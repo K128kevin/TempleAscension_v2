@@ -1,0 +1,249 @@
+extends Node3D
+const Data = preload("res://scripts/data.gd")
+const Motion = preload("res://scripts/combat_animation.gd")
+const Visual = preload("res://scripts/visual.gd")
+const Art = preload("res://scripts/assets.gd")
+var game
+var visual
+var kind = "player"
+var uid = ""
+var hp = 100.0
+var max_hp = 100.0
+var config: Dictionary = {}
+var awake = false
+var dormant_offering = true
+var dead = false
+var cooldown = 0.0
+var busy = 0.0
+var windup = 0.0
+var attack_recovery = .25
+var attack_point = Vector3.ZERO
+var warning: Sprite3D
+var route = PackedVector3Array()
+var repath = 0.0
+var death_age = 0.0
+var cast_count = 0
+var laser_cooldown = 7.0
+var laser_time = 0.0
+var laser_angle = 0.0
+var laser_tick = 0.0
+var laser_model: Node3D
+var thresholds = 0
+var label: Label3D
+var invulnerable = 0.0
+var slow_time = 0.0
+var mark_time = 0.0
+var stagger_time = 0.0
+var stagger_meter = 0.0
+
+func setup(owner_game, type: String, id: String, at: Vector3) -> void:
+	game = owner_game
+	kind = type
+	uid = id
+	position = at
+	visual = Visual.new()
+	add_child(visual)
+	if kind == "player":
+		max_hp = Data.max_health(game.run)
+		hp = max_hp
+		visual.setup(false,Color.WHITE,Data.WEAPONS[game.run.weapon])
+	else:
+		config = Data.ENEMIES[kind]
+		max_hp = config.hp * Data.HEALTH_SCALE[game.run.difficulty]
+		hp = max_hp
+		visual.setup(true,config.color,config.weapon,config.size)
+		if kind == "boss": visual.crown()
+		visual.animator.pause()
+		label = Label3D.new()
+		label.position.y = config.size * 2.25
+		label.font_size = 34
+		label.pixel_size = .009
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		label.modulate = Color(1,.89,.71)
+		label.visible = false
+		add_child(label)
+	warning = Art.seal(3.4,Color(1,.2,.08,.75))
+	warning.position.y = .06
+	warning.visible = false
+	add_child(warning)
+
+func tick(dt: float) -> void:
+	slow_time = maxf(0,slow_time-dt)
+	mark_time = maxf(0,mark_time-dt)
+	stagger_time = maxf(0,stagger_time-dt)
+	invulnerable = maxf(0,invulnerable-dt)
+	busy = maxf(0,busy-dt)
+	cooldown = maxf(0,cooldown-dt)
+	if dead:
+		death_age += dt
+		if death_age > 8 and kind != "player": visible = false
+		return
+	if kind == "player" or stagger_time>0: return
+	var player = game.player
+	var distance: float = position.distance_to(player.position)
+	visible = game.world.camera.is_position_in_frustum(position+Vector3.UP*config.size)
+	visual.animator.active = visible
+	if kind == "offering":
+		if dormant_offering: return
+		if not is_instance_valid(game.boss) or game.boss.dead: die(false); return
+		if position.distance_to(game.boss.position) < 1.8:
+			game.boss.hp = minf(game.boss.max_hp,game.boss.hp+game.boss.max_hp*.05)
+			game.float_text(position,"+5%",Color(.7,.4,1))
+			die(false)
+		else: walk_to(game.boss.position,dt)
+		return
+	if not awake:
+		if distance < 10 and game.world.clear_line(position,player.position): game.awaken(self)
+		else: return
+	if kind == "boss":
+		for i in range(thresholds,4):
+			if hp/max_hp <= .8 - i*.2:
+				thresholds = i+1
+				game.wake_offerings(i)
+		laser_cooldown -= dt
+		if laser_time > 0:
+			laser_time -= dt
+			laser_angle = rotate_toward(laser_angle,atan2(player.position.x-position.x,player.position.z-position.z),deg_to_rad(30)*dt)
+			face(position + Vector3(sin(laser_angle),0,cos(laser_angle)))
+			laser_model.rotation.y = laser_angle
+			laser_tick -= dt
+			if laser_tick <= 0:
+				laser_tick = .1
+				var forward = Vector3(sin(laser_angle),0,cos(laser_angle))
+				var offset: Vector3 = player.position-position
+				if offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(10*.6*Data.DAMAGE_SCALE[game.run.difficulty])
+			if laser_time <= 0:
+				laser_model.queue_free()
+				busy = 0
+			return
+		if laser_cooldown <= 0 and windup <= 0:
+			laser_cooldown = 16
+			windup = 1.0
+			cast_count = -1
+			attack_point = player.position
+			warning.visible = true
+			game.toast("THE CROWN'S GAZE — keep moving around the statue")
+	if windup > 0:
+		windup -= dt
+		warning.modulate.a = .5 + .35 * sin(Time.get_ticks_msec()*.025)
+		if windup <= 0:
+			warning.visible = false
+			release_attack()
+		return
+	if busy > 0: return
+	var reach: float = config.range
+	if distance <= reach and game.world.clear_line(position,player.position) and cooldown <= 0:
+		face(player.position)
+		attack_point = player.position
+		windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else .42)
+		cooldown = config.interval + windup
+		warning.visible = true
+		if kind == "wizard":
+			cast_count += 1
+			game.effect(attack_point,4.4,Color(1,.25,.12),1.5)
+		var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
+		var duration = windup+.25
+		var weapon_index = Data.WEAPONS.find(config.weapon)
+		if weapon_index>=0 and visual.clips.has(Motion.NORMAL[weapon_index].clip):
+			clip = Motion.NORMAL[weapon_index].clip
+			duration = windup/Motion.NORMAL[weapon_index].contacts[0]
+		attack_recovery = maxf(.25,duration-windup)
+		visual.play(clip,duration)
+	elif distance > reach * .85:
+		walk_to(player.position,dt)
+	elif kind in ["archer","wizard"] and distance < 5:
+		var direction: Vector3 = (position-player.position).normalized()
+		var before = position
+		position = game.world.move(position,direction*config.speed*(.4 if slow_time>0 else 1.0)*dt)
+		face(player.position)
+		visual.locomotion(position.distance_to(before)>.005,false)
+	else: visual.locomotion(false,false)
+
+func release_attack() -> void:
+	if kind == "boss" and cast_count == -1:
+		cast_count = 0
+		laser_time = 5
+		laser_angle = atan2(attack_point.x-position.x,attack_point.z-position.z)
+		laser_model = Node3D.new()
+		add_child(laser_model)
+		var beam = Art.model("arrow",Vector3(.25,.25,28),Art.material("gold"))
+		laser_model.add_child(beam)
+		beam.position = Vector3(0,1.0,14)
+		return
+	busy = attack_recovery
+	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]
+	if kind == "archer": game.projectile(position,attack_point,damage,false,"arrow")
+	elif kind == "wizard":
+		if cast_count % 2 == 1: game.blast(attack_point,2.2,damage,false)
+		else: game.projectile(position,attack_point,7.5*.6*Data.DAMAGE_SCALE[game.run.difficulty],false,"ice")
+	elif position.distance_to(game.player.position) <= config.range + .6 and game.world.clear_line(position,game.player.position):
+		var d: Vector3 = (game.player.position-position).normalized()
+		if forward().dot(d) > .2: game.hurt_player(damage)
+
+func walk_to(destination: Vector3, dt: float) -> void:
+	repath -= dt
+	var direct: bool = game.world.clear_line(position,destination)
+	if repath <= 0 and not direct:
+		repath = .6 + float(uid.hash()%7)*.035
+		route = game.world.path(position,destination)
+	var next = destination
+	if not direct:
+		if route.is_empty(): visual.locomotion(false,false); return
+		next = route[0]
+		if position.distance_to(next) < .3:
+			route.remove_at(0)
+			return
+	var direction = (next-position).normalized()
+	var separation = Vector3.ZERO
+	for other in game.enemies:
+		if other == self or other.dead or not other.awake: continue
+		var difference: Vector3 = position-other.position
+		if difference.length_squared() < .85 and difference.length_squared() > .001: separation += difference.normalized()*.6
+	direction = (direction + separation).normalized()
+	var before = position
+	position = game.world.move(position,direction*config.speed*(.4 if slow_time>0 else 1.0)*dt)
+	if position.distance_to(before) > .005: face(position+direction)
+	visual.locomotion(position.distance_to(before)>.005,false,kind=="lion")
+
+func face(at: Vector3) -> void:
+	var d = at-position
+	if d.length_squared() > .001:
+		rotation.y = atan2(d.x,d.z)
+		visual.align_weapon()
+
+func forward() -> Vector3:
+	return Vector3(sin(rotation.y),0,cos(rotation.y))
+
+func stagger(seconds: float) -> void:
+	if kind=="boss":
+		stagger_meter += 1
+		if stagger_meter<3: return
+		stagger_meter = 0
+		seconds = minf(seconds,.6)
+	stagger_time = maxf(stagger_time,seconds)
+	windup = 0
+	warning.visible = false
+
+func hit(damage: float, type: String = "physical") -> void:
+	if dead or (kind == "offering" and dormant_offering): return
+	damage = Data.mitigate(damage,35.0 if kind=="boss" else (20.0 if kind=="centurion" else 0.0),0.0,int(game.run.level),type)
+	if mark_time>0: damage *= 1.2+Data.passive(game.run,"predator")*.01
+	hp -= damage
+	game.sound.play("weapon-impact",-15)
+	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),Color(1,.83,.46))
+	if hp <= 0: die()
+	else:
+		if not awake: game.awaken(self)
+		cooldown += .25
+		if windup > 0: windup += .1
+
+func die(reward: bool = true) -> void:
+	if dead: return
+	dead = true
+	hp = 0
+	warning.visible = false
+	if label: label.visible = false
+	if is_instance_valid(laser_model): laser_model.queue_free()
+	visual.play("Death")
+	if reward: game.enemy_died(self)

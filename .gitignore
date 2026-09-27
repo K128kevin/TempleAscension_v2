@@ -1,0 +1,6 @@
+.godot/
+.tools/
+builds/
+test-results/
+source_art/
+.DS_Store
