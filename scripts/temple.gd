@@ -19,6 +19,7 @@ var shadow_torches: Array[OmniLight3D] = []
 var fountain
 var desert_backdrop: Sprite3D
 var terrace_moonlight: DirectionalLight3D
+var boss_moonlight: SpotLight3D
 const TERRACE_LIGHT_LAYER = 8
 
 func setup(floor_index: int, run_seed: int = 1) -> void:
@@ -101,7 +102,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		fountain = preload("res://scripts/fountain.gd").new()
 		add_child(fountain)
 		fountain.setup(layout)
-	if floor_index in [3,4]: setup_desert()
+	if floor_index in [3,4,5]: setup_desert()
 	# A downward stair marks arrival; ascent is in the furthest generated room.
 	var arrival = place("stairs",spawn+Vector3(0,-.25,1.1),Vector3(1.5,.3,1.5),stone)
 	arrival.rotation.y = PI
@@ -121,6 +122,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		torch(at,true)
 	if floor_index==5:
 		boss_point = layout.to_world(Vector2i(14,10))
+		setup_boss_moonlight()
 		for corner in [Vector2i(2,2),Vector2i(25,2),Vector2i(2,17),Vector2i(25,17)]:
 			var dx = 1 if corner.x<14 else -1
 			var dz = 1 if corner.y<10 else -1
@@ -173,6 +175,20 @@ func setup_desert() -> void:
 	terrace_moonlight.shadow_enabled = false
 	terrace_moonlight.visible = false
 	add_child(terrace_moonlight)
+
+func setup_boss_moonlight() -> void:
+	boss_moonlight = SpotLight3D.new()
+	boss_moonlight.name = "DimBossRoomMoonlight"
+	boss_moonlight.position = boss_point+Vector3.UP*12
+	boss_moonlight.rotation_degrees.x = -90
+	boss_moonlight.light_color = Color(.50,.61,.80)
+	boss_moonlight.light_energy = .55
+	boss_moonlight.spot_range = 25
+	boss_moonlight.spot_angle = 48
+	boss_moonlight.spot_attenuation = 1.4
+	boss_moonlight.light_cull_mask = 3
+	boss_moonlight.shadow_enabled = false
+	add_child(boss_moonlight)
 
 func terrace_surface(at: Vector3) -> bool:
 	# Include parapets offset just outside a gallery tile. Interior paving
@@ -390,7 +406,7 @@ func follow(pos: Vector3, delta: float) -> void:
 	camera.size = lerpf(camera.size,zoom,minf(1,delta*8))
 	if is_instance_valid(desert_backdrop):
 		var outdoors = layout.on_terrace(layout.to_cell(pos))
-		desert_backdrop.visible = outdoors
+		desert_backdrop.visible = outdoors or level==5
 		terrace_moonlight.visible = outdoors
 		var viewport_size = get_viewport().get_visible_rect().size
 		var width = camera.size*viewport_size.x/viewport_size.y
