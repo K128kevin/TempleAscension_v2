@@ -178,7 +178,14 @@ separate from earlier games:
 The local library supplies humanoid rigs, so the original lion enemy is represented
 by a crouching humanoid Lion Guardian with the original fast pursuit and attack
 cadence. All humanoid statues and the hero use the requested local model and
-animation library. The room placement, seeded random generator, corridor
+animation library.
+Gladiators wear light shoulder armor and bracers, archers wear light armor,
+centurions wear heavy plate and full helmets, and oracles wear long robes.
+Enemy bodies and their equipment share a matte stone-gray finish with fine
+weathering and cracks. These outfits use authored meshes fitted to the existing
+enemy skeleton and retain the current combat animations.
+
+The room placement, seeded random generator, corridor
 connections, court footprint and galleries are adapted from the browser game's generator. Existing imported
 3D floor, wall and prop meshes populate that layout. The third-floor court has
 the original broad, shallow pool and a three-tier stone fountain. The player can

@@ -22,6 +22,15 @@ the explicit debug launcher and use isolated saves.
 Export success verifies packaging, not execution on another operating system.
 Windows requires a playtest on Windows hardware. macOS signing is ad-hoc only.
 
+Enemy statue outfits (0.4.2): the rendered enemy visual checks pass 50 checks
+for the four imported outfits, retained animation clips, changed running bone
+poses, single skinned surfaces and the shared stone material on body and gear.
+Front/back, running and attack captures were inspected under neutral lighting.
+The bow checks pass 21 checks and the campaign passes 555. Each variant retains
+the existing skeleton and all 22 clips; gameplay stats and collision are shared
+with the existing enemy definitions. The robe hides covered leg surfaces to
+prevent running knees clipping through it.
+
 Compact ability bar and starting equipment (0.4.1): 98 progression checks,
 155 class runtime checks, 555 campaign checks and 52 native HUD checks pass.
 The HUD has exactly four 56×56 buttons with 34×34 icons, ordered LMB basic

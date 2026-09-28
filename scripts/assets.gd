@@ -3,6 +3,14 @@ extends RefCounted
 static var scenes: Dictionary = {}
 static var materials: Dictionary = {}
 
+static func statue_material() -> ShaderMaterial:
+	if materials.has("statue"): return materials.statue
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/statue_stone.gdshader")
+	m.set_shader_parameter("stone_texture",load("res://assets/textures/statue_marble.png"))
+	materials.statue = m
+	return m
+
 static func material(kind: String, tint: Color = Color.WHITE) -> StandardMaterial3D:
 	var key = kind + tint.to_html()
 	if materials.has(key): return materials[key]

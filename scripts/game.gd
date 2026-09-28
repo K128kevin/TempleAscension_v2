@@ -565,7 +565,8 @@ func tick_pickups(dt: float) -> void:
 
 func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type: String, piercing: bool = false) -> void:
 	var direction = (at-from).normalized()
-	var node = Art.model("arrow" if type=="arrow" else "gem",Vector3(.09,.9,.09) if type=="arrow" else Vector3(1.5,.5,.6),Art.material("gold" if friendly else "marble",Color(.35,.7,1) if type=="ice" else (Color(.65,.35,1) if type=="arcane" else (Color(1,.3,.05) if type=="fire" else Color(.9,.67,.45)))))
+	var finish: Material = Art.statue_material() if not friendly and type=="arrow" else Art.material("gold" if friendly else "marble",Color(.35,.7,1) if type=="ice" else (Color(.65,.35,1) if type=="arcane" else (Color(1,.3,.05) if type=="fire" else Color(.9,.67,.45))))
+	var node = Art.model("arrow" if type=="arrow" else "gem",Vector3(.09,.9,.09) if type=="arrow" else Vector3(1.5,.5,.6),finish)
 	world.add_child(node)
 	node.position = from + Vector3.UP
 	# The imported arrow tip points down local Y; rotate it into flight.

@@ -51,7 +51,7 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 		config = Data.ENEMIES[kind]
 		max_hp = config.hp * Data.HEALTH_SCALE[game.run.difficulty]
 		hp = max_hp
-		visual.setup(true,config.color,config.weapon,config.size)
+		visual.setup(true,config.color,config.weapon,config.size,kind)
 		if kind == "boss": visual.crown()
 		visual.animator.pause()
 		label = Label3D.new()

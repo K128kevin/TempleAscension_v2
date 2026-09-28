@@ -59,7 +59,7 @@ func test():
 	for id in ids:
 		if not game.run.skills.has(id): Data.Skills.learn(game.run,id)
 	game.run.hotbar = ids
-	check(hud.weapon_slots.size()==4 and hud.weapon_icons[0].size==Vector2(40,40),"Exactly four significantly smaller ability icons")
+	check(hud.weapon_slots.size()==4 and hud.weapon_icons[0].size==Vector2(34,34) and hud.weapon_slots[0].size==Vector2(56,56),"Exactly four significantly smaller ability icons")
 	game.player.busy=0; game.player.cooldown=0
 	await click(hud.weapon_slots[0])
 	check(game.player.busy>0 and not game.left_held and game.route.is_empty(),"LMB icon performs the basic attack and consumes movement input")

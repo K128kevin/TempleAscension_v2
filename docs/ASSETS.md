@@ -66,7 +66,8 @@ animation licenses sit beside it. Rebuild with Blender:
   paving, walls, open doorway, stairs, rubble, lit torch and altar/table mesh. The doorway's
   separate door leaf is omitted to make a permanently open portal.
 - [KayKit Adventurers](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0):
-  axe, arrow and staff.
+  axe, arrow and staff, plus authored Barbarian/Rogue light armor,
+  Knight plate armor/full helmet, and Mage robe/cape geometry.
 - [Quaternius Fantasy Props MegaKit](https://opengameart.org/content/fantasy-props-megakit):
   sword, shield, vase, torch, banner, bookcase, books and chalice.
 - [Crown by Quaternius](https://poly.pizza/m/i0PZVuVlYv), CC0.
@@ -78,6 +79,24 @@ this workstation and excluded from native exports. Prop normalization preserves 
 `tools/prepare_guardian.py` makes a crowd variant of the supplied character: it
 merges the stone surfaces and reduces the mesh to about 5,450 export vertices,
 while retaining the skeleton and all twenty-two clips. The full hero remains unchanged.
+
+`tools/prepare_enemy_outfits.py` fits the KayKit clothing meshes to that existing
+Quaternius skeleton, remaps their skin weights, and joins each outfit into one
+crowd surface. It exports `guardian_gladiator.glb`, `guardian_archer.glb`,
+`guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 22 clips.
+The supplied mage tunic is extended into an ankle-length robe; covered leg
+surfaces are omitted to avoid running knees piercing the garment. The helmet
+covers the centurion's whole head. Rebuild with:
+
+```sh
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_enemy_outfits.py
+```
+
+Bodies, armor, robes, weapons, shields, arrows and the boss's crown share
+`assets/shaders/statue_stone.gdshader`. It samples the existing cracked marble
+texture in grayscale with matte gray shading and consistent grain size on
+scaled equipment. Original colored/metallic equipment materials are overridden
+for enemies. This update adds no generated bitmap or primitive geometry.
 
 `tools/prepare_bow_draw.py` adds a draw morph to the existing bowstring vertices.
 Run it after normalizing the bow with `tools/prepare_models.py`. At runtime the

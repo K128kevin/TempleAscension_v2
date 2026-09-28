@@ -14,13 +14,16 @@ var weapon_size = Vector3.ONE
 var nocked_arrow: Node3D
 var bow_strings: Array = []
 var shield_attachment: BoneAttachment3D
+var is_stone = false
 const BOW_GRIP = Vector3(-.42,.51,0)
 const BOW_PALM = Vector3(0,.065,0)
 # Imported left-hand axes to the bow's grip: +Y along the stave, -X forward.
 const BOW_HAND_BASIS = Basis(Vector3(0,-1,0),Vector3(0,0,1),Vector3(-1,0,0))
 
-func setup(stone: bool, tint: Color, weapon: String, stature: float = 1.0) -> void:
-	rig = load("res://assets/models/character/guardian.glb" if stone else "res://assets/models/character/warrior.glb").instantiate()
+func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enemy_kind: String = "") -> void:
+	is_stone = stone
+	var character = "guardian_%s" % enemy_kind if stone and enemy_kind in ["gladiator","archer","centurion","wizard"] else ("guardian" if stone else "warrior")
+	rig = load("res://assets/models/character/%s.glb" % character).instantiate()
 	# The supplied Godot rig faces +Z, matching Actor.forward().
 	rig.rotation.y = 0
 	rig.scale = Vector3.ONE * stature
@@ -30,7 +33,7 @@ func setup(stone: bool, tint: Color, weapon: String, stature: float = 1.0) -> vo
 	for mesh in rig.find_children("*", "MeshInstance3D", true, false):
 		skin_meshes.append(mesh)
 		if stone:
-			mesh.material_override = Art.material("marble", tint)
+			mesh.material_override = Art.statue_material()
 		elif "SuperHero" in mesh.name:
 			# Keep supplied head/skin surfaces; armor only on the torso/limb mesh.
 			var skin = StandardMaterial3D.new()
@@ -63,7 +66,7 @@ func equip(weapon: String) -> void:
 	equipment = hand
 	var sizes = {"sword":Vector3(.15,1.0,.07),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22)}
 	weapon_size = sizes[weapon]
-	var item = Art.model(weapon, weapon_size)
+	var item = Art.model(weapon, weapon_size,Art.statue_material() if is_stone else null)
 	weapon_item = item
 	hand.add_child(item)
 	# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
@@ -75,7 +78,7 @@ func equip(weapon: String) -> void:
 			for mesh in item.find_children("*","MeshInstance3D",true,false):
 				for i in mesh.mesh.get_blend_shape_count():
 					if mesh.mesh.get_blend_shape_name(i)=="Draw": bow_strings.append({"mesh":mesh,"index":i})
-			nocked_arrow = Art.model("arrow",Vector3(.035,.85,.035))
+			nocked_arrow = Art.model("arrow",Vector3(.035,.85,.035),Art.statue_material() if is_stone else null)
 			add_child(nocked_arrow)
 			nocked_arrow.top_level = true
 			nocked_arrow.visible = false
@@ -84,7 +87,7 @@ func equip(weapon: String) -> void:
 		shield_attachment = BoneAttachment3D.new()
 		shield_attachment.bone_name = "hand_l"
 		skeleton.add_child(shield_attachment)
-		var shield = Art.model("shield",Vector3(.48,.62,.12))
+		var shield = Art.model("shield",Vector3(.48,.62,.12),Art.statue_material() if is_stone else null)
 		shield_attachment.add_child(shield)
 		shield.position = Vector3(0,.05,0)
 	if state in ["Idle","BowIdle","SpearIdle"]: play(idle_action())
@@ -138,12 +141,13 @@ func crown() -> void:
 	var attachment = BoneAttachment3D.new()
 	attachment.bone_name = "Head"
 	skeleton.add_child(attachment)
-	var c = Art.model("crown", Vector3(.47,.24,.47), Art.material("gold"))
+	var c = Art.model("crown", Vector3(.47,.24,.47), Art.statue_material() if is_stone else Art.material("gold"))
 	attachment.add_child(c)
 	c.position = Vector3(0,.16,0)
 
 func petrify() -> void:
-	for mesh in skin_meshes: mesh.material_override = Art.material("marble")
+	is_stone = true
+	for mesh in find_children("*","MeshInstance3D",true,false): mesh.material_override = Art.statue_material()
 	animator.pause()
 
 func play(action: String, duration: float = 0.0) -> void:
