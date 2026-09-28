@@ -123,6 +123,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	if floor_index==5:
 		boss_point = layout.to_world(Vector2i(14,10))
 		setup_boss_moonlight()
+		setup_summit_understructure(stone)
 		for corner in [Vector2i(2,2),Vector2i(25,2),Vector2i(2,17),Vector2i(25,17)]:
 			var dx = 1 if corner.x<14 else -1
 			var dz = 1 if corner.y<10 else -1
@@ -190,6 +191,22 @@ func setup_boss_moonlight() -> void:
 	boss_moonlight.light_cull_mask = 3
 	boss_moonlight.shadow_enabled = false
 	add_child(boss_moonlight)
+
+func setup_summit_understructure(stone: Material) -> void:
+	# Two colonnaded wings hang beneath the southern roof edge, with short
+	# returns around the southwest and southeast corners.
+	for wing_x in [-7.5,7.5]:
+		place("wall",Vector3(wing_x,-8,10.65),Vector3(12,8,1.0),stone)
+		place("wall",Vector3(wing_x,-.65,10.75),Vector3(12,.7,1.5),stone)
+		place("wall",Vector3(wing_x,-6.4,10.82),Vector3(12,.7,1.5),stone)
+		for offset in [-4.5,-.0,4.5]:
+			place("column",Vector3(wing_x+offset,-8,11.05),Vector3(.95,8,.95),stone)
+		var return_x = -13.35 if wing_x<0 else 12.35
+		place("wall",Vector3(return_x,-8,8.0),Vector3(.9,8,5.5),stone)
+	# Paired piers leave the lower central passage open beneath the temple.
+	for x in [-1.65,1.65]:
+		place("column",Vector3(x,-8,11.05),Vector3(1.0,8,1.0),stone)
+	place("wall",Vector3(0,-.65,10.75),Vector3(3.4,.7,1.5),stone)
 
 func terrace_surface(at: Vector3) -> bool:
 	# Include parapets offset just outside a gallery tile. Interior paving
