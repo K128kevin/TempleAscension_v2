@@ -21,6 +21,8 @@ var scheduled: Array = []
 var carriers: Dictionary = {}
 var mode = "playing"
 var target
+var hover_ring: Sprite3D
+const ENEMY_CLICK_RADIUS = 64.0
 var route = PackedVector3Array()
 var left_held = false
 var right_held = false
@@ -117,6 +119,9 @@ func load_floor() -> void:
 	world = Temple.new()
 	add_child(world)
 	world.setup(int(run.floor),int(run.seed))
+	hover_ring = Art.target_ring()
+	world.add_child(hover_ring)
+	hud.show_enemy_hover(null)
 	sound.track(int(run.floor))
 	player = Actor.new()
 	world.add_child(player)
@@ -218,11 +223,7 @@ func _process(dt: float) -> void:
 	world.follow(player.position,dt)
 	if is_instance_valid(world.fountain): world.fountain.tick(dt,player.position,mode=="playing")
 	hud.tick(dt)
-	var hovered = clicked_enemy() if mode=="playing" else null
-	for enemy in enemies:
-		if enemy.label:
-			enemy.label.visible = not enemy.dead and (enemy==target or enemy==hovered)
-			if enemy.label.visible: enemy.label.text = "%s  %d/%d" % [enemy.config.title,enemy.hp,enemy.max_hp]
+	update_enemy_hover()
 
 
 func _input(event: InputEvent) -> void:
@@ -266,17 +267,33 @@ func _unhandled_input(event: InputEvent) -> void:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 func clicked_enemy():
-	var mouse = get_viewport().get_mouse_position()
+	if get_viewport().gui_get_hovered_control()!=null: return null
+	return enemy_at_screen(get_viewport().get_mouse_position())
+
+func enemy_at_screen(mouse: Vector2):
 	var nearest = null
-	var best = 38.0
+	var best = INF
 	for a in enemies:
-		if a.dead or not a.visible or (a.kind=="offering" and a.dormant_offering): continue
+		if a.dead or not a.is_visible_in_tree() or (a.kind=="offering" and a.dormant_offering): continue
+		if world.camera.is_position_behind(a.position): continue
 		var screen: Vector2 = world.camera.unproject_position(a.position+Vector3.UP*a.config.size)
+		var feet: Vector2 = world.camera.unproject_position(a.position)
+		var head: Vector2 = world.camera.unproject_position(a.position+Vector3.UP*a.config.size*2.1)
+		# A generous minimum target grows to cover tall models at close zoom.
+		var radius = maxf(ENEMY_CLICK_RADIUS,feet.distance_to(head)*.5+20)
 		var distance = screen.distance_to(mouse)
-		if distance < best:
+		if distance < radius and distance < best:
 			best = distance
 			nearest = a
 	return nearest
+
+func update_enemy_hover() -> void:
+	var hovered = clicked_enemy() if mode=="playing" and not player.dead else null
+	hover_ring.visible = is_instance_valid(hovered)
+	if hover_ring.visible:
+		hover_ring.position = hovered.position+Vector3.UP*.08
+		hover_ring.scale = Vector3.ONE*hovered.config.size
+	hud.show_enemy_hover(hovered)
 
 func issue_click(special: bool) -> void:
 	order_pending = false

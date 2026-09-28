@@ -36,6 +36,9 @@ func playtest() -> void:
 	game.run = preload("res://scripts/data.gd").new_run()
 	game.run.seed = 0
 	game.load_floor()
+	# Keep steering checks on empty ground; enlarged enemy targets can now
+	# cover the old destination. Restore the statues for the attack checks.
+	for statue in game.enemies: statue.dead=true; statue.visible=false
 	var room: Rect2i = game.world.layout.rooms[0]
 	for candidate in game.world.layout.rooms:
 		if mini(candidate.size.x,candidate.size.y)>mini(room.size.x,room.size.y): room=candidate
@@ -61,6 +64,7 @@ func playtest() -> void:
 	await frames(24)
 	click(screen,MOUSE_BUTTON_LEFT,false)
 	check((game.player.position-turn_start).dot(-right)>.3,"Moving a held cursor to screen-left reverses the route in live gameplay")
+	for statue in game.enemies: statue.dead=false; statue.visible=true
 	var enemy = game.enemies[0]
 	for offset in [Vector3(0,0,1.4),Vector3(1.4,0,0),Vector3(0,0,-1.4),Vector3(-1.4,0,0)]:
 		if game.world.fits(enemy.position+offset): game.player.position = enemy.position+offset; break

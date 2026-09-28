@@ -13,11 +13,13 @@ mkdir -p test-results
 "$godot_bin" --headless --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-regression.log"
 "$godot_bin" --headless --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-visuals.log"
 "$godot_bin" --headless --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-regression.log"
+"$godot_bin" --headless --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover.log"
 "$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log" -- --test
 "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"
 "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-normal.log"
 "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-regression.log" -- --debug-mode --floor=3 --bow --axe
 if [ "${RENDER_TEST:-0}" = "1" ]; then
+  "$godot_bin" --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover-native.log" -- --render-hover
   "$godot_bin" --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing-native.log" -- --live-attacks
   "$godot_bin" --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-render.log" -- --render-enemies
   "$godot_bin" --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-render.log" -- --render-shields

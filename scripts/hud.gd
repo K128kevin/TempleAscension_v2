@@ -18,6 +18,7 @@ var recovery: Label
 var prompt: Label
 var boss_bar: ProgressBar
 var boss_name: Label
+var hover_health: ProgressBar
 var modal: PanelContainer
 var modal_body: VBoxContainer
 var weapon_slots: Array[Button] = []
@@ -54,6 +55,17 @@ func setup(owner_game) -> void:
 	for state in ["normal","hover","pressed","focus"]:
 		theme.set_stylebox(state,"Button",panel_style(Color(.12,.13,.14,.96) if state=="normal" else Color(.24,.23,.20),gold))
 	root.theme = theme
+	hover_health = bar(Color(.88,.055,.04),root)
+	hover_health.custom_minimum_size = Vector2(72,8)
+	hover_health.size = Vector2(72,8)
+	hover_health.z_index = 1
+	hover_health.visible = false
+	var hover_background = StyleBoxFlat.new()
+	hover_background.bg_color = Color(.045,.015,.015,.96)
+	hover_background.border_color = Color(.18,.08,.07)
+	hover_background.set_border_width_all(1)
+	hover_background.set_corner_radius_all(2)
+	hover_health.add_theme_stylebox_override("background",hover_background)
 	var left = make_orb(false)
 	health = left.orb; hp_text = left.value
 	var right = make_orb(true)
@@ -261,6 +273,15 @@ func tick(dt: float) -> void:
 func toast(value: String) -> void:
 	notice.text = value
 	notice_time = 5
+
+func show_enemy_hover(enemy) -> void:
+	hover_health.visible = is_instance_valid(enemy) and not enemy.dead
+	if not hover_health.visible: return
+	hover_health.max_value = enemy.max_hp
+	hover_health.value = clampf(enemy.hp,0,enemy.max_hp)
+	var head: Vector3 = enemy.position+Vector3.UP*enemy.config.size*2.25
+	var screen: Vector2 = game.world.camera.unproject_position(head)
+	hover_health.position = screen-Vector2(hover_health.size.x*.5,12)
 
 func close_modal() -> void:
 	if is_instance_valid(modal):

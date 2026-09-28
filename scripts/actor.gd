@@ -29,7 +29,6 @@ var laser_angle = 0.0
 var laser_tick = 0.0
 var laser_model: Node3D
 var thresholds = 0
-var label: Label3D
 var invulnerable = 0.0
 var slow_time = 0.0
 var mark_time = 0.0
@@ -54,15 +53,6 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 		visual.setup(true,config.color,config.weapon,config.size,kind)
 		if kind == "boss": visual.crown()
 		visual.animator.pause()
-		label = Label3D.new()
-		label.position.y = config.size * 2.25
-		label.font_size = 34
-		label.pixel_size = .009
-		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label.no_depth_test = true
-		label.modulate = Color(1,.89,.71)
-		label.visible = false
-		add_child(label)
 	warning = Art.seal(3.4,Color(1,.2,.08,.75))
 	warning.position.y = .06
 	warning.visible = false
@@ -248,7 +238,6 @@ func die(reward: bool = true) -> void:
 	dead = true
 	hp = 0
 	warning.visible = false
-	if label: label.visible = false
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	visual.play("Death")
 	if reward: game.enemy_died(self)

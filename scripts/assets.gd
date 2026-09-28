@@ -2,6 +2,7 @@ extends RefCounted
 ## Every visible solid is an imported mesh. Collision volumes are invisible.
 static var scenes: Dictionary = {}
 static var materials: Dictionary = {}
+static var target_ring_texture: GradientTexture2D
 
 static func statue_material() -> ShaderMaterial:
 	if materials.has("statue"): return materials.statue
@@ -46,3 +47,22 @@ static func seal(diameter: float, color: Color) -> Sprite3D:
 	s.no_depth_test = false
 	s.shaded = false
 	return s
+
+static func target_ring() -> Sprite3D:
+	if target_ring_texture == null:
+		target_ring_texture = GradientTexture2D.new()
+		target_ring_texture.width = 128; target_ring_texture.height = 128
+		target_ring_texture.fill = GradientTexture2D.FILL_RADIAL
+		target_ring_texture.fill_from = Vector2(.5,.5); target_ring_texture.fill_to = Vector2(1,.5)
+		var gradient = Gradient.new()
+		gradient.offsets = PackedFloat32Array([0,.89,.93,.97,1])
+		gradient.colors = PackedColorArray([Color(.95,.035,.035,0),Color(.95,.035,.035,0),Color(.95,.035,.035,.92),Color(.95,.035,.035,.92),Color(.95,.035,.035,0)])
+		target_ring_texture.gradient = gradient
+	var ring = Sprite3D.new()
+	ring.texture = target_ring_texture
+	ring.pixel_size = 1.8/128
+	ring.rotation.x = -PI/2
+	ring.shaded = false
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ring.visible = false
+	return ring

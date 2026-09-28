@@ -22,6 +22,22 @@ the explicit debug launcher and use isolated saves.
 Export success verifies packaging, not execution on another operating system.
 Windows requires a playtest on Windows hardware. macOS signing is ad-hoc only.
 
+Enemy hover feedback (0.4.5): `tests/enemy_hover.gd` checks the enlarged click
+region at four window sizes and two zoom levels, nearest selection in overlapping
+regions, dead/hidden/dormant exclusions and selection at a large enemy's feet and
+head. The native run passes 101 checks including real mouse clicks in the enlarged
+region, current health fractions, ring/bar placement, hover leaving the area,
+death, pause, floor changes and GUI priority. Rendered captures were inspected.
+The headless selection run passes 23 checks, existing HUD checks pass 52 and the
+isolated live input playtest passes 11. Movement checks now hide statues while
+testing empty ground, then restore them for actual attack input. One initial
+input run crashed in Godot during resume while build/import was running; it did
+not recur in the isolated rerun or a separate 20-cycle pause/resume probe.
+Both 0.4.5 archives pass CRC and packaged-data checks; macOS signature
+verification passes. Both exported PCKs pass the 23 selection checks through the
+local runtime, with the previously recorded headless resource messages at exit.
+The Windows executable was not run.
+
 Attack playback synchronization (0.4.4): 910 deterministic combat checks cover
 all five weapon families, normal/special clips, playback shortened to 0.25 seconds
 or extended to 1.75 seconds, all 24 active skills, held attacks at 15/60 FPS for

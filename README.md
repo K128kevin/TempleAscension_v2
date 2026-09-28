@@ -177,6 +177,11 @@ separate from earlier games:
 
 ## Adaptation decisions
 
+Enemy click areas have a minimum radius of 64 logical pixels, with extra room
+for tall enemies at close zoom. Hovering shows a red ring at their feet and a
+small health bar above their head. Hover and attack selection use the same area;
+HUD controls, dead enemies and dormant offerings do not trigger this feedback.
+
 The local library supplies humanoid rigs, so the original lion enemy is represented
 by a crouching humanoid Lion Guardian with the original fast pursuit and attack
 cadence. All humanoid statues and the hero use the requested local model and

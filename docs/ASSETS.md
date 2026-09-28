@@ -34,6 +34,11 @@ combat clock, so held attacks finish their recovery before the next swing.
 Damage and projectile jobs follow the same clock. Enemy hit delays pause the
 pose and telegraph together; culled actors retain elapsed animation time.
 
+Enemy hover feedback uses a flat red sprite with a procedural radial gradient
+from `scripts/assets.gd`, plus a 72×8 HUD health bar projected above the head.
+The ring scales with the enemy's stature. Both indicators ignore mouse input.
+This UI effect adds no external bitmap or solid geometry.
+
 ## Requested local assets
 
 Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
