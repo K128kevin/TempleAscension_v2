@@ -193,22 +193,25 @@ func setup_boss_moonlight() -> void:
 	add_child(boss_moonlight)
 
 func setup_summit_understructure(stone: Material) -> void:
-	# A continuous stone body and wrapped side walls keep the desert out of
-	# view beneath either southern corner, all the way to the lower screen edge.
+	# A continuous stone body wraps beneath the southern front and full east
+	# edge, keeping the desert out of view around the southeast corner.
 	for story in 4:
 		var story_base = -8.0*(story+1)
 		place("wall",Vector3(-.5,story_base,10.65),Vector3(26,8,1.0),stone)
-		place("wall",Vector3(-13.5,story_base,25.65),Vector3(1.0,8,30),stone)
-		place("wall",Vector3(12.5,story_base,25.65),Vector3(1.0,8,30),stone)
+		place("wall",Vector3(-13.5,story_base,25.5),Vector3(1.0,8,30),stone)
+		place("wall",Vector3(12.5,story_base,1.5),Vector3(1.0,8,18),stone)
+		place("wall",Vector3(12.5,story_base,25.5),Vector3(1.0,8,30),stone)
 		# Projecting stone courses articulate each storey and join the corner returns.
 		place("wall",Vector3(-.5,story_base-.55,10.95),Vector3(26,.55,1.6),stone)
-		place("wall",Vector3(-13.5,story_base-.55,25.65),Vector3(1.6,.55,30),stone)
-		place("wall",Vector3(12.5,story_base-.55,25.65),Vector3(1.6,.55,30),stone)
+		place("wall",Vector3(-13.5,story_base-.55,25.5),Vector3(1.6,.55,30),stone)
+		place("wall",Vector3(12.5,story_base-.55,1.5),Vector3(1.6,.55,18),stone)
+		place("wall",Vector3(12.5,story_base-.55,25.5),Vector3(1.6,.55,30),stone)
 		for x in [-12,-7,-2,3,8,12]:
 			place("column",Vector3(x,story_base,11.15),Vector3(.95,8,.95),stone)
-		for x in [-13.5,12.5]:
-			for z in [17,28,39]:
-				place("column",Vector3(x,story_base,z),Vector3(.95,8,.95),stone)
+		for z in [17,28,39]:
+			place("column",Vector3(-13.5,story_base,z),Vector3(.95,8,.95),stone)
+		for z in [-5,0,5,10,17,28,39]:
+			place("column",Vector3(12.5,story_base,z),Vector3(.95,8,.95),stone)
 
 func terrace_surface(at: Vector3) -> bool:
 	# Include parapets offset just outside a gallery tile. Interior paving
