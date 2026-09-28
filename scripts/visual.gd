@@ -191,6 +191,6 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 	if dead or busy: return
 	var wanted = ("Crouch" if crouch else "Walk") if moving else idle_action()
 	if moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
-	var rate = clampf(speed_scale, .1, 2.0)
+	var rate = clampf(speed_scale, .1, 4.0)
 	if wanted != state or (wanted in ["Walk","BowRun"] and not is_equal_approx(rate,locomotion_rate)):
 		play(wanted,0.0,rate)

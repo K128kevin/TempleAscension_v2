@@ -23,7 +23,8 @@ var mode = "playing"
 var target
 var hover_ring: Sprite3D
 const ENEMY_CLICK_RADIUS = 64.0
-const PLAYER_WALK_SPEED = .9 # Matches the grounded foot sweep in UAL1 Walk_Loop.
+const PLAYER_WALK_SPEED = 2.7 # Three times the grounded-foot pace of UAL1 Walk_Loop.
+const PLAYER_WALK_ANIMATION_SCALE = 3.0
 var route = PackedVector3Array()
 var left_held = false
 var right_held = false
@@ -387,7 +388,7 @@ func player_control(dt: float) -> void:
 		elif not is_instance_valid(target):
 			var aim: Vector3 = world.pointer()
 			if player.position.distance_to(aim) > .6: player.face(aim)
-	player.visual.locomotion(moved,player.busy>0,false,.5 if slowed>0 else 1.0)
+	player.visual.locomotion(moved,player.busy>0,false,PLAYER_WALK_ANIMATION_SCALE*(.5 if slowed>0 else 1.0))
 
 func attack_range(special: bool) -> float:
 	if special: return 13.0
