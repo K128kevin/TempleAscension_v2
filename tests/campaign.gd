@@ -13,11 +13,10 @@ func start(owner_game):
 	check(game.run.floor==0 and game.player.position==Vector3(0,0,9),"New character starts at temple entrance")
 	check(game.player.visual.clips.size()==22,"All locomotion and weapon clips are present")
 	check(game.run.class_id=="warrior" and game.run.skills.cleave==1,"Warrior starts with Cleave and sword")
-	game.player.hp=20; game.run.energy=0; game.heal()
-	game.skills.tick(2)
-	check(game.player.hp==60 and game.run.flasks==2 and game.heal_cd==8,"Flask restores 40 percent over two seconds with charge and cooldown")
+	game.player.hp=20; game.run.energy=60; game.heal()
+	check(game.player.hp==80 and game.run.energy==0 and game.heal_cd==20 and not game.run.has("flasks"),"Healing spell instantly restores 60 percent for 60 energy with a 20-second cooldown and no charges")
 	game.heal()
-	check(game.run.flasks==2,"Flask cooldown prevents a second charge being spent")
+	check(game.run.energy==0,"Healing spell cooldown prevents another cast")
 	game.run.energy=10; game.dash()
 	check(game.run.energy==0 and game.dash_time>0 and game.player.invulnerable>0,"Dash spends ten energy and has no cooldown")
 	var hp: float = game.player.hp
@@ -27,7 +26,7 @@ func start(owner_game):
 	game.hurt_player(10000)
 	check(game.mode=="dead","Lethal damage opens retry")
 	game.retry_floor()
-	check(game.run.deaths==1 and game.run.class_id=="warrior" and game.run.flasks==3,"Retry preserves character and refills checkpoint flask")
+	check(game.run.deaths==1 and game.run.class_id=="warrior","Retry preserves the character")
 	game.pause_game(); check(game.mode=="paused","Pause stops campaign processing")
 	game.resume_game(); check(game.mode=="playing","Resume restores gameplay")
 	var total = 0

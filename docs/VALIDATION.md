@@ -1,9 +1,15 @@
 # Validation
 
+Healing and regeneration (0.4.8): Q spends 60 energy and instantly heals up to
+60% maximum health, with a 20-second cooldown and no charges. Health regenerates
+at 1% maximum per second, rising to 4% after three seconds without an active
+enemy. Energy regenerates at 10% maximum per second, retaining Willpower and
+Attunement bonuses. Version 4 saves migrate from flask charges to the new spell.
+
 `tests/campaign.gd` runs in a headless Godot process with test-only saves. It
 checks all 247 regular enemies through the actual scheduled melee damage path,
 reachable placement and stairways, weapon pickup, kill XP, point budgets,
-flasks, evade invulnerability, wall collision, death persistence, boss offerings,
+healing, evade invulnerability, wall collision, death persistence, boss offerings,
 gaze warning, crown ending, summary and corrupted-save recovery. Stairways grant
 no points, and repeat death callbacks or retries cannot duplicate kill XP.
 It controls player placement and cooldowns to make the run deterministic and
@@ -22,7 +28,7 @@ the explicit debug launcher and use isolated saves.
 Skill energy costs and dash (0.4.7): active skills spend their listed energy on
 each cast and have no cooldown timer. Dash spends 10 energy and can be used again
 when the player has enough energy. Legacy skill and evade cooldown values are
-discarded on load; the independent flask charge timer remains.
+discarded on load.
 
 Energy orb color (0.4.6): the energy tracker has a green fill; its health and fill
 tracking behavior are unchanged.
@@ -100,7 +106,7 @@ mode checks. Progression coverage includes shared stat formulas, all 36 skills,
 rank gates, level-25/30 point conservation, multi-level awards, respec, migration
 and save round trips. Runtime coverage exercises all 24 active skills, defensive
 effects, traps, persistent attacks, weapon requirements, free basics, cooldowns,
-flasks, evade and XP deduplication across death/retry.
+healing, evade and XP deduplication across death/retry.
 
 Native class captures pass the same 155 runtime checks. Character and skill
 screens for all three classes were visually inspected. The native HUD suite

@@ -255,12 +255,12 @@ func tick(dt: float) -> void:
 		weapon_icons[i].modulate = Color(.5,.65,1,.25) if r.class_id=="wizard" else Color(1,.8,.4,.2)
 		weapon_names[i].text = "Empty" if id.is_empty() else game.Book.all()[id].title
 	abilities.text = "%s · K: learn / assign skills · I: equipment" % Data.WEAPONS[r.weapon].capitalize()
-	recovery.text = "Q · Flask %d/3%s" % [r.flasks," · %ds" % ceili(game.heal_cd) if game.heal_cd>0 else ""]
+	recovery.text = "Q · Heal 60%% · 60 energy%s" % [" · %ds" % ceili(game.heal_cd) if game.heal_cd>0 else ""]
 	prompt.text = ""
 	if game.mode == "playing":
 		if game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
 		elif remaining==0 and r.floor<5: prompt.text = "The stairway is open. %s" % ("Press E to ascend" if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
-		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest / refill flasks · C attributes · K skills"
+		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest · C attributes · K skills"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
 	boss_name.visible = boss_bar.visible
 	if boss_bar.visible:

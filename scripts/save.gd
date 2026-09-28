@@ -3,14 +3,21 @@ const Data = preload("res://scripts/data.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=4: return d
+	if int(d.get("version",0))>=5: return d
+	if int(d.get("version",0))==4:
+		var updated = d.duplicate(true)
+		updated.version = 5
+		updated.erase("flasks")
+		updated.erase("flask_cooldown")
+		updated.heal_cooldown = 0.0
+		return updated
 	if int(d.get("version",0))==3:
 		if not d.get("hotbar") is Array or d.hotbar.size()!=5: return {}
 		var updated = d.duplicate(true)
 		updated.version = 4
 		updated.hotbar = updated.hotbar.slice(0,3)
 		updated.drops = updated.drops.filter(func(drop): return drop is Dictionary and drop.get("value",-1) not in [2,3])
-		return updated
+		return migrate(updated)
 	if not d.has("stats") or not d.stats is Array or d.stats.size()!=4: return {}
 	var old_floor = clampi(int(d.get("floor",0)),0,5)
 	var fresh = Data.new_run("ranger" if int(d.get("weapon",0))==2 else "warrior")
@@ -33,14 +40,14 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<4:
+	if int(d.get("version",0))<5:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
 		if not d.has(key): return false
-	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","flasks","deaths","seed","health","energy","flask_cooldown"]:
+	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","deaths","seed","health","energy","heal_cooldown"]:
 		if not (d[key] is int or d[key] is float) or not is_finite(float(d[key])) or d[key]<0: return false
-	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","flasks","deaths"]:
+	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","deaths"]:
 		if d[key]!=int(d[key]): return false
 	if not d.class_id in Data.CLASSES: return false
 	if not d.stats is Array or d.stats.size()!=5 or not d.owned is Array or d.owned.size()!=5: return false
@@ -77,7 +84,6 @@ static func valid(d) -> bool:
 			if id in assigned: return false
 			assigned.append(id)
 		if id!="" and (not d.skills.has(id) or Data.Skills.all()[id].effect=="passive"): return false
-	if d.flasks<0 or d.flasks>3: return false
 	if not (d.dead is Array and d.gems is Array and d.drops is Array and d.xp_claimed is Array): return false
 	for drop in d.drops:
 		if not drop is Dictionary or drop.get("kind","")!="weapon" or not drop.get("id",0) is String: return false
@@ -95,7 +101,7 @@ static func load_run() -> Dictionary:
 		if valid(parsed):
 			parsed = migrate(parsed)
 			parsed.erase("seconds")
-			for key in ["floor","weapon","difficulty","points","deaths","seed","level","xp","skill_points","flasks"]: parsed[key] = int(parsed[key])
+			for key in ["floor","weapon","difficulty","points","deaths","seed","level","xp","skill_points"]: parsed[key] = int(parsed[key])
 			for i in parsed.stats.size(): parsed.stats[i] = int(parsed.stats[i])
 			for id in parsed.skills: parsed.skills[id] = int(parsed.skills[id])
 			return parsed

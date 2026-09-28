@@ -23,11 +23,11 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Right click | Cast active skill slot 1 |
 | Hold left mouse | Continuously repath toward the cursor |
 | Space | Dash: spend 10 energy |
-| Q | Drink a flask: 40% health over two seconds, three charges, eight-second cooldown |
+| Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
 | 1 / 2 | Cast the other two assigned active skills |
 | C / K / I | Character attributes / skills and assignments / equipment |
 | Mouse wheel | Zoom |
-| E | Ascend, claim the crown, or rest/refill flasks at a safe entrance |
+| E | Ascend, claim the crown, or rest at a safe entrance |
 | Escape | Pause, continue saved game, choose new run/difficulty, sound, quit |
 | F11 | Fullscreen |
 
@@ -106,7 +106,9 @@ The summit remains a single arena with four corner groups of offerings.
 ## Classes and progression
 
 All classes start with Strength, Dexterity, Intelligence, Vitality and Willpower
-at 5, 100 health, 100 energy, and 8 energy regenerated per second. Above the base:
+at 5, 100 health and 100 energy. Health regenerates at 1% of maximum per second,
+quadrupled after three seconds without an active enemy. Energy regenerates at 10%
+of maximum per second. Above the base:
 
 | Attribute | Per point |
 |---|---|
@@ -143,8 +145,9 @@ award its XP again. XP and skill investment survive death and travel.
 Free respec is available through C at a safe floor entrance, out of combat; it
 refunds earned attribute/skill points and clears the hotbar. Equipment and active
 assignments can change out of combat. Maximum resource increases do not heal;
-refunds clamp current resources. Flasks replace the old energy-based heal and
-there is no default health regeneration. E at a safe entrance refills charges.
+refunds clamp current resources. The Q healing spell has no charges; it spends 60
+energy, heals 60% of maximum health instantly and recharges after 20 seconds. E
+at a safe entrance opens character settings; ascending restores health and energy.
 
 All attack clips scale to the character's attack duration and restart for every
 attack. Animation, contact/release and recovery advance on the same combat clock,

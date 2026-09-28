@@ -38,6 +38,7 @@ var leap_speed = 0.0
 var dash_time = 0.0
 var dash_direction = Vector3.ZERO
 var heal_cd = 0.0
+var regen_recovery_time = 3.0
 var slowed = 0.0
 var combat_age = 0.0
 var save_timer = 0.0
@@ -91,7 +92,7 @@ func load_floor() -> void:
 	run.erase("skill_cooldowns") # Ignore obsolete skill recharge timers in saved runs.
 	run.erase("evade_cooldown")
 	var migrating = int(run.version)<2
-	if int(run.version)<4: run = Save.migrate(run)
+	if int(run.version)<5: run = Save.migrate(run)
 	run.drops = run.drops.filter(func(drop): return drop.value not in [2,3])
 	if skills: skills.reset()
 	run_generation += 1
@@ -113,7 +114,8 @@ func load_floor() -> void:
 	crown_available = false
 	dash_time = 0
 	leap_left = 0
-	heal_cd = run.flask_cooldown
+	heal_cd = run.heal_cooldown
+	regen_recovery_time = 3.0
 	combat_age = 10
 	slowed = 0
 	world = Temple.new()
@@ -211,6 +213,15 @@ func _process(dt: float) -> void:
 		tick_projectiles(dt)
 		tick_pickups(dt)
 		if not player.dead:
+			var combat_engaged = false
+			for enemy in enemies:
+				if enemy.awake and not enemy.dead and enemy.kind!="offering":
+					combat_engaged = true
+					break
+			if combat_engaged: regen_recovery_time = 0.0
+			else: regen_recovery_time += dt
+			var health_regen_rate = .01*(4.0 if regen_recovery_time>=3.0 else 1.0)
+			player.hp = minf(Data.max_health(run),player.hp+Data.max_health(run)*health_regen_rate*dt)
 			run.energy = minf(Data.max_energy(run),run.energy+Data.energy_regen(run)*dt)
 		heal_cd = maxf(0,heal_cd-dt)
 		slowed = maxf(0,slowed-dt)
@@ -463,12 +474,14 @@ func dash() -> void:
 	effect(player.position,1.8,Color(.6,.9,1,.6),.3)
 
 func heal() -> void:
-	if mode!="playing" or player.dead or heal_cd>0 or run.flasks<=0 or player.hp>=Data.max_health(run): return
+	if mode!="playing" or player.dead or heal_cd>0 or player.hp>=Data.max_health(run): return
+	if run.energy<60:
+		toast("Healing needs 60 energy.")
+		return
 	sound.play("heal")
-	run.flasks -= 1
-	heal_cd = 8
-	skills.flask_time = 2
-	skills.flask_rate = Data.max_health(run)*.2
+	run.energy -= 60
+	player.hp = minf(Data.max_health(run),player.hp+Data.max_health(run)*.6)
+	heal_cd = 20
 	effect(player.position,3.5,Color(.3,1,.76,.9),2)
 	save_run()
 
@@ -526,7 +539,6 @@ func retry_floor() -> void:
 	run.energy = Data.max_energy(run)
 	run.position = [0,9]
 	run.phase = "playing"
-	run.flasks = 3
 	load_floor()
 	save_run()
 
@@ -696,7 +708,6 @@ func interact() -> void:
 	elif remaining()==0 and run.floor<5 and player.position.distance_to(world.exit_point)<4:
 		next_floor()
 	elif safe_checkpoint():
-		run.flasks = 3
 		save_run()
 		ProgressionUI.character(self)
 
@@ -704,7 +715,6 @@ func allocation_menu() -> void:
 	ProgressionUI.character(self)
 
 func next_floor() -> void:
-	run.flasks = 3
 	run.floor = mini(run.floor+1,5)
 	run.dead = []
 	run.drops = []
@@ -747,7 +757,7 @@ func pause_game() -> void:
 	left_held = false
 	right_held = false
 	save_run()
-	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1 / 2 skills · Space evade · Q flask\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel zoom · E interact · F11 fullscreen")
+	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1 / 2 skills · Space evade · Q healing spell\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel zoom · E interact · F11 fullscreen")
 	hud.button("Resume",resume_game)
 	hud.button("Continue saved ascent",continue_run)
 	hud.button("New ascent / Difficulty",new_run_menu)
@@ -775,7 +785,7 @@ func new_run_menu() -> void:
 
 func save_run() -> void:
 	if creating_character: return
-	run.flask_cooldown = heal_cd
+	run.heal_cooldown = heal_cd
 	if not is_instance_valid(player): return
 	run.health = maxf(1,player.hp)
 	run.position = [player.position.x,player.position.z]

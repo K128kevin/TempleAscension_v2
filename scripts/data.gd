@@ -33,7 +33,7 @@ const XP_STEPS = [100,150,220,300,400,520,650,800,960,1140,1340,1560,1800,2060,2
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	var starter: String = {"warrior":"cleave","ranger":"power_shot","wizard":"firebolt"}.get(class_id,"cleave")
 	var ranks = {}; ranks[starter] = 1
-	return {"version":4,"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"flasks":3,"flask_cooldown":0.0}
+	return {"version":5,"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 
 static func passive(run: Dictionary, id: String) -> float:
 	return Skills.value(id,int(run.skills.get(id,0)))
@@ -45,7 +45,7 @@ static func max_energy(run: Dictionary) -> float:
 	return 100.0+(run.stats[4]-5)*3.0+passive(run,"arcane_reserve")
 
 static func energy_regen(run: Dictionary) -> float:
-	return 8.0+(run.stats[4]-5)*.1+passive(run,"attunement")
+	return max_energy(run)*.1+(run.stats[4]-5)*.1+passive(run,"attunement")
 
 static func scaling_tag(weapon: int) -> String:
 	return "ranged" if weapon==2 else ("spell" if weapon==4 else "melee")

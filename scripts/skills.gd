@@ -8,13 +8,11 @@ var guard = 0.0
 var war_cry = 0.0
 var barrier = 0.0
 var barrier_time = 0.0
-var flask_time = 0.0
-var flask_rate = 0.0
 
 func reset() -> void:
 	pending.clear()
 	zones.clear()
-	guard = 0; war_cry = 0; barrier = 0; barrier_time = 0; flask_time = 0
+	guard = 0; war_cry = 0; barrier = 0; barrier_time = 0
 
 func reason(id: String) -> String:
 	if id.is_empty(): return "No skill assigned. Open K to choose a skill."
@@ -149,9 +147,6 @@ func execute(job: Dictionary) -> void:
 func tick(dt: float) -> void:
 	guard = maxf(0,guard-dt); war_cry = maxf(0,war_cry-dt); barrier_time = maxf(0,barrier_time-dt)
 	if barrier_time<=0: barrier = 0
-	if flask_time>0:
-		game.player.hp = minf(Data.max_health(game.run),game.player.hp+flask_rate*minf(dt,flask_time))
-		flask_time = maxf(0,flask_time-dt)
 	for i in range(pending.size()-1,-1,-1):
 		pending[i].time -= dt
 		if pending[i].time<=0:

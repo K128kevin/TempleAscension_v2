@@ -11,7 +11,7 @@ func check(ok: bool, message: String):
 func test():
 	for class_id in Data.CLASSES:
 		var run = Data.new_run(class_id)
-		check(run.stats==[5,5,5,5,5] and run.level==1 and Data.max_health(run)==100 and Data.max_energy(run)==100 and Data.energy_regen(run)==8,"Shared base resources and attributes: "+class_id)
+		check(run.stats==[5,5,5,5,5] and run.level==1 and Data.max_health(run)==100 and Data.max_energy(run)==100 and Data.energy_regen(run)==10,"Shared base resources and attributes: "+class_id)
 		check(run.skills.size()==1 and run.skill_points==0 and Book.compatible(run.hotbar[0],run.weapon),"Starter point is spent on a usable skill: "+class_id)
 		check(run.owned.count(true)==1 and run.owned[run.weapon],"Each class owns only its starting weapon: "+class_id)
 		var active = 0; var passive = 0

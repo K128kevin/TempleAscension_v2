@@ -101,10 +101,8 @@ func test():
 	var points=game.run.points
 	game.next_floor()
 	check(game.run.points==points and game.run.xp==earned,"Floor travel grants no points or XP")
-	game.player.hp=20; game.run.energy=0; game.heal_cd=0; game.heal()
-	check(game.run.flasks==2 and game.run.energy==0 and game.player.hp==20,"Flask spends a charge and heals over time without energy")
-	game.skills.tick(2)
-	check(is_equal_approx(game.player.hp,60),"Flask restores 40 percent over two seconds")
+	game.player.hp=20; game.run.energy=60; game.heal_cd=0; game.heal()
+	check(not game.run.has("flasks") and game.run.energy==0 and game.player.hp==80 and game.heal_cd==20,"Healing spell instantly restores 60 percent for 60 energy without charges")
 	game.run.energy=10; game.dash()
 	check(game.run.energy==0 and game.dash_time>0 and game.player.invulnerable>0,"Dash spends ten energy and has no cooldown")
 	game.save_run()
