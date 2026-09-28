@@ -60,7 +60,7 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 
 func tick(dt: float) -> void:
 	if kind!="player" and not dead:
-		visible = game.world.camera.is_position_in_frustum(position+Vector3.UP*config.size)
+		visible = game.world.can_see(position)
 		visual.animator.active = visible
 	visual.advance(dt)
 	slow_time = maxf(0,slow_time-dt)

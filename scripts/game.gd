@@ -134,6 +134,7 @@ func load_floor() -> void:
 	player.setup(self,"player","hero",at)
 	player.hp = clampf(run.health,1,Data.max_health(run))
 	player.rotation.y = PI
+	world.update_visibility(player.position,player.forward(),.1)
 	world.follow(player.position,1)
 	var rng = RandomNumberGenerator.new()
 	rng.seed = int(run.seed)+int(run.floor)*193
@@ -211,6 +212,7 @@ func _process(dt: float) -> void:
 		tick_scheduled(dt)
 		if not player.dead: skills.tick(dt)
 		player_control(dt)
+		world.update_visibility(player.position,player.forward(),dt)
 		for enemy in enemies: enemy.tick(dt)
 		tick_projectiles(dt)
 		tick_pickups(dt)
@@ -588,6 +590,8 @@ func tick_pickups(dt: float) -> void:
 	for i in range(pickups.size()-1,-1,-1):
 		var p: Dictionary = pickups[i]
 		p.node.rotation.y += dt
+		p.node.visible = world.can_see(p.node.position)
+		p.seal.visible = p.node.visible
 		if player.position.distance_to(p.node.position)>1.3: continue
 		var drop: Dictionary = p.drop
 		sound.play("gem-pickup")
@@ -615,6 +619,7 @@ func tick_projectiles(dt: float) -> void:
 		p.age += dt
 		var before: Vector3 = p.node.position
 		var after: Vector3 = before+p.direction*10.3*dt
+		p.node.visible = world.can_see(after)
 		var remove: bool = p.age>4 or not world.clear_line(Vector3(before.x,0,before.z),Vector3(after.x,0,after.z))
 		p.node.position = after
 		if not remove:
@@ -667,6 +672,7 @@ func tick_effects(dt: float) -> void:
 		var e: Dictionary = effects[i]
 		e.life -= dt
 		if e.float: e.node.position.y += dt
+		e.node.visible = world.can_see(e.node.position)
 		e.node.modulate.a = clampf(e.life/e.total,0,1)
 		if e.life<=0:
 			e.node.queue_free()
@@ -696,7 +702,7 @@ func direction_hint() -> String:
 	var nearest = null
 	var best = INF
 	for e in enemies:
-		if e.dead or e.kind=="offering": continue
+		if e.dead or e.kind=="offering" or not world.can_see(e.position): continue
 		var distance: float = e.position.distance_to(player.position)
 		if distance < best: best = distance; nearest = e
 	if nearest == null: return "The ascent is open"

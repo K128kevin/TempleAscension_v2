@@ -21,6 +21,18 @@ var desert_backdrop: Sprite3D
 var terrace_moonlight: DirectionalLight3D
 var boss_moonlight: SpotLight3D
 const TERRACE_LIGHT_LAYER = 8
+const VISION_RANGE = 16.0
+const VISION_HALF_ANGLE = deg_to_rad(70.0)
+const VISIBILITY_GRID_ORIGIN = Vector2i(-5,-5)
+var visibility_image: Image
+var visibility_texture: ImageTexture
+var visibility_grid_size = Vector2i.ZERO
+var visibility_floor_batches: Array[Dictionary] = []
+var visibility_nodes: Array[Node3D] = []
+var visibility_timer = 0.0
+var visibility_player_position = Vector3(INF,INF,INF)
+var visibility_player_forward = Vector3.ZERO
+var fog_material: ShaderMaterial
 
 func setup(floor_index: int, run_seed: int = 1) -> void:
 	level = floor_index
@@ -43,6 +55,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	camera.size = zoom
 	camera.far = 200
 	add_child(camera)
+	setup_visibility_fog()
 	var stone = Art.material("stone", [Color(.91,.87,.77),Color(.74,.80,.77),Color(.73,.70,.66),Color(.70,.76,.82),Color(.75,.69,.61),Color(.94,.87,.70)][floor_index])
 	var paving = Art.material("marble", Color(.37,.40,.39))
 	var court_paving = Art.material("marble",Color(.57,.64,.60))
@@ -180,6 +193,28 @@ func setup_desert() -> void:
 	terrace_moonlight.visible = false
 	add_child(terrace_moonlight)
 
+func setup_visibility_fog() -> void:
+	visibility_grid_size = Vector2i(layout.size+10,layout.size+10)
+	visibility_image = Image.create(visibility_grid_size.x,visibility_grid_size.y,false,Image.FORMAT_R8)
+	visibility_image.fill(Color.BLACK)
+	visibility_texture = ImageTexture.create_from_image(visibility_image)
+	fog_material = ShaderMaterial.new()
+	fog_material.shader = preload("res://assets/shaders/fog_of_war.gdshader")
+	fog_material.set_shader_parameter("visibility_mask",visibility_texture)
+	var layer = CanvasLayer.new()
+	layer.name = "LineOfSightFog"
+	layer.layer = 0
+	add_child(layer)
+	var fog = ColorRect.new()
+	fog.name = "FogOverlay"
+	fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fog.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fog.material = fog_material
+	layer.add_child(fog)
+	var world_origin = Vector2(VISIBILITY_GRID_ORIGIN.x-layout.start.x,VISIBILITY_GRID_ORIGIN.y-layout.start.y+9)
+	fog_material.set_shader_parameter("map_world_origin",world_origin)
+	fog_material.set_shader_parameter("map_dimensions",Vector2(visibility_grid_size))
+
 func setup_boss_moonlight() -> void:
 	boss_moonlight = SpotLight3D.new()
 	boss_moonlight.name = "DimBossRoomMoonlight"
@@ -294,11 +329,13 @@ func torch(at: Vector3, cast_shadows: bool) -> void:
 	light.distance_fade_shadow = 26
 	light.distance_fade_length = 8
 	add_child(light)
+	visibility_nodes.append(light)
 	var fire = preload("res://scripts/torch_flame.gd").new()
 	fire.position = at+Vector3.UP*2.08
 	# Stable spatial phases keep neighboring torches from pulsing in unison.
 	fire.setup(light,fposmod(at.x*12.9898+at.z*78.233,100.0))
 	add_child(fire)
+	visibility_nodes.append(fire)
 
 func place(id: String, pos: Vector3, size: Vector3, mat: Material = null) -> Node3D:
 	# The wall's continuous face runs along local X. Rotate north–south
@@ -309,6 +346,7 @@ func place(id: String, pos: Vector3, size: Vector3, mat: Material = null) -> Nod
 	if turn_wall: n.rotation.y = PI/2
 	add_child(n)
 	n.position = pos
+	if id!="floor": visibility_nodes.append(n)
 	# Torches cast architecture shadows without re-rendering the animated crowd.
 	var layers = 2 | TERRACE_LIGHT_LAYER if terrace_surface(pos) else 2
 	for mesh in n.find_children("*","MeshInstance3D",true,false): mesh.layers = layers
@@ -327,10 +365,11 @@ func batch_floors() -> void:
 		for mesh in tile.find_children("*","MeshInstance3D",true,false):
 			# Small batches keep the compatibility renderer's per-object light
 			# limit from choosing one set of torches for the entire temple floor.
-			var chunk = 4 if layout.court.has_point(layout.to_cell(tile.position)) else 12
+			var chunk = 4
 			var key = "%d:%d:%d:%d:%d:%d" % [mesh.mesh.get_instance_id(),mesh.material_override.get_instance_id(),mesh.layers,chunk,floori(tile.position.x/chunk),floori(tile.position.z/chunk)]
-			if not groups.has(key): groups[key] = {"mesh":mesh.mesh,"material":mesh.material_override,"layers":mesh.layers,"transforms":[]}
+			if not groups.has(key): groups[key] = {"mesh":mesh.mesh,"material":mesh.material_override,"layers":mesh.layers,"transforms":[],"cells":[]}
 			groups[key].transforms.append(mesh.global_transform)
+			groups[key].cells.append(layout.to_cell(tile.position))
 	for group in groups.values():
 		var instances = MultiMesh.new()
 		instances.transform_format = MultiMesh.TRANSFORM_3D
@@ -343,6 +382,7 @@ func batch_floors() -> void:
 		batch.layers = group.layers
 		batch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(batch)
+		visibility_floor_batches.append({"node":batch,"cells":group.cells})
 	for tile in floor_nodes:
 		remove_child(tile)
 		tile.queue_free()
@@ -442,11 +482,17 @@ func follow(pos: Vector3, delta: float) -> void:
 	camera.position = camera.position.lerp(desired,minf(1,delta*8))
 	camera.look_at(camera.position-Vector3(12,21,19))
 	camera.size = lerpf(camera.size,zoom,minf(1,delta*8))
+	var viewport_size = get_viewport().get_visible_rect().size
+	fog_material.set_shader_parameter("camera_position",camera.global_position)
+	fog_material.set_shader_parameter("camera_right",camera.global_basis.x)
+	fog_material.set_shader_parameter("camera_up",camera.global_basis.y)
+	fog_material.set_shader_parameter("camera_forward",-camera.global_basis.z)
+	fog_material.set_shader_parameter("camera_size",camera.size)
+	fog_material.set_shader_parameter("viewport_aspect",viewport_size.x/maxf(1.0,viewport_size.y))
 	if is_instance_valid(desert_backdrop):
 		var outdoors = layout.on_terrace(layout.to_cell(pos))
 		desert_backdrop.visible = outdoors or level==5
 		terrace_moonlight.visible = outdoors
-		var viewport_size = get_viewport().get_visible_rect().size
 		var width = camera.size*viewport_size.x/viewport_size.y
 		var texture_size = desert_backdrop.texture.get_size()
 		desert_backdrop.pixel_size = maxf(width/texture_size.x,camera.size/texture_size.y)*1.08
@@ -473,3 +519,39 @@ func follow(pos: Vector3, delta: float) -> void:
 			if blocked != group.hidden:
 				group.hidden = blocked
 				for mesh in group.meshes: mesh.material_override = group.faded if blocked else group.normal
+
+func update_visibility(pos: Vector3, facing: Vector3, delta: float) -> void:
+	visibility_timer -= delta
+	var flat_facing = Vector3(facing.x,0,facing.z).normalized()
+	var direction_changed = visibility_player_forward.dot(flat_facing)<.995
+	if visibility_timer>0 and pos.distance_squared_to(visibility_player_position)<.09 and not direction_changed: return
+	visibility_timer = .10
+	visibility_player_position = pos
+	visibility_player_forward = flat_facing
+	visibility_image.fill(Color.BLACK)
+	var cos_limit = cos(VISION_HALF_ANGLE)
+	for cell in layout.cells:
+		var at = layout.to_world(cell)
+		var offset = at-pos
+		if offset.length_squared()>VISION_RANGE*VISION_RANGE: continue
+		var flat_offset = Vector3(offset.x,0,offset.z)
+		if flat_offset.length_squared()>.01 and flat_facing.dot(flat_offset.normalized())<cos_limit: continue
+		if not clear_line(pos,at): continue
+		var pixel = cell-VISIBILITY_GRID_ORIGIN
+		if pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y:
+			visibility_image.set_pixel(pixel.x,pixel.y,Color.WHITE)
+	visibility_texture.update(visibility_image)
+	for batch in visibility_floor_batches:
+		var seen = false
+		for cell in batch.cells:
+			if cell_is_visible(cell): seen = true; break
+		batch.node.visible = seen
+	for node in visibility_nodes:
+		if is_instance_valid(node): node.visible = can_see(node.position)
+
+func cell_is_visible(cell: Vector2i) -> bool:
+	var pixel = cell-VISIBILITY_GRID_ORIGIN
+	return pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y and visibility_image.get_pixel(pixel.x,pixel.y).r>.5
+
+func can_see(at: Vector3) -> bool:
+	return cell_is_visible(layout.to_cell(at))
