@@ -114,12 +114,14 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	var torch_positions: Array[Vector3] = []
 	# Deterministic placement covers room walls, junctions and galleries.
 	for at in torch_candidates:
+		if floor_index==2 and layout.court.grow(1).has_point(layout.to_cell(at)): continue
 		var crowded = false
 		for other in torch_positions:
 			if at.distance_squared_to(other)<30.25: crowded=true; break
 		if crowded: continue
 		torch_positions.append(at)
 		torch(at,true)
+	if floor_index==2: setup_court_torches()
 	if floor_index==5:
 		boss_point = layout.to_world(Vector2i(14,10))
 		setup_boss_moonlight()
@@ -192,6 +194,17 @@ func setup_boss_moonlight() -> void:
 	boss_moonlight.shadow_enabled = false
 	add_child(boss_moonlight)
 
+func setup_court_torches() -> void:
+	var first: Vector3 = layout.to_world(layout.court.position)
+	var last: Vector3 = layout.to_world(layout.court.end-Vector2i.ONE)
+	var center = (first+last)*.5
+	for offset in [-8.0,8.0]:
+		torch(Vector3(center.x+offset,0,first.z-.28),true)
+		torch(Vector3(center.x+offset,0,last.z+.28),true)
+	for offset in [-4.5,4.5]:
+		torch(Vector3(first.x-.28,0,center.z+offset),true)
+		torch(Vector3(last.x+.28,0,center.z+offset),true)
+
 func setup_summit_understructure(stone: Material) -> void:
 	# A continuous stone body wraps beneath the southern front and full east
 	# edge, keeping the desert out of view around the southeast corner.
@@ -223,6 +236,7 @@ func terrace_surface(at: Vector3) -> bool:
 func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	var candidates: Array[Dictionary] = []
 	for cell in layout.cells:
+		if layout.court.has_area() and layout.court.has_point(cell): continue
 		var at = layout.to_world(cell)
 		if at.distance_to(spawn)<9 or at.distance_to(exit_point)<2.5 or not fits(at,.45): continue
 		var backs: Array[Vector2i] = []
@@ -243,6 +257,7 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 		if posts.size()==count: return posts
 	# Small/pathological layouts may use unoccupied interior floor positions.
 	for cell in layout.cells:
+		if layout.court.has_area() and layout.court.has_point(cell): continue
 		var at = layout.to_world(cell)
 		if at.distance_to(spawn)<9 or at.distance_to(exit_point)<2.5 or not fits(at,.45): continue
 		var crowded = false
