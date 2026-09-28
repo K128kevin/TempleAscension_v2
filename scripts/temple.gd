@@ -541,14 +541,13 @@ func update_visibility(pos: Vector3, delta: float) -> void:
 	visibility_timer = .10
 	visibility_player_position = pos
 	visibility_image.fill(Color.BLACK)
-	for cell in layout.cells:
-		var at = layout.to_world(cell)
-		var offset = at-pos
-		if offset.length_squared()>VISION_RANGE*VISION_RANGE: continue
-		if not clear_line(pos,at): continue
-		var pixel = cell-VISIBILITY_GRID_ORIGIN
-		if pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y:
-			visibility_image.set_pixel(pixel.x,pixel.y,Color.WHITE)
+	for cell in layout.cells: mark_visibility_cell(cell,pos)
+	# Fountain cells are intentionally removed from layout.cells so they remain
+	# blocked for movement, but their surface should still receive the clear LOS mask.
+	if level==2:
+		for y in range(layout.court_obstacle.position.y,layout.court_obstacle.end.y):
+			for x in range(layout.court_obstacle.position.x,layout.court_obstacle.end.x):
+				mark_visibility_cell(Vector2i(x,y),pos)
 	visibility_texture.update(visibility_image)
 	for batch in visibility_floor_batches:
 		var seen = false
@@ -557,6 +556,13 @@ func update_visibility(pos: Vector3, delta: float) -> void:
 		batch.node.visible = seen
 	for node in visibility_nodes:
 		if is_instance_valid(node): node.visible = can_see(node.position)
+
+func mark_visibility_cell(cell: Vector2i, pos: Vector3) -> void:
+	var at = layout.to_world(cell)
+	if at.distance_squared_to(pos)>VISION_RANGE*VISION_RANGE or not clear_line(pos,at): return
+	var pixel = cell-VISIBILITY_GRID_ORIGIN
+	if pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y:
+		visibility_image.set_pixel(pixel.x,pixel.y,Color.WHITE)
 
 func cell_is_visible(cell: Vector2i) -> bool:
 	var pixel = cell-VISIBILITY_GRID_ORIGIN
