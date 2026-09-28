@@ -24,7 +24,7 @@ Windows requires a playtest on Windows hardware. macOS signing is ad-hoc only.
 
 Compact ability bar and starting equipment (0.4.1): 98 progression checks,
 155 class runtime checks, 555 campaign checks and 52 native HUD checks pass.
-The HUD has exactly four 56×64 buttons with 40×40 icons, ordered LMB basic
+The HUD has exactly four 56×56 buttons with 34×34 icons, ordered LMB basic
 attack, RMB skill, 1 and 2. Its total width is 236 pixels instead of 482.
 All four buttons were exercised with actual mouse events, and rendered captures
 at four window sizes were inspected. Each new class owns only its starting
