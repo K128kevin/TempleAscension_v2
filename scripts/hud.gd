@@ -99,7 +99,7 @@ func setup(owner_game) -> void:
 	var row = Control.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(row)
-	anchor(row,Vector2(.5,1),Vector2(-118,-132),Vector2(236,64))
+	anchor(row,Vector2(.5,1),Vector2(-118,-124),Vector2(236,56))
 	idle_style = panel_style(Color(.035,.032,.028,.94),Color(.37,.31,.21))
 	selected_style = panel_style(Color(.15,.115,.065,.97),gold)
 	selected_style.set_border_width_all(2)
@@ -109,7 +109,7 @@ func setup(owner_game) -> void:
 		var slot = Button.new()
 		row.add_child(slot)
 		slot.position = Vector2(i*60,0)
-		slot.size = Vector2(56,64)
+		slot.size = Vector2(56,56)
 		slot.focus_mode = Control.FOCUS_NONE
 		slot.tooltip_text = "Assign skills in K"
 		slot.add_theme_stylebox_override("disabled",idle_style)
@@ -123,16 +123,16 @@ func setup(owner_game) -> void:
 		icon.texture = load("res://assets/textures/seal.png")
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.position = Vector2(8,14); icon.size = Vector2(40,40)
+		icon.position = Vector2(11,10); icon.size = Vector2(34,34)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(icon)
 		weapon_icons.append(icon)
 		var hotkey = label(["LMB","RMB","1","2"][i],12,gold,slot)
 		hotkey.position = Vector2(5,2)
-		var name_label = label("",11,cream,slot)
-		name_label.position = Vector2(2,27); name_label.size = Vector2(52,35)
+		var name_label = label("",10,cream,slot)
+		name_label.position = Vector2(2,39); name_label.size = Vector2(52,15)
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		name_label.max_lines_visible = 2
+		name_label.max_lines_visible = 1
 		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		weapon_names.append(name_label)
