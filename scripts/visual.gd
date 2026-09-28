@@ -18,6 +18,7 @@ var shield_item: Node3D
 var is_stone = false
 var animation_delay = 0.0
 var pending_animation_time = 0.0
+var locomotion_rate = 1.0
 const SHIELD_SIZE = Vector3(.48,.62,.12)
 const SHIELD_CENTER = Vector3(0,.14,-.135)
 const BOW_GRIP = Vector3(-.42,.51,0)
@@ -162,12 +163,13 @@ func petrify() -> void:
 	for mesh in find_children("*","MeshInstance3D",true,false): mesh.material_override = Art.statue_material()
 	animator.pause()
 
-func play(action: String, duration: float = 0.0) -> void:
+func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> void:
 	if dead or not clips.has(action): return
 	state = action
 	animation_delay = 0
 	pending_animation_time = 0
-	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else 1.0
+	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
+	if action in ["Walk","BowRun"]: locomotion_rate = speed_scale
 	animator.play(clips[action], minf(.08,duration*.1) if duration>0 else .08, speed)
 	# play() resumes an already assigned clip. Repeated attacks must each
 	# start a fresh wind-up, even when the last recovery is still playing.
@@ -185,8 +187,10 @@ func advance(dt: float) -> void:
 		animator.advance(pending_animation_time)
 		pending_animation_time = 0
 
-func locomotion(moving: bool, busy: bool, crouch: bool = false) -> void:
+func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: float = 1.0) -> void:
 	if dead or busy: return
 	var wanted = ("Crouch" if crouch else "Walk") if moving else idle_action()
 	if moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
-	if wanted != state: play(wanted)
+	var rate = clampf(speed_scale, .1, 2.0)
+	if wanted != state or (wanted in ["Walk","BowRun"] and not is_equal_approx(rate,locomotion_rate)):
+		play(wanted,0.0,rate)
