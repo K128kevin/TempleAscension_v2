@@ -181,7 +181,7 @@ func make_orb(is_energy: bool) -> Dictionary:
 	orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var material = ShaderMaterial.new()
 	material.shader = preload("res://assets/shaders/orb.gdshader")
-	material.set_shader_parameter("liquid",Color(.045,.26,.78) if is_energy else Color(.78,.035,.06))
+	material.set_shader_parameter("liquid",Color(.08,.64,.18) if is_energy else Color(.78,.035,.06))
 	orb.material = material
 	holder.add_child(orb)
 	var value = label("",18,cream,holder)

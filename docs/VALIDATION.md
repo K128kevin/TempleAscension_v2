@@ -19,6 +19,9 @@ summit, and records the fifth-floor frame rate. Screenshots and JSON/log outputs
 are under `test-results/`. Native exports exclude tests. Developer controls require
 the explicit debug launcher and use isolated saves.
 
+Energy orb color (0.4.6): the energy tracker has a green fill; its health and fill
+tracking behavior are unchanged.
+
 Export success verifies packaging, not execution on another operating system.
 Windows requires a playtest on Windows hardware. macOS signing is ad-hoc only.
 
