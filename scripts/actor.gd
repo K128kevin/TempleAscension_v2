@@ -69,6 +69,10 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 	add_child(warning)
 
 func tick(dt: float) -> void:
+	if kind!="player" and not dead:
+		visible = game.world.camera.is_position_in_frustum(position+Vector3.UP*config.size)
+		visual.animator.active = visible
+	visual.advance(dt)
 	slow_time = maxf(0,slow_time-dt)
 	mark_time = maxf(0,mark_time-dt)
 	stagger_time = maxf(0,stagger_time-dt)
@@ -82,8 +86,6 @@ func tick(dt: float) -> void:
 	if kind == "player" or stagger_time>0: return
 	var player = game.player
 	var distance: float = position.distance_to(player.position)
-	visible = game.world.camera.is_position_in_frustum(position+Vector3.UP*config.size)
-	visual.animator.active = visible
 	if kind == "offering":
 		if dormant_offering: return
 		if not is_instance_valid(game.boss) or game.boss.dead: die(false); return
@@ -123,6 +125,7 @@ func tick(dt: float) -> void:
 			cast_count = -1
 			attack_point = player.position
 			warning.visible = true
+			visual.play("Cast",windup/.5)
 			game.toast("THE CROWN'S GAZE — keep moving around the statue")
 	if windup > 0:
 		windup -= dt
@@ -236,7 +239,9 @@ func hit(damage: float, type: String = "physical") -> void:
 	else:
 		if not awake: game.awaken(self)
 		cooldown += .25
-		if windup > 0: windup += .1
+		if windup > 0:
+			windup += .1
+			visual.animation_delay += .1
 
 func die(reward: bool = true) -> void:
 	if dead: return

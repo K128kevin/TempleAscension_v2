@@ -145,7 +145,9 @@ assignments can change out of combat. Maximum resource increases do not heal;
 refunds clamp current resources. Flasks replace the old energy-based heal and
 there is no default health regeneration. E at a safe entrance refills charges.
 
-Sword, axe, spear and bow attacks retain their authored animation timing. Staff
+All attack clips scale to the character's attack duration and restart for every
+attack. Animation, contact/release and recovery advance on the same combat clock,
+including held attacks, Quick Draw and enemy wind-ups delayed by a hit. Staff
 basic attacks launch free arcane bolts. Bow draws stay clear of the torso and neck,
 with dedicated carry poses for running and crouching. Class skills add distinct
 projectiles, sweeps, traps, defensive buffs, crowd control and area effects using

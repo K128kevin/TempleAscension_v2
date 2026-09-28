@@ -16,6 +16,8 @@ var bow_strings: Array = []
 var shield_attachment: BoneAttachment3D
 var shield_item: Node3D
 var is_stone = false
+var animation_delay = 0.0
+var pending_animation_time = 0.0
 const SHIELD_SIZE = Vector3(.48,.62,.12)
 const SHIELD_CENTER = Vector3(0,.14,-.135)
 const BOW_GRIP = Vector3(-.42,.51,0)
@@ -32,6 +34,8 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	rig.scale = Vector3.ONE * stature
 	add_child(rig)
 	animator = rig.find_children("*", "AnimationPlayer", true, false)[0]
+	# Actor.tick advances poses on the same clock as wind-up and recovery.
+	animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	skeleton = rig.find_children("*", "Skeleton3D", true, false)[0]
 	for mesh in rig.find_children("*", "MeshInstance3D", true, false):
 		skin_meshes.append(mesh)
@@ -161,10 +165,25 @@ func petrify() -> void:
 func play(action: String, duration: float = 0.0) -> void:
 	if dead or not clips.has(action): return
 	state = action
+	animation_delay = 0
+	pending_animation_time = 0
 	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else 1.0
-	animator.play(clips[action], .08, speed)
+	animator.play(clips[action], minf(.08,duration*.1) if duration>0 else .08, speed)
+	# play() resumes an already assigned clip. Repeated attacks must each
+	# start a fresh wind-up, even when the last recovery is still playing.
+	animator.seek(0,true)
 	animator.advance(0)
 	if action == "Death": dead = true
+
+func advance(dt: float) -> void:
+	var held = minf(dt,animation_delay)
+	animation_delay -= held
+	if not animator.is_playing(): return
+	pending_animation_time += dt-held
+	# Keep the clock while culled; update the pose when visible again.
+	if animator.active:
+		animator.advance(pending_animation_time)
+		pending_animation_time = 0
 
 func locomotion(moving: bool, busy: bool, crouch: bool = false) -> void:
 	if dead or busy: return

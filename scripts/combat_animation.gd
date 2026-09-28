@@ -13,9 +13,9 @@ const SPECIAL = [
 	{"clip":"BowRapid","seconds":1.16,"contacts":[.30,.54,.78]},
 	{"clip":"AxeWhirl","seconds":1.02,"contacts":[.62]},
 	{"clip":"Cast","seconds":.8,"contacts":[.5]}]
-static func profile(weapon: int, special: bool, attack_speed_percent: float) -> Dictionary:
+static func profile(weapon: int, special: bool, attack_speed_percent: float, minimum_duration: float = 0.0) -> Dictionary:
 	var result: Dictionary = (SPECIAL if special else NORMAL)[weapon].duplicate(true)
-	result.duration = result.seconds * maxf(.65,1.0/(1.0+attack_speed_percent*.01))
+	result.duration = maxf(minimum_duration,result.seconds * maxf(.65,1.0/(1.0+attack_speed_percent*.01)))
 	result.times = []
 	for fraction in result.contacts: result.times.append(fraction*result.duration)
 	return result

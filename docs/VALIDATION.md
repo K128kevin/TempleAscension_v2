@@ -22,6 +22,23 @@ the explicit debug launcher and use isolated saves.
 Export success verifies packaging, not execution on another operating system.
 Windows requires a playtest on Windows hardware. macOS signing is ad-hoc only.
 
+Attack playback synchronization (0.4.4): 910 deterministic combat checks cover
+all five weapon families, normal/special clips, playback shortened to 0.25 seconds
+or extended to 1.75 seconds, all 24 active skills, held attacks at 15/60 FPS for
+every class/weapon combination, six attacking enemy types, enemy hit delays and
+returning from culling. Animation contacts and gameplay releases use one clock.
+The live rendered check confirms four complete swings for four held attacks in
+each class, with the previous animation finished before the next attack starts.
+The campaign fixture advances recovery instead of forcibly clearing cooldowns.
+The native timing run passes 925 checks; class runtime passes 155, campaign 555,
+bow 21 and shield mounting 184. These runs exit cleanly except the previously
+recorded headless class-runtime resource messages at engine shutdown.
+The native input playtest also passes 11 checks for movement, held attacks,
+pause, evade, equipment and save/continue. Both 0.4.4 packages pass archive CRC
+and packaged-data checks; macOS signing verification passes. Each exported PCK
+passes 910 timing checks in the local Godot runtime, with the previously recorded
+headless resource messages at shutdown. The Windows executable was not run.
+
 Shield mounting and worn stone (0.4.3): 184 shield checks pass across Warrior
 and Gladiator idle, run, crouch and both sword attacks, sampled at six animation
 phases. They check that the wrist projects inside the shield rim, the shield

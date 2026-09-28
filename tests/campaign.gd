@@ -43,7 +43,7 @@ func start(owner_game):
 			game.run.weapon=1
 			for swing in 30:
 				if enemy.dead: break
-				game.player.cooldown=0
+				game.player.tick(1.2) # Finish the previous swing and its recovery.
 				game.attack(false,enemy.position)
 				game.tick_scheduled(1.2)
 			check(enemy.dead,"Defeat through weapon combat: "+enemy.uid)

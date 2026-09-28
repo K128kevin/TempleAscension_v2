@@ -197,14 +197,16 @@ func _process(dt: float) -> void:
 	if mode == "playing":
 		combat_age += dt
 		player.tick(dt)
+		# Advance existing jobs before accepting this frame's input: a new
+		# attack and its animation both start at time zero on this clock.
+		tick_scheduled(dt)
+		if not player.dead: skills.tick(dt)
 		player_control(dt)
 		for enemy in enemies: enemy.tick(dt)
-		tick_scheduled(dt)
 		tick_projectiles(dt)
 		tick_pickups(dt)
 		if not player.dead:
 			run.energy = minf(Data.max_energy(run),run.energy+Data.energy_regen(run)*dt)
-			skills.tick(dt)
 		dash_cd = maxf(0,dash_cd-dt)
 		heal_cd = maxf(0,heal_cd-dt)
 		slowed = maxf(0,slowed-dt)
@@ -364,13 +366,13 @@ func attack_range(special: bool) -> float:
 	return 1.9
 
 func attack(special: bool, point: Vector3) -> void:
-	if player.cooldown>0 or player.dead or mode!="playing": return
+	if player.cooldown>0 or player.busy>0 or player.dead or mode!="playing": return
 	if special:
 		skills.cast_slot(0,point)
 		return
 	order_pending = false
-	var animation = CombatAnimation.profile(run.weapon,false,Data.passive(run,"quick_draw") if run.weapon==2 else 0)
-	player.cooldown = maxf(Data.cooldown(run),animation.duration)
+	var animation = CombatAnimation.profile(run.weapon,false,Data.passive(run,"quick_draw") if run.weapon==2 else 0,Data.cooldown(run))
+	player.cooldown = animation.duration
 	player.busy = animation.duration
 	player.face(point)
 	var damage = Data.damage(run,randf_range(10,15))

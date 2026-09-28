@@ -28,6 +28,12 @@ animation. Class projectiles reuse the arrow and gem meshes; traps, defensive
 effects and area warnings reuse the transparent seal sprite with distinct colors
 and timing. This update adds no externally sourced or generated image assets.
 
+`scripts/visual.gd` scales imported clips to each attack's duration and restarts
+every attack at its wind-up. `scripts/actor.gd` advances animation manually on the
+combat clock, so held attacks finish their recovery before the next swing.
+Damage and projectile jobs follow the same clock. Enemy hit delays pause the
+pose and telegraph together; culled actors retain elapsed animation time.
+
 ## Requested local assets
 
 Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
