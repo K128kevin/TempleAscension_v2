@@ -141,13 +141,14 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 func setup_desert() -> void:
 	# The image lies far beyond/below the gallery. A dark imported foundation under
 	# the building keeps the desert out of interior gaps between generated rooms.
-	var dark = StandardMaterial3D.new()
-	dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	dark.albedo_color = Color(.007,.009,.013)
-	var center = layout.to_world(Vector2i.ZERO)+Vector3((layout.size-1)*.5,0,(layout.size-1)*.5)
-	var foundation = Art.model("floor",Vector3(layout.size,.4,layout.size),dark)
-	foundation.position = center+Vector3.DOWN*.6
-	add_child(foundation)
+	if level<5:
+		var dark = StandardMaterial3D.new()
+		dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		dark.albedo_color = Color(.007,.009,.013)
+		var center = layout.to_world(Vector2i.ZERO)+Vector3((layout.size-1)*.5,0,(layout.size-1)*.5)
+		var foundation = Art.model("floor",Vector3(layout.size,.4,layout.size),dark)
+		foundation.position = center+Vector3.DOWN*.6
+		add_child(foundation)
 	# Deep masonry along the exposed edges makes the elevation above the dunes
 	# legible instead of leaving the terrace as a paper-thin floating platform.
 	var masonry = Art.material("stone",Color(.22,.27,.34))
@@ -179,13 +180,13 @@ func setup_desert() -> void:
 func setup_boss_moonlight() -> void:
 	boss_moonlight = SpotLight3D.new()
 	boss_moonlight.name = "DimBossRoomMoonlight"
-	boss_moonlight.position = boss_point+Vector3.UP*12
+	boss_moonlight.position = boss_point+Vector3.UP*9
 	boss_moonlight.rotation_degrees.x = -90
 	boss_moonlight.light_color = Color(.50,.61,.80)
-	boss_moonlight.light_energy = .55
-	boss_moonlight.spot_range = 25
-	boss_moonlight.spot_angle = 48
-	boss_moonlight.spot_attenuation = 1.4
+	boss_moonlight.light_energy = 1.7
+	boss_moonlight.spot_range = 24
+	boss_moonlight.spot_angle = 68
+	boss_moonlight.spot_attenuation = 1.0
 	boss_moonlight.light_cull_mask = 3
 	boss_moonlight.shadow_enabled = false
 	add_child(boss_moonlight)
