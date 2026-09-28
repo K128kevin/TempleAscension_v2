@@ -146,7 +146,7 @@ def bow_grip(pitch=0.0,cant=0.0):
 
 # Preserve the supplied locomotion below the shoulders, but carry the bow in a
 # relaxed left-hand grip beside the body rather than swinging it through the legs.
-for name,source_name in [('BowRun','Walk'),('BowCrouch','Crouch')]:
+for name,source_name in [('BowRun','Jog'),('BowCrouch','Crouch')]:
  original=bpy.data.actions[source_name]
  length=original.frame_range.y/30
  poses=[]

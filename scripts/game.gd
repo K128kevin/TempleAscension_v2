@@ -23,8 +23,8 @@ var mode = "playing"
 var target
 var hover_ring: Sprite3D
 const ENEMY_CLICK_RADIUS = 64.0
-const PLAYER_WALK_SPEED = 2.7 # Three times the grounded-foot pace of UAL1 Walk_Loop.
-const PLAYER_WALK_ANIMATION_SCALE = 3.0
+const PLAYER_JOG_SPEED = 8.1 # Triple the previous movement speed.
+const PLAYER_JOG_ANIMATION_SCALE = 3.0 # Matches the UAL1 jog stride to player travel.
 var route = PackedVector3Array()
 var left_held = false
 var right_held = false
@@ -381,7 +381,7 @@ func player_control(dt: float) -> void:
 		if not route.is_empty():
 			var offset: Vector3 = route[0]-player.position
 			var speed_scale = .5 if slowed>0 else 1.0
-			var step: float = minf(offset.length(),PLAYER_WALK_SPEED*speed_scale*dt)
+			var step: float = minf(offset.length(),PLAYER_JOG_SPEED*speed_scale*dt)
 			var before: Vector3 = player.position
 			player.position = world.move(before,offset.normalized()*step)
 			var displacement: Vector3 = player.position-before
@@ -390,7 +390,7 @@ func player_control(dt: float) -> void:
 		elif not is_instance_valid(target):
 			var aim: Vector3 = world.pointer()
 			if player.position.distance_to(aim) > .6: player.face(aim)
-	player.visual.locomotion(moved,player.busy>0,false,PLAYER_WALK_ANIMATION_SCALE*(.5 if slowed>0 else 1.0))
+		player.visual.locomotion(moved,player.busy>0,false,PLAYER_JOG_ANIMATION_SCALE*(.5 if slowed>0 else 1.0))
 
 func attack_range(special: bool) -> float:
 	if special: return 13.0
