@@ -22,7 +22,6 @@ func reason(id: String) -> String:
 	var s: Dictionary = Book.all()[id]
 	if s.effect=="passive": return "Passive skills apply automatically."
 	if not Book.compatible(id,int(game.run.weapon)): return "Requires %s." % ("sword and shield" if s.requirement=="shield" else s.requirement)
-	if float(game.run.skill_cooldowns.get(id,0))>0: return "Recharging: %.1fs" % game.run.skill_cooldowns[id]
 	if game.run.energy<cost(id): return "Not enough energy."
 	return ""
 
@@ -50,7 +49,6 @@ func cast(id: String, at: Vector3) -> bool:
 		game.toast("The target is behind a wall.")
 		return false
 	game.run.energy -= cost(id)
-	game.run.skill_cooldowns[id] = float(s.cooldown)
 	game.order_pending = false
 	game.route.clear()
 	game.player.face(at)
@@ -154,7 +152,6 @@ func tick(dt: float) -> void:
 	if flask_time>0:
 		game.player.hp = minf(Data.max_health(game.run),game.player.hp+flask_rate*minf(dt,flask_time))
 		flask_time = maxf(0,flask_time-dt)
-	for id in game.run.skill_cooldowns: game.run.skill_cooldowns[id] = maxf(0,float(game.run.skill_cooldowns[id])-dt)
 	for i in range(pending.size()-1,-1,-1):
 		pending[i].time -= dt
 		if pending[i].time<=0:

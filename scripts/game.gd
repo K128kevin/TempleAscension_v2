@@ -35,7 +35,6 @@ var leap_left = 0.0
 var leap_duration = .26
 var leap_direction = Vector3.ZERO
 var leap_speed = 0.0
-var dash_cd = 0.0
 var dash_time = 0.0
 var dash_direction = Vector3.ZERO
 var heal_cd = 0.0
@@ -89,6 +88,8 @@ func _ready() -> void:
 func load_floor() -> void:
 	if test_mode: creating_character = false
 	run.erase("seconds") # Discard elapsed time from legacy saves.
+	run.erase("skill_cooldowns") # Ignore obsolete skill recharge timers in saved runs.
+	run.erase("evade_cooldown")
 	var migrating = int(run.version)<2
 	if int(run.version)<4: run = Save.migrate(run)
 	run.drops = run.drops.filter(func(drop): return drop.value not in [2,3])
@@ -112,7 +113,6 @@ func load_floor() -> void:
 	crown_available = false
 	dash_time = 0
 	leap_left = 0
-	dash_cd = run.evade_cooldown
 	heal_cd = run.flask_cooldown
 	combat_age = 10
 	slowed = 0
@@ -212,7 +212,6 @@ func _process(dt: float) -> void:
 		tick_pickups(dt)
 		if not player.dead:
 			run.energy = minf(Data.max_energy(run),run.energy+Data.energy_regen(run)*dt)
-		dash_cd = maxf(0,dash_cd-dt)
 		heal_cd = maxf(0,heal_cd-dt)
 		slowed = maxf(0,slowed-dt)
 		save_timer += dt
@@ -442,11 +441,14 @@ func tick_scheduled(dt: float) -> void:
 
 func dash() -> void:
 	if leap_left>0: return
-	if dash_cd>0 or mode!="playing" or player.dead: return
+	if mode!="playing" or player.dead: return
+	if run.energy<10:
+		toast("Evade needs 10 energy.")
+		return
+	run.energy -= 10
 	scheduled.clear() # Evading cancels an unfinished wind-up or remaining volley.
 	sound.play("dash-whoosh")
 	skills.pending.clear()
-	dash_cd = 3.0
 	dash_time = .16
 	var offset = world.pointer()-player.position
 	dash_speed = minf(41,offset.length()/.16)
@@ -774,7 +776,6 @@ func new_run_menu() -> void:
 func save_run() -> void:
 	if creating_character: return
 	run.flask_cooldown = heal_cd
-	run.evade_cooldown = dash_cd
 	if not is_instance_valid(player): return
 	run.health = maxf(1,player.hp)
 	run.position = [player.position.x,player.position.z]

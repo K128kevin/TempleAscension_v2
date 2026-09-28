@@ -19,6 +19,11 @@ summit, and records the fifth-floor frame rate. Screenshots and JSON/log outputs
 are under `test-results/`. Native exports exclude tests. Developer controls require
 the explicit debug launcher and use isolated saves.
 
+Skill energy costs and dash (0.4.7): active skills spend their listed energy on
+each cast and have no cooldown timer. Dash spends 10 energy and can be used again
+when the player has enough energy. Legacy skill and evade cooldown values are
+discarded on load; the independent flask charge timer remains.
+
 Energy orb color (0.4.6): the energy tracker has a green fill; its health and fill
 tracking behavior are unchanged.
 

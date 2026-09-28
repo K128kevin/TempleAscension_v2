@@ -38,7 +38,7 @@ static func valid(d) -> bool:
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
 		if not d.has(key): return false
-	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","flasks","deaths","seed","health","energy","flask_cooldown","evade_cooldown"]:
+	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","flasks","deaths","seed","health","energy","flask_cooldown"]:
 		if not (d[key] is int or d[key] is float) or not is_finite(float(d[key])) or d[key]<0: return false
 	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","flasks","deaths"]:
 		if d[key]!=int(d[key]): return false
@@ -77,11 +77,7 @@ static func valid(d) -> bool:
 			if id in assigned: return false
 			assigned.append(id)
 		if id!="" and (not d.skills.has(id) or Data.Skills.all()[id].effect=="passive"): return false
-	if not d.skill_cooldowns is Dictionary or d.flasks<0 or d.flasks>3: return false
-	for id in d.skill_cooldowns:
-		if not Data.Skills.all().has(id): return false
-		var value = d.skill_cooldowns[id]
-		if not (value is int or value is float) or not is_finite(float(value)) or value<0 or value>3600: return false
+	if d.flasks<0 or d.flasks>3: return false
 	if not (d.dead is Array and d.gems is Array and d.drops is Array and d.xp_claimed is Array): return false
 	for drop in d.drops:
 		if not drop is Dictionary or drop.get("kind","")!="weapon" or not drop.get("id",0) is String: return false

@@ -66,10 +66,11 @@ func test():
 	game.scheduled.clear()
 	for i in 3:
 		game.player.busy=0; game.player.cooldown=0
-		game.run.skill_cooldowns.clear(); game.skills.pending.clear()
+		game.skills.pending.clear()
 		game.run.energy=Data.max_energy(game.run); hud.tick(0)
+		var before_energy: float=game.run.energy
 		await click(hud.weapon_slots[i+1]); hud.tick(0)
-		check(game.run.skill_cooldowns.has(ids[i]),"Clicking hotbar casts "+ids[i])
+		check(game.run.energy<before_energy and not game.run.has("skill_cooldowns"),"Clicking hotbar spends energy without a cooldown: "+ids[i])
 		check(not game.left_held and game.route.is_empty(),"Skill panel consumes movement input: "+ids[i])
 	game.skills.pending.clear()
 	game.creating_character=true

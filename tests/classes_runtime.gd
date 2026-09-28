@@ -46,7 +46,6 @@ func test():
 			var s: Dictionary = Book.all()[id]
 			if s.effect=="passive": continue
 			game.skills.reset(); game.scheduled.clear()
-			game.run.skill_cooldowns.clear()
 			game.player.position = origin
 			game.player.busy = 0; game.player.cooldown = 0
 			game.run.energy = Data.max_energy(game.run)
@@ -55,9 +54,10 @@ func test():
 			victim.hp = 100000; victim.slow_time=0; victim.mark_time=0; victim.stagger_time=0
 			var before: float = game.run.energy
 			check(game.skills.cast(id,at),"Cast learned skill: "+id)
-			check(game.run.energy<before and game.run.skill_cooldowns[id]>0,"Cost and cooldown apply once: "+id)
+			check(game.run.energy<before and not game.run.has("skill_cooldowns"),"Skill spends energy without a cooldown: "+id)
 			game.player.busy=0
-			check(not game.skills.cast(id,at),"Cooldown prevents duplicate cast: "+id)
+			var repeat_energy: float=game.run.energy
+			check(game.skills.cast(id,at)==(repeat_energy>=game.skills.cost(id)),"Energy cost alone controls repeated casts: "+id)
 			game.skills.tick(.6)
 			for i in 90: game.tick_projectiles(.016)
 			game.skills.tick(1.0)
@@ -68,7 +68,7 @@ func test():
 			elif s.effect=="mark": check(victim.mark_time>0,"Marked Prey applies vulnerability")
 			elif s.effect=="blink": check(game.player.position.distance_to(origin)>.5 and game.world.fits(game.player.position),"Blink moves without crossing walls")
 			elif s.effect=="war_cry": check(game.skills.war_cry>0,"War Cry supplies damage buff")
-		game.skills.reset(); game.run.skill_cooldowns.clear()
+		game.skills.reset()
 		game.player.busy=0; game.player.cooldown=0
 		game.player.position=origin
 		var owned_id = "cleave" if class_id=="warrior" else ("power_shot" if class_id=="ranger" else "firebolt")
@@ -105,8 +105,8 @@ func test():
 	check(game.run.flasks==2 and game.run.energy==0 and game.player.hp==20,"Flask spends a charge and heals over time without energy")
 	game.skills.tick(2)
 	check(is_equal_approx(game.player.hp,60),"Flask restores 40 percent over two seconds")
-	game.dash_cd=0; game.dash()
-	check(game.run.energy==0 and game.dash_cd==3 and game.player.invulnerable>0,"Universal evade is free with a three-second recharge")
+	game.run.energy=10; game.dash()
+	check(game.run.energy==0 and game.dash_time>0 and game.player.invulnerable>0,"Dash spends ten energy and has no cooldown")
 	game.save_run()
 	check(not Save.load_run().is_empty(),"New progression survives gameplay save")
 	FileAccess.open("res://test-results/classes-runtime.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))

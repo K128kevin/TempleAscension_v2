@@ -42,7 +42,7 @@ static func skills(game) -> void:
 		var next = "%.0f%% damage" % (Book.value(id,rank+1)*100) if not s.tag.is_empty() and s.effect!="passive" else "%.1f" % Book.value(id,rank+1)
 		var title = "%s%s · %d/%d · level %d · %s" % [s.title," (passive)" if s.effect=="passive" else "",rank,s.max_rank,s.unlock,scaling]
 		game.hud.label(title,19,game.hud.gold,game.hud.modal_body)
-		var details = game.hud.label("%s\nValue %s → %s · %d energy · %.1fs cooldown · Requires %s" % [s.description,current,next,game.skills.cost(id),s.cooldown,s.requirement],15,game.hud.cream,game.hud.modal_body)
+		var details = game.hud.label("%s\nValue %s → %s · %d energy per cast · Requires %s" % [s.description,current,next,game.skills.cost(id),s.requirement],15,game.hud.cream,game.hud.modal_body)
 		details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		var upgrade = game.hud.button("Learn / Upgrade" if rank<cap else ("Maximum rank" if rank==s.max_rank else "Next rank requires level %d" % (s.unlock+rank*3)),func():
 			if Book.learn(game.run,id):

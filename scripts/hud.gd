@@ -254,7 +254,6 @@ func tick(dt: float) -> void:
 		weapon_slots[i].add_theme_stylebox_override("normal",selected_style if i==1 else idle_style)
 		weapon_icons[i].modulate = Color(.5,.65,1,.25) if r.class_id=="wizard" else Color(1,.8,.4,.2)
 		weapon_names[i].text = "Empty" if id.is_empty() else game.Book.all()[id].title
-		if not id.is_empty() and r.skill_cooldowns.get(id,0)>0: weapon_names[i].text += "\n%.1fs" % r.skill_cooldowns[id]
 	abilities.text = "%s · K: learn / assign skills · I: equipment" % Data.WEAPONS[r.weapon].capitalize()
 	recovery.text = "Q · Flask %d/3%s" % [r.flasks," · %ds" % ceili(game.heal_cd) if game.heal_cd>0 else ""]
 	prompt.text = ""

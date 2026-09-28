@@ -18,8 +18,8 @@ func start(owner_game):
 	check(game.player.hp==60 and game.run.flasks==2 and game.heal_cd==8,"Flask restores 40 percent over two seconds with charge and cooldown")
 	game.heal()
 	check(game.run.flasks==2,"Flask cooldown prevents a second charge being spent")
-	game.dash_cd=0; game.dash()
-	check(game.run.energy==0 and game.dash_cd==3 and game.player.invulnerable>0,"Evade is free with three-second recharge")
+	game.run.energy=10; game.dash()
+	check(game.run.energy==0 and game.dash_time>0 and game.player.invulnerable>0,"Dash spends ten energy and has no cooldown")
 	var hp: float = game.player.hp
 	game.hurt_player(100)
 	check(game.player.hp==hp,"Evade prevents damage")

@@ -22,7 +22,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Shift + left click | Attack toward cursor without moving |
 | Right click | Cast active skill slot 1 |
 | Hold left mouse | Continuously repath toward the cursor |
-| Space | Evade, no energy cost, three-second recharge |
+| Space | Dash: spend 10 energy |
 | Q | Drink a flask: 40% health over two seconds, three charges, eight-second cooldown |
 | 1 / 2 | Cast the other two assigned active skills |
 | C / K / I | Character attributes / skills and assignments / equipment |
@@ -121,7 +121,8 @@ Wizard with staff and Firebolt. The first skill point is spent on that starter.
 Each class has the plan's eight active skills and four passives, unlocking at
 levels 1, 4, 8, 12 and 18. Active skills have five ranks; passives have three.
 Rank is limited to `1 + floor((level - unlock_level) / 3)`. K shows scaling,
-requirements, cost, cooldown and the next rank's value. Assign three active skills
+requirements, energy cost and the next rank's value. Skills have no cooldown;
+energy is their only activation cost. Assign three active skills
 to RMB, 1 and 2; passives work automatically. Bow skills need a bow, spells a staff,
 and Shield Bash needs sword/shield. All classes can equip every owned family.
 

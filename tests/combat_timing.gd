@@ -28,7 +28,7 @@ func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
 	if class_id=="ranger": game.run.skills.quick_draw=3
 	game.player.visual.equip(Data.WEAPONS[weapon])
 	game.player.cooldown=0; game.player.busy=0; game.scheduled.clear()
-	game.skills.reset(); game.run.skill_cooldowns.clear()
+	game.skills.reset()
 	game.left_held=true; game.right_held=false; game.target=victim
 	game.order_pending=true; game.ordered_special=false; game.route.clear()
 	victim.dead=false; victim.hp=1000000
@@ -185,9 +185,10 @@ func test():
 		check(victim.hp==10000 and game.projectiles.is_empty(),"Class skill respects windup: "+class_id)
 		game.skills.tick(.5)
 		check(victim.hp<10000 or not game.projectiles.is_empty(),"Class skill executes after windup: "+class_id)
-		game.skills.pending.clear(); game.run.skill_cooldowns.clear(); game.player.busy=0
+		game.skills.pending.clear(); game.player.busy=0
 		game.skills.cast_slot(0,victim.position)
-		game.dash_cd=0; game.dash()
+		game.run.energy=10; game.dash()
+		check(is_equal_approx(game.run.energy,0.0),"Evade costs 10 energy")
 		check(game.skills.pending.is_empty() and game.scheduled.is_empty(),"Evade cancels unfinished skill and basic attack jobs")
 		victim.dead=true
 	if "--live-attacks" in OS.get_cmdline_user_args(): await live_attacks(game)

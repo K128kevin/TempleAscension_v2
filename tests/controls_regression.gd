@@ -43,7 +43,6 @@ func reset():
 	game.route.clear()
 	game.scheduled.clear()
 	game.skills.reset()
-	game.run.skill_cooldowns.clear()
 	game.run.energy = 100
 	game.leap_left = 0
 	game.dash_time = 0

@@ -86,10 +86,10 @@ func playtest() -> void:
 	check(game.mode=="playing","Resume button works")
 	game.player.invulnerable = 0
 	game.run.energy = 100
-	game.dash_cd = 0
+	game.run.energy = 10
 	await key(KEY_SPACE,true)
 	await key(KEY_SPACE,false)
-	check(game.dash_cd>0,"Space input triggers dash")
+	check(game.run.energy==0 and game.dash_time>0,"Space input spends ten energy to dash")
 	for other in game.enemies: other.awake=false
 	game.player.busy=0; game.combat_age=10
 	game.run.owned[2] = true
