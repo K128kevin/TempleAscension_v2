@@ -22,6 +22,16 @@ the explicit debug launcher and use isolated saves.
 Export success verifies packaging, not execution on another operating system.
 Windows requires a playtest on Windows hardware. macOS signing is ad-hoc only.
 
+Compact ability bar and starting equipment (0.4.1): 98 progression checks,
+155 class runtime checks, 555 campaign checks and 52 native HUD checks pass.
+The HUD has exactly four 56×64 buttons with 40×40 icons, ordered LMB basic
+attack, RMB skill, 1 and 2. Its total width is 236 pixels instead of 482.
+All four buttons were exercised with actual mouse events, and rendered captures
+at four window sizes were inspected. Each new class owns only its starting
+weapon. Campaign coverage confirms no bow or axe drops and retains the staff
+drop. Version 3 saves keep their first three assigned skills and all learned
+ranks; pending bow/axe drops are removed. Older owned weapons remain available.
+
 Class/progression update (0.4.0): the current headless suite passes 2,705 checks:
 94 progression, 155 class runtime, 1,721 procedural maps, 24 map integration,
 73 scenery, 6 torch, 21 bow, 552 campaign, 37 combat timing, and 22 normal/debug

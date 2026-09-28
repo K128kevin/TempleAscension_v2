@@ -24,7 +24,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Hold left mouse | Continuously repath toward the cursor |
 | Space | Evade, no energy cost, three-second recharge |
 | Q | Drink a flask: 40% health over two seconds, three charges, eight-second cooldown |
-| 1 / 2 / 3 / 4 | Cast the other four assigned active skills |
+| 1 / 2 | Cast the other two assigned active skills |
 | C / K / I | Character attributes / skills and assignments / equipment |
 | Mouse wheel | Zoom |
 | E | Ascend, claim the crown, or rest/refill flasks at a safe entrance |
@@ -36,7 +36,8 @@ between the camera and the hero becomes translucent. The HUD reports the nearest
 remaining statue and the direction to it.
 
 The HUD has a red health orb at bottom left, a blue energy orb at bottom right,
-and five clickable skill slots centered below the action. Class, level, XP and
+and four compact clickable ability icons centered below the action: LMB basic
+attack, RMB skill, 1 and 2. Class, level, XP and
 available points appear at top left. Floor, remaining statues and difficulty
 appear at top right. Unassigned, incompatible, and recharging skills are disabled
 with an explanation. Character, skill and equipment screens pause combat.
@@ -82,7 +83,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | P | Hide/show the panel; shortcuts remain active |
 
 The panel also offers an instant summit jump without extra XP. Bare
-1–4 cast assigned skills. Floor jumps retain level and point budgets, refill health/energy, and reset enemies,
+1 and 2 cast assigned skills. Floor jumps retain level and point budgets, refill health/energy, and reset enemies,
 loose drops, combat effects, and pending attacks. Restart and jump controls
 also work from pause, death, character, and completion screens.
 
@@ -120,8 +121,8 @@ Wizard with staff and Firebolt. The first skill point is spent on that starter.
 Each class has the plan's eight active skills and four passives, unlocking at
 levels 1, 4, 8, 12 and 18. Active skills have five ranks; passives have three.
 Rank is limited to `1 + floor((level - unlock_level) / 3)`. K shows scaling,
-requirements, cost, cooldown and the next rank's value. Assign five active skills
-to RMB and 1–4; passives work automatically. Bow skills need a bow, spells a staff,
+requirements, cost, cooldown and the next rank's value. Assign three active skills
+to RMB, 1 and 2; passives work automatically. Bow skills need a bow, spells a staff,
 and Shield Bash needs sword/shield. All classes can equip every owned family.
 
 Enemy kills award XP, with diminishing rewards from enemies well below the
@@ -132,7 +133,9 @@ current 247-enemy temple route reaches about level 23 before the summit; this
 balance is for the existing climb, not the plan's future pre-temple regions.
 
 Floor travel grants no points or XP. Permanent attribute gems have been removed.
-Bow, axe and staff drops on floors one, two and three expand equipment choices.
+Each class starts with only its own weapon: sword for Warrior, bow for Ranger,
+and staff for Wizard. Bow and axe drops are disabled for now; the staff drop on
+floor three remains.
 Repeated death callbacks, reloads and retrying an already-rewarded enemy cannot
 award its XP again. XP and skill investment survive death and travel.
 
@@ -159,7 +162,8 @@ Death restarts the current floor while preserving class, XP, attributes, skills 
 Living enemies reset when a save is loaded; defeated enemies and loose drops
 persist. Autosaves run every eight seconds and on important progression events.
 Writes use a temporary file and a backup. A damaged current save falls back to its
-backup. Version 1/2 saves migrate to a Warrior (or Ranger if a bow was equipped).
+backup. Version 3 saves keep their first three assigned skills (RMB, 1 and 2);
+all learned skills remain available in K. Version 1/2 saves migrate to a Warrior (or Ranger if a bow was equipped).
 Campaign progress, weapons and defeated enemies remain. Old stat/gem bonuses are
 refunded into a level-based point budget; open C and K to rebuild. Legacy gem
 drops are retired. Fixed-layout saves move safely to the generated entrance.

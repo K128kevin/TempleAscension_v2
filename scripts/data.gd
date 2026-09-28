@@ -33,7 +33,7 @@ const XP_STEPS = [100,150,220,300,400,520,650,800,960,1140,1340,1560,1800,2060,2
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	var starter: String = {"warrior":"cleave","ranger":"power_shot","wizard":"firebolt"}.get(class_id,"cleave")
 	var ranks = {}; ranks[starter] = 1
-	return {"version":3,"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[true,true,class_id=="ranger",false,class_id=="wizard"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"flasks":3,"skill_cooldowns":{},"flask_cooldown":0.0,"evade_cooldown":0.0}
+	return {"version":4,"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"flasks":3,"skill_cooldowns":{},"flask_cooldown":0.0,"evade_cooldown":0.0}
 
 static func passive(run: Dictionary, id: String) -> float:
 	return Skills.value(id,int(run.skills.get(id,0)))
@@ -89,6 +89,6 @@ static func respec(run: Dictionary) -> void:
 	run.points = (int(run.level)-1)*3
 	run.skills = {}
 	run.skill_points = int(run.level)
-	run.hotbar = ["","","","",""]
+	run.hotbar = ["","",""]
 	run.health = minf(run.health,max_health(run))
 	run.energy = minf(run.energy,max_energy(run))

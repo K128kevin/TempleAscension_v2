@@ -40,8 +40,8 @@ func test():
 		check(right.end.x>area.size.x*.85 and right.position.y>area.size.y*.65,"Energy anchored bottom-right at "+str(size))
 		check(area.encloses(left) and area.encloses(right),"Orbs fit the viewport at "+str(size))
 		var first: Rect2 = hud.weapon_slots[0].get_global_rect()
-		var last: Rect2 = hud.weapon_slots[4].get_global_rect()
-		check(absf((first.position.x+last.end.x)*.5-area.size.x*.5)<2 and left.end.x<first.position.x and last.end.x<right.position.x,"Five skill panels centered without overlap at "+str(size))
+		var last: Rect2 = hud.weapon_slots[3].get_global_rect()
+		check(absf((first.position.x+last.end.x)*.5-area.size.x*.5)<2 and left.end.x<first.position.x and last.end.x<right.position.x,"Four compact ability panels centered without overlap at "+str(size))
 		check(hud.objective.get_global_rect().end.x>area.size.x*.9 and hud.objective.position.y<100,"Floor information anchored top-right at "+str(size))
 		for ratio in [0.0,.5,1.0]:
 			game.player.hp = Data.max_health(game.run)*ratio
@@ -53,17 +53,22 @@ func test():
 			await capture("hud-partial")
 		else: await capture("hud-%dx%d" % [size.x,size.y])
 	game.player.hp=100; game.run.energy=100; hud.tick(0)
-	check(hud.weapon_slots[1].disabled and hud.weapon_slots[4].disabled,"Unassigned skill slots are disabled")
+	check(not hud.weapon_slots[0].disabled and hud.weapon_slots[2].disabled and hud.weapon_slots[3].disabled,"Basic attack remains available and unassigned skill slots are disabled")
 	Data.gain_xp(game.run,Data.xp_at_level(8))
-	var ids = ["cleave","guard","shield_bash","lunge","whirlwind"]
+	var ids = ["cleave","guard","shield_bash"]
 	for id in ids:
 		if not game.run.skills.has(id): Data.Skills.learn(game.run,id)
 	game.run.hotbar = ids
-	for i in 5:
+	check(hud.weapon_slots.size()==4 and hud.weapon_icons[0].size==Vector2(40,40),"Exactly four significantly smaller ability icons")
+	game.player.busy=0; game.player.cooldown=0
+	await click(hud.weapon_slots[0])
+	check(game.player.busy>0 and not game.left_held and game.route.is_empty(),"LMB icon performs the basic attack and consumes movement input")
+	game.scheduled.clear()
+	for i in 3:
 		game.player.busy=0; game.player.cooldown=0
 		game.run.skill_cooldowns.clear(); game.skills.pending.clear()
 		game.run.energy=Data.max_energy(game.run); hud.tick(0)
-		await click(hud.weapon_slots[i]); hud.tick(0)
+		await click(hud.weapon_slots[i+1]); hud.tick(0)
 		check(game.run.skill_cooldowns.has(ids[i]),"Clicking hotbar casts "+ids[i])
 		check(not game.left_held and game.route.is_empty(),"Skill panel consumes movement input: "+ids[i])
 	game.skills.pending.clear()

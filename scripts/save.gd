@@ -3,7 +3,14 @@ const Data = preload("res://scripts/data.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=3: return d
+	if int(d.get("version",0))>=4: return d
+	if int(d.get("version",0))==3:
+		if not d.get("hotbar") is Array or d.hotbar.size()!=5: return {}
+		var updated = d.duplicate(true)
+		updated.version = 4
+		updated.hotbar = updated.hotbar.slice(0,3)
+		updated.drops = updated.drops.filter(func(drop): return drop is Dictionary and drop.get("value",-1) not in [2,3])
+		return updated
 	if not d.has("stats") or not d.stats is Array or d.stats.size()!=4: return {}
 	var old_floor = clampi(int(d.get("floor",0)),0,5)
 	var fresh = Data.new_run("ranger" if int(d.get("weapon",0))==2 else "warrior")
@@ -18,7 +25,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 	var level = clampi(maxi(Data.ENEMY_LEVELS[old_floor],1+ceili(previous_points/3.0)),1,30)
 	Data.gain_xp(fresh,Data.xp_at_level(level))
 	fresh.xp_claimed = fresh.dead.duplicate()
-	fresh.drops = fresh.drops.filter(func(drop): return drop is Dictionary and drop.get("kind","")=="weapon")
+	fresh.drops = fresh.drops.filter(func(drop): return drop is Dictionary and drop.get("kind","")=="weapon" and drop.get("value",-1) not in [2,3])
 	fresh.health = 100.0
 	fresh.energy = 100.0
 	fresh["migration_notice"] = true
@@ -26,7 +33,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<3:
+	if int(d.get("version",0))<4:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -53,7 +60,7 @@ static func valid(d) -> bool:
 		if not (stat is float or stat is int) or stat<5 or stat>92 or stat!=int(stat): return false
 		spent += int(stat)-5
 	if d.points<0 or spent+d.points!=(d.level-1)*3: return false
-	if not d.skills is Dictionary or not d.hotbar is Array or d.hotbar.size()!=5: return false
+	if not d.skills is Dictionary or not d.hotbar is Array or d.hotbar.size()!=3: return false
 	var ranks = 0
 	for id in d.skills:
 		if not Data.Skills.all().has(id): return false

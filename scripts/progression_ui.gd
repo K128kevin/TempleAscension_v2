@@ -31,7 +31,7 @@ static func character(game) -> void:
 	game.hud.button("Return to game",game.resume_game)
 
 static func skills(game) -> void:
-	open(game,"%s SKILLS" % game.run.class_id.to_upper(),"%d skill points · RMB + 1–4 are your five active slots.\nPassives apply automatically. Change assignments out of combat. K closes." % game.run.skill_points)
+	open(game,"%s SKILLS" % game.run.class_id.to_upper(),"%d skill points · RMB, 1 and 2 are your active skill slots.\nLMB uses your weapon's basic attack. Passives apply automatically.\nChange assignments out of combat. K closes." % game.run.skill_points)
 	for id in Book.all():
 		var s: Dictionary = Book.all()[id]
 		if s.class_id!=game.run.class_id: continue
@@ -60,11 +60,11 @@ static func skills(game) -> void:
 
 static func assignment(game, id: String) -> void:
 	open(game,"ASSIGN "+Book.all()[id].title.to_upper(),"Choose an active skill slot.")
-	for i in 5:
+	for i in 3:
 		var old: String = game.run.hotbar[i]
 		game.hud.button("%s · %s" % ["RMB" if i==0 else str(i),"Empty" if old.is_empty() else Book.all()[old].title],func():
 			if not game.out_of_combat(): return
-			for j in 5:
+			for j in 3:
 				if game.run.hotbar[j]==id: game.run.hotbar[j] = ""
 			game.run.hotbar[i] = id
 			game.save_run(); skills(game))

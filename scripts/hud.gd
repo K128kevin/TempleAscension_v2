@@ -61,7 +61,7 @@ func setup(owner_game) -> void:
 	recovery = label("",13,cream,root)
 	anchor(recovery,Vector2(0,1),Vector2(20,-26),Vector2(180,22))
 	recovery.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var energy_caption = label("RMB + 1–4 · Skills",13,cream,root)
+	var energy_caption = label("RMB + 1 / 2 · Skills",13,cream,root)
 	anchor(energy_caption,Vector2(1,1),Vector2(-208,-26),Vector2(188,22))
 	energy_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	objective = label("",20,gold,root)
@@ -99,46 +99,51 @@ func setup(owner_game) -> void:
 	var row = Control.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(row)
-	anchor(row,Vector2(.5,1),Vector2(-241,-172),Vector2(482,104))
+	anchor(row,Vector2(.5,1),Vector2(-118,-132),Vector2(236,64))
 	idle_style = panel_style(Color(.035,.032,.028,.94),Color(.37,.31,.21))
 	selected_style = panel_style(Color(.15,.115,.065,.97),gold)
 	selected_style.set_border_width_all(2)
 	selected_style.shadow_color = Color(.8,.49,.13,.24)
 	selected_style.shadow_size = 5
-	for i in 5:
+	for i in 4:
 		var slot = Button.new()
 		row.add_child(slot)
-		slot.position = Vector2(i*98,0)
-		slot.size = Vector2(88,104)
+		slot.position = Vector2(i*60,0)
+		slot.size = Vector2(56,64)
 		slot.focus_mode = Control.FOCUS_NONE
 		slot.tooltip_text = "Assign skills in K"
 		slot.add_theme_stylebox_override("disabled",idle_style)
 		slot.pressed.connect(func():
-			if game.mode=="playing": game.skills.cast_slot(i,game.target.position if is_instance_valid(game.target) and not game.target.dead else game.player.position+game.player.forward()*4))
+			if game.mode!="playing": return
+			var at: Vector3 = game.target.position if is_instance_valid(game.target) and not game.target.dead else game.player.position+game.player.forward()*4
+			if i==0: game.attack(false,at)
+			else: game.skills.cast_slot(i-1,at))
 		weapon_slots.append(slot)
 		var icon = TextureRect.new()
 		icon.texture = load("res://assets/textures/seal.png")
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.position = Vector2(5,5); icon.size = Vector2(78,78)
+		icon.position = Vector2(8,14); icon.size = Vector2(40,40)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(icon)
 		weapon_icons.append(icon)
-		var hotkey = label("RMB" if i==0 else str(i),14,gold,slot)
-		hotkey.position = Vector2(7,3)
-		var name_label = label("",13,cream,slot)
-		name_label.position = Vector2(2,34); name_label.size = Vector2(84,66)
+		var hotkey = label(["LMB","RMB","1","2"][i],12,gold,slot)
+		hotkey.position = Vector2(5,2)
+		var name_label = label("",11,cream,slot)
+		name_label.position = Vector2(2,27); name_label.size = Vector2(52,35)
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_label.max_lines_visible = 2
+		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		weapon_names.append(name_label)
 	abilities = label("",16,gold,root)
 	anchor(abilities,Vector2(.5,1),Vector2(-330,-61),Vector2(660,23))
 	abilities.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var controls = label("LMB Move / Attack · RMB + 1–4 Skills · SPACE Evade · Q Flask",13,Color(.7,.68,.60),root)
+	var controls = label("LMB Move / Attack · RMB + 1 / 2 Skills · SPACE Evade · Q Flask",13,Color(.7,.68,.60),root)
 	anchor(controls,Vector2(.5,1),Vector2(-350,-30),Vector2(700,22))
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = label("",19,gold,root)
-	anchor(prompt,Vector2(.5,1),Vector2(-400,-217),Vector2(800,28))
+	anchor(prompt,Vector2(.5,1),Vector2(-400,-177),Vector2(800,28))
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice = label("",21,cream,root)
 	anchor(notice,Vector2(.5,1),Vector2(-390,-290),Vector2(780,65))
@@ -222,12 +227,19 @@ func tick(dt: float) -> void:
 	character_info.text = "%s · Lv %d · %d XP · %d attribute / %d skill points" % [r.class_id.capitalize(),r.level,r.xp,r.points,r.skill_points]
 	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<30 else 1
 	experience.value = r.xp-Data.xp_at_level(r.level) if r.level<30 else 1
-	for i in 5:
-		var id: String = r.hotbar[i]
+	weapon_slots[0].disabled = game.player.dead
+	weapon_slots[0].tooltip_text = "LMB · %s basic attack · no energy cost" % Data.WEAPONS[r.weapon].capitalize()
+	weapon_slots[0].add_theme_stylebox_override("normal",idle_style)
+	var weapon_icon_path = "res://assets/ui/weapon-%s.png" % Data.WEAPONS[r.weapon]
+	weapon_icons[0].texture = load(weapon_icon_path) if ResourceLoader.exists(weapon_icon_path) else load("res://assets/textures/seal.png")
+	weapon_icons[0].modulate = Color.WHITE
+	weapon_names[0].text = "Attack"
+	for i in range(1,4):
+		var id: String = r.hotbar[i-1]
 		var problem: String = game.skills.reason(id)
 		weapon_slots[i].disabled = not problem.is_empty()
 		weapon_slots[i].tooltip_text = problem if not problem.is_empty() else "%s · %.0f energy" % [game.Book.all()[id].title,game.skills.cost(id)]
-		weapon_slots[i].add_theme_stylebox_override("normal",selected_style if i==0 else idle_style)
+		weapon_slots[i].add_theme_stylebox_override("normal",selected_style if i==1 else idle_style)
 		weapon_icons[i].modulate = Color(.5,.65,1,.25) if r.class_id=="wizard" else Color(1,.8,.4,.2)
 		weapon_names[i].text = "Empty" if id.is_empty() else game.Book.all()[id].title
 		if not id.is_empty() and r.skill_cooldowns.get(id,0)>0: weapon_names[i].text += "\n%.1fs" % r.skill_cooldowns[id]

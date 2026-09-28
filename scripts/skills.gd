@@ -31,7 +31,7 @@ func cost(id: String) -> float:
 	return float(s.cost)*(1.0-Data.passive(game.run,"efficient_casting")*.01 if s.requirement=="staff" else 1.0)
 
 func cast_slot(slot: int, at: Vector3) -> bool:
-	if slot<0 or slot>=5: return false
+	if slot<0 or slot>=3: return false
 	return cast(game.run.hotbar[slot],at)
 
 func cast(id: String, at: Vector3) -> bool:

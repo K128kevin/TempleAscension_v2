@@ -88,7 +88,8 @@ func load_floor() -> void:
 	if test_mode: creating_character = false
 	run.erase("seconds") # Discard elapsed time from legacy saves.
 	var migrating = int(run.version)<2
-	if int(run.version)<3: run = Save.migrate(run)
+	if int(run.version)<4: run = Save.migrate(run)
+	run.drops = run.drops.filter(func(drop): return drop.value not in [2,3])
 	if skills: skills.reset()
 	run_generation += 1
 	if is_instance_valid(world):
@@ -149,8 +150,8 @@ func load_floor() -> void:
 			var swap = carrier_ids[i]
 			carrier_ids[i] = carrier_ids[j]
 			carrier_ids[j] = swap
-		if run.floor<3:
-			carriers["%d:%d" % [run.floor,carrier_ids[-1]]] = {"kind":"weapon","value":[2,3,4][run.floor],"id":"weapon:%d" % run.floor}
+		if run.floor==2:
+			carriers["%d:%d" % [run.floor,carrier_ids[-1]]] = {"kind":"weapon","value":4,"id":"weapon:%d" % run.floor}
 	else:
 		boss = spawn_enemy("boss","boss",world.boss_point)
 		for group in 4:
@@ -259,8 +260,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_E: interact()
 			KEY_1: skills.cast_slot(1,world.pointer())
 			KEY_2: skills.cast_slot(2,world.pointer())
-			KEY_3: skills.cast_slot(3,world.pointer())
-			KEY_4: skills.cast_slot(4,world.pointer())
 			KEY_F11:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
@@ -538,7 +537,7 @@ func enemy_died(enemy) -> void:
 	save_run()
 
 func create_pickup(drop: Dictionary) -> void:
-	if drop.kind=="gem": return
+	if drop.kind=="gem" or drop.value in [2,3]: return
 	var color: Color = Data.GEM_COLORS[drop.value] if drop.kind=="gem" else Color(1,.72,.25)
 	var id: String = "gem" if drop.kind=="gem" else Data.WEAPONS[drop.value]
 	var node = Art.model(id,Vector3(.45,.65,.35) if drop.kind=="gem" else Vector3(.6,1.3,.22),Art.material("marble",color))
@@ -726,7 +725,7 @@ func pause_game() -> void:
 	left_held = false
 	right_held = false
 	save_run()
-	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1–4 skills · Space evade · Q flask\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel zoom · E interact · F11 fullscreen")
+	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1 / 2 skills · Space evade · Q flask\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel zoom · E interact · F11 fullscreen")
 	hud.button("Resume",resume_game)
 	hud.button("Continue saved ascent",continue_run)
 	hud.button("New ascent / Difficulty",new_run_menu)

@@ -53,7 +53,8 @@ func start(owner_game):
 			game.player.position=pickup.node.position; game.player.position.y=0
 			game.tick_pickups(.016)
 		check(game.pickups.is_empty() and game.run.gems.is_empty(),"Weapon loot can be collected; no permanent gems")
-		if floor_index<3: check(game.run.owned[[2,3,4][floor_index]],"Guaranteed weapon family drop")
+		check(not game.run.owned[2] and not game.run.owned[3],"Bow and axe do not drop")
+		if floor_index==2: check(game.run.owned[4],"Staff drop remains available")
 		var points: int = game.run.points
 		var xp: int = game.run.xp
 		game.player.position=game.world.exit_point

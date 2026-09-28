@@ -13,6 +13,7 @@ func test():
 		var run = Data.new_run(class_id)
 		check(run.stats==[5,5,5,5,5] and run.level==1 and Data.max_health(run)==100 and Data.max_energy(run)==100 and Data.energy_regen(run)==8,"Shared base resources and attributes: "+class_id)
 		check(run.skills.size()==1 and run.skill_points==0 and Book.compatible(run.hotbar[0],run.weapon),"Starter point is spent on a usable skill: "+class_id)
+		check(run.owned.count(true)==1 and run.owned[run.weapon],"Each class owns only its starting weapon: "+class_id)
 		var active = 0; var passive = 0
 		for s in Book.all().values():
 			if s.class_id!=class_id: continue
@@ -29,7 +30,7 @@ func test():
 		Data.gain_xp(run,100000)
 		check(run.points==points,"XP at cap cannot mint points: "+class_id)
 		Data.respec(run)
-		check(run.skill_points==30 and run.points==87 and run.hotbar==["","","","",""] and Save.valid(run),"Respec refunds exact budgets and clears slots: "+class_id)
+		check(run.skill_points==30 and run.points==87 and run.hotbar==["","",""] and Save.valid(run),"Respec refunds exact budgets and clears slots: "+class_id)
 		for tag in ["melee","ranged","spell"]:
 			var i: int = {"melee":0,"ranged":1,"spell":2}[tag]
 			run.stats[i] += 10
@@ -37,6 +38,12 @@ func test():
 			for other in ["melee","ranged","spell"]:
 				if other!=tag: check(is_equal_approx(Data.damage_tag(run,other,100),100),"Exclusive scaling tag %s does not affect %s" % [tag,other])
 			run.stats[i] -= 10
+	var prior = Data.new_run(); prior.version=3
+	Data.gain_xp(prior,Data.xp_at_level(4)); Book.learn(prior,"guard"); Book.learn(prior,"shield_bash")
+	prior.hotbar=["cleave","","","guard","shield_bash"]
+	prior.drops=[{"kind":"weapon","value":2,"id":"weapon:0","position":[0,9]},{"kind":"weapon","value":3,"id":"weapon:1","position":[0,9]}]
+	var converted = Save.migrate(prior)
+	check(Save.valid(prior) and Save.valid(converted) and converted.hotbar==["cleave","",""] and converted.drops.is_empty() and converted.skills==prior.skills,"Version 3 saves migrate to three active slots and retire pending bow/axe drops")
 	var fresh = Data.new_run()
 	fresh.skill_points = 1
 	check(not Book.learn(fresh,"meteor"),"Cannot learn another class's or locked skill")
