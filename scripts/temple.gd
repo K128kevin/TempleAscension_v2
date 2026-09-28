@@ -409,7 +409,24 @@ func move(from: Vector3, step: Vector3, radius: float = .4) -> Vector3:
 	return p
 
 func clear_line(a: Vector3, b: Vector3) -> bool:
-	return floor_line(a,b,.04)
+	# The level 3 fountain occupies blocked navigation tiles, but does not hide
+	# the rest of the court. Keep the obstacle solid for movement while letting
+	# visibility rays pass through its footprint.
+	var steps = maxi(1,ceili(a.distance_to(b)/.2))
+	for i in range(steps+1):
+		if not fits_for_visibility(a.lerp(b,float(i)/steps),.04): return false
+	return true
+
+func fits_for_visibility(p: Vector3, radius: float) -> bool:
+	var lo = layout.to_cell(p-Vector3(radius,0,radius))
+	var hi = layout.to_cell(p+Vector3(radius,0,radius))
+	for x in range(lo.x,hi.x+1):
+		for y in range(lo.y,hi.y+1):
+			var cell = Vector2i(x,y)
+			if layout.cells.has(cell): continue
+			if level==2 and layout.court_obstacle.has_point(cell): continue
+			return false
+	return true
 
 func floor_line(a: Vector3, b: Vector3, radius: float) -> bool:
 	var steps = maxi(1,ceili(a.distance_to(b)/.2))
