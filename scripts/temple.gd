@@ -22,7 +22,6 @@ var terrace_moonlight: DirectionalLight3D
 var boss_moonlight: SpotLight3D
 const TERRACE_LIGHT_LAYER = 8
 const VISION_RANGE = 16.0
-const VISION_HALF_ANGLE = deg_to_rad(70.0)
 const VISIBILITY_GRID_ORIGIN = Vector2i(-5,-5)
 var visibility_image: Image
 var visibility_texture: ImageTexture
@@ -31,7 +30,6 @@ var visibility_floor_batches: Array[Dictionary] = []
 var visibility_nodes: Array[Node3D] = []
 var visibility_timer = 0.0
 var visibility_player_position = Vector3(INF,INF,INF)
-var visibility_player_forward = Vector3.ZERO
 var fog_material: ShaderMaterial
 
 func setup(floor_index: int, run_seed: int = 1) -> void:
@@ -520,22 +518,16 @@ func follow(pos: Vector3, delta: float) -> void:
 				group.hidden = blocked
 				for mesh in group.meshes: mesh.material_override = group.faded if blocked else group.normal
 
-func update_visibility(pos: Vector3, facing: Vector3, delta: float) -> void:
+func update_visibility(pos: Vector3, delta: float) -> void:
 	visibility_timer -= delta
-	var flat_facing = Vector3(facing.x,0,facing.z).normalized()
-	var direction_changed = visibility_player_forward.dot(flat_facing)<.995
-	if visibility_timer>0 and pos.distance_squared_to(visibility_player_position)<.09 and not direction_changed: return
+	if visibility_timer>0 and pos.distance_squared_to(visibility_player_position)<.09: return
 	visibility_timer = .10
 	visibility_player_position = pos
-	visibility_player_forward = flat_facing
 	visibility_image.fill(Color.BLACK)
-	var cos_limit = cos(VISION_HALF_ANGLE)
 	for cell in layout.cells:
 		var at = layout.to_world(cell)
 		var offset = at-pos
 		if offset.length_squared()>VISION_RANGE*VISION_RANGE: continue
-		var flat_offset = Vector3(offset.x,0,offset.z)
-		if flat_offset.length_squared()>.01 and flat_facing.dot(flat_offset.normalized())<cos_limit: continue
 		if not clear_line(pos,at): continue
 		var pixel = cell-VISIBILITY_GRID_ORIGIN
 		if pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y:

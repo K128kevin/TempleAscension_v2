@@ -134,7 +134,7 @@ func load_floor() -> void:
 	player.setup(self,"player","hero",at)
 	player.hp = clampf(run.health,1,Data.max_health(run))
 	player.rotation.y = PI
-	world.update_visibility(player.position,player.forward(),.1)
+	world.update_visibility(player.position,.1)
 	world.follow(player.position,1)
 	var rng = RandomNumberGenerator.new()
 	rng.seed = int(run.seed)+int(run.floor)*193
@@ -212,7 +212,7 @@ func _process(dt: float) -> void:
 		tick_scheduled(dt)
 		if not player.dead: skills.tick(dt)
 		player_control(dt)
-		world.update_visibility(player.position,player.forward(),dt)
+		world.update_visibility(player.position,dt)
 		for enemy in enemies: enemy.tick(dt)
 		tick_projectiles(dt)
 		tick_pickups(dt)
