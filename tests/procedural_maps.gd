@@ -34,6 +34,19 @@ func test():
 			check(connected.has(layout.exit_cell),"Ascent reachable: "+label)
 			check(layout.start.distance_to(layout.exit_cell)>20,"Distant ascent: "+label)
 			check(layout.rooms.size()>=5,"Multiple distributed rooms: "+label)
+			var roomy = true
+			for room in layout.rooms: roomy = roomy and mini(room.size.x,room.size.y)>=Layout.ROOM_MIN
+			check(roomy,"Rooms are at least %d tiles across: %s" % [Layout.ROOM_MIN,label])
+			var flight: Rect2i = layout.stairs
+			check(flight.size==(Vector2i(2,4) if layout.stairs_dir.y!=0 else Vector2i(4,2)),"Ascent stair has a full wall-height flight: "+label)
+			var blocked = true; var backed = true
+			for y in range(flight.position.y,flight.end.y):
+				for x in range(flight.position.x,flight.end.x):
+					blocked = blocked and not layout.cells.has(Vector2i(x,y))
+					var above = Vector2i(x,y)+layout.stairs_dir
+					if not flight.has_point(above): backed = backed and not layout.is_open(above)
+			check(blocked and backed,"Stair is solid and climbs into a continuous wall: "+label)
+			check(flight.has_point(layout.exit_cell+layout.stairs_dir) and not flight.has_point(layout.exit_cell),"Ascent point is the floor at the stair's foot: "+label)
 			var copy = Layout.new(); copy.generate(run_seed,floor_index)
 			check(layout.cells==copy.cells and layout.rooms==copy.rooms and layout.start==copy.start and layout.exit_cell==copy.exit_cell,"Deterministic retry: "+label)
 			var total = 0
@@ -55,7 +68,7 @@ func test():
 				for x in range(court.position.x,court.end.x):
 					for y in [court.position.y-1,court.end.y]:
 						if layout.cells.has(Vector2i(x,y)): door_tiles += 1
-				check(door_tiles==6,"Court has exactly two three-tile doors: "+label)
+				check(door_tiles==2*Layout.CORRIDOR,"Court has exactly two hallway-width doors: "+label)
 			if floor_index in [3,4]: check(layout.terrace.size()==2 and layout.terrace_doors.size()==4,"Wraparound gallery and four entrances: "+label)
 			var signature = hash(layout.cells)
 			check(not signatures.has(signature),"Different run/floor has distinct layout: "+label)

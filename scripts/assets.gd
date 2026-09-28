@@ -12,6 +12,15 @@ static func statue_material() -> ShaderMaterial:
 	materials.statue = m
 	return m
 
+static func quartz_material(tint: Color = Color(.70,.70,.72)) -> ShaderMaterial:
+	var key = "quartz" + tint.to_html()
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/quartz_floor.gdshader")
+	m.set_shader_parameter("quartz_color",tint)
+	materials[key] = m
+	return m
+
 static func material(kind: String, tint: Color = Color.WHITE) -> StandardMaterial3D:
 	var key = kind + tint.to_html()
 	if materials.has(key): return materials[key]

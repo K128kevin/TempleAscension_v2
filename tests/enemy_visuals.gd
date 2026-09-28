@@ -42,7 +42,7 @@ func verify():
 		check(mesh.name=="Stone"+kind.capitalize(),"Correct imported outfit: "+kind)
 		check(mesh.material_override==Art.statue_material(),"Body and outfit share gray cracked stone: "+kind)
 		check(actor.skin_meshes.size()==1 and mesh.skin.get_bind_count()>50,"Outfit remains one skinned surface: "+kind)
-		for clip in ["Run","Death","SwordSwing","SpearStab","BowShot","Cast"]:
+		for clip in ["Run","Death","SwordSwing","SpearStab","BowShot","Cast","Hit","HitHead","HitStagger","HitKnockdown"]:
 			check(actor.clips.has(clip),"Outfit retains animation "+clip+": "+kind)
 		for gear in actor.find_children("*","MeshInstance3D",true,false):
 			check(gear.material_override==Art.statue_material(),"Worn/held item uses statue stone: "+kind+"/"+gear.name)

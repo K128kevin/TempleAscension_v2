@@ -1,4 +1,5 @@
 extends SceneTree
+const Oracle = preload("res://scripts/actor.gd")
 const Data=preload("res://scripts/data.gd")
 const Motion=preload("res://scripts/combat_animation.gd")
 const Book=preload("res://scripts/skill_data.gd")
@@ -143,6 +144,36 @@ func test():
 		check(game.scheduled.size()==jobs,"Basic cannot interrupt a skill recovery: "+id)
 	# Actual AI attacks use the same timed clip on each enemy rig.
 	game.run=Data.new_run(); game.invincible_test=true
+	# The Oracle's fire spell: a lobbed fireball that damages only on impact,
+	# with the ground warning lasting the full wind-up plus flight.
+	game.invincible_test=false; game.player.invulnerable=0
+	var oracle=game.spawn_enemy("wizard","fire:oracle",game.world.spawn)
+	oracle.awake=true; oracle.cast_count=0
+	game.player.position=game.world.move(game.world.spawn,Vector3(0,0,-7))
+	game.player.hp=game.player.max_hp
+	var before_hp: float=game.player.hp
+	var fire_clock=0.0; var launched=-1.0; var landed=-1.0
+	while fire_clock<4.0 and landed<0:
+		oracle.tick(1.0/60); game.tick_fireballs(1.0/60); fire_clock+=1.0/60
+		if launched<0 and not game.fireballs.is_empty(): launched=fire_clock; check(game.player.hp==before_hp,"Fireball launch deals no damage")
+		if launched>=0 and game.player.hp<before_hp: landed=fire_clock
+	check(launched>0 and landed>launched+.3,"Fireball flies before it explodes")
+	check(absf(landed-Oracle.FIRE_WARNING)<.05,"Fire warning lasts exactly until impact (%.2fs)" % landed)
+	check(game.fireballs.size()==1 and game.fireballs[0].exploded,"Explosion effect lingers after impact")
+	for step in 300: game.tick_fireballs(1.0/60)
+	check(game.fireballs.is_empty(),"Explosion cleans itself up")
+	oracle.dead=true; oracle.visible=false
+	game.player.hp=game.player.max_hp; game.invincible_test=true
+	# Only wizards back away from a nearby hero; archers hold their ground.
+	for kind in ["archer","wizard"]:
+		var ranged=game.spawn_enemy(kind,"retreat:"+kind,game.world.spawn)
+		ranged.awake=true; ranged.cooldown=1000000
+		game.player.position=game.world.move(game.world.spawn,Vector3(0,0,-3))
+		var start: Vector3=ranged.position
+		for step in 30: ranged.tick(1.0/30)
+		var gap: float=ranged.position.distance_to(game.player.position)-start.distance_to(game.player.position)
+		check(gap>.5 if kind=="wizard" else ranged.position.distance_to(start)<.01,"Close range: %s %s" % [kind,"retreats" if kind=="wizard" else "holds position"])
+		ranged.dead=true; ranged.visible=false
 	for kind in ["gladiator","centurion","archer","wizard","lion","boss"]:
 		var enemy=game.spawn_enemy(kind,"timing:"+kind,game.world.spawn)
 		enemy.awake=true; enemy.laser_cooldown=1000000
@@ -166,6 +197,11 @@ func test():
 		var before_phase: float=phase(enemy.visual); var before_windup: float=enemy.windup
 		enemy.hit(0); enemy.tick(.1)
 		check(absf(phase(enemy.visual)-before_phase)<.001 and absf(enemy.windup-before_windup)<.001,"Enemy hit delay keeps pose and contact synchronized: "+kind)
+		enemy.windup=0; enemy.busy=0; enemy.warning.visible=false
+		enemy.hit(0)
+		check(enemy.visual.state in ["Hit","HitHead"] and enemy.visual.reaction_time>0,"Idle enemy flinches when hit: "+kind)
+		for bash in (3 if kind=="boss" else 1): enemy.stagger(1.5)
+		check(enemy.visual.state==("HitStagger" if kind=="boss" else "HitKnockdown"),"Bashed enemy is knocked down, boss staggers: "+kind)
 		enemy.dead=true
 	game.player.visual.play("SwordSwing",1.0)
 	game.player.visual.animator.active=false; game.player.visual.advance(.4)

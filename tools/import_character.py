@@ -1,4 +1,4 @@
-"""Prepare the user's Quaternius CC0 character and retarget ten gameplay clips.
+"""Prepare the user's Quaternius CC0 character and retarget eleven gameplay clips.
 Run with Blender --background --python tools/import_character.py.
 Original downloads are read only; output is a self-contained game GLB.
 """
@@ -63,7 +63,7 @@ for obj in set(bpy.data.objects) - before_hair:
 rig.animation_data_create()
 # Use the relaxed neutral idle and forward run from the universal library.
 clips = {'Idle':'Idle_Loop', 'Run':'Sprint_Loop', 'Attack':'Sword_Attack',
-         'Cleave':'Sword_Attack', 'Evade':'Roll', 'Death':'Death01', 'Cast':'Spell_Simple_Shoot', 'Thrust':'Punch_Cross', 'Crouch':'Crouch_Fwd_Loop', 'Hit':'Hit_Chest'}
+         'Cleave':'Sword_Attack', 'Evade':'Roll', 'Death':'Death01', 'Cast':'Spell_Simple_Shoot', 'Thrust':'Punch_Cross', 'Crouch':'Crouch_Fwd_Loop', 'Hit':'Hit_Chest', 'HitHead':'Hit_Head'}
 bones = sorted(rig.data.bones, key=lambda b: len(b.parent_recursive))
 for output_name, source_name in clips.items():
     source.animation_data.action = actions[source_name]

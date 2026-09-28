@@ -1,27 +1,61 @@
-shader_type canvas_item;
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_test_disabled, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
-uniform sampler2D screen_texture : hint_screen_texture, filter_nearest;
+// Full-screen pass drawn after the scene. Each pixel's real world position is
+// rebuilt from depth, so walls, columns and statues are judged by where they
+// stand rather than by the floor point their pixel would cover if projected
+// down to the ground.
+uniform sampler2D depth_texture : hint_depth_texture, filter_nearest;
 uniform sampler2D visibility_mask : filter_linear;
-uniform vec3 camera_position;
-uniform vec3 camera_right;
-uniform vec3 camera_up;
-uniform vec3 camera_forward;
-uniform float camera_size;
-uniform float viewport_aspect;
 uniform vec2 map_world_origin;
 uniform vec2 map_dimensions;
+// On a terrace or the summit the desert, the foundation and the storeys below
+// are open-air scenery, not temple interior, and are never fogged.
+uniform bool outdoors = false;
+// Wall cells are not walkable and never marked seen. A raised face borrows the
+// cell in front of it; a raised top borrows the brightest neighbouring cell.
+const float FACE_REACH = 0.9;
+
+float mask_at(vec2 xz) {
+	vec2 uv = (xz - map_world_origin + vec2(0.5)) / map_dimensions;
+	if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 0.0;
+	return texture(visibility_mask, uv).r;
+}
+
+void vertex() {
+	POSITION = vec4(VERTEX.xy, 0.0, 1.0);
+}
 
 void fragment() {
-	vec3 ray_origin = camera_position
-		+ camera_right * ((SCREEN_UV.x - 0.5) * camera_size * viewport_aspect)
-		+ camera_up * ((0.5 - SCREEN_UV.y) * camera_size);
-	float ray_length = -ray_origin.y / camera_forward.y;
-	vec3 ground = ray_origin + camera_forward * ray_length;
-	vec2 mask_uv = (ground.xz - map_world_origin + vec2(0.5)) / map_dimensions;
-	float seen = 0.0;
-	if (all(greaterThanEqual(mask_uv, vec2(0.0))) && all(lessThanEqual(mask_uv, vec2(1.0)))) {
-		seen = smoothstep(0.15, 0.85, texture(visibility_mask, mask_uv).r);
+	float depth = texture(depth_texture, SCREEN_UV).r;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	vec3 ndc = vec3(SCREEN_UV, depth) * 2.0 - 1.0;
+#else
+	vec3 ndc = vec3(SCREEN_UV * 2.0 - 1.0, depth);
+#endif
+	vec4 view = INV_PROJECTION_MATRIX * vec4(ndc, 1.0);
+	vec3 world = (INV_VIEW_MATRIX * vec4(view.xyz / view.w, 1.0)).xyz;
+	vec3 forward = -INV_VIEW_MATRIX[2].xyz;
+	float seen;
+	if (world.y < -0.3) {
+		// Below floor level: outdoors it is all visible scenery; indoors keep the
+		// original ground-plane projection of the pixel's view ray.
+		seen = outdoors ? 1.0 : mask_at((world - forward * (world.y / forward.y)).xz);
+	} else {
+		seen = mask_at(world.xz);
+		if (world.y > 0.08) {
+			vec3 normal = normalize(cross(dFdx(world), dFdy(world)));
+			if (dot(normal, forward) > 0.0) normal = -normal;
+			vec2 across = normal.xz;
+			if (length(across) > 0.5) {
+				seen = max(seen, mask_at(world.xz + normalize(across) * FACE_REACH));
+			} else {
+				seen = max(seen, max(
+					max(mask_at(world.xz + vec2(FACE_REACH, 0.0)), mask_at(world.xz - vec2(FACE_REACH, 0.0))),
+					max(mask_at(world.xz + vec2(0.0, FACE_REACH)), mask_at(world.xz - vec2(0.0, FACE_REACH)))));
+			}
+		}
 	}
-	vec3 scene = texture(screen_texture, SCREEN_UV).rgb;
-	COLOR = vec4(mix(vec3(0.008, 0.011, 0.018), scene, seen), 1.0);
+	ALBEDO = vec3(0.008, 0.011, 0.018);
+	ALPHA = 1.0 - smoothstep(0.15, 0.85, seen);
 }

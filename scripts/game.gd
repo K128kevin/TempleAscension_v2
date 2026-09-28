@@ -16,6 +16,7 @@ var hud
 var enemies: Array = []
 var effects: Array = []
 var projectiles: Array = []
+var fireballs: Array = []
 var pickups: Array = []
 var scheduled: Array = []
 var carriers: Dictionary = {}
@@ -103,6 +104,7 @@ func load_floor() -> void:
 	enemies.clear()
 	effects.clear()
 	projectiles.clear()
+	fireballs.clear()
 	pickups.clear()
 	scheduled.clear()
 	carriers.clear()
@@ -214,6 +216,7 @@ func _process(dt: float) -> void:
 		world.update_visibility(player.position,dt)
 		for enemy in enemies: enemy.tick(dt)
 		tick_projectiles(dt)
+		tick_fireballs(dt)
 		tick_pickups(dt)
 		if not player.dead:
 			var combat_engaged = false
@@ -509,7 +512,7 @@ func equip(index: int) -> void:
 func awaken(enemy) -> void:
 	if enemy.awake or enemy.dead or enemy.kind=="offering": return
 	enemy.awake = true
-	enemy.visual.play("Idle")
+	enemy.visual.play(enemy.visual.idle_action())
 	for other in enemies:
 		if other.awake or other.dead or other.kind=="offering": continue
 		if other.position.distance_to(enemy.position)<6.56 and other.position.distance_to(player.position)<18 and world.clear_line(enemy.position,other.position): awaken(other)
@@ -535,6 +538,7 @@ func hurt_player(damage: float, type: String = "physical") -> void:
 		hud.dialog("STONE CLAIMS ANOTHER", "Retry with your class, XP, learned skills and equipment intact. Previously rewarded enemies grant no additional XP.")
 		hud.button("Rise again",retry_floor)
 		hud.button("Save and quit",quit_game)
+	elif damage>0: player.react_to_hit(damage>=player.max_hp*.2)
 
 func retry_floor() -> void:
 	run.dead = []
@@ -642,17 +646,35 @@ func tick_projectiles(dt: float) -> void:
 
 func blast(at: Vector3, radius: float, damage: float, friendly: bool) -> void:
 	effect(at,radius*2,Color(1,.55,.13,.95),.6)
+	area_damage(at,radius,damage,friendly)
+
+func area_damage(at: Vector3, radius: float, damage: float, friendly: bool) -> void:
 	var candidates: Array = enemies if friendly else [player]
 	for a in candidates:
 		if a.dead or a.position.distance_to(at)>radius or not world.clear_line(at,a.position): continue
 		if friendly: a.hit(damage)
 		else: hurt_player(damage)
 
-func effect(at: Vector3, diameter: float, color: Color, duration: float) -> void:
+# The Oracle's lobbed fireball; it deals area damage when it lands.
+func fireball(from: Vector3, at: Vector3, radius: float, damage: float, seconds: float) -> void:
+	var ball = preload("res://scripts/fireball.gd").new()
+	world.add_child(ball)
+	ball.setup(self,from,at,radius,damage,seconds)
+	fireballs.append(ball)
+
+func tick_fireballs(dt: float) -> void:
+	for i in range(fireballs.size()-1,-1,-1):
+		if not fireballs[i].tick(dt):
+			fireballs[i].queue_free()
+			fireballs.remove_at(i)
+
+func effect(at: Vector3, diameter: float, color: Color, duration: float) -> Dictionary:
 	var node = Art.seal(diameter,color)
 	world.add_child(node)
 	node.position = at + Vector3.UP*.08
-	effects.append({"node":node,"life":duration,"total":duration,"float":false})
+	var entry = {"node":node,"life":duration,"total":duration,"float":false}
+	effects.append(entry)
+	return entry
 
 func float_text(at: Vector3, text: String, color: Color) -> void:
 	var l = Label3D.new()

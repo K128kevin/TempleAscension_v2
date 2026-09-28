@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
+outputs=['SpearShieldIdle','SpearLunge','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -75,12 +75,14 @@ def retarget():
 sequences={'SwordSwing':[('Sword_Regular_A',0,1),('Sword_Regular_A_Rec',0,1)],
  'SwordSlash':[('Sword_Regular_B',0,1),('Sword_Regular_B_Rec',0,1)],
  'AxeChop':[('Sword_Regular_C',.20,.95)],
- 'AxeWhirl':[('Sword_Regular_C',0,1)]}
+ 'AxeWhirl':[('Sword_Regular_C',0,1)],
+ 'HitKnockdown':[('Hit_Knockback',0,1),('LayToIdle',0,1)]}
 timing={
  'SwordSwing':[(0,0),(.32,.14),(.52,.18),(.68,.22),(1,1)],
  'SwordSlash':[(0,0),(.30,.12),(.52,.16),(.72,.20),(1,1)],
  'AxeChop':[(0,0),(.28,.10/.75),(.55,.14/.75),(.72,.20/.75),(1,1)],
- 'AxeWhirl':[(0,0),(.30,.24),(.40,.30),(.62,.35),(.74,.42),(1,1)]}
+ 'AxeWhirl':[(0,0),(.30,.24),(.40,.30),(.62,.35),(.74,.42),(1,1)],
+ 'HitKnockdown':[(0,0),(1,1)]}
 def retimed(points,t):
  for (a,v),(b,w) in zip(points,points[1:]):
   if t<=b:return v+(w-v)*(t-a)/(b-a)
@@ -144,6 +146,23 @@ def bow_grip(pitch=0.0,cant=0.0):
     finger.rotation_quaternion=(mirror @ base[other].to_3x3() @ mirror).to_quaternion()
  bpy.context.view_layer.update()
 
+# The knockback's opening crumple, held briefly and blended back to the idle
+# stance, gives heavy hits a stagger that stays on its feet.
+knockback=source_actions['Hit_Knockback'];source.animation_data.action=knockback
+a=action('HitStagger')
+for f in range(61):
+ t=f/60;frame(knockback.frame_range.y/30*.08*min(1,t/.3))
+ reset_pose();bpy.context.view_layer.update();rest={b.name:b.matrix.copy() for b in rig.pose.bones}
+ retarget()
+ w=1-max(0,min(1,(t-.35)/.65));w=w*w*(3-2*w)
+ for b in bones:
+  p=rig.pose.bones[b.name];m=p.matrix;r0=rest[b.name]
+  q=r0.to_quaternion().slerp(m.to_quaternion(),w)
+  p.matrix=Matrix.Translation(r0.translation.lerp(m.translation,w)) @ q.to_matrix().to_4x4()
+  bpy.context.view_layer.update()
+ keys(f)
+finish('HitStagger',a,2.0)
+
 # Preserve the supplied locomotion below the shoulders, but carry the bow in a
 # relaxed left-hand grip beside the body rather than swinging it through the legs.
 for name,source_name in [('BowRun','Run'),('BowCrouch','Crouch')]:
@@ -165,6 +184,104 @@ for name,source_name in [('BowRun','Run'),('BowCrouch','Crouch')]:
   bow_grip(-.14+.035*math.sin(f/60*math.tau),.85 if crouched else .18)
   keys(length*30*f/60)
  finish(name,a,length)
+
+# Sword-and-shield stance: the relaxed idle with the left forearm turned so its
+# outer face, where the shield is strapped, faces out to the side rather than
+# backward.
+original=bpy.data.actions['Idle']
+length=original.frame_range.y/30
+rig.animation_data.action=original
+poses=[]
+for f in range(61):
+ frame(length*f/60)
+ poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+a=action('SwordIdle')
+twist=Quaternion(Vector((0,1,0)),math.radians(60))
+for f,pose in enumerate(poses):
+ for b in rig.pose.bones:b.matrix_basis=pose[b.name]
+ forearm=rig.pose.bones['lowerarm_l']
+ forearm.rotation_quaternion=forearm.rotation_quaternion @ twist
+ bpy.context.view_layer.update()
+ keys(length*30*f/60)
+finish('SwordIdle',a,length)
+
+# Two-bone leg IK; the foot keeps its planted orientation.
+def leg(side,target,pole):
+ thigh=rig.pose.bones['thigh_'+side];calf=rig.pose.bones['calf_'+side];foot=rig.pose.bones['foot_'+side]
+ keep=foot.matrix.to_quaternion()
+ s=thigh.matrix.translation.copy();target=Vector(target);pole=Vector(pole)
+ l1=(calf.matrix.translation-s).length;l2=(foot.matrix.translation-calf.matrix.translation).length
+ d=target-s;length=min(d.length,l1+l2-.001);direction=d.normalized();target=s+direction*length
+ bend=pole-s;bend=(bend-direction*bend.dot(direction)).normalized()
+ along=(l1*l1-l2*l2+length*length)/(2*length)
+ knee=s+direction*along+bend*math.sqrt(max(0,l1*l1-along*along))
+ for bone,head,end in [(thigh,s,knee),(calf,knee,target)]:
+  q=bone.matrix.to_quaternion();y=q @ Vector((0,1,0))
+  bone.matrix=Matrix.Translation(head) @ (y.rotation_difference((end-head).normalized()) @ q).to_matrix().to_4x4()
+  bpy.context.view_layer.update()
+ foot.matrix=Matrix.Translation(foot.matrix.translation) @ keep.to_matrix().to_4x4()
+ bpy.context.view_layer.update()
+
+def twist(name,angle):
+ # Turn a bone about its own length, e.g. to face a forearm-mounted shield.
+ b=rig.pose.bones[name];m=b.matrix.copy();axis=(m.to_quaternion() @ Vector((0,1,0))).normalized()
+ b.matrix=Matrix.Translation(m.translation) @ (Quaternion(axis,angle) @ m.to_quaternion()).to_matrix().to_4x4()
+ bpy.context.view_layer.update()
+
+SHIELD_TWIST=math.radians(60)
+def shield_arm(forward=0.0,turn=0.0):
+ # Left forearm raised across the front, carrying the gladiator's scutum;
+ # `turn` swings it with the upper body.
+ spin=Matrix.Rotation(turn,3,'Z')
+ arm('l',spin @ Vector((.24,-.32+forward,1.06)),spin @ Vector((.62,.12,.8)))
+ twist('lowerarm_l',SHIELD_TWIST)
+
+# Gladiator stance: the relaxed idle with the spear held level at the hip and
+# the shield carried in front.
+original=bpy.data.actions['Idle']
+length=original.frame_range.y/30
+rig.animation_data.action=original
+poses=[]
+for f in range(61):
+ frame(length*f/60)
+ poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+a=action('SpearShieldIdle')
+for f,pose in enumerate(poses):
+ for b in rig.pose.bones:b.matrix_basis=pose[b.name]
+ bpy.context.view_layer.update()
+ arm('r',(-.30,-.06,1.0),(-.7,.2,.85))
+ shield_arm()
+ keys(length*30*f/60)
+finish('SpearShieldIdle',a,length)
+
+# One firm spear thrust: draw back, then drive forward while the left foot
+# steps ahead and the hips drop into the lunge; the right foot stays planted.
+a=action('SpearLunge')
+reset_pose()
+planted={side:rig.pose.bones['foot_'+side].matrix.translation.copy() for side in 'lr'}
+for f in range(61):
+ t=f/60;reset_pose()
+ thrust=sample([(0,0),(.14,-.3),(.34,-.45),(.52,1),(.66,1),(.9,0),(1,0)],t)
+ step=sample([(0,0),(.34,0),(.5,1),(.7,1),(.92,0),(1,0)],t)
+ lift=0.0
+ for a0,a1 in [(.34,.5),(.7,.92)]:
+  if a0<t<a1:u=(t-a0)/(a1-a0);lift=.09*4*u*(1-u)
+ shift=Vector((0,-.24*step,-.07*step))
+ pelvis=rig.pose.bones['pelvis'];m=pelvis.matrix.copy()
+ pelvis.matrix=Matrix.Translation(m.translation+shift) @ m.to_quaternion().to_matrix().to_4x4()
+ bpy.context.view_layer.update()
+ leg('l',planted['l']+Vector((0,-.46*step,lift)),planted['l']+Vector((0,-.9,.5)))
+ leg('r',planted['r'],planted['r']+Vector((0,-.9,.5)))
+ # The upper body winds back, then turns into the thrust: the spear shoulder
+ # drives forward (+Z turn) as he leans in.
+ turn=.22*thrust
+ rotate_body('spine_01',(0,0,1),turn)
+ rotate_body('spine_02',(0,0,1),turn)
+ rotate_body('spine_01',(1,0,0),.14*max(0,thrust))
+ arm('r',(-.26,.10-thrust*.72+shift.y,1.02+max(0,thrust)*.12),(-.7,.2,.85))
+ shield_arm(shift.y,turn*1.4)
+ keys(f)
+finish('SpearLunge',a,2.0)
 
 for name in ['BowIdle','BowShot','BowRapid','SpearIdle','SpearStab','SpearJab']:
  a=action(name)

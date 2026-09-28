@@ -50,7 +50,8 @@ func test():
 		max_step = maxf(max_step,absf(energy-previous))
 		previous = energy
 		if absf(energy-second.light.light_energy)>.02: different = true
-	check(min_energy>=2.52 and max_energy<=3.08 and max_energy-min_energy>.15,"Flicker varies visibly while remaining within ten percent of original brightness")
+	var base: float = first.base_energy
+	check(min_energy>=base*.9 and max_energy<=base*1.1 and max_energy-min_energy>base*.05,"Flicker varies visibly while remaining within ten percent of the torch's brightness")
 	check(max_step<.04,"Light changes smoothly without frame-to-frame flashes")
 	check(different,"Neighboring torches flicker independently")
 	check(is_equal_approx(first.flame_material.get_shader_parameter("flame_time"),start_time+10.0),"Flame animation advances with elapsed time at the same rate as the light")

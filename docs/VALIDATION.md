@@ -85,7 +85,7 @@ for the four imported outfits, retained animation clips, changed running bone
 poses, single skinned surfaces and the shared stone material on body and gear.
 Front/back, running and attack captures were inspected under neutral lighting.
 The bow checks pass 21 checks and the campaign passes 555. Each variant retains
-the existing skeleton and all 22 clips; gameplay stats and collision are shared
+the existing skeleton and all 28 clips; gameplay stats and collision are shared
 with the existing enemy definitions. The robe hides covered leg surfaces to
 prevent running knees clipping through it.
 

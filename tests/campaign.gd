@@ -11,7 +11,7 @@ func start(owner_game):
 	game = owner_game
 	game.set_process(false)
 	check(game.run.floor==0 and game.player.position==Vector3(0,0,9),"New character starts at temple entrance")
-	check(game.player.visual.clips.size()==22,"All locomotion and weapon clips are present")
+	check(game.player.visual.clips.size()==28,"All locomotion, weapon and hit reaction clips are present")
 	check(game.run.class_id=="warrior" and game.run.skills.cleave==1,"Warrior starts with Cleave and sword")
 	game.player.hp=20; game.run.energy=60; game.heal()
 	check(game.player.hp==80 and game.run.energy==0 and game.heal_cd==20 and not game.run.has("flasks"),"Healing spell instantly restores 60 percent for 60 energy with a 20-second cooldown and no charges")
@@ -19,6 +19,19 @@ func start(owner_game):
 	check(game.run.energy==0,"Healing spell cooldown prevents another cast")
 	game.run.energy=10; game.dash()
 	check(game.run.energy==0 and game.dash_time>0 and game.player.invulnerable>0,"Dash spends ten energy and has no cooldown")
+	game.player.busy=0; game.player.invulnerable=0; game.dash_time=0
+	game.player.hp=game.player.max_hp; game.hurt_player(5)
+	check(game.player.visual.state in ["Hit","HitHead"] and game.player.visual.reaction_time>0,"Light damage plays a hit flinch")
+	game.player.visual.locomotion(true,false)
+	check(game.player.visual.state in ["Hit","HitHead"],"Locomotion waits for the flinch to finish")
+	game.player.visual.advance(.4); game.player.visual.locomotion(true,false)
+	check(game.player.visual.state=="Run","Locomotion resumes after the flinch")
+	game.player.hp=game.player.max_hp; game.hurt_player(game.player.max_hp*.5)
+	check(game.player.visual.state=="HitStagger","Heavy damage staggers the hero")
+	game.player.visual.play("Idle"); game.player.busy=1.0; game.hurt_player(5)
+	check(game.player.visual.state=="Idle","Hit reactions never interrupt attacks")
+	game.player.busy=0; game.player.hp=game.player.max_hp
+	game.run.energy=10; game.dash()
 	var hp: float = game.player.hp
 	game.hurt_player(100)
 	check(game.player.hp==hp,"Evade prevents damage")

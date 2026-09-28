@@ -4,7 +4,10 @@ No visible game object is built from Godot primitive meshes, CSG, surface tools,
 or scripted Blender primitives. `tools/prepare_models.py` imports and normalizes
 existing meshes. `scripts/layout.gd` adapts the original room-and-corridor generator;
 `scripts/temple.gd` places those authored modules on its tile layout and constructs
-only navigation/collision data. Runtime generation places imported meshes and
+only navigation/collision data. Each floor's ascent reuses the imported stairs mesh,
+scaled to a two-tile-wide flight four tiles deep and exactly wall height. It stands
+against a solid wall of the farthest suitable room, so its top step meets the top
+of that wall; its footprint is solid and the ascent point is the floor at its foot. Runtime generation places imported meshes and
 does not construct mesh geometry. The third-floor court assembles three decreasing
 stone bowls from the imported chalice, with a low column base in the original
 fountain obstacle footprint. Paving meshes provide the pool floor and low rim;
@@ -12,18 +15,31 @@ the water shader uses thin instances of the same mesh. Spill particles reuse the
 imported gem mesh. The generated seal is a transparent VFX sprite,
 not a replacement for a 3D environment object.
 
+Floor paving keeps the imported tile mesh with `assets/shaders/quartz_floor.gdshader`:
+pale, polished milky quartz slabs with soft clouding, faint veins, tiny flecks and thin
+grout on each one-metre tile. The mesh's small carved cobbles are shaded flat. The
+light floor contrasts with the dark stone statues; floor 3's court uses a faint rose
+tint. It is procedural and adds no image asset.
+
 Torch fixtures retain the imported brazier and torch meshes. The static authored
 flame is masked out in `assets/shaders/torch.gdshader` and replaced by a small,
 camera-facing VFX sprite. `assets/shaders/torch_flame.gdshader` draws animated
 flame tongues, a warm core, soft edges and rising embers procedurally; it requires
 no new image asset. `scripts/torch_flame.gd` varies each existing local light
 smoothly by at most ten percent, with independent phases and slight warmth
-variation. Light range, collision and the nearby-shadow budget are preserved.
+variation. Light range and the nearby-shadow budget are preserved.
+Hallways are five tiles wide and rooms 8–15 tiles across. Torches are spaced
+along the walls, then added wherever the estimated floor light (the omni falloff
+and floor incidence of every torch) would fall below a dim but readable level.
+Where no wall is close enough, a standing brazier is placed on open floor; it is
+solid. Torches beyond line of sight are switched off, keeping about a dozen lights
+active in any view.
 
 Warrior, Ranger and Wizard share the imported hero rig and armor. Starting
 equipment distinguishes them: sword/shield, bow, or staff. The shield uses the
 existing imported model centered against the left forearm, with its face pointing
-outward. This mounting follows idle, movement and attack poses. Staff attacks reuse the Cast
+outward. This mounting follows idle, movement and attack poses. With a sword equipped, the SwordIdle stance (the library idle with the
+left forearm turned 60° outward) holds the shield facing out to the side. Staff attacks reuse the Cast
 animation. Class projectiles reuse the arrow and gem meshes; traps, defensive
 effects and area warnings reuse the transparent seal sprite with distinct colors
 and timing. This update adds no externally sourced or generated image assets.
@@ -33,6 +49,14 @@ every attack at its wind-up. `scripts/actor.gd` advances animation manually on t
 combat clock, so held attacks finish their recovery before the next swing.
 Damage and projectile jobs follow the same clock. Enemy hit delays pause the
 pose and telegraph together; culled actors retain elapsed animation time.
+
+The Oracle's fire spell is a lobbed fireball (`scripts/fireball.gd`). A camera-facing
+card drawn by `assets/shaders/fireball.gdshader` renders procedural, flowing fire; an
+ember trail and a travelling light follow it. On impact it swells into an explosion
+that cools from white-hot through orange and red into smoke, with sparks, a light
+flash, a ground shockwave from the existing seal VFX and a fading scorch mark. Damage
+lands on impact; the wind-up is shortened by the flight time, keeping the 1.5-second
+ground warning. It adds no image asset or mesh geometry.
 
 Enemy hover feedback uses a flat red sprite with a procedural radial gradient
 from `scripts/assets.gd`, plus a 72×8 HUD health bar projected above the head.
@@ -48,14 +72,24 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   boss, offerings, and ending elders.
 - Quaternius Universal Animation Library [Standard]: `UAL1_Standard.glb`.
   Sword Idle, Sprint, Sword Attack, Roll, Death01, Spell Simple Shoot, Punch Cross,
-  Crouch Forward and Hit Chest drive ten gameplay slots (Cleave also uses Sword
-  Attack). All are retargeted and baked to the supplied base character skeleton.
+  Crouch Forward, Hit Chest and Hit Head drive eleven gameplay slots (Cleave also
+  uses Sword Attack). All are retargeted and baked to the supplied base character skeleton.
 - Quaternius Universal Animation Library 2 [Standard]: `UAL2_Standard.glb`.
   `Sword_Regular_A` plus its recovery supplies SwordSwing; `Sword_Regular_B`
   plus its recovery supplies SwordSlash. `Sword_Regular_C` supplies AxeWhirl
   and its overhead strike supplies AxeChop. Wind-up, cutting motion and recovery
   are retimed separately for readable swings, then baked onto the character.
-- Neither supplied animation library includes archery or spear thrust clips.
+  `Hit_Knockback` followed by `LayToIdle` supplies HitKnockdown; its opening
+  crumple, blended back to the idle stance, supplies HitStagger.
+- Hit reactions: light hits alternate Hit (chest) and HitHead flinches on the
+  hero and every statue. Hits of at least 20% of the hero's maximum health play
+  HitStagger. Shield Bash knocks statues down for the stagger's duration; the
+  boss's short stagger uses HitStagger. Reactions never interrupt wind-ups,
+  attack recoveries, skills, evades, the boss's gaze or death, and locomotion
+  resumes when they finish.
+- Neither supplied animation library includes archery or spear thrust clips
+  (the Standard editions of both were searched, including their FBX and
+  root-motion variants).
   `tools/import_combat.py` authors and bakes BowIdle, BowShot, BowRapid, BowRun, BowCrouch,
   SpearIdle, SpearStab and SpearJab on the supplied skeleton. These animate
   existing bones and meshes; no replacement geometry is generated.
@@ -90,13 +124,26 @@ are under `assets/models/props/`. Original downloads are under `source_art/` on
 this workstation and excluded from native exports. Prop normalization preserves mesh topology; it recenters bounds, corrects orientation, and repacks textures.
 `tools/prepare_guardian.py` makes a crowd variant of the supplied character: it
 merges the stone surfaces and reduces the mesh to about 5,450 export vertices,
-while retaining the skeleton and all twenty-two clips. The full hero remains unchanged.
+while retaining the skeleton and all twenty-eight clips. The full hero remains unchanged.
 
 `tools/prepare_enemy_outfits.py` fits the KayKit clothing meshes to that existing
 Quaternius skeleton, remaps their skin weights, and joins each outfit into one
 crowd surface. It exports `guardian_gladiator.glb`, `guardian_archer.glb`,
-`guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 22 clips.
-The supplied mage tunic is extended into an ankle-length robe; covered leg
+`guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 28 clips.
+The gladiator is a murmillo: the bare statue torso wears the barbarian's studded
+belt and fringe (trimmed below the chest) and the knight's plated right arm, with
+bare legs, and the knight helm reshaped from its own vertices, sized to the statue's
+head, with the ridge spikes raised into a crest and the rim flared into a brim. Its
+visor shows the statue's face. Its build is reshaped from the same mesh: collarbone
+chains move 3.5cm outward, arms, chest and thighs thicken around their bones over
+leaner calves, and thighs and calves shorten by 4cm and 3cm with the hips lowered to
+match. Bones only translate in the rest pose, so every baked clip still applies. It
+carries the Mini Dungeon spear and a tall curved scutum (KayKit Adventurers
+`shield_square`, normalized as `assets/models/props/scutum.glb`), held upright in
+front of the left forearm. SpearShieldIdle is its stance; SpearLunge is a single
+thrust: the spear draws back as the upper body coils, then drives forward as the torso
+turns into the thrust, the left foot steps ahead and the hips drop, with the
+right foot planted by leg IK. The supplied mage tunic is extended into an ankle-length robe; covered leg
 surfaces are omitted to avoid running knees piercing the garment. The helmet
 covers the centurion's whole head. Rebuild with:
 

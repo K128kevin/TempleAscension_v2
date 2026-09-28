@@ -42,7 +42,8 @@ available points appear at top left. Floor, remaining statues and difficulty
 appear at top right. Unassigned, incompatible, and recharging skills are disabled
 with an explanation. Character, skill and equipment screens pause combat.
 
-The temple's dark interiors are illuminated mainly by torch stations, with
+The temple's dark interiors are illuminated mainly by torch stations, placed so every
+hallway and room stays readable, with
 animated flames, rising embers and subtle independent light flicker. The
 terraces on floors four and five look down onto nearby moonlit dunes and ruins,
 with mountains and a river farther away. The dark panorama appears only while the player is on a terrace,
@@ -190,11 +191,14 @@ The local library supplies humanoid rigs, so the original lion enemy is represen
 by a crouching humanoid Lion Guardian with the original fast pursuit and attack
 cadence. All humanoid statues and the hero use the requested local model and
 animation library.
-Gladiators wear light shoulder armor and bracers, archers wear light armor,
+Gladiators are broad-shouldered, heavily muscled murmillones with a crested, brimmed
+helmet, a studded belt, a plated sword arm and bare legs; they carry a spear and a tall scutum and attack
+with a single stepping thrust. Archers wear light armor,
 centurions wear heavy plate and full helmets, and oracles wear long robes.
 Enemy bodies and their equipment share a dark, rough stone-gray finish with
-grain, pits, weathering and cracks. Warrior and gladiator shields are centered
-against their left forearms throughout idle, movement and attacks.
+grain, pits, weathering and cracks. The warrior's shield is centered against the left
+forearm, and the gladiator's scutum is held upright in front of it, throughout idle,
+movement and attacks.
 These outfits use authored meshes fitted to the existing
 enemy skeleton and retain the current combat animations.
 

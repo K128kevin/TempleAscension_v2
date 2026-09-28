@@ -18,7 +18,7 @@ sources={
  'banner':props/'Banner_1.gltf','altar':kay/'table_medium_tablecloth.gltf.glb',
  'sword':props/'Sword_Bronze.gltf','spear':mini/'weapon-spear.glb',
  'axe':adv/'axe_2handed.gltf','arrow':adv/'arrow.gltf','staff':adv/'staff.gltf',
- 'shield':props/'Shield_Wooden.gltf','crown':ROOT/'source_art/crown.glb',
+ 'shield':props/'Shield_Wooden.gltf', 'scutum':adv/'shield_square.gltf','crown':ROOT/'source_art/crown.glb',
  'bow':ROOT/'source_art/bow.glb','gem':nature/'Pebble_Square_2.gltf',
  'rock':nature/'Rock_Medium_3.gltf','tree':nature/'DeadTree_1.gltf',
  'bookcase':props/'Bookcase_2.gltf','books':props/'BookGroup_Medium_1.gltf','chalice':props/'Chalice.gltf',

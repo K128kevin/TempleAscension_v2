@@ -41,6 +41,25 @@ func test():
 		var world = game.world
 		check(is_instance_valid(world.fountain)==(index==2),"Fountain exists only on floor 3 (%d)" % (index+1))
 		check(is_instance_valid(world.desert_backdrop)==(index in [3,4]),"Desert backdrop exists only on terrace floors (%d)" % (index+1))
+		if index<5:
+			var dark = 0
+			for cell in world.layout.cells:
+				if index==2 and world.layout.court.grow(1).has_point(cell): continue
+				var lit = 0.0
+				for at in world.torch_lights: lit += world.torch_light(at,world.layout.to_world(cell))
+				if lit<world.LIT_LEVEL: dark += 1
+			check(dark==0,"Torches light every hallway and room tile (%d)" % (index+1))
+			var solid = true
+			for cell in world.solid_floor: solid = solid and not world.fits(world.layout.to_world(cell),.1)
+			check(solid,"Standing braziers and stairs are solid (%d)" % (index+1))
+		world.visibility_timer = 0
+		world.update_visibility(world.spawn,1.0)
+		var shown_walls = 0; var hidden_walls = 0
+		for group in world.occluders:
+			if group.root.visible: shown_walls += 1
+			else: hidden_walls += 1
+		check(shown_walls>0 and hidden_walls>0,"Walls facing seen floor are revealed; walls of unseen rooms stay hidden (%d)" % (index+1))
+		check(world.fog_material.render_priority==Material.RENDER_PRIORITY_MAX and world.fog_material.shader.get_mode()==Shader.MODE_SPATIAL,"Line-of-sight fog uses scene depth (%d)" % (index+1))
 		if index==2:
 			var fountain = world.fountain
 			check(fountain.pool_bounds.size==Vector2(25,12),"Pool retains original room size and 1.5-tile inset")
@@ -103,8 +122,10 @@ func test():
 				check(not world.desert_backdrop.visible,"Landscape is hidden on the inside of doorway %d, floor %d" % [i,index+1])
 				world.follow(inside+direction,1)
 				check(world.desert_backdrop.visible and world.terrace_moonlight.visible,"Stepping out of doorway %d reveals landscape and moonlight on floor %d" % [i,index+1])
+				check(world.fog_material.get_shader_parameter("outdoors")==true,"Fog leaves the desert and outer storeys unfogged outdoors at doorway %d, floor %d" % [i,index+1])
 				world.follow(inside,.016)
 				check(not world.desert_backdrop.visible and not world.terrace_moonlight.visible,"Stepping back inside hides landscape immediately at doorway %d, floor %d" % [i,index+1])
+				check(world.fog_material.get_shader_parameter("outdoors")==false,"Fog returns to interior line of sight inside at doorway %d, floor %d" % [i,index+1])
 			var terrace: Rect2i = world.layout.terrace[0]
 			var cell = terrace.position+Vector2i(2,terrace.size.y/2)
 			game.player.position = world.layout.to_world(cell)

@@ -16,18 +16,32 @@ var occluders: Array = []
 var occlusion_tick = 0.0
 var floor_nodes: Array = []
 var shadow_torches: Array[OmniLight3D] = []
+var torch_lights: Array[Vector3] = []
 var fountain
 var desert_backdrop: Sprite3D
 var terrace_moonlight: DirectionalLight3D
 var boss_moonlight: SpotLight3D
 const TERRACE_LIGHT_LAYER = 8
 const VISION_RANGE = 16.0
+const WALL_HEIGHT = 3.2
+const TORCH_ENERGY = 2.4
+const TORCH_RANGE = 9.0
+const TORCH_DECAY = 1.6
+const TORCH_HEIGHT = 2.05
+# Estimated floor light, with Godot's omni falloff and floor incidence, that
+# still reads clearly in the dark temple: one torch at about three metres.
+const LIT_LEVEL = .12
+# Floor cells occupied by solid props (stairs, standing braziers). They are
+# visible and let sight pass, but are not walkable.
+var solid_floor: Dictionary = {}
 const VISIBILITY_GRID_ORIGIN = Vector2i(-5,-5)
 var visibility_image: Image
 var visibility_texture: ImageTexture
 var visibility_grid_size = Vector2i.ZERO
 var visibility_floor_batches: Array[Dictionary] = []
 var visibility_nodes: Array[Node3D] = []
+# Cells whose line of sight reveals each node; nodes absent here use their own cell.
+var visibility_cells: Dictionary = {}
 var visibility_timer = 0.0
 var visibility_player_position = Vector3(INF,INF,INF)
 var fog_material: ShaderMaterial
@@ -36,14 +50,14 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	level = floor_index
 	layout.generate(run_seed,floor_index)
 	spawn = layout.to_world(layout.start)
-	exit_point = layout.to_world(layout.exit_cell)
+	exit_point = layout.exit_position()
 	var env = WorldEnvironment.new()
 	var e = Environment.new()
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = Color.BLACK
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(.35,.40,.50)
-	e.ambient_light_energy = .08
+	e.ambient_light_energy = .12
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.fog_enabled = false
 	env.environment = e
@@ -55,19 +69,25 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	add_child(camera)
 	setup_visibility_fog()
 	var stone = Art.material("stone", [Color(.91,.87,.77),Color(.74,.80,.77),Color(.73,.70,.66),Color(.70,.76,.82),Color(.75,.69,.61),Color(.94,.87,.70)][floor_index])
-	var paving = Art.material("marble", Color(.37,.40,.39))
-	var court_paving = Art.material("marble",Color(.57,.64,.60))
+	# Pale quartz paving keeps the dark stone statues readable against the floor.
+	var paving = Art.quartz_material()
+	var court_paving = Art.quartz_material(Color(.74,.64,.64))
 	var lower = Vector2i(10000,10000)
 	var upper = Vector2i(-10000,-10000)
 	var edges: Dictionary = {}
 	var torch_candidates: Array[Vector3] = []
-	for cell in layout.cells:
+	# The ascent stair's footprint is paved and walled like the room around it,
+	# although it is solid for movement.
+	var surface: Array = layout.cells.keys()
+	for y in range(layout.stairs.position.y,layout.stairs.end.y):
+		for x in range(layout.stairs.position.x,layout.stairs.end.x): surface.append(Vector2i(x,y))
+	for cell in surface:
 		var at = layout.to_world(cell)
 		lower = lower.min(Vector2i(at.x,at.z))
 		upper = upper.max(Vector2i(at.x,at.z))
 		place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),court_paving if layout.court.has_point(cell) else paving)
 		for direction in Layout.DIRS:
-			if layout.cells.has(cell+direction): continue
+			if layout.is_open(cell+direction): continue
 			# The court's solid centerpiece is the fountain, not a wall.
 			if layout.court_obstacle.has_point(cell+direction): continue
 			var horizontal_edge: bool = direction.y!=0
@@ -77,7 +97,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			if not edges.has(key): edges[key] = {"horizontal":horizontal_edge,"line":line,"direction":direction,"low":low,"along":[]}
 			edges[key].along.append(int(at.x if horizontal_edge else at.z))
 			# Small wall torches sit inside the boundary, with no floor obstruction.
-			torch_candidates.append(at+Vector3(direction.x,0,direction.y)*.28)
+			if not layout.stairs.has_point(cell): torch_candidates.append(at+Vector3(direction.x,0,direction.y)*.28)
 	bounds = Rect2(Vector2(lower)-Vector2(.5,.5),Vector2(upper-lower)+Vector2.ONE)
 	for edge in edges.values():
 		edge.along.sort()
@@ -91,12 +111,19 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 				index += 1
 			var mid = (first+last)*.5
 			var pos = Vector3(mid,0,edge.line+edge.direction.y*.14) if edge.horizontal else Vector3(edge.line+edge.direction.x*.14,0,mid)
-			var height = 1.0 if edge.low else 3.2
+			var height = 1.0 if edge.low else WALL_HEIGHT
 			# Extend each end to the adjacent wall's centerline. The authored
 			# molding is wider than its stone core, so a tiny cap overlap leaves
 			# open seams at right-angle corners.
 			var dimensions = Vector3(last-first+1.28,height,.28) if edge.horizontal else Vector3(.28,height,last-first+1.28)
-			place("wall",pos,dimensions,stone)
+			var wall = place("wall",pos,dimensions,stone)
+			# Walls stand in solid cells that are never seen themselves. Reveal each
+			# one from the floor it faces, never from the far side of the wall.
+			var faces: Array[Vector2i] = []
+			for along in range(first,last+1):
+				var floor_at = Vector3(along,0,edge.line-edge.direction.y*.5) if edge.horizontal else Vector3(edge.line-edge.direction.x*.5,0,along)
+				faces.append(layout.to_cell(floor_at))
+			visibility_cells[wall] = faces
 	# The generated rooms determine every landmark and decoration placement.
 	for i in layout.rooms.size():
 		var room: Rect2i = layout.rooms[i]
@@ -117,22 +144,24 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	# A downward stair marks arrival; ascent is in the furthest generated room.
 	var arrival = place("stairs",spawn+Vector3(0,-.25,1.1),Vector3(1.5,.3,1.5),stone)
 	arrival.rotation.y = PI
-	place("stairs",exit_point,Vector3(2,1.3,2),stone)
+	if layout.stairs.has_area():
+		# The imported flight climbs toward its local -Z from a base at its origin.
+		# Scaled to wall height, its top step meets the top of the wall it climbs into.
+		var rect: Rect2i = layout.stairs
+		var middle = layout.to_world(rect.position)+Vector3(rect.size.x-1,0,rect.size.y-1)*.5
+		var flight = place("stairs",middle,Vector3(Layout.STAIR_WIDTH,WALL_HEIGHT,Layout.STAIR_DEPTH),stone)
+		flight.rotation.y = atan2(-layout.stairs_dir.x,-layout.stairs_dir.y)
+		var reveal: Array[Vector2i] = [layout.exit_cell]
+		for y in range(rect.position.y,rect.end.y):
+			for x in range(rect.position.x,rect.end.x): reveal.append(Vector2i(x,y))
+		visibility_cells[flight] = reveal
+		for cell in reveal.slice(1): solid_floor[cell] = true
 	exit_seal = Art.seal(3,Color(.3,1,.85,.85))
 	exit_seal.position = exit_point+Vector3.UP*.05
 	add_child(exit_seal)
 	exit_seal.visible = false
-	var torch_positions: Array[Vector3] = []
-	# Deterministic placement covers room walls, junctions and galleries.
-	for at in torch_candidates:
-		if floor_index==2 and layout.court.grow(1).has_point(layout.to_cell(at)): continue
-		var crowded = false
-		for other in torch_positions:
-			if at.distance_squared_to(other)<30.25: crowded=true; break
-		if crowded: continue
-		torch_positions.append(at)
-		torch(at,true)
 	if floor_index==2: setup_court_torches()
+	light_floor(torch_candidates)
 	if floor_index==5:
 		boss_point = layout.to_world(Vector2i(14,10))
 		setup_boss_moonlight()
@@ -199,16 +228,19 @@ func setup_visibility_fog() -> void:
 	fog_material = ShaderMaterial.new()
 	fog_material.shader = preload("res://assets/shaders/fog_of_war.gdshader")
 	fog_material.set_shader_parameter("visibility_mask",visibility_texture)
-	var layer = CanvasLayer.new()
-	layer.name = "LineOfSightFog"
-	layer.layer = 0
-	add_child(layer)
-	var fog = ColorRect.new()
-	fog.name = "FogOverlay"
-	fog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	fog.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fog.material = fog_material
-	layer.add_child(fog)
+	# Drawn last over the whole view; the shader reads scene depth so raised
+	# surfaces such as walls are fogged by their own cell, not the floor behind.
+	fog_material.render_priority = Material.RENDER_PRIORITY_MAX
+	var quad = QuadMesh.new()
+	quad.size = Vector2(2,2)
+	var fog = MeshInstance3D.new()
+	fog.name = "LineOfSightFog"
+	fog.mesh = quad
+	fog.material_override = fog_material
+	fog.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fog.custom_aabb = AABB(Vector3(-1e4,-1e4,-1e4),Vector3(2e4,2e4,2e4))
+	fog.position.z = -1
+	camera.add_child(fog)
 	var world_origin = Vector2(VISIBILITY_GRID_ORIGIN.x-layout.start.x,VISIBILITY_GRID_ORIGIN.y-layout.start.y+9)
 	fog_material.set_shader_parameter("map_world_origin",world_origin)
 	fog_material.set_shader_parameter("map_dimensions",Vector2(visibility_grid_size))
@@ -301,6 +333,94 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	assert(false,"Generated floor has insufficient statue positions")
 	return posts
 
+# Floor light a torch at `at` gives a point on the floor, matching the omni
+# light's falloff and the floor's angle to it.
+func torch_light(at: Vector3, point: Vector3) -> float:
+	var d = (at+Vector3.UP*TORCH_HEIGHT).distance_to(point)
+	if d>=TORCH_RANGE: return 0.0
+	var window = maxf(1.0-pow(d/TORCH_RANGE,4.0),0.0)
+	return TORCH_ENERGY*window*window*pow(d,-TORCH_DECAY)*TORCH_HEIGHT/d
+
+func add_light(levels: Dictionary, at: Vector3) -> void:
+	var center = layout.to_cell(at)
+	var reach = ceili(TORCH_RANGE)
+	for x in range(center.x-reach,center.x+reach+1):
+		for y in range(center.y-reach,center.y+reach+1):
+			var cell = Vector2i(x,y)
+			if levels.has(cell): levels[cell] += torch_light(at,layout.to_world(cell))
+
+# Evenly spaced wall torches first, then more wherever any floor tile is still
+# too dark: another wall torch if one is close, otherwise a standing brazier.
+func light_floor(candidates: Array[Vector3]) -> void:
+	var levels: Dictionary = {}
+	for cell in layout.cells:
+		# The court on floor 3 keeps its authored torches around the pool.
+		if level==2 and layout.court.grow(1).has_point(cell): continue
+		levels[cell] = 0.0
+	var placed: Array[Vector3] = []
+	for at in torch_lights: placed.append(at)
+	for at in placed: add_light(levels,at)
+	for at in candidates:
+		if level==2 and layout.court.grow(1).has_point(layout.to_cell(at)): continue
+		if nearest_torch(placed,at)<5.5: continue
+		torch(at,true)
+		placed.append(at)
+		add_light(levels,at)
+	var given_up: Dictionary = {}
+	while true:
+		var darkest = Vector2i.ZERO
+		var lowest = LIT_LEVEL
+		for cell in levels:
+			if levels[cell]<lowest and not given_up.has(cell):
+				lowest = levels[cell]
+				darkest = cell
+		if lowest>=LIT_LEVEL: break
+		var target = layout.to_world(darkest)
+		var choice = Vector3.INF
+		var best = 3.0
+		for at in candidates:
+			var d = at.distance_to(target)
+			if d<best and nearest_torch(placed,at)>=3.0: best = d; choice = at
+		if choice==Vector3.INF: choice = brazier_spot(target,placed)
+		if choice==Vector3.INF:
+			given_up[darkest] = true
+			continue
+		torch(choice,true)
+		placed.append(choice)
+		add_light(levels,choice)
+		var cell = layout.to_cell(choice)
+		if choice.is_equal_approx(layout.to_world(cell)):
+			# Standing braziers are solid; the room around them stays open.
+			layout.cells.erase(cell)
+			solid_floor[cell] = true
+
+func nearest_torch(placed: Array[Vector3], at: Vector3) -> float:
+	var nearest = INF
+	for other in placed: nearest = minf(nearest,other.distance_to(at))
+	return nearest
+
+# An open floor tile near `target` for a freestanding brazier: surrounded by
+# floor, clear of the entrance, the ascent and other torches.
+func brazier_spot(target: Vector3, placed: Array[Vector3]) -> Vector3:
+	# The summit arena stays open for the boss fight; its moonlight fills the middle.
+	if level==5: return Vector3.INF
+	var center = layout.to_cell(target)
+	var best = Vector3.INF
+	var distance = 2.5
+	for x in range(center.x-2,center.x+3):
+		for y in range(center.y-2,center.y+3):
+			var cell = Vector2i(x,y)
+			var at = layout.to_world(cell)
+			var d = at.distance_to(target)
+			if d>=distance or layout.on_terrace(cell): continue
+			if at.distance_to(spawn)<3.0 or at.distance_to(exit_point)<3.0 or nearest_torch(placed,at)<3.0: continue
+			var open = true
+			for dx in range(-1,2):
+				for dy in range(-1,2):
+					if not layout.cells.has(cell+Vector2i(dx,dy)): open = false
+			if open: best = at; distance = d
+	return best
+
 func torch(at: Vector3, cast_shadows: bool) -> void:
 	place("brazier",at,Vector3(.6,1.6,.6),Art.material("gold"))
 	var flame = place("torch_lit",at+Vector3.UP,Vector3(.5,1.0,.5))
@@ -313,11 +433,12 @@ func torch(at: Vector3, cast_shadows: bool) -> void:
 			if source is StandardMaterial3D: material.set_shader_parameter("atlas",source.albedo_texture)
 			mesh.set_surface_override_material(surface,material)
 	var light = OmniLight3D.new()
-	light.position = at+Vector3.UP*2.05
+	light.position = at+Vector3.UP*TORCH_HEIGHT
 	light.light_color = Color(1,.60,.28)
-	light.light_energy = 2.8
-	light.omni_range = 9.0
-	light.omni_attenuation = 1.6
+	torch_lights.append(at)
+	light.light_energy = TORCH_ENERGY
+	light.omni_range = TORCH_RANGE
+	light.omni_attenuation = TORCH_DECAY
 	light.shadow_enabled = false
 	if cast_shadows: shadow_torches.append(light)
 	light.shadow_bias = .06
@@ -345,11 +466,19 @@ func place(id: String, pos: Vector3, size: Vector3, mat: Material = null) -> Nod
 	add_child(n)
 	n.position = pos
 	if id!="floor": visibility_nodes.append(n)
+	if id in ["column","arch","banner","bookcase"] and pos.y>-1:
+		# Corner architecture sits in solid cells; any seen neighbour reveals it.
+		var low = layout.to_cell(pos-size*.5)
+		var high = layout.to_cell(pos+size*.5)
+		var around: Array[Vector2i] = []
+		for x in range(low.x-1,high.x+2):
+			for y in range(low.y-1,high.y+2): around.append(Vector2i(x,y))
+		visibility_cells[n] = around
 	# Torches cast architecture shadows without re-rendering the animated crowd.
 	var layers = 2 | TERRACE_LIGHT_LAYER if terrace_surface(pos) else 2
 	for mesh in n.find_children("*","MeshInstance3D",true,false): mesh.layers = layers
 	if id=="floor": floor_nodes.append(n)
-	if id in ["wall","arch","column","bookcase"] and mat:
+	if (id in ["wall","arch","column","bookcase"] or (id=="stairs" and size.y>=WALL_HEIGHT)) and mat:
 		var faded = mat.duplicate()
 		faded.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		faded.albedo_color.a = .16
@@ -425,6 +554,7 @@ func fits_for_visibility(p: Vector3, radius: float) -> bool:
 			var cell = Vector2i(x,y)
 			if layout.cells.has(cell): continue
 			if level==2 and layout.court_obstacle.has_point(cell): continue
+			if solid_floor.has(cell): continue
 			return false
 	return true
 
@@ -498,15 +628,10 @@ func follow(pos: Vector3, delta: float) -> void:
 	camera.look_at(camera.position-Vector3(12,21,19))
 	camera.size = lerpf(camera.size,zoom,minf(1,delta*8))
 	var viewport_size = get_viewport().get_visible_rect().size
-	fog_material.set_shader_parameter("camera_position",camera.global_position)
-	fog_material.set_shader_parameter("camera_right",camera.global_basis.x)
-	fog_material.set_shader_parameter("camera_up",camera.global_basis.y)
-	fog_material.set_shader_parameter("camera_forward",-camera.global_basis.z)
-	fog_material.set_shader_parameter("camera_size",camera.size)
-	fog_material.set_shader_parameter("viewport_aspect",viewport_size.x/maxf(1.0,viewport_size.y))
 	if is_instance_valid(desert_backdrop):
 		var outdoors = layout.on_terrace(layout.to_cell(pos))
 		desert_backdrop.visible = outdoors or level==5
+		fog_material.set_shader_parameter("outdoors",desert_backdrop.visible)
 		terrace_moonlight.visible = outdoors
 		var width = camera.size*viewport_size.x/viewport_size.y
 		var texture_size = desert_backdrop.texture.get_size()
@@ -530,7 +655,10 @@ func follow(pos: Vector3, delta: float) -> void:
 			var blocked = false
 			for mesh in group.meshes:
 				var box: AABB = mesh.global_transform * mesh.get_aabb()
-				if box.intersects_segment(camera.position,pos+Vector3.UP): blocked = true; break
+				# Fade anything hiding the hero's feet, body or head.
+				for height in [.15,1.0,1.8]:
+					if box.intersects_segment(camera.position,pos+Vector3.UP*height): blocked = true; break
+				if blocked: break
 			if blocked != group.hidden:
 				group.hidden = blocked
 				for mesh in group.meshes: mesh.material_override = group.faded if blocked else group.normal
@@ -548,6 +676,7 @@ func update_visibility(pos: Vector3, delta: float) -> void:
 		for y in range(layout.court_obstacle.position.y,layout.court_obstacle.end.y):
 			for x in range(layout.court_obstacle.position.x,layout.court_obstacle.end.x):
 				mark_visibility_cell(Vector2i(x,y),pos)
+	for cell in solid_floor: mark_visibility_cell(cell,pos)
 	visibility_texture.update(visibility_image)
 	for batch in visibility_floor_batches:
 		var seen = false
@@ -555,7 +684,13 @@ func update_visibility(pos: Vector3, delta: float) -> void:
 			if cell_is_visible(cell): seen = true; break
 		batch.node.visible = seen
 	for node in visibility_nodes:
-		if is_instance_valid(node): node.visible = can_see(node.position)
+		if not is_instance_valid(node): continue
+		if visibility_cells.has(node):
+			var seen = false
+			for cell in visibility_cells[node]:
+				if cell_is_visible(cell): seen = true; break
+			node.visible = seen
+		else: node.visible = can_see(node.position)
 
 func mark_visibility_cell(cell: Vector2i, pos: Vector3) -> void:
 	var at = layout.to_world(cell)

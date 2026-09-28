@@ -34,6 +34,12 @@ var slow_time = 0.0
 var mark_time = 0.0
 var stagger_time = 0.0
 var stagger_meter = 0.0
+var hit_reactions = 0
+# Seconds the Oracle's fireball spends in the air; its wind-up is shortened
+# by the same amount so the ground warning still lasts 1.5 seconds.
+var fireball_flight = 0.0
+var fire_ring: Dictionary = {}
+const FIRE_WARNING = 1.5
 
 func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 	game = owner_game
@@ -130,22 +136,28 @@ func tick(dt: float) -> void:
 		face(player.position)
 		attack_point = player.position
 		windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else .42)
-		cooldown = config.interval + windup
-		warning.visible = true
 		if kind == "wizard":
 			cast_count += 1
-			game.effect(attack_point,4.4,Color(1,.25,.12),1.5)
+			if cast_count % 2 == 1:
+				fireball_flight = clampf(distance/14.0,.4,.8)
+				windup = FIRE_WARNING-fireball_flight
+				fire_ring = game.effect(attack_point,4.4,Color(1,.25,.12),FIRE_WARNING)
+		cooldown = config.interval + windup
+		warning.visible = true
 		var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
 		var duration = windup+.25
 		var weapon_index = Data.WEAPONS.find(config.weapon)
-		if weapon_index>=0 and visual.clips.has(Motion.NORMAL[weapon_index].clip):
+		if kind=="gladiator" and visual.clips.has(Motion.LUNGE.clip):
+			clip = Motion.LUNGE.clip
+			duration = windup/Motion.LUNGE.contacts[0]
+		elif weapon_index>=0 and visual.clips.has(Motion.NORMAL[weapon_index].clip):
 			clip = Motion.NORMAL[weapon_index].clip
 			duration = windup/Motion.NORMAL[weapon_index].contacts[0]
 		attack_recovery = maxf(.25,duration-windup)
 		visual.play(clip,duration)
 	elif distance > reach * .85:
 		walk_to(player.position,dt)
-	elif kind in ["archer","wizard"] and distance < 5:
+	elif kind == "wizard" and distance < 5:
 		var direction: Vector3 = (position-player.position).normalized()
 		var before = position
 		position = game.world.move(position,direction*config.speed*(.4 if slow_time>0 else 1.0)*dt)
@@ -168,7 +180,10 @@ func release_attack() -> void:
 	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]
 	if kind == "archer": game.projectile(position,attack_point,damage,false,"arrow")
 	elif kind == "wizard":
-		if cast_count % 2 == 1: game.blast(attack_point,2.2,damage,false)
+		if cast_count % 2 == 1:
+			var hand: Vector3 = visual.skeleton.global_transform*visual.skeleton.get_bone_global_pose(visual.skeleton.find_bone("hand_r")).origin
+			game.fireball(hand+forward()*.25,attack_point,2.2,damage,fireball_flight)
+			fire_ring = {}
 		else: game.projectile(position,attack_point,7.5*.6*Data.DAMAGE_SCALE[game.run.difficulty],false,"ice")
 	elif position.distance_to(game.player.position) <= config.range + .6 and game.world.clear_line(position,game.player.position):
 		var d: Vector3 = (game.player.position-position).normalized()
@@ -217,6 +232,20 @@ func stagger(seconds: float) -> void:
 	stagger_time = maxf(stagger_time,seconds)
 	windup = 0
 	warning.visible = false
+	# A cancelled cast clears its ground warning.
+	if not fire_ring.is_empty(): fire_ring.life = minf(fire_ring.life,.15)
+	fire_ring = {}
+	# Long staggers knock the statue down and let it rise as the stagger ends.
+	if not dead and laser_time<=0: visual.react("HitKnockdown" if seconds>=1.2 else "HitStagger",seconds if seconds>=1.2 else .6)
+
+# Light hits alternate chest and head flinches; heavy hits stagger. Wind-ups,
+# attack recoveries, the boss's gaze and running reactions are not interrupted.
+func react_to_hit(heavy: bool = false) -> void:
+	if dead or windup>0 or busy>0 or laser_time>0: return
+	if visual.reaction_time>0 and not (heavy and visual.state in ["Hit","HitHead"]): return
+	hit_reactions += 1
+	if heavy: visual.react("HitStagger",.6)
+	else: visual.react("HitHead" if hit_reactions%2==0 else "Hit",.34)
 
 func hit(damage: float, type: String = "physical") -> void:
 	if dead or (kind == "offering" and dormant_offering): return
@@ -228,16 +257,20 @@ func hit(damage: float, type: String = "physical") -> void:
 	if hp <= 0: die()
 	else:
 		if not awake: game.awaken(self)
+		react_to_hit()
 		cooldown += .25
 		if windup > 0:
 			windup += .1
 			visual.animation_delay += .1
+			# Keep the fire warning up until the delayed fireball lands.
+			if not fire_ring.is_empty(): fire_ring.life += .1; fire_ring.total += .1
 
 func die(reward: bool = true) -> void:
 	if dead: return
 	dead = true
 	hp = 0
 	warning.visible = false
+	if windup>0 and not fire_ring.is_empty(): fire_ring.life = minf(fire_ring.life,.15)
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	visual.play("Death")
 	if reward: game.enemy_died(self)

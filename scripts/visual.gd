@@ -19,8 +19,17 @@ var is_stone = false
 var animation_delay = 0.0
 var pending_animation_time = 0.0
 var locomotion_rate = 1.0
+var enemy_kind = ""
+# Remaining time of a hit reaction; locomotion waits for it to finish.
+var reaction_time = 0.0
 const SHIELD_SIZE = Vector3(.48,.62,.12)
 const SHIELD_CENTER = Vector3(0,.14,-.135)
+# The gladiator's tall curved scutum, strapped over the same forearm.
+const SCUTUM_SIZE = Vector3(.58,.95,.2)
+# Measured from the SpearShieldIdle stance: upright, facing forward and 20° out
+# to the left, centred just in front of the forearm (forearm bone space).
+const SCUTUM_CENTER = Vector3(-.072,.224,-.063)
+const SCUTUM_ROTATION = Quaternion(.753,-.397,-.466,-.238)
 const BOW_GRIP = Vector3(-.42,.51,0)
 const BOW_PALM = Vector3(0,.065,0)
 # Imported left-hand axes to the bow's grip: +Y along the stave, -X forward.
@@ -28,6 +37,7 @@ const BOW_HAND_BASIS = Basis(Vector3(0,-1,0),Vector3(0,0,1),Vector3(-1,0,0))
 
 func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enemy_kind: String = "") -> void:
 	is_stone = stone
+	self.enemy_kind = enemy_kind
 	var character = "guardian_%s" % enemy_kind if stone and enemy_kind in ["gladiator","archer","centurion","wizard"] else ("guardian" if stone else "warrior")
 	rig = load("res://assets/models/character/%s.glb" % character).instantiate()
 	# The supplied Godot rig faces +Z, matching Actor.forward().
@@ -49,10 +59,10 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			skin.roughness = .65
 			mesh.material_override = skin
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","Hit","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
+		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SpearShieldIdle","SpearLunge","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
-				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
+				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
 	skeleton.skeleton_updated.connect(align_weapon)
 	equip(weapon)
 	play(idle_action())
@@ -92,21 +102,24 @@ func equip(weapon: String) -> void:
 			nocked_arrow.top_level = true
 			nocked_arrow.visible = false
 		align_weapon()
-	if weapon=="sword":
+	if weapon=="sword" or enemy_kind=="gladiator":
+		var scutum = enemy_kind=="gladiator"
 		shield_attachment = BoneAttachment3D.new()
 		shield_attachment.bone_name = "lowerarm_l"
 		skeleton.add_child(shield_attachment)
-		var shield = Art.model("shield",SHIELD_SIZE,Art.statue_material() if is_stone else null)
+		var shield = Art.model("scutum" if scutum else "shield",SCUTUM_SIZE if scutum else SHIELD_SIZE,Art.statue_material() if is_stone else null)
 		shield_item = shield
 		shield_attachment.add_child(shield)
 		# The imported shield pivots at its bottom edge. Center its back against
 		# the outer forearm, keeping the wrist inside its face rather than at a rim.
-		shield.rotation.y = PI
-		shield.position = SHIELD_CENTER-shield.basis*Vector3(0,.5,0)
-	if state in ["Idle","BowIdle","SpearIdle"]: play(idle_action())
+		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(SCUTUM_SIZE)
+		else: shield.rotation.y = PI
+		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5,0)
+	if state in ["Idle","SwordIdle","SpearShieldIdle","BowIdle","SpearIdle"]: play(idle_action())
 
 func idle_action() -> String:
-	var wanted = {"bow":"BowIdle","spear":"SpearIdle"}.get(weapon_kind,"Idle")
+	var wanted = {"bow":"BowIdle","spear":"SpearIdle","sword":"SwordIdle"}.get(weapon_kind,"Idle")
+	if enemy_kind=="gladiator": wanted = "SpearShieldIdle"
 	return wanted if clips.has(wanted) else "Idle"
 
 func draw_amount(t: float, release: float, start: float) -> float:
@@ -166,6 +179,7 @@ func petrify() -> void:
 func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> void:
 	if dead or not clips.has(action): return
 	state = action
+	reaction_time = 0
 	animation_delay = 0
 	pending_animation_time = 0
 	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
@@ -177,7 +191,15 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	animator.advance(0)
 	if action == "Death": dead = true
 
+# Flinch without interrupting anything: attacks, skills, evades and death
+# replace a reaction through play(); locomotion resumes once it finishes.
+func react(action: String, duration: float) -> void:
+	if dead or not clips.has(action): return
+	play(action,duration)
+	reaction_time = duration
+
 func advance(dt: float) -> void:
+	reaction_time = maxf(0,reaction_time-dt)
 	var held = minf(dt,animation_delay)
 	animation_delay -= held
 	if not animator.is_playing(): return
@@ -188,7 +210,7 @@ func advance(dt: float) -> void:
 		pending_animation_time = 0
 
 func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: float = 1.0) -> void:
-	if dead or busy: return
+	if dead or busy or reaction_time>0: return
 	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
 	if moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
 	var rate = clampf(speed_scale, .1, 4.0)

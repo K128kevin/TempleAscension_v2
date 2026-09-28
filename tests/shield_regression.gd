@@ -31,17 +31,35 @@ func verify():
 	camera.position=Vector3(1.5,2.5,9); camera.look_at(Vector3(0,1,0))
 	for i in 4:
 		var actor=Visual.new(); scene.add_child(actor); actor.position.x=i*2.1-3.15; actor.rotation.y=PI if i%2 else 0
-		actor.setup(i>=2,Color.WHITE,"sword",1,"gladiator" if i>=2 else "")
+		actor.setup(i>=2,Color.WHITE,"spear" if i>=2 else "sword",1,"gladiator" if i>=2 else "")
 		actor.animator.callback_mode_process=AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 		actors.append(actor)
 		var label=Label3D.new(); label.text="Warrior" if i<2 else "Gladiator"; label.position=Vector3(actor.position.x,-.2,0)
 		label.font_size=40; label.pixel_size=.007; label.billboard=BaseMaterial3D.BILLBOARD_ENABLED; scene.add_child(label)
 	await frames(2)
-	for clip in ["Idle","Run","Crouch","SwordSwing","SwordSlash"]:
+	for actor in actors: pose(actor,actor.idle_action(),.3)
+	await frames(1)
+	for i in [0,1]:
+		var side: Vector3=actors[i].global_basis.x.normalized()
+		check(actors[i].state=="SwordIdle" and actors[i].shield_item.global_basis.z.normalized().dot(side)>.9,"Sword-and-shield idle holds the shield facing sideways: %d" % i)
+	# The gladiator carries a spear and a tall scutum, upright and facing forward.
+	for i in [2,3]:
+		var actor=actors[i]; var shield: Node3D=actor.shield_item
+		check(actor.state=="SpearShieldIdle" and actor.weapon_kind=="spear" and shield.scene_file_path.ends_with("scutum.glb"),"Gladiator stands with spear and scutum: %d" % i)
+		check(shield.global_basis.y.normalized().dot(Vector3.UP)>.9 and shield.global_basis.z.normalized().dot(actor.global_basis.z)>.8,"Scutum is held upright, facing forward: %d" % i)
+	for clip in ["SpearShieldIdle","Run","SpearLunge","Hit","HitHead"]:
+		for phase in [0.0,.25,.5,.75]:
+			for i in [2,3]: pose(actors[i],clip,phase)
+			await frames(1)
+			for i in [2,3]:
+				var actor=actors[i]
+				var forearm: Vector3=(actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("lowerarm_l"))).origin
+				check((actor.shield_item.global_transform*Vector3(0,.5,0)).distance_to(forearm)<.5,"Scutum stays strapped to the forearm: %s %.2f / %d" % [clip,phase,i])
+	for clip in ["Idle","SwordIdle","Run","Crouch","SwordSwing","SwordSlash"]:
 		for phase in [0.0,.15,.35,.55,.75,.95]:
 			for actor in actors: pose(actor,clip,phase)
 			await frames(1)
-			for i in [0,2]:
+			for i in [0,1]:
 				var actor=actors[i]; var shield=actor.shield_item
 				var forearm: Transform3D=actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("lowerarm_l"))
 				var wrist: Vector3=(actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("hand_l"))).origin
@@ -53,8 +71,8 @@ func verify():
 				check(shield.global_basis.z.normalized().dot(-forearm.basis.z.normalized())>.99,"Shield face stays on the outside of the forearm: %s %.2f / %d" % [clip,phase,i])
 		for actor in actors: pose(actor,clip,.35)
 		await snapshot(clip)
-	for actor in actors:
+	for actor in actors.slice(0,2):
 		actor.equip("bow"); await frames(1)
-		check(actor.shield_item==null and not is_instance_valid(actor.shield_attachment),"Changing weapon removes the shield")
+		check(actor.shield_item==null and not is_instance_valid(actor.shield_attachment),"Changing the hero's weapon removes the shield")
 	print("SHIELD_REGRESSION ",passed," passed; ",failures)
 	scene.queue_free(); await process_frame; quit(0 if failures.is_empty() else 1)

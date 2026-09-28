@@ -21,6 +21,68 @@ def bounds(obj):
     return Vector([min(v[i] for v in points) for i in range(3)]),Vector([max(v[i] for v in points) for i in range(3)])
 
 
+def trim_above(obj, height):
+    # Keep only the part of an authored piece below `height` (source space).
+    world=obj.matrix_world
+    remove_faces(obj,lambda f: all((world@v.co).z>height for v in f.verts))
+    import bmesh
+    bm=bmesh.new(); bm.from_mesh(obj.data)
+    bmesh.ops.delete(bm,geom=[v for v in bm.verts if not v.link_faces],context='VERTS')
+    bm.to_mesh(obj.data); bm.free()
+
+
+# The gladiator's build, applied to the fitted and joined statue: broader
+# shoulders, heavier arms, chest and thighs over leaner calves, and slightly
+# shorter legs. Bones only translate in the rest pose, so the baked animation
+# rotations still apply; the hips drop by the leg shortening, keeping the feet
+# on the ground.
+MUSCLE={'upperarm':1.14,'lowerarm':1.10,'thigh':1.16,'calf':.96,'spine_01':1.06,'spine_02':1.08,'spine_03':1.08}
+def reproportion(body, rig, shoulder=.035, thigh_cut=.04, calf_cut=.03):
+    import bpy
+    bones=rig.data.bones
+    calf_up=(bones['calf_l'].head_local-bones['calf_l'].tail_local).normalized()
+    drop=thigh_cut+calf_cut*calf_up.z
+    moved={}
+    for bone in bones['pelvis'].children_recursive+[bones['pelvis']]:
+        moved[bone.name]=Vector((0,0,-drop))
+    for side in ['l','r']:
+        sign=1 if bones['upperarm_'+side].head_local.x>0 else -1
+        for bone in [bones['clavicle_'+side]]+list(bones['clavicle_'+side].children_recursive):
+            moved[bone.name]=moved[bone.name]+Vector((sign*shoulder,0,0))
+        for bone in [bones['calf_'+side]]+list(bones['calf_'+side].children_recursive):
+            moved[bone.name]=moved[bone.name]+Vector((0,0,thigh_cut))
+        for bone in [bones['foot_'+side]]+list(bones['foot_'+side].children_recursive):
+            moved[bone.name]=moved[bone.name]+calf_up*calf_cut
+    def along(bone,co):
+        a=bone.head_local;b=bone.tail_local;axis=b-a
+        t=max(0.0,min(1.0,(co-a).dot(axis)/max(axis.length_squared,1e-9)))
+        return t,a+axis*t
+    names={g.index:g.name for g in body.vertex_groups}
+    for v in body.data.vertices:
+        total=Vector();weight=0.0
+        for g in v.groups:
+            name=names[g.group]
+            if name not in bones: continue
+            bone=bones[name]
+            t,closest=along(bone,v.co)
+            key=next((k for k in MUSCLE if name==k or name.startswith(k+'_')),None)
+            change=(v.co-closest)*(MUSCLE[key]-1) if key else Vector()
+            shift=moved.get(name,Vector())
+            # Shortened segments compress smoothly along their length.
+            if name.startswith('thigh_'): shift=shift+Vector((0,0,thigh_cut))*t
+            elif name.startswith('calf_'): shift=shift+calf_up*calf_cut*t
+            total+=(change+shift)*g.weight;weight+=g.weight
+        if weight>0: v.co+=total/weight
+    bpy.context.view_layer.objects.active=rig
+    bpy.ops.object.mode_set(mode='EDIT')
+    for bone in rig.data.edit_bones:
+        if bone.name in moved:
+            offset=moved[bone.name]
+            end=moved.get(bone.children[0].name,offset) if bone.name.startswith(('thigh_','calf_')) and bone.children else offset
+            bone.head+=offset;bone.tail+=end
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
 def remove_faces(obj, predicate):
     import bmesh
     bm=bmesh.new(); bm.from_mesh(obj.data)
@@ -41,7 +103,18 @@ def fit(source, source_rig, target_rig, style):
         lo,hi=old_bounds
         for v in source.data.vertices:
             t=(world@v.co-lo)
-            v.co=Vector((t.x/(hi.x-lo.x)*.38-.19,t.y/(hi.y-lo.y)*.40-.21,t.z/(hi.z-lo.z)*.49+1.51))
+            u=Vector((t.x/(hi.x-lo.x),t.y/(hi.y-lo.y),t.z/(hi.z-lo.z)))
+            v.co=Vector((u.x*.38-.19,u.y*.40-.21,u.z*.49+1.51))
+            if style=='murmillo':
+                # Sized to the statue's own head (0.18 x 0.22 x 0.26m) rather
+                # than the knight helm's oversized box.
+                v.co=Vector((u.x*.25-.125,u.y*.29-.15,u.z*.31+1.585))
+                # Gladiator helm: the knight's ridge spikes rise into a tall
+                # crest, and the lower rim flares into a broad brim.
+                ridge=max(0,1-abs(u.x-.5)/.13)
+                if u.z>.8: v.co.z+=(u.z-.8)*.75*ridge; v.co.y+=(u.z-.8)*.2*ridge
+                flare=1+max(0,.32-u.z)*.45
+                v.co.x*=flare; v.co.y=(v.co.y+.01)*flare-.01
         weights=[[('head',1)] for _ in weights]
     elif is_cape:
         for v in source.data.vertices:
@@ -104,24 +177,39 @@ def fit(source, source_rig, target_rig, style):
     return source
 
 
-for output,pack,style in [('gladiator','Barbarian','light'),('archer','Rogue','light'),('centurion','Knight','plate'),('wizard','Mage','robes')]:
+# The murmillo gladiator: a bare statue torso with the barbarian's studded
+# belt and fringe, a plated sword arm, bare legs and a crested, brimmed helm.
+MURMILLO=[('Barbarian','Barbarian_Body','light',.66),('Knight','Knight_ArmRight','plate',None),
+    ('Knight','Knight_Helmet','murmillo',None)]
+for output,pack,style in [('gladiator','Barbarian','murmillo'),('archer','Rogue','light'),('centurion','Knight','plate'),('wizard','Mage','robes')]:
     if '--only' in sys.argv and output != sys.argv[sys.argv.index('--only')+1]: continue
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=str(OUTPUT/'guardian.glb'))
     target=next(o for o in bpy.data.objects if o.type=='ARMATURE')
     target.name='StatueRig'
     body=next(o for o in bpy.data.objects if o.type=='MESH' and o.name=='StoneGuardian')
-    before=set(bpy.data.objects)
-    bpy.ops.import_scene.gltf(filepath=str(SOURCE/(pack+'.glb')))
-    imported=set(bpy.data.objects)-before
-    source=next(o for o in imported if o.type=='ARMATURE')
-    chosen=[]
-    for obj in imported:
-        if obj.type!='MESH':continue
-        if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append(obj)
-        if style=='plate' and obj.name==pack+'_Helmet':chosen.append(obj)
-        if style=='robes' and obj.name==pack+'_Cape':chosen.append(obj)
-    fitted=[fit(obj,source,target,style) for obj in chosen]
+    imported=set(); fitted=[]
+    packs=sorted({piece[0] for piece in MURMILLO}) if style=='murmillo' else [pack]
+    for source_pack in packs:
+        before=set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=str(SOURCE/(source_pack+'.glb')))
+        new=set(bpy.data.objects)-before
+        imported|=new
+        source=next(o for o in new if o.type=='ARMATURE')
+        chosen=[]
+        for obj in new:
+            if obj.type!='MESH':continue
+            if style=='murmillo':
+                piece=next((p for p in MURMILLO if p[0]==source_pack and obj.name==p[1]),None)
+                if piece:
+                    if piece[3] is not None: trim_above(obj,piece[3])
+                    chosen.append((obj,piece[2]))
+                continue
+            if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append((obj,style))
+            if style=='plate' and obj.name==pack+'_Helmet':chosen.append((obj,style))
+            if style=='robes' and obj.name==pack+'_Cape':chosen.append((obj,style))
+        fitted+=[fit(obj,source,target,piece_style) for obj,piece_style in chosen]
+    # The closed knight helm hides the head; the gladiator's visor shows the face.
     if style=='plate': remove_faces(body,lambda f: all(v.co.z>1.52 for v in f.verts))
     if style=='robes':
         # Covered legs are omitted so high running knees do not pierce the robe.
@@ -134,6 +222,7 @@ for output,pack,style in [('gladiator','Barbarian','light'),('archer','Rogue','l
     bpy.context.view_layer.objects.active=body
     bpy.ops.object.join()
     body.name='Stone'+output.capitalize()
+    if style=='murmillo': reproportion(body,target)
     body.data.materials.clear()
     mat=bpy.data.materials.new('WeatheredStone'); mat.diffuse_color=(.62,.62,.62,1)
     body.data.materials.append(mat)
