@@ -14,7 +14,10 @@ var weapon_size = Vector3.ONE
 var nocked_arrow: Node3D
 var bow_strings: Array = []
 var shield_attachment: BoneAttachment3D
+var shield_item: Node3D
 var is_stone = false
+const SHIELD_SIZE = Vector3(.48,.62,.12)
+const SHIELD_CENTER = Vector3(0,.14,-.135)
 const BOW_GRIP = Vector3(-.42,.51,0)
 const BOW_PALM = Vector3(0,.065,0)
 # Imported left-hand axes to the bow's grip: +Y along the stave, -X forward.
@@ -51,6 +54,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 
 func equip(weapon: String) -> void:
 	if is_instance_valid(shield_attachment): shield_attachment.queue_free()
+	shield_item = null
 	bow_strings.clear()
 	if is_instance_valid(nocked_arrow): nocked_arrow.queue_free()
 	nocked_arrow = null
@@ -85,11 +89,15 @@ func equip(weapon: String) -> void:
 		align_weapon()
 	if weapon=="sword":
 		shield_attachment = BoneAttachment3D.new()
-		shield_attachment.bone_name = "hand_l"
+		shield_attachment.bone_name = "lowerarm_l"
 		skeleton.add_child(shield_attachment)
-		var shield = Art.model("shield",Vector3(.48,.62,.12),Art.statue_material() if is_stone else null)
+		var shield = Art.model("shield",SHIELD_SIZE,Art.statue_material() if is_stone else null)
+		shield_item = shield
 		shield_attachment.add_child(shield)
-		shield.position = Vector3(0,.05,0)
+		# The imported shield pivots at its bottom edge. Center its back against
+		# the outer forearm, keeping the wrist inside its face rather than at a rim.
+		shield.rotation.y = PI
+		shield.position = SHIELD_CENTER-shield.basis*Vector3(0,.5,0)
 	if state in ["Idle","BowIdle","SpearIdle"]: play(idle_action())
 
 func idle_action() -> String:

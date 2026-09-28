@@ -22,6 +22,17 @@ the explicit debug launcher and use isolated saves.
 Export success verifies packaging, not execution on another operating system.
 Windows requires a playtest on Windows hardware. macOS signing is ad-hoc only.
 
+Shield mounting and worn stone (0.4.3): 184 shield checks pass across Warrior
+and Gladiator idle, run, crouch and both sword attacks, sampled at six animation
+phases. They check that the wrist projects inside the shield rim, the shield
+center covers the forearm, its face points outward and changing weapons removes
+it. Rendered front/back poses were inspected. The shared stone shader adds dark
+grain and pits with surface bump shading; native rendering compiles it cleanly.
+All 50 enemy visual checks also pass with the new finish. Both 0.4.3 archives
+pass CRC and packaged-data checks, and the macOS bundle passes strict ad-hoc
+signature verification. Each exported PCK passes the same 184 shield checks
+through the local Godot runtime; this does not execute the Windows binary.
+
 Enemy statue outfits (0.4.2): the rendered enemy visual checks pass 50 checks
 for the four imported outfits, retained animation clips, changed running bone
 poses, single skinned surfaces and the shared stone material on body and gear.

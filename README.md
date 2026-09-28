@@ -181,8 +181,10 @@ cadence. All humanoid statues and the hero use the requested local model and
 animation library.
 Gladiators wear light shoulder armor and bracers, archers wear light armor,
 centurions wear heavy plate and full helmets, and oracles wear long robes.
-Enemy bodies and their equipment share a matte stone-gray finish with fine
-weathering and cracks. These outfits use authored meshes fitted to the existing
+Enemy bodies and their equipment share a dark, rough stone-gray finish with
+grain, pits, weathering and cracks. Warrior and gladiator shields are centered
+against their left forearms throughout idle, movement and attacks.
+These outfits use authored meshes fitted to the existing
 enemy skeleton and retain the current combat animations.
 
 The room placement, seeded random generator, corridor

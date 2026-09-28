@@ -22,7 +22,8 @@ variation. Light range, collision and the nearby-shadow budget are preserved.
 
 Warrior, Ranger and Wizard share the imported hero rig and armor. Starting
 equipment distinguishes them: sword/shield, bow, or staff. The shield uses the
-existing imported model attached to the left hand. Staff attacks reuse the Cast
+existing imported model centered against the left forearm, with its face pointing
+outward. This mounting follows idle, movement and attack poses. Staff attacks reuse the Cast
 animation. Class projectiles reuse the arrow and gem meshes; traps, defensive
 effects and area warnings reuse the transparent seal sprite with distinct colors
 and timing. This update adds no externally sourced or generated image assets.
@@ -94,8 +95,9 @@ covers the centurion's whole head. Rebuild with:
 
 Bodies, armor, robes, weapons, shields, arrows and the boss's crown share
 `assets/shaders/statue_stone.gdshader`. It samples the existing cracked marble
-texture in grayscale with matte gray shading and consistent grain size on
-scaled equipment. Original colored/metallic equipment materials are overridden
+texture in grayscale with dark gray shading, procedural grain, worn patches and
+small pits. Surface bumps affect lighting, with high roughness and low specular
+reflection. Grain size stays consistent on scaled equipment. Original colored/metallic equipment materials are overridden
 for enemies. This update adds no generated bitmap or primitive geometry.
 
 `tools/prepare_bow_draw.py` adds a draw morph to the existing bowstring vertices.
