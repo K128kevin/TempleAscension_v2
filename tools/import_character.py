@@ -61,7 +61,9 @@ for obj in set(bpy.data.objects) - before_hair:
 # Bake rotational motion in armature space, preserving target limb lengths.
 # Root/hip translations keep the library's in-place movement and vertical roll.
 rig.animation_data_create()
-clips = {'Idle':'Sword_Idle', 'Run':'Sprint_Loop', 'Attack':'Sword_Attack',
+# Use the relaxed neutral idle and on-foot walk from the universal library;
+# the sword-ready idle and sprint were too weapon-specific for general movement.
+clips = {'Idle':'Idle_Loop', 'Run':'Sprint_Loop', 'Walk':'Walk_Loop', 'Attack':'Sword_Attack',
          'Cleave':'Sword_Attack', 'Evade':'Roll', 'Death':'Death01', 'Cast':'Spell_Simple_Shoot', 'Thrust':'Punch_Cross', 'Crouch':'Crouch_Fwd_Loop', 'Hit':'Hit_Chest'}
 bones = sorted(rig.data.bones, key=lambda b: len(b.parent_recursive))
 for output_name, source_name in clips.items():

@@ -48,10 +48,10 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			skin.roughness = .65
 			mesh.material_override = skin
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","Hit","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
+		for expected in ["Idle","Run","Walk","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","Hit","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
-				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
+				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","Run","Walk","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
 	skeleton.skeleton_updated.connect(align_weapon)
 	equip(weapon)
 	play(idle_action())
@@ -187,6 +187,6 @@ func advance(dt: float) -> void:
 
 func locomotion(moving: bool, busy: bool, crouch: bool = false) -> void:
 	if dead or busy: return
-	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
+	var wanted = ("Crouch" if crouch else "Walk") if moving else idle_action()
 	if moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
 	if wanted != state: play(wanted)
