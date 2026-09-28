@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
+outputs=['SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowJog','BowCrouch','SpearIdle']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -146,7 +146,7 @@ def bow_grip(pitch=0.0,cant=0.0):
 
 # Preserve the supplied locomotion below the shoulders, but carry the bow in a
 # relaxed left-hand grip beside the body rather than swinging it through the legs.
-for name,source_name in [('BowRun','Jog'),('BowCrouch','Crouch')]:
+for name,source_name in [('BowRun','Walk'),('BowJog','Jog'),('BowCrouch','Crouch')]:
  original=bpy.data.actions[source_name]
  length=original.frame_range.y/30
  poses=[]
