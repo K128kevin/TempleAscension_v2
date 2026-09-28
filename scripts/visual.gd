@@ -49,10 +49,10 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			skin.roughness = .65
 			mesh.material_override = skin
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Walk","Jog","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","Hit","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowJog","BowCrouch","SpearIdle"]:
+		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","Hit","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
-				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","Run","Walk","Jog","Crouch","BowIdle","BowRun","BowJog","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
+				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
 	skeleton.skeleton_updated.connect(align_weapon)
 	equip(weapon)
 	play(idle_action())
@@ -169,7 +169,7 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	animation_delay = 0
 	pending_animation_time = 0
 	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
-	if action in ["Walk","Jog","BowRun","BowJog"]: locomotion_rate = speed_scale
+	if action == "BowRun": locomotion_rate = speed_scale
 	animator.play(clips[action], minf(.08,duration*.1) if duration>0 else .08, speed)
 	# play() resumes an already assigned clip. Repeated attacks must each
 	# start a fresh wind-up, even when the last recovery is still playing.
@@ -189,9 +189,8 @@ func advance(dt: float) -> void:
 
 func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: float = 1.0) -> void:
 	if dead or busy: return
-	var move_clip = "Jog" if not is_stone else "Run"
-	var wanted = ("Crouch" if crouch else move_clip) if moving else idle_action()
-	if moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else ("BowJog" if not is_stone else "BowRun")
+	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
+	if moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
 	var rate = clampf(speed_scale, .1, 4.0)
-	if wanted != state or (wanted in ["Walk","Jog","BowRun","BowJog"] and not is_equal_approx(rate,locomotion_rate)):
+	if wanted != state or (wanted == "BowRun" and not is_equal_approx(rate,locomotion_rate)):
 		play(wanted,0.0,rate)
