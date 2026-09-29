@@ -4,3 +4,4 @@ builds/
 test-results/
 source_art/
 .DS_Store
+__pycache__/

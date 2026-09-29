@@ -39,6 +39,33 @@ static func material(kind: String, tint: Color = Color.WHITE) -> StandardMateria
 	materials[key] = m
 	return m
 
+# The hero's sword: brass fittings, a dark leather grip and a fullered silver blade.
+static func sword_material() -> ShaderMaterial:
+	if materials.has("sword"): return materials.sword
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/sword.gdshader")
+	materials.sword = m
+	return m
+
+# Brown leather for the warrior's boots.
+static func leather() -> StandardMaterial3D:
+	if materials.has("leather"): return materials.leather
+	var m = StandardMaterial3D.new()
+	m.albedo_color = Color(.34,.2,.1)
+	m.roughness = .72
+	materials.leather = m
+	return m
+
+# Worn grey steel for the warrior's round shield.
+static func metal() -> StandardMaterial3D:
+	if materials.has("metal"): return materials.metal
+	var m = StandardMaterial3D.new()
+	m.albedo_color = Color(.5,.52,.55)
+	m.metallic = .85
+	m.roughness = .38
+	materials.metal = m
+	return m
+
 static func model(id: String, dimensions: Vector3, mat: Material = null) -> Node3D:
 	var path = "res://assets/models/props/%s.glb" % id
 	if not scenes.has(path): scenes[path] = load(path)

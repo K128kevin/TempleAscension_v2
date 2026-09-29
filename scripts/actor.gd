@@ -159,7 +159,7 @@ func tick(dt: float) -> void:
 		var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
 		var duration = windup+.25
 		var weapon_index = Data.WEAPONS.find(config.weapon)
-		var signature = {"gladiator":Motion.LUNGE,"centurion":Motion.SHIELD_STAB}.get(kind,{})
+		var signature = {"centurion":Motion.SHIELD_STAB}.get(kind,{})
 		if not signature.is_empty() and visual.clips.has(signature.clip):
 			clip = signature.clip
 			duration = windup/signature.contacts[0]

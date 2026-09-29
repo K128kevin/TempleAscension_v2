@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
+outputs=['ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -155,10 +155,16 @@ for f in range(61):
  reset_pose();bpy.context.view_layer.update();rest={b.name:b.matrix.copy() for b in rig.pose.bones}
  retarget()
  w=1-max(0,min(1,(t-.35)/.65));w=w*w*(3-2*w)
+ # Blend rotations only; each bone hangs rigidly from its blended parent so no
+ # limb stretches mid-blend. Only the root and hips blend their position.
+ target={b.name:rig.pose.bones[b.name].matrix.copy() for b in bones}
  for b in bones:
-  p=rig.pose.bones[b.name];m=p.matrix;r0=rest[b.name]
+  p=rig.pose.bones[b.name];m=target[b.name];r0=rest[b.name]
   q=r0.to_quaternion().slerp(m.to_quaternion(),w)
-  p.matrix=Matrix.Translation(r0.translation.lerp(m.translation,w)) @ q.to_matrix().to_4x4()
+  if b.parent and b.name not in ('root','pelvis'):
+   head=rig.pose.bones[b.parent.name].matrix @ b.parent.matrix_local.inverted() @ b.head_local
+  else:head=r0.translation.lerp(m.translation,w)
+  p.matrix=Matrix.Translation(head) @ q.to_matrix().to_4x4()
   bpy.context.view_layer.update()
  keys(f)
 finish('HitStagger',a,2.0)
@@ -283,6 +289,44 @@ for f,pose in enumerate(poses):
  keys(length*30*f/60)
 finish('SpearShieldIdle',a,length)
 
+# Shield bearers (gladiator, centurion): the left arm holds the scutum exactly
+# as in SpearShieldIdle, so the shield stays upright. The gladiator's idle
+# takes SwordIdle's sword arm; their run keeps the sprint's legs and body with
+# the shield arm held and the right arm eased toward the low sword carry.
+def arm_side(name):
+ if name.startswith(('clavicle','upperarm','lowerarm','hand','thumb','index','middle','ring','pinky')):return name[-1]
+ return ''
+def clip_poses(name,count=61):
+ act=bpy.data.actions[name];span=act.frame_range.y/30;rig.animation_data.action=act;out=[]
+ for f in range(count):
+  frame(span*f/(count-1));out.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+ return out,span
+def blend(m1,m2,w):
+ l1,r1,s1=m1.decompose();l2,r2,s2=m2.decompose()
+ return Matrix.LocRotScale(l1.lerp(l2,w),r1.slerp(r2,w),s1)
+shield_pose,_=clip_poses('SpearShieldIdle')
+sword_pose,length=clip_poses('SwordIdle')
+a=action('ScutumSwordIdle')
+for f in range(61):
+ for b in rig.pose.bones:
+  b.matrix_basis=shield_pose[f][b.name] if arm_side(b.name)=='l' else sword_pose[f][b.name]
+ bpy.context.view_layer.update()
+ keys(length*30*f/60)
+finish('ScutumSwordIdle',a,length)
+run_pose,length=clip_poses('Run')
+a=action('ScutumRun')
+for f in range(61):
+ for b in rig.pose.bones:
+  side=arm_side(b.name);m=run_pose[f][b.name]
+  if side=='r':m=blend(m,sword_pose[0][b.name],.75)
+  b.matrix_basis=m
+ bpy.context.view_layer.update()
+ # Reach the shield arm to its stance position after the run's lean, so the
+ # shield stays upright rather than tipping with the torso.
+ shield_arm()
+ keys(length*30*f/60)
+finish('ScutumRun',a,length)
+
 # One firm spear thrust: draw back, then drive forward while the left foot
 # steps ahead and the hips drop into the lunge; the right foot stays planted.
 a=action('SpearLunge')
@@ -331,12 +375,17 @@ for f in range(61):
  bpy.context.view_layer.update()
  leg('l',planted['l']+Vector((0,-.62*step,lift)),planted['l']+Vector((0,-.9,.5)))
  leg('r',planted['r'],planted['r']+Vector((0,-.9,.5)))
- turn=.26*thrust
- rotate_body('spine_01',(0,0,1),turn)
- rotate_body('spine_02',(0,0,1),turn)
+ # The torso turns about the spine: coiling, the right side and spear rotate
+ # back as the left shoulder and shield swing forward; striking, the right
+ # side drives forward and the left side pulls back with the shield arm.
+ # Positive turn brings the right shoulder forward.
+ turn=.52*thrust if thrust>0 else 1.1*thrust
+ for spine,share in [('spine_01',.35),('spine_02',.35),('spine_03',.3)]:
+  rotate_body(spine,(0,0,1),turn*share)
  rotate_body('spine_01',(1,0,0),.2*max(0,thrust)-.05*max(0,-thrust))
  arm('r',(-.24,.14-thrust*.95+shift.y,1.04+max(0,thrust)*.14),(-.7,.2,.85))
- shield_arm(shift.y,turn*1.3)
+ # The shield arm follows the turn, and draws back further on the strike.
+ shield_arm(shift.y+.1*max(0,thrust),turn*.9)
  keys(f)
 finish('ShieldStab',a,2.0)
 

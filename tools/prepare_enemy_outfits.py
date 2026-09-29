@@ -114,34 +114,56 @@ def region_of_bone(name):
     if name.startswith(('pelvis','spine_','neck_','clavicle_')): return 'torso'
     return None
 
-def armor_up(piece, body, rig, suffix):
+def armor_up(piece, body, rig, suffix, thickness=None, relief=None, reach=None):
     # Fit an authored armor piece closely over its body region at a plate's
     # thickness, then skin it with the weights of the flesh beneath it so it
-    # moves exactly with the limb.
+    # moves exactly with the limb. `reach(co)` in [0, 1] limits the fit per
+    # vertex; parts it leaves loose (a robe's skirt) keep their own weights.
     import bpy
     from mathutils import kdtree
+    relief=ARMOR_RELIEF if relief is None else relief
     target=region_target(body,ARMOR_REGION[suffix])
     wrap=piece.modifiers.new('Close fit','SHRINKWRAP')
     wrap.target=target; wrap.wrap_method='NEAREST_SURFACEPOINT'; wrap.wrap_mode='ABOVE_SURFACE'
-    wrap.offset=ARMOR_THICKNESS[suffix]
+    wrap.offset=ARMOR_THICKNESS[suffix] if thickness is None else thickness
     bpy.context.view_layer.objects.active=piece
     for mod in list(piece.modifiers):
         if mod!=wrap: piece.modifiers.remove(mod)
     authored=[v.co.copy() for v in piece.data.vertices]
+    amount=[1.0 if reach is None else reach(co) for co in authored]
     bpy.ops.object.modifier_apply(modifier=wrap.name)
-    for v,original in zip(piece.data.vertices,authored): v.co=v.co.lerp(original,ARMOR_RELIEF)
+    for v,original,a in zip(piece.data.vertices,authored,amount): v.co=v.co.lerp(original,1-a*(1-relief))
     tree=kdtree.KDTree(len(target.data.vertices))
     for v in target.data.vertices: tree.insert(v.co,v.index)
     tree.balance()
     names={g.index:g.name for g in target.vertex_groups}
+    loose={v.index:[(piece.vertex_groups[g.group].name,g.weight) for g in v.groups] for v,a in zip(piece.data.vertices,amount) if a<.5}
     for group in list(piece.vertex_groups): piece.vertex_groups.remove(group)
     for v in piece.data.vertices:
+        if v.index in loose:
+            for name,weight in loose[v.index]:
+                group=piece.vertex_groups.get(name) or piece.vertex_groups.new(name=name)
+                group.add([v.index],weight,'REPLACE')
+            continue
         _,index,_=tree.find(v.co)
         for g in target.data.vertices[index].groups:
             group=piece.vertex_groups.get(names[g.group]) or piece.vertex_groups.new(name=names[g.group])
             group.add([v.index],g.weight,'REPLACE')
     arm=piece.modifiers.new('Statue outfit skin','ARMATURE'); arm.object=rig
     bpy.data.objects.remove(target,do_unlink=True)
+
+
+# Per style and piece: thickness over the body, share of authored shape kept,
+# and how much of the piece is pulled in.
+LEATHER={'thickness':.018,'relief':.3}
+CLOSE_FIT={
+    'legion':{},
+    'light':{'_Body':{'thickness':.028,'relief':.3},'_ArmLeft':LEATHER,'_ArmRight':LEATHER,'_LegLeft':LEATHER,'_LegRight':LEATHER},
+    # The gladiator's belt keeps more of its studs and fringe; the plated arm fits.
+    'murmillo':{'_Body':{'thickness':.03,'relief':.45},'_ArmRight':{'thickness':.025,'relief':.35}},
+    # The robe fits over the chest and sleeves; the lengthened skirt stays loose.
+    'robes':{'_Body':{'thickness':.028,'relief':.3,'reach':lambda co: max(0.0,min(1.0,(co.z-.98)/.14))},'_ArmLeft':LEATHER,'_ArmRight':LEATHER},
+}
 
 
 def remove_faces(obj, predicate):
@@ -169,6 +191,10 @@ def fit(source, source_rig, target_rig, style):
             if style=='legion':
                 # A closed helm sized to the statue's head, not the knight's box.
                 v.co=Vector((u.x*.26-.13,u.y*.30-.155,u.z*.33+1.575))
+            if style=='fullhelm':
+                # The hero's full helm: close over the head, reaching below the
+                # jaw, its ridge kept low rather than raised into a crest.
+                v.co=Vector((u.x*.25-.125,u.y*.29-.15,u.z*.37+1.525))
             if style=='murmillo':
                 # Sized to the statue's own head (0.18 x 0.22 x 0.26m) rather
                 # than the knight helm's oversized box.
@@ -245,60 +271,67 @@ def fit(source, source_rig, target_rig, style):
 # belt and fringe, a plated sword arm, bare legs and a crested, brimmed helm.
 MURMILLO=[('Barbarian','Barbarian_Body','light',.66),('Knight','Knight_ArmRight','plate',None),
     ('Knight','Knight_Helmet','murmillo',None)]
-for output,pack,style in [('gladiator','Barbarian','murmillo'),('archer','Rogue','light'),('centurion','Knight','legion'),('wizard','Mage','robes')]:
-    if '--only' in sys.argv and output != sys.argv[sys.argv.index('--only')+1]: continue
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=str(OUTPUT/'guardian.glb'))
-    target=next(o for o in bpy.data.objects if o.type=='ARMATURE')
-    target.name='StatueRig'
-    body=next(o for o in bpy.data.objects if o.type=='MESH' and o.name=='StoneGuardian')
-    imported=set(); fitted=[]
-    packs=sorted({piece[0] for piece in MURMILLO}) if style=='murmillo' else [pack]
-    for source_pack in packs:
-        before=set(bpy.data.objects)
-        bpy.ops.import_scene.gltf(filepath=str(SOURCE/(source_pack+'.glb')))
-        new=set(bpy.data.objects)-before
-        imported|=new
-        source=next(o for o in new if o.type=='ARMATURE')
-        chosen=[]
-        for obj in new:
-            if obj.type!='MESH':continue
-            if style=='murmillo':
-                piece=next((p for p in MURMILLO if p[0]==source_pack and obj.name==p[1]),None)
-                if piece:
-                    if piece[3] is not None: trim_above(obj,piece[3])
-                    chosen.append((obj,piece[2]))
-                continue
-            if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append((obj,'plate' if style=='legion' else style))
-            if style in ['plate','legion'] and obj.name==pack+'_Helmet':chosen.append((obj,style))
-            if style=='robes' and obj.name==pack+'_Cape':chosen.append((obj,style))
-        fitted+=[fit(obj,source,target,piece_style) for obj,piece_style in chosen]
-    if style=='legion':
-        # Reshape the body first, then close-fit the armor over the new build.
-        reproportion(body,target,shoulder=.045,thigh_cut=0,calf_cut=0,muscle=LEGION_MUSCLE)
+def build_outfits():
+    for output,pack,style in [('gladiator','Barbarian','murmillo'),('archer','Rogue','light'),('centurion','Knight','legion'),('wizard','Mage','robes')]:
+        if '--only' in sys.argv and output != sys.argv[sys.argv.index('--only')+1]: continue
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        bpy.ops.import_scene.gltf(filepath=str(OUTPUT/'guardian.glb'))
+        target=next(o for o in bpy.data.objects if o.type=='ARMATURE')
+        target.name='StatueRig'
+        body=next(o for o in bpy.data.objects if o.type=='MESH' and o.name=='StoneGuardian')
+        imported=set(); fitted=[]
+        packs=sorted({piece[0] for piece in MURMILLO}) if style=='murmillo' else [pack]
+        for source_pack in packs:
+            before=set(bpy.data.objects)
+            bpy.ops.import_scene.gltf(filepath=str(SOURCE/(source_pack+'.glb')))
+            new=set(bpy.data.objects)-before
+            imported|=new
+            source=next(o for o in new if o.type=='ARMATURE')
+            chosen=[]
+            for obj in new:
+                if obj.type!='MESH':continue
+                if style=='murmillo':
+                    piece=next((p for p in MURMILLO if p[0]==source_pack and obj.name==p[1]),None)
+                    if piece:
+                        if piece[3] is not None: trim_above(obj,piece[3])
+                        chosen.append((obj,piece[2]))
+                    continue
+                if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append((obj,'plate' if style=='legion' else style))
+                if style in ['plate','legion'] and obj.name==pack+'_Helmet':chosen.append((obj,style))
+                if style=='robes' and obj.name==pack+'_Cape':chosen.append((obj,style))
+            fitted+=[fit(obj,source,target,piece_style) for obj,piece_style in chosen]
+        if style=='legion':
+            # Reshape the body first, then close-fit the armor over the new build.
+            reproportion(body,target,shoulder=.045,thigh_cut=0,calf_cut=0,muscle=LEGION_MUSCLE)
+        # Every outfit is close-fitted over its wearer, so no unit keeps the
+        # KayKit pieces' toy-proportioned tubes and barrels.
         for piece in fitted:
             suffix=next((k for k in ARMOR_REGION if piece.name.endswith(k)),None)
-            if suffix: armor_up(piece,body,target,suffix)
-    # The closed knight helm hides the head; the gladiator's visor shows the face.
-    if style=='plate': remove_faces(body,lambda f: all(v.co.z>1.52 for v in f.verts))
-    if style=='robes':
-        # Covered legs are omitted so high running knees do not pierce the robe.
-        covered={v.index for v in body.data.vertices if v.co.z>.18 and sum(g.weight for g in v.groups if body.vertex_groups[g.group].name.startswith(('thigh_','calf_')))> .2}
-        remove_faces(body,lambda f: all(v.index in covered for v in f.verts))
-    for obj in imported:
-        if obj not in fitted and obj.name in bpy.data.objects:bpy.data.objects.remove(obj,do_unlink=True)
-    bpy.ops.object.select_all(action='DESELECT')
-    for obj in [body]+fitted:obj.select_set(True)
-    bpy.context.view_layer.objects.active=body
-    bpy.ops.object.join()
-    body.name='Stone'+output.capitalize()
-    if style=='murmillo': reproportion(body,target)
-    body.data.materials.clear()
-    mat=bpy.data.materials.new('WeatheredStone'); mat.diffuse_color=(.62,.62,.62,1)
-    body.data.materials.append(mat)
-    for polygon in body.data.polygons:polygon.material_index=0
-    bpy.ops.object.select_all(action='DESELECT')
-    body.select_set(True); target.select_set(True)
-    bpy.context.scene.frame_set(0)
-    bpy.ops.export_scene.gltf(filepath=str(OUTPUT/('guardian_'+output+'.glb')),export_format='GLB',use_selection=True,export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True)
-    print('ENEMY_OUTFIT_READY',output,len(body.data.vertices))
+            if suffix: armor_up(piece,body,target,suffix,**CLOSE_FIT[style].get(suffix,{}))
+        # The closed knight helm hides the head; the gladiator's visor shows the face.
+        if style=='plate': remove_faces(body,lambda f: all(v.co.z>1.52 for v in f.verts))
+        if style=='robes':
+            # Covered legs are omitted so high running knees do not pierce the robe.
+            covered={v.index for v in body.data.vertices if v.co.z>.18 and sum(g.weight for g in v.groups if body.vertex_groups[g.group].name.startswith(('thigh_','calf_')))> .2}
+            remove_faces(body,lambda f: all(v.index in covered for v in f.verts))
+        for obj in imported:
+            if obj not in fitted and obj.name in bpy.data.objects:bpy.data.objects.remove(obj,do_unlink=True)
+        bpy.ops.object.select_all(action='DESELECT')
+        for obj in [body]+fitted:obj.select_set(True)
+        bpy.context.view_layer.objects.active=body
+        bpy.ops.object.join()
+        body.name='Stone'+output.capitalize()
+        body.data.materials.clear()
+        mat=bpy.data.materials.new('WeatheredStone'); mat.diffuse_color=(.62,.62,.62,1)
+        body.data.materials.append(mat)
+        for polygon in body.data.polygons:polygon.material_index=0
+        bpy.ops.object.select_all(action='DESELECT')
+        body.select_set(True); target.select_set(True)
+        bpy.context.scene.frame_set(0)
+        bpy.ops.export_scene.gltf(filepath=str(OUTPUT/('guardian_'+output+'.glb')),export_format='GLB',use_selection=True,export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True)
+        print('ENEMY_OUTFIT_READY',output,len(body.data.vertices))
+
+
+# tools/outfit_hero.py imports the fitting helpers above without building outfits.
+if __name__ == "__main__":
+    build_outfits()

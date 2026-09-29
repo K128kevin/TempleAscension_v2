@@ -13,8 +13,6 @@ const SPECIAL = [
 	{"clip":"BowRapid","seconds":1.16,"contacts":[.30,.54,.78]},
 	{"clip":"AxeWhirl","seconds":1.02,"contacts":[.62]},
 	{"clip":"Cast","seconds":.8,"contacts":[.5]}]
-# The gladiator's single stepping spear thrust, contact at its full extension.
-const LUNGE = {"clip":"SpearLunge","contacts":[.52]}
 # The centurion's stepping, full-body thrust past its tower shield.
 const SHIELD_STAB = {"clip":"ShieldStab","contacts":[.5]}
 static func profile(weapon: int, special: bool, attack_speed_percent: float, minimum_duration: float = 0.0) -> Dictionary:

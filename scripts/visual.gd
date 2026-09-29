@@ -22,11 +22,10 @@ var locomotion_rate = 1.0
 var enemy_kind = ""
 # Remaining time of a hit reaction; locomotion waits for it to finish.
 var reaction_time = 0.0
-# The warrior's wooden tower shield (the scutum mesh in planked wood). Measured
-# from the SwordIdle stance: upright at his side, face turned outward.
-const SHIELD_SIZE = Vector3(.56,1.15,.18)
-const SHIELD_ROTATION = Quaternion(.982,-.167,-.046,-.076)
-const SHIELD_CENTER = Vector3(-.008,.142,-.118)
+# The warrior's round grey metal shield, strapped flat to the outside of the
+# left forearm so it follows every pose.
+const SHIELD_SIZE = Vector3(.66,.66,.12)
+const SHIELD_CENTER = Vector3(0,.14,-.135)
 # The gladiator's tall curved scutum, strapped over the same forearm.
 const SCUTUM_SIZE = Vector3(.58,.95,.2)
 # Measured from the SpearShieldIdle stance: upright, facing forward and 20° out
@@ -60,6 +59,14 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		skin_meshes.append(mesh)
 		if stone:
 			mesh.material_override = Art.statue_material()
+		elif "HeroBoots" in mesh.name:
+			mesh.material_override = Art.leather()
+		elif "HeroHelmet" in mesh.name:
+			# Steel full helm, matching the shield.
+			mesh.material_override = Art.metal()
+		elif "Hair" in mesh.name:
+			# The closed helm covers the hair.
+			mesh.visible = false
 		elif "SuperHero" in mesh.name:
 			# Keep supplied head/skin surfaces; armor only on the torso/limb mesh.
 			var skin = StandardMaterial3D.new()
@@ -67,10 +74,10 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			skin.roughness = .65
 			mesh.material_override = skin
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","SpearShieldIdle","SpearLunge","ShieldStab","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
+		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
-				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
+				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
 	skeleton.skeleton_updated.connect(align_weapon)
 	equip(weapon)
 	play(idle_action())
@@ -93,7 +100,8 @@ func equip(weapon: String) -> void:
 	equipment = hand
 	var sizes = {"sword":Vector3(.19,1.3,.09),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22)}
 	weapon_size = sizes[weapon]
-	var item = Art.model(weapon, weapon_size,Art.statue_material() if is_stone else null)
+	var weapon_finish = Art.statue_material() if is_stone else (Art.sword_material() if weapon=="sword" else null)
+	var item = Art.model(weapon, weapon_size,weapon_finish)
 	weapon_item = item
 	hand.add_child(item)
 	# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
@@ -117,20 +125,20 @@ func equip(weapon: String) -> void:
 		shield_attachment = BoneAttachment3D.new()
 		shield_attachment.bone_name = "lowerarm_l"
 		skeleton.add_child(shield_attachment)
-		var finish = Art.statue_material() if is_stone else Art.material("wood",Color(.92,.85,.78))
-		var shield = Art.model("scutum",TOWER_SIZE if tower else (SCUTUM_SIZE if scutum else SHIELD_SIZE),finish)
+		var finish = Art.statue_material() if is_stone else Art.metal()
+		var shield = Art.model("scutum" if scutum else "shield",TOWER_SIZE if tower else (SCUTUM_SIZE if scutum else SHIELD_SIZE),finish)
 		shield_item = shield
 		shield_attachment.add_child(shield)
 		# The imported shield pivots at its bottom edge. Center its back against
 		# the outer forearm, keeping the wrist inside its face rather than at a rim.
 		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(TOWER_SIZE if tower else SCUTUM_SIZE)
-		else: shield.basis = Basis(SHIELD_ROTATION.normalized())*Basis.from_scale(SHIELD_SIZE)
+		else: shield.rotation.y = PI
 		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5+(TOWER_DROP if tower else 0.0),0)
-	if state in ["Idle","SwordIdle","SpearShieldIdle","BowIdle","SpearIdle"]: play(idle_action())
+	if state in ["Idle","SwordIdle","ScutumSwordIdle","SpearShieldIdle","BowIdle","SpearIdle"]: play(idle_action())
 
 func idle_action() -> String:
 	var wanted = {"bow":"BowIdle","spear":"SpearIdle","sword":"SwordIdle"}.get(weapon_kind,"Idle")
-	if enemy_kind in SHIELD_BEARERS: wanted = "SpearShieldIdle"
+	if enemy_kind in SHIELD_BEARERS: wanted = "ScutumSwordIdle" if weapon_kind=="sword" else "SpearShieldIdle"
 	return wanted if clips.has(wanted) else "Idle"
 
 func draw_amount(t: float, release: float, start: float) -> float:
@@ -194,7 +202,7 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	animation_delay = 0
 	pending_animation_time = 0
 	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
-	if action in ["BowRun","SwordRun"]: locomotion_rate = speed_scale
+	if action in ["BowRun","SwordRun","ScutumRun"]: locomotion_rate = speed_scale
 	animator.play(clips[action], minf(.08,duration*.1) if duration>0 else .08, speed)
 	# play() resumes an already assigned clip. Repeated attacks must each
 	# start a fresh wind-up, even when the last recovery is still playing.
@@ -225,7 +233,9 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
 	if moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
 	# Carry the sword low while running so the blade never swings through the head.
+	# Shield bearers keep the tall shield held upright while they run.
+	elif moving and not crouch and enemy_kind in SHIELD_BEARERS and clips.has("ScutumRun"): wanted = "ScutumRun"
 	elif moving and not crouch and weapon_kind=="sword" and clips.has("SwordRun"): wanted = "SwordRun"
 	var rate = clampf(speed_scale, .1, 4.0)
-	if wanted != state or (wanted in ["BowRun","SwordRun"] and not is_equal_approx(rate,locomotion_rate)):
+	if wanted != state or (wanted in ["BowRun","SwordRun","ScutumRun"] and not is_equal_approx(rate,locomotion_rate)):
 		play(wanted,0.0,rate)

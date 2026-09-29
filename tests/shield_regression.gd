@@ -31,7 +31,7 @@ func verify():
 	camera.position=Vector3(1.5,2.5,9); camera.look_at(Vector3(0,1,0))
 	for i in 4:
 		var actor=Visual.new(); scene.add_child(actor); actor.position.x=i*2.1-3.15; actor.rotation.y=PI if i%2 else 0
-		actor.setup(i>=2,Color.WHITE,"spear" if i>=2 else "sword",1,"gladiator" if i>=2 else "")
+		actor.setup(i>=2,Color.WHITE,"sword",1,"gladiator" if i>=2 else "")
 		actor.animator.callback_mode_process=AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 		actors.append(actor)
 		var label=Label3D.new(); label.text="Warrior" if i<2 else "Gladiator"; label.position=Vector3(actor.position.x,-.2,0)
@@ -56,7 +56,7 @@ func verify():
 	# The gladiator carries a spear and a tall scutum, upright and facing forward.
 	for i in [2,3]:
 		var actor=actors[i]; var shield: Node3D=actor.shield_item
-		check(actor.state=="SpearShieldIdle" and actor.weapon_kind=="spear" and shield.scene_file_path.ends_with("scutum.glb"),"Gladiator stands with spear and scutum: %d" % i)
+		check(actor.state=="ScutumSwordIdle" and actor.weapon_kind=="sword" and shield.scene_file_path.ends_with("scutum.glb"),"Gladiator stands with sword and scutum: %d" % i)
 		check(shield.global_basis.y.normalized().dot(Vector3.UP)>.9 and shield.global_basis.z.normalized().dot(actor.global_basis.z)>.8,"Scutum is held upright, facing forward: %d" % i)
 	# The centurion: a close-fitted armored soldier behind a tall tower shield.
 	var centurion=Visual.new(); root.add_child(centurion); centurion.setup(true,Color.WHITE,"spear",1.2,"centurion")
@@ -68,7 +68,13 @@ func verify():
 		check(tower.global_basis.y.normalized().dot(Vector3.UP)>.85,"Tower shield stays upright: "+clip)
 	check(centurion.idle_action()=="SpearShieldIdle","Centurion stands in the shield-and-spear stance")
 	centurion.queue_free()
-	for clip in ["SpearShieldIdle","Run","SpearLunge","Hit","HitHead"]:
+	for i in [2,3]:
+		for step in 10:
+			pose(actors[i],"ScutumRun",step/10.0); await frames(1)
+			check(actors[i].shield_item.global_basis.y.normalized().dot(Vector3.UP)>.85,"Scutum stays upright while running: %d %d" % [i,step])
+		actors[i].state=actors[i].idle_action(); actors[i].locomotion(true,false)
+		check(actors[i].state=="ScutumRun","Shield bearers run holding the shield: %d" % i)
+	for clip in ["ScutumSwordIdle","ScutumRun","SwordSwing","Hit","HitHead"]:
 		for phase in [0.0,.25,.5,.75]:
 			for i in [2,3]: pose(actors[i],clip,phase)
 			await frames(1)
@@ -76,7 +82,7 @@ func verify():
 				var actor=actors[i]
 				var forearm: Vector3=(actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("lowerarm_l"))).origin
 				check((actor.shield_item.global_transform*Vector3(0,.5,0)).distance_to(forearm)<.5,"Scutum stays strapped to the forearm: %s %.2f / %d" % [clip,phase,i])
-	for clip in ["Idle","SwordIdle","Run","Crouch","SwordSwing","SwordSlash"]:
+	for clip in ["Idle","SwordIdle","Run","SwordRun","Crouch","SwordSwing","SwordSlash","Cleave","Evade","Hit","HitHead","HitStagger","HitKnockdown"]:
 		for phase in [0.0,.15,.35,.55,.75,.95]:
 			for actor in actors: pose(actor,clip,phase)
 			await frames(1)
@@ -89,8 +95,7 @@ func verify():
 				var along_arm: float=(center-forearm.origin).dot((wrist-forearm.origin).normalized())/forearm.origin.distance_to(wrist)
 				check(absf(local_wrist.x)<.35 and local_wrist.y>.18 and local_wrist.y<.82,"Wrist is behind the shield interior, clear of the rim: %s %.2f / %d" % [clip,phase,i])
 				check(along_arm>.35 and along_arm<.75,"Shield center rests over the forearm: %s %.2f / %d" % [clip,phase,i])
-				# The tower shield is turned upright from the forearm, its face still outward.
-				check(shield.global_basis.z.normalized().dot(-forearm.basis.z.normalized())>.9,"Shield face stays on the outside of the forearm: %s %.2f / %d" % [clip,phase,i])
+				check(shield.global_basis.z.normalized().dot(-forearm.basis.z.normalized())>.99,"Shield face stays on the outside of the forearm: %s %.2f / %d" % [clip,phase,i])
 		for actor in actors: pose(actor,clip,.35)
 		await snapshot(clip)
 	for actor in actors.slice(0,2):

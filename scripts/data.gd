@@ -8,7 +8,7 @@ const COUNTS = [
 	{"gladiator":15,"archer":12,"lion":12,"wizard":12,"centurion":6},
 	{"gladiator":23,"archer":12,"lion":15,"wizard":18,"centurion":12}]
 const ENEMIES = {
-	"gladiator":{"title":"Gladiator","hp":33.0,"damage":7.5,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"spear","shield":"scutum","size":1.0,"color":Color(.70,.73,.69)},
+	"gladiator":{"title":"Gladiator","hp":33.0,"damage":7.5,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"sword","shield":"scutum","size":1.0,"color":Color(.70,.73,.69)},
 	"archer":{"title":"Archer","hp":18.0,"damage":12.5,"speed":3.56,"range":10.6,"interval":2.0,"weapon":"bow","size":.94,"color":Color(.59,.73,.68)},
 	"lion":{"title":"Lion Guardian","hp":28.0,"damage":4.5,"speed":7.12,"range":1.5,"interval":.5,"weapon":"","size":1.0,"color":Color(.79,.64,.42)},
 	"wizard":{"title":"Oracle","hp":33.0,"damage":22.5,"speed":4.75,"range":11.8,"interval":3.0,"weapon":"staff","size":1.06,"color":Color(.54,.57,.78)},

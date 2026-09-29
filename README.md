@@ -120,8 +120,8 @@ of maximum per second. Above the base:
 | Vitality | +10 maximum health |
 | Willpower | +3 maximum energy and +0.1 energy per second |
 
-Warrior starts with a large sword, a wooden tower shield and Cleave, wearing bronze
-scale armor and brown shorts; Ranger with bow and Power Shot;
+Warrior starts with a large sword, a round steel shield and Cleave, wearing a
+steel full helm, bronze scale armor, brown shorts and brown leather boots; Ranger with bow and Power Shot;
 Wizard with staff and Firebolt. The first skill point is spent on that starter.
 Each class has the plan's eight active skills and four passives, unlocking at
 levels 1, 4, 8, 12 and 18. Active skills have five ranks; passives have three.
@@ -193,9 +193,8 @@ The local library supplies humanoid rigs, so the original lion enemy is represen
 by a crouching humanoid Lion Guardian with the original fast pursuit and attack
 cadence. All humanoid statues and the hero use the requested local model and
 animation library.
-Gladiators are broad-shouldered, heavily muscled murmillones with a crested, brimmed
-helmet, a studded belt, a plated sword arm and bare legs; they carry a spear and a tall scutum and attack
-with a single stepping thrust. Archers wear light armor,
+Gladiators are murmillones with a crested, brimmed helmet, a studded belt, a
+plated sword arm and bare legs; they carry a sword and a tall scutum. Archers wear light armor,
 centurions are powerfully built legionaries in close-fitting heavy plate and helmets
 behind tall tower shields, and oracles wear long robes.
 Enemy bodies and their equipment share a dark, rough stone-gray finish with

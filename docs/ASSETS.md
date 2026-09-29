@@ -43,13 +43,21 @@ active in any view. The torch shader hides the fixture's authored flame, both it
 orange tongues and its pale core, so only the particle flame shows.
 
 Warrior, Ranger and Wizard share the imported hero rig and armor. Starting
-equipment distinguishes them: a larger sword with a wooden tower shield, a bow, or
-a staff. The tower shield is the scutum mesh (1.15m) in planked wood, projected in
-the shield's own space from the plank area of the Quaternius furniture trim sheet
-(`assets/textures/wood_planks.png`, cut by `tools/paint_hero.py`). It rides the left
-forearm through idle, movement and attack poses; in the SwordIdle stance (the library
-idle with the left forearm turned 60° outward) it stands upright at his side, face
-outward. SwordRun is the sprint with both arms eased toward that carry, so the sword
+equipment distinguishes them: a larger sword (`assets/shaders/sword.gdshader`: brass pommel and cross guard, a
+dark brown leather grip, and a silver blade with a fuller down both flat faces) with
+a round grey steel shield, a bow,
+or a staff. The shield is the original round shield mesh at 0.66m, strapped flat to
+the outside of the left forearm through every hero clip, including runs, strikes,
+the roll and hit reactions; the SwordIdle stance (the library idle with the left
+forearm turned 60° outward) turns it out to the side. The hero also wears brown
+leather boots (the KayKit Rogue's leg pieces trimmed to the boot, close-fitted over
+the lower legs) and a steel full helm matching the shield: the KayKit knight helm
+sized to the head and lowered over the jaw, its open face closed by mirroring its
+back half forward, whose eye-level seam becomes the visor slit. The
+helm hides the hair. `tools/outfit_hero.py` adds both after the enemy outfits are
+built; statues never inherit them. `assets/textures/wood_planks.png` (cut from the
+Quaternius furniture trim sheet by `tools/paint_hero.py`) remains available as a
+wood material. SwordRun is the sprint with both arms eased toward that carry, so the sword
 stays low and never swings through the head. Staff attacks reuse the Cast
 animation. Class projectiles reuse the arrow and gem meshes; traps, defensive
 effects and area warnings reuse the transparent seal sprite with distinct colors
@@ -151,20 +159,24 @@ while retaining the skeleton and all thirty clips. The full hero remains unchang
 Quaternius skeleton, remaps their skin weights, and joins each outfit into one
 crowd surface. It exports `guardian_gladiator.glb`, `guardian_archer.glb`,
 `guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 30 clips.
+Every outfit piece is then close-fitted over its wearer: shrink-wrapped onto its
+own region of the statue (torso, each arm, each leg) at a garment's thickness, with
+part of its authored shape kept so belts, cuffs, plate edges and pauldrons still
+read, and skinned to the flesh beneath it. Leather (archer sleeves, trousers and
+boots; robe sleeves) sits at about 2cm, plate at 3–4.5cm. The oracle's robe fits over
+the chest and sleeves while its lengthened skirt stays loose with its own weights,
+so it still swings. No unit keeps the KayKit pieces' toy-proportioned tubes.
 The gladiator is a murmillo: the bare statue torso wears the barbarian's studded
 belt and fringe (trimmed below the chest) and the knight's plated right arm, with
 bare legs, and the knight helm reshaped from its own vertices, sized to the statue's
 head, with the ridge spikes raised into a crest and the rim flared into a brim. Its
-visor shows the statue's face. Its build is reshaped from the same mesh: collarbone
-chains move 3.5cm outward, arms, chest and thighs thicken around their bones over
-leaner calves, and thighs and calves shorten by 4cm and 3cm with the hips lowered to
-match. Bones only translate in the rest pose, so every baked clip still applies. It
-carries the Mini Dungeon spear and a tall curved scutum (KayKit Adventurers
+visor shows the statue's face. Its body keeps the statue's own shape. It carries a
+sword the size of the hero's, in statue stone, and a tall curved scutum (KayKit Adventurers
 `shield_square`, normalized as `assets/models/props/scutum.glb`), held upright in
-front of the left forearm. SpearShieldIdle is its stance; SpearLunge is a single
-thrust: the spear draws back as the upper body coils, then drives forward as the torso
-turns into the thrust, the left foot steps ahead and the hips drop, with the
-right foot planted by leg IK. The supplied mage tunic is extended into an ankle-length robe; covered leg
+front of the left forearm. ScutumSwordIdle holds the sword low beside the shield, and
+ScutumRun (shared with the centurion) keeps the sprint's legs while reaching the
+shield arm to its stance position, so the shield stays upright; it attacks with the
+sword swing. The supplied mage tunic is extended into an ankle-length robe; covered leg
 surfaces are omitted to avoid running knees piercing the garment. The helmet
 covers the centurion's whole head. The centurion is a heavy legionary: its body takes a broad,
 thickset build at full height (the gladiator's reshaping without leg shortening),
@@ -173,12 +185,16 @@ own region of the statue (torso, each arm, each leg) at a plate's thickness, kee
 35% of its authored shape so plate edges, belt and pauldrons still read, and takes
 the skin weights of the flesh beneath it so it moves with the limb. The helm is
 sized to the statue's head. It carries a tall tower shield (the scutum mesh at
-1.3m) upright from shin to chin. Its attack (ShieldStab) coils deeply, then takes
-a long step with the left foot as the hips drive forward and the upper body turns
-and leans into a one-handed thrust past the shield, the right foot planted by leg IK. Rebuild with:
+1.3m) upright from shin to chin. Its attack (ShieldStab) coils deeply, the right
+side and spear rotating well back (about 32°) as the left shoulder and shield swing
+forward; then it
+takes a long step with the left foot as the hips drive forward and the torso turns
+the other way, the right shoulder driving the spear forward while the left side and
+shield arm pull back. The right foot stays planted by leg IK. Rebuild with:
 
 ```sh
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_enemy_outfits.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/outfit_hero.py
 ```
 
 Bodies, armor, robes, weapons, shields, arrows and the boss's crown share
