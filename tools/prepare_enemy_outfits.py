@@ -37,7 +37,7 @@ def trim_above(obj, height):
 # rotations still apply; the hips drop by the leg shortening, keeping the feet
 # on the ground.
 MUSCLE={'upperarm':1.14,'lowerarm':1.10,'thigh':1.16,'calf':.96,'spine_01':1.06,'spine_02':1.08,'spine_03':1.08}
-def reproportion(body, rig, shoulder=.035, thigh_cut=.04, calf_cut=.03):
+def reproportion(body, rig, shoulder=.035, thigh_cut=.04, calf_cut=.03, muscle=MUSCLE):
     import bpy
     bones=rig.data.bones
     calf_up=(bones['calf_l'].head_local-bones['calf_l'].tail_local).normalized()
@@ -65,8 +65,8 @@ def reproportion(body, rig, shoulder=.035, thigh_cut=.04, calf_cut=.03):
             if name not in bones: continue
             bone=bones[name]
             t,closest=along(bone,v.co)
-            key=next((k for k in MUSCLE if name==k or name.startswith(k+'_')),None)
-            change=(v.co-closest)*(MUSCLE[key]-1) if key else Vector()
+            key=next((k for k in muscle if name==k or name.startswith(k+'_')),None)
+            change=(v.co-closest)*(muscle[key]-1) if key else Vector()
             shift=moved.get(name,Vector())
             # Shortened segments compress smoothly along their length.
             if name.startswith('thigh_'): shift=shift+Vector((0,0,thigh_cut))*t
@@ -81,6 +81,67 @@ def reproportion(body, rig, shoulder=.035, thigh_cut=.04, calf_cut=.03):
             end=moved.get(bone.children[0].name,offset) if bone.name.startswith(('thigh_','calf_')) and bone.children else offset
             bone.head+=offset;bone.tail+=end
     bpy.ops.object.mode_set(mode='OBJECT')
+
+
+# The centurion's heavy build: broad and thick through the chest, arms and
+# thighs, at full height.
+LEGION_MUSCLE={'upperarm':1.16,'lowerarm':1.12,'thigh':1.14,'calf':1.04,'spine_01':1.10,'spine_02':1.12,'spine_03':1.12,'neck_01':1.12}
+ARMOR_THICKNESS={'_Body':.045,'_ArmLeft':.03,'_ArmRight':.03,'_LegLeft':.032,'_LegRight':.032}
+# Share of each plate's authored shape kept over the close fit: its edges,
+# belt and pauldrons still read as armor, without the knight's barrel outline.
+ARMOR_RELIEF=.35
+ARMOR_REGION={'_Body':'torso','_ArmLeft':'arm_l','_ArmRight':'arm_r','_LegLeft':'leg_l','_LegRight':'leg_r'}
+
+def dominant(vertex, names):
+    best=max(vertex.groups,key=lambda g:g.weight,default=None)
+    return names[best.group] if best else ''
+
+def region_target(body, region):
+    # A copy of the statue surface limited to one region, for shrinkwrapping.
+    import bpy
+    names={g.index:g.name for g in body.vertex_groups}
+    target=body.copy(); target.data=body.data.copy(); target.name='Target_'+region
+    for mod in list(target.modifiers): target.modifiers.remove(mod)
+    bpy.context.scene.collection.objects.link(target)
+    keep={v.index for v in target.data.vertices if region_of_bone(dominant(v,names))==region}
+    remove_faces(target,lambda f: not all(v.index in keep for v in f.verts))
+    return target
+
+def region_of_bone(name):
+    if name.startswith(('upperarm_','lowerarm_','hand_','thumb_','index_','middle_','ring_','pinky_')):
+        return 'arm_'+name[-1]
+    if name.startswith(('thigh_','calf_','foot_','ball_')): return 'leg_'+name[-1]
+    if name.startswith(('pelvis','spine_','neck_','clavicle_')): return 'torso'
+    return None
+
+def armor_up(piece, body, rig, suffix):
+    # Fit an authored armor piece closely over its body region at a plate's
+    # thickness, then skin it with the weights of the flesh beneath it so it
+    # moves exactly with the limb.
+    import bpy
+    from mathutils import kdtree
+    target=region_target(body,ARMOR_REGION[suffix])
+    wrap=piece.modifiers.new('Close fit','SHRINKWRAP')
+    wrap.target=target; wrap.wrap_method='NEAREST_SURFACEPOINT'; wrap.wrap_mode='ABOVE_SURFACE'
+    wrap.offset=ARMOR_THICKNESS[suffix]
+    bpy.context.view_layer.objects.active=piece
+    for mod in list(piece.modifiers):
+        if mod!=wrap: piece.modifiers.remove(mod)
+    authored=[v.co.copy() for v in piece.data.vertices]
+    bpy.ops.object.modifier_apply(modifier=wrap.name)
+    for v,original in zip(piece.data.vertices,authored): v.co=v.co.lerp(original,ARMOR_RELIEF)
+    tree=kdtree.KDTree(len(target.data.vertices))
+    for v in target.data.vertices: tree.insert(v.co,v.index)
+    tree.balance()
+    names={g.index:g.name for g in target.vertex_groups}
+    for group in list(piece.vertex_groups): piece.vertex_groups.remove(group)
+    for v in piece.data.vertices:
+        _,index,_=tree.find(v.co)
+        for g in target.data.vertices[index].groups:
+            group=piece.vertex_groups.get(names[g.group]) or piece.vertex_groups.new(name=names[g.group])
+            group.add([v.index],g.weight,'REPLACE')
+    arm=piece.modifiers.new('Statue outfit skin','ARMATURE'); arm.object=rig
+    bpy.data.objects.remove(target,do_unlink=True)
 
 
 def remove_faces(obj, predicate):
@@ -105,6 +166,9 @@ def fit(source, source_rig, target_rig, style):
             t=(world@v.co-lo)
             u=Vector((t.x/(hi.x-lo.x),t.y/(hi.y-lo.y),t.z/(hi.z-lo.z)))
             v.co=Vector((u.x*.38-.19,u.y*.40-.21,u.z*.49+1.51))
+            if style=='legion':
+                # A closed helm sized to the statue's head, not the knight's box.
+                v.co=Vector((u.x*.26-.13,u.y*.30-.155,u.z*.33+1.575))
             if style=='murmillo':
                 # Sized to the statue's own head (0.18 x 0.22 x 0.26m) rather
                 # than the knight helm's oversized box.
@@ -181,7 +245,7 @@ def fit(source, source_rig, target_rig, style):
 # belt and fringe, a plated sword arm, bare legs and a crested, brimmed helm.
 MURMILLO=[('Barbarian','Barbarian_Body','light',.66),('Knight','Knight_ArmRight','plate',None),
     ('Knight','Knight_Helmet','murmillo',None)]
-for output,pack,style in [('gladiator','Barbarian','murmillo'),('archer','Rogue','light'),('centurion','Knight','plate'),('wizard','Mage','robes')]:
+for output,pack,style in [('gladiator','Barbarian','murmillo'),('archer','Rogue','light'),('centurion','Knight','legion'),('wizard','Mage','robes')]:
     if '--only' in sys.argv and output != sys.argv[sys.argv.index('--only')+1]: continue
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=str(OUTPUT/'guardian.glb'))
@@ -205,10 +269,16 @@ for output,pack,style in [('gladiator','Barbarian','murmillo'),('archer','Rogue'
                     if piece[3] is not None: trim_above(obj,piece[3])
                     chosen.append((obj,piece[2]))
                 continue
-            if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append((obj,style))
-            if style=='plate' and obj.name==pack+'_Helmet':chosen.append((obj,style))
+            if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append((obj,'plate' if style=='legion' else style))
+            if style in ['plate','legion'] and obj.name==pack+'_Helmet':chosen.append((obj,style))
             if style=='robes' and obj.name==pack+'_Cape':chosen.append((obj,style))
         fitted+=[fit(obj,source,target,piece_style) for obj,piece_style in chosen]
+    if style=='legion':
+        # Reshape the body first, then close-fit the armor over the new build.
+        reproportion(body,target,shoulder=.045,thigh_cut=0,calf_cut=0,muscle=LEGION_MUSCLE)
+        for piece in fitted:
+            suffix=next((k for k in ARMOR_REGION if piece.name.endswith(k)),None)
+            if suffix: armor_up(piece,body,target,suffix)
     # The closed knight helm hides the head; the gladiator's visor shows the face.
     if style=='plate': remove_faces(body,lambda f: all(v.co.z>1.52 for v in f.verts))
     if style=='robes':

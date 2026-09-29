@@ -194,7 +194,8 @@ animation library.
 Gladiators are broad-shouldered, heavily muscled murmillones with a crested, brimmed
 helmet, a studded belt, a plated sword arm and bare legs; they carry a spear and a tall scutum and attack
 with a single stepping thrust. Archers wear light armor,
-centurions wear heavy plate and full helmets, and oracles wear long robes.
+centurions are powerfully built legionaries in close-fitting heavy plate and helmets
+behind tall tower shields, and oracles wear long robes.
 Enemy bodies and their equipment share a dark, rough stone-gray finish with
 grain, pits, weathering and cracks. The warrior's shield is centered against the left
 forearm, and the gladiator's scutum is held upright in front of it, throughout idle,

@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['SpearShieldIdle','SpearLunge','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
+outputs=['SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -282,6 +282,34 @@ for f in range(61):
  shield_arm(shift.y,turn*1.4)
  keys(f)
 finish('SpearLunge',a,2.0)
+
+# The centurion's driving thrust: a deep coil, then a long step with the left
+# foot as the hips drive forward and the whole upper body turns and leans into
+# the spear, the tower shield kept up in front. The right foot stays planted.
+a=action('ShieldStab')
+reset_pose()
+planted={side:rig.pose.bones['foot_'+side].matrix.translation.copy() for side in 'lr'}
+for f in range(61):
+ t=f/60;reset_pose()
+ thrust=sample([(0,0),(.22,-.4),(.36,-.5),(.5,1),(.62,1),(.9,0),(1,0)],t)
+ step=sample([(0,0),(.36,0),(.5,1),(.68,1),(.92,0),(1,0)],t)
+ lift=0.0
+ for a0,a1 in [(.36,.5),(.68,.92)]:
+  if a0<t<a1:u=(t-a0)/(a1-a0);lift=.1*4*u*(1-u)
+ shift=Vector((0,-.34*step,-.1*step))
+ pelvis=rig.pose.bones['pelvis'];m=pelvis.matrix.copy()
+ pelvis.matrix=Matrix.Translation(m.translation+shift) @ m.to_quaternion().to_matrix().to_4x4()
+ bpy.context.view_layer.update()
+ leg('l',planted['l']+Vector((0,-.62*step,lift)),planted['l']+Vector((0,-.9,.5)))
+ leg('r',planted['r'],planted['r']+Vector((0,-.9,.5)))
+ turn=.26*thrust
+ rotate_body('spine_01',(0,0,1),turn)
+ rotate_body('spine_02',(0,0,1),turn)
+ rotate_body('spine_01',(1,0,0),.2*max(0,thrust)-.05*max(0,-thrust))
+ arm('r',(-.24,.14-thrust*.95+shift.y,1.04+max(0,thrust)*.14),(-.7,.2,.85))
+ shield_arm(shift.y,turn*1.3)
+ keys(f)
+finish('ShieldStab',a,2.0)
 
 for name in ['BowIdle','BowShot','BowRapid','SpearIdle','SpearStab','SpearJab']:
  a=action(name)

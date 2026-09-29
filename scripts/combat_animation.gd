@@ -15,6 +15,8 @@ const SPECIAL = [
 	{"clip":"Cast","seconds":.8,"contacts":[.5]}]
 # The gladiator's single stepping spear thrust, contact at its full extension.
 const LUNGE = {"clip":"SpearLunge","contacts":[.52]}
+# The centurion's stepping, full-body thrust past its tower shield.
+const SHIELD_STAB = {"clip":"ShieldStab","contacts":[.5]}
 static func profile(weapon: int, special: bool, attack_speed_percent: float, minimum_duration: float = 0.0) -> Dictionary:
 	var result: Dictionary = (SPECIAL if special else NORMAL)[weapon].duplicate(true)
 	result.duration = maxf(minimum_duration,result.seconds * maxf(.65,1.0/(1.0+attack_speed_percent*.01)))

@@ -30,6 +30,11 @@ const SCUTUM_SIZE = Vector3(.58,.95,.2)
 # to the left, centred just in front of the forearm (forearm bone space).
 const SCUTUM_CENTER = Vector3(-.072,.224,-.063)
 const SCUTUM_ROTATION = Quaternion(.753,-.397,-.466,-.238)
+# The centurion's tower shield: the same curved shield, taller and carried
+# lower so it covers shin to chin.
+const TOWER_SIZE = Vector3(.68,1.3,.24)
+const TOWER_DROP = .12
+const SHIELD_BEARERS = ["gladiator","centurion"]
 const BOW_GRIP = Vector3(-.42,.51,0)
 const BOW_PALM = Vector3(0,.065,0)
 # Imported left-hand axes to the bow's grip: +Y along the stave, -X forward.
@@ -59,7 +64,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			skin.roughness = .65
 			mesh.material_override = skin
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SpearShieldIdle","SpearLunge","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
+		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
@@ -102,24 +107,25 @@ func equip(weapon: String) -> void:
 			nocked_arrow.top_level = true
 			nocked_arrow.visible = false
 		align_weapon()
-	if weapon=="sword" or enemy_kind=="gladiator":
-		var scutum = enemy_kind=="gladiator"
+	if weapon=="sword" or enemy_kind in SHIELD_BEARERS:
+		var scutum = enemy_kind in SHIELD_BEARERS
+		var tower = enemy_kind=="centurion"
 		shield_attachment = BoneAttachment3D.new()
 		shield_attachment.bone_name = "lowerarm_l"
 		skeleton.add_child(shield_attachment)
-		var shield = Art.model("scutum" if scutum else "shield",SCUTUM_SIZE if scutum else SHIELD_SIZE,Art.statue_material() if is_stone else null)
+		var shield = Art.model("scutum" if scutum else "shield",TOWER_SIZE if tower else (SCUTUM_SIZE if scutum else SHIELD_SIZE),Art.statue_material() if is_stone else null)
 		shield_item = shield
 		shield_attachment.add_child(shield)
 		# The imported shield pivots at its bottom edge. Center its back against
 		# the outer forearm, keeping the wrist inside its face rather than at a rim.
-		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(SCUTUM_SIZE)
+		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(TOWER_SIZE if tower else SCUTUM_SIZE)
 		else: shield.rotation.y = PI
-		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5,0)
+		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5+(TOWER_DROP if tower else 0.0),0)
 	if state in ["Idle","SwordIdle","SpearShieldIdle","BowIdle","SpearIdle"]: play(idle_action())
 
 func idle_action() -> String:
 	var wanted = {"bow":"BowIdle","spear":"SpearIdle","sword":"SwordIdle"}.get(weapon_kind,"Idle")
-	if enemy_kind=="gladiator": wanted = "SpearShieldIdle"
+	if enemy_kind in SHIELD_BEARERS: wanted = "SpearShieldIdle"
 	return wanted if clips.has(wanted) else "Idle"
 
 func draw_amount(t: float, release: float, start: float) -> float:

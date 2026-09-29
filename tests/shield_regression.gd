@@ -47,6 +47,16 @@ func verify():
 		var actor=actors[i]; var shield: Node3D=actor.shield_item
 		check(actor.state=="SpearShieldIdle" and actor.weapon_kind=="spear" and shield.scene_file_path.ends_with("scutum.glb"),"Gladiator stands with spear and scutum: %d" % i)
 		check(shield.global_basis.y.normalized().dot(Vector3.UP)>.9 and shield.global_basis.z.normalized().dot(actor.global_basis.z)>.8,"Scutum is held upright, facing forward: %d" % i)
+	# The centurion: a close-fitted armored soldier behind a tall tower shield.
+	var centurion=Visual.new(); root.add_child(centurion); centurion.setup(true,Color.WHITE,"spear",1.2,"centurion")
+	centurion.animator.callback_mode_process=AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	for clip in ["SpearShieldIdle","ShieldStab"]:
+		pose(centurion,clip,.5); await frames(1)
+		var tower: Node3D=centurion.shield_item
+		check(tower.scene_file_path.ends_with("scutum.glb") and is_equal_approx(tower.basis.get_scale().y,Visual.TOWER_SIZE.y),"Centurion carries the tall tower shield: "+clip)
+		check(tower.global_basis.y.normalized().dot(Vector3.UP)>.85,"Tower shield stays upright: "+clip)
+	check(centurion.idle_action()=="SpearShieldIdle","Centurion stands in the shield-and-spear stance")
+	centurion.queue_free()
 	for clip in ["SpearShieldIdle","Run","SpearLunge","Hit","HitHead"]:
 		for phase in [0.0,.25,.5,.75]:
 			for i in [2,3]: pose(actors[i],clip,phase)

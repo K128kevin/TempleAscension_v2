@@ -124,12 +124,12 @@ are under `assets/models/props/`. Original downloads are under `source_art/` on
 this workstation and excluded from native exports. Prop normalization preserves mesh topology; it recenters bounds, corrects orientation, and repacks textures.
 `tools/prepare_guardian.py` makes a crowd variant of the supplied character: it
 merges the stone surfaces and reduces the mesh to about 5,450 export vertices,
-while retaining the skeleton and all twenty-eight clips. The full hero remains unchanged.
+while retaining the skeleton and all twenty-nine clips. The full hero remains unchanged.
 
 `tools/prepare_enemy_outfits.py` fits the KayKit clothing meshes to that existing
 Quaternius skeleton, remaps their skin weights, and joins each outfit into one
 crowd surface. It exports `guardian_gladiator.glb`, `guardian_archer.glb`,
-`guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 28 clips.
+`guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 29 clips.
 The gladiator is a murmillo: the bare statue torso wears the barbarian's studded
 belt and fringe (trimmed below the chest) and the knight's plated right arm, with
 bare legs, and the knight helm reshaped from its own vertices, sized to the statue's
@@ -145,7 +145,16 @@ thrust: the spear draws back as the upper body coils, then drives forward as the
 turns into the thrust, the left foot steps ahead and the hips drop, with the
 right foot planted by leg IK. The supplied mage tunic is extended into an ankle-length robe; covered leg
 surfaces are omitted to avoid running knees piercing the garment. The helmet
-covers the centurion's whole head. Rebuild with:
+covers the centurion's whole head. The centurion is a heavy legionary: its body takes a broad,
+thickset build at full height (the gladiator's reshaping without leg shortening),
+and the knight's plate is close-fitted over it. Each piece is shrink-wrapped onto its
+own region of the statue (torso, each arm, each leg) at a plate's thickness, keeps
+35% of its authored shape so plate edges, belt and pauldrons still read, and takes
+the skin weights of the flesh beneath it so it moves with the limb. The helm is
+sized to the statue's head. It carries a tall tower shield (the scutum mesh at
+1.3m) upright from shin to chin. Its attack (ShieldStab) coils deeply, then takes
+a long step with the left foot as the hips drive forward and the upper body turns
+and leans into a one-handed thrust past the shield, the right foot planted by leg IK. Rebuild with:
 
 ```sh
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_enemy_outfits.py
