@@ -57,7 +57,9 @@ back half forward, whose eye-level seam becomes the visor slit. The
 helm hides the hair. `tools/outfit_hero.py` adds both after the enemy outfits are
 built; statues never inherit them. `assets/textures/wood_planks.png` (cut from the
 Quaternius furniture trim sheet by `tools/paint_hero.py`) remains available as a
-wood material. SwordRun is the sprint with both arms eased toward that carry, so the sword
+wood material. Hit reactions for anyone holding a shield (ShieldHit, ShieldHitHead, ShieldHitStagger,
+ShieldHitKnockdown) keep that 60° forearm turn, so a hit does not flip the shield.
+SwordRun is the sprint with both arms eased toward that carry, so the sword
 stays low and never swings through the head. Staff attacks reuse the Cast
 animation. Class projectiles reuse the arrow and gem meshes; traps, defensive
 effects and area warnings reuse the transparent seal sprite with distinct colors
@@ -211,7 +213,19 @@ clips carry it beside the body, tilting it clear of the ground when crouched.
 The draw wrist and elbow remain on the right side of the torso and neck, with
 a 36cm pull and a matching upward string morph. The string follows the baked
 hand position until release; the imported arrow follows the draw/release cycles.
-Both character exports retain
+Statue archers, and the Ranger's basic bow attack, shoot with ArcherShot, modeled on Quaternius's Bow_Notch followed by
+Bow_Shoot. Those clips are in the paid Source edition of Universal Animation Library
+2, not the Standard one used here; they were studied in the online viewer and this
+clip was authored with the same IK tools, not copied. From a relaxed stance the draw
+hand reaches over the right shoulder to the quiver, brings the arrow down to nock it
+at the bow in front of the chest as the body turns side-on, then the bow arm extends
+at shoulder height, the string is drawn to the cheek, held, and released at 0.78, the
+draw hand flicking back. The whole body takes part: the archer steps into a staggered
+stance (left foot forward, right back) with soft knees, the hips carry half of the
+side-on turn, the weight rises on the quiver reach, settles onto the rear leg through
+the draw and rocks forward on the release; leg IK keeps the feet planted. The arrow shows from the nock to the release, and the
+string follows the hand. The archer winds up for 1.2 seconds; its interval is
+shortened to keep 2.42 seconds between shots. Both character exports retain
 all eight weapon attack clips, including the statue archer's bow shot.
 
 ## Generated images
@@ -291,9 +305,12 @@ The hero's body texture, `assets/textures/hero_kit.png`, is baked by
 `tools/paint_hero.py` through the character's own UVs. Each vertex takes a region from
 its skin weights and rest-pose height: bronze scale armor over the chest, back,
 shoulders and upper arms, projected onto the body in 3D from generated image 2 so
-its scales keep one size and direction across seams; a dark leather belt; brown
-woven shorts to mid-thigh; leather forearm bracers; and bare skin from the
-character's original `T_Superhero_Male_Dark.png` elsewhere, including both legs.
+its scales keep one size and direction across seams; a dark leather belt; long brown
+woven trousers; leather forearm bracers; and bare skin from the
+character's original `T_Superhero_Male_Dark.png` elsewhere. The scale armor also has
+bulk: `tools/outfit_hero.py` copies the armored part of the body and thickens it outward
+(2.5cm, 3.5cm at the shoulders, as a 2cm solid shell) with the same UVs, texture and
+skin weights.
 Cloth and leather are procedural. Statue materials use generated marble; architecture uses generated
 limestone and marble. Original source-pack materials remain on selected small
 props and vegetation. The bronze tile is also available as a reusable material.
@@ -306,6 +323,14 @@ combat sound effects were credited to www.zapsplat.com in that project. This
 adaptation does not relicense those tracks or effects as CC0. Relevant attribution
 must remain with any public distribution, and the original project's license
 terms continue to apply.
+
+`assets/audio/stone-crumble.wav` is the original game's `public/stone-crumble.m4a`,
+decoded with macOS `afconvert` to 48 kHz stereo 16-bit PCM (1.02 s) and its extensible
+WAV header rewritten as standard PCM, samples unchanged. It plays when a statue dies:
+instead of falling over, the statue crumbles as in the original game. The body sinks
+and spreads over 0.7 s into a rubble pile (the KayKit rubble mesh in statue stone),
+twelve stone chips (the imported rock mesh) burst out and fall around it, and dust
+rises, all on the combat clock.
 
 `assets/audio/fountain-trickle.wav` is the original game's
 `public/sfx-fountain-trickle.m4a`, decoded without normalization or editing to

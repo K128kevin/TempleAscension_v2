@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
+outputs=['ShieldHit','ShieldHitHead','ShieldHitStagger','ShieldHitKnockdown','ArcherShot','ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -211,6 +211,26 @@ for f,pose in enumerate(poses):
  keys(length*30*f/60)
 finish('SwordIdle',a,length)
 
+# Hit reactions for shield bearers: the same reactions with the left forearm
+# kept turned 60° outward, as in the shield stances, so a hit does not flip the
+# strapped shield round and back.
+for source_name in ['Hit','HitHead','HitStagger','HitKnockdown']:
+ original=bpy.data.actions[source_name]
+ length=original.frame_range.y/30
+ rig.animation_data.action=original
+ poses=[]
+ for f in range(61):
+  frame(length*f/60)
+  poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+ a=action('Shield'+source_name)
+ for f,pose in enumerate(poses):
+  for b in rig.pose.bones:b.matrix_basis=pose[b.name]
+  forearm=rig.pose.bones['lowerarm_l']
+  forearm.rotation_quaternion=forearm.rotation_quaternion @ twist
+  bpy.context.view_layer.update()
+  keys(length*30*f/60)
+ finish('Shield'+source_name,a,length)
+
 # Sword-and-shield run: the sprint's legs and body, with each arm eased most of
 # the way toward the SwordIdle carry, so the sword stays low and forward instead
 # of swinging back through the head, and the shield stays at his side.
@@ -388,6 +408,66 @@ for f in range(61):
  shield_arm(shift.y+.1*max(0,thrust),turn*.9)
  keys(f)
 finish('ShieldStab',a,2.0)
+
+# The statue archer's shot, modeled on Quaternius's Bow_Notch then Bow_Shoot
+# (UAL2 Source edition, studied in the online viewer; authored here, not
+# copied): from a relaxed stance the draw hand reaches over the right shoulder
+# to the quiver, brings the arrow down to nock it at the bow in front of the
+# chest as the body turns side-on, then the bow arm extends at shoulder height,
+# the string is drawn to the cheek, held, and released with the draw hand
+# flicking back, before easing back to the stance. Release is at 0.78.
+def vsample(points,t):
+ for i in range(len(points)-1):
+  if t<=points[i+1][0]:
+   a,v=points[i];b,w=points[i+1];u=max(0,min(1,(t-a)/(b-a)));u=u*u*(3-2*u)
+   return Vector(v).lerp(Vector(w),u)
+ return Vector(points[-1][1])
+BOW_OUT=(-.24,-.315,1.28)
+NOCK=(-.24,-.15,1.28)
+CHEEK=(-.24,.21,1.34)
+bow_hand=[(0,(.12,-.26,.96)),(.3,(.1,-.28,1.0)),(.42,(-.04,-.34,1.18)),(.52,BOW_OUT),(.9,BOW_OUT),(1,(.12,-.26,.96))]
+draw_hand=[(0,(-.2,-.1,.95)),(.14,(-.26,.05,1.45)),(.26,(-.2,.16,1.62)),(.32,(-.18,.12,1.6)),(.43,(-.06,-.3,1.2)),(.52,NOCK),(.56,NOCK),(.74,CHEEK),(.78,CHEEK),(.82,(-.3,.34,1.4)),(.9,(-.3,.3,1.3)),(1,(-.2,-.1,.95))]
+draw_pole=[(0,(-.7,.2,.85)),(.2,(-.6,.3,1.9)),(.34,(-.6,.2,1.7)),(.45,(-.7,.3,1.2)),(.52,(-.65,.3,1.38)),(1,(-.7,.2,.85))]
+side_on=[(0,0),(.3,-.12),(.46,-.45),(.86,-.45),(1,0)]
+# The whole body shoots, as in the reference: the archer steps into a
+# staggered stance (left foot forward toward the target, right foot back) and
+# sinks into soft knees; the hips carry half of the side-on turn; the weight
+# rises a touch on the quiver reach, settles back onto the rear leg through
+# the draw and rocks forward on the release, before stepping back to idle.
+# Leg IK keeps both feet planted while the hips move.
+a=action('ArcherShot')
+reset_pose()
+planted={side:rig.pose.bones['foot_'+side].matrix.translation.copy() for side in 'lr'}
+stance_keys=[(0,0),(.16,1),(.9,1),(1,0)]
+settle_keys=[(0,0),(.5,0),(.74,.035),(.78,.035),(.84,-.02),(.95,0),(1,0)]
+FRONT=Vector((.02,-.16,0));BACK=Vector((-.03,.14,0))
+for f in range(61):
+ t=f/60;reset_pose()
+ stance=sample(stance_keys,t)
+ turn=sample(side_on,t)
+ reach=max(0,1-abs(t-.26)/.14)
+ # Hips: sink into the stance, lift on the reach, shift back and forward.
+ hips=Vector((0,sample(settle_keys,t),-.045*stance+.015*reach))
+ pelvis=rig.pose.bones['pelvis'];m=pelvis.matrix.copy()
+ pelvis.matrix=Matrix.Translation(m.translation+hips) @ m.to_quaternion().to_matrix().to_4x4()
+ bpy.context.view_layer.update()
+ rotate_body('pelvis',(0,0,1),turn*.5)
+ # Feet: each lifts a little as it steps into and out of the stance.
+ step=0.0
+ for a0,a1 in [(0,.16),(.9,1)]:
+  if a0<t<a1:u=(t-a0)/(a1-a0);step=.05*4*u*(1-u)
+ leg('l',planted['l']+FRONT*stance+Vector((0,0,step)),planted['l']+Vector((.1,-.9,.5)))
+ leg('r',planted['r']+BACK*stance+Vector((0,0,step*.6)),planted['r']+Vector((-.1,-.9,.5)))
+ rotate_body('spine_01',(0,0,1),turn*.5)
+ rotate_body('neck_01',(0,0,1),-turn*.55)
+ rotate_body('Head',(0,0,1),-turn*.45)
+ # The quiver reach lifts the chest a little and tips the head away.
+ rotate_body('spine_02',(1,0,0),-.12*reach)
+ arm('l',vsample(bow_hand,t)+hips,(.45,-.25,1.08))
+ arm('r',vsample(draw_hand,t)+hips,vsample(draw_pole,t))
+ bow_grip()
+ keys(f)
+finish('ArcherShot',a,2.0)
 
 for name in ['BowIdle','BowShot','BowRapid','SpearIdle','SpearStab','SpearJab']:
  a=action(name)

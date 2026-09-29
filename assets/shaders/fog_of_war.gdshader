@@ -7,6 +7,8 @@ render_mode unshaded, blend_mix, depth_test_disabled, depth_draw_never, cull_dis
 // down to the ground.
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest;
 uniform sampler2D visibility_mask : filter_linear;
+// 1 on the temple's floor cells; 0 off them (void, and outdoor stonework).
+uniform sampler2D walkable_mask : filter_nearest;
 uniform vec2 map_world_origin;
 uniform vec2 map_dimensions;
 // On a terrace or the summit the desert, the foundation and the storeys below
@@ -15,6 +17,12 @@ uniform bool outdoors = false;
 // Wall cells are not walkable and never marked seen. A raised face borrows the
 // cell in front of it; a raised top borrows the brightest neighbouring cell.
 const float FACE_REACH = 0.9;
+
+float walkable_at(vec2 xz) {
+	vec2 uv = (xz - map_world_origin + vec2(0.5)) / map_dimensions;
+	if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 0.0;
+	return texture(walkable_mask, uv).r;
+}
 
 float mask_at(vec2 xz) {
 	vec2 uv = (xz - map_world_origin + vec2(0.5)) / map_dimensions;
@@ -41,6 +49,10 @@ void fragment() {
 		// Below floor level: outdoors it is all visible scenery; indoors keep the
 		// original ground-plane projection of the pixel's view ray.
 		seen = outdoors ? 1.0 : mask_at((world - forward * (world.y / forward.y)).xz);
+	} else if (outdoors && world.y <= 0.08 && walkable_at(world.xz) < 0.5) {
+		// Outdoors, floor-height surfaces off the temple floor are the tops of
+		// the storeys below: open-air scenery, never fogged.
+		seen = 1.0;
 	} else {
 		seen = mask_at(world.xz);
 		if (world.y > 0.08) {

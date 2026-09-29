@@ -82,7 +82,17 @@ func verify():
 				var actor=actors[i]
 				var forearm: Vector3=(actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("lowerarm_l"))).origin
 				check((actor.shield_item.global_transform*Vector3(0,.5,0)).distance_to(forearm)<.5,"Scutum stays strapped to the forearm: %s %.2f / %d" % [clip,phase,i])
-	for clip in ["Idle","SwordIdle","Run","SwordRun","Crouch","SwordSwing","SwordSlash","Cleave","Evade","Hit","HitHead","HitStagger","HitKnockdown"]:
+	# A hit must not flip the shield: each shield reaction starts with the shield
+	# facing where the sword-and-shield stance holds it.
+	for i in [0,1]:
+		pose(actors[i],"SwordIdle",0.0); await frames(1)
+		var steady: Vector3=actors[i].shield_item.global_basis.z.normalized()
+		for clip in ["ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown"]:
+			pose(actors[i],clip,0.0); await frames(1)
+			check(actors[i].shield_item.global_basis.z.normalized().dot(steady)>.9,"A hit keeps the shield facing out: %s / %d" % [clip,i])
+		actors[i].state="SwordIdle"; actors[i].react("Hit",.3)
+		check(actors[i].state=="ShieldHit","Shield bearers flinch with the shield arm held: %d" % i)
+	for clip in ["Idle","SwordIdle","Run","SwordRun","Crouch","SwordSwing","SwordSlash","Cleave","Evade","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown"]:
 		for phase in [0.0,.15,.35,.55,.75,.95]:
 			for actor in actors: pose(actor,clip,phase)
 			await frames(1)

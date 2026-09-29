@@ -35,6 +35,16 @@ var mark_time = 0.0
 var stagger_time = 0.0
 var stagger_meter = 0.0
 var hit_reactions = 0
+# Hit pushback: each hit delays the next attack by a share of the unit's normal
+# time between attacks, rooting it for that time; a wind-up or cast in progress
+# is pushed back by the same amount. The share steps down with repeated hits
+# and resets once the enemy lands an attack.
+const PUSHBACK = [.5,.3,.15]
+# The archer notches and draws before releasing; its interval is shortened to
+# match, keeping the same time between shots.
+const ARCHER_DRAW = 1.2
+var pushback_step = 0
+var hit_stun = 0.0
 # The Oracle's fireball takes two seconds to cast, shown by a cast bar; the
 # ground warning lasts through the cast and the fireball's flight.
 const FIRE_CAST = 2.0
@@ -80,6 +90,7 @@ func tick(dt: float) -> void:
 	slow_time = maxf(0,slow_time-dt)
 	mark_time = maxf(0,mark_time-dt)
 	stagger_time = maxf(0,stagger_time-dt)
+	hit_stun = maxf(0,hit_stun-dt)
 	invulnerable = maxf(0,invulnerable-dt)
 	busy = maxf(0,busy-dt)
 	cooldown = maxf(0,cooldown-dt)
@@ -89,6 +100,10 @@ func tick(dt: float) -> void:
 		if death_age > 8 and kind != "player": visible = false
 		return
 	if kind == "player" or stagger_time>0: return
+	# Rooted by a hit: no moving, while the pushed-back attack timer runs.
+	if hit_stun>0 and windup<=0 and laser_time<=0:
+		visual.locomotion(false,false)
+		return
 	var player = game.player
 	var distance: float = position.distance_to(player.position)
 	if kind == "offering":
@@ -119,7 +134,7 @@ func tick(dt: float) -> void:
 				laser_tick = .1
 				var forward = Vector3(sin(laser_angle),0,cos(laser_angle))
 				var offset: Vector3 = player.position-position
-				if offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(10*.6*Data.DAMAGE_SCALE[game.run.difficulty])
+				if offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(10*.6*Data.DAMAGE_SCALE[game.run.difficulty],"physical",self)
 			if laser_time <= 0:
 				laser_model.queue_free()
 				busy = 0
@@ -147,7 +162,7 @@ func tick(dt: float) -> void:
 	if distance <= reach and game.world.clear_line(position,player.position) and cooldown <= 0:
 		face(player.position)
 		attack_point = player.position
-		windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else .42)
+		windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else (ARCHER_DRAW if kind == "archer" else .42))
 		if kind == "wizard":
 			# Every ranged cast is the fireball; frost comes only as the nova.
 			fireball_flight = clampf(distance/14.0,.4,.8)
@@ -159,7 +174,7 @@ func tick(dt: float) -> void:
 		var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
 		var duration = windup+.25
 		var weapon_index = Data.WEAPONS.find(config.weapon)
-		var signature = {"centurion":Motion.SHIELD_STAB}.get(kind,{})
+		var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT}.get(kind,{})
 		if not signature.is_empty() and visual.clips.has(signature.clip):
 			clip = signature.clip
 			duration = windup/signature.contacts[0]
@@ -193,22 +208,22 @@ func release_attack() -> void:
 		return
 	busy = attack_recovery
 	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]
-	if kind == "archer": game.projectile(position,attack_point,damage,false,"arrow")
+	if kind == "archer": game.projectile(position,attack_point,damage,false,"arrow",false,self)
 	elif kind == "wizard":
 		cast_total = 0
 		var hand: Vector3 = visual.skeleton.global_transform*visual.skeleton.get_bone_global_pose(visual.skeleton.find_bone("hand_r")).origin
-		game.fireball(hand+forward()*.25,attack_point,2.2,damage,fireball_flight)
+		game.fireball(hand+forward()*.25,attack_point,2.2,damage,fireball_flight,self)
 		cast_ring = {}
 	elif position.distance_to(game.player.position) <= config.range + .6 and game.world.clear_line(position,game.player.position):
 		var d: Vector3 = (game.player.position-position).normalized()
-		if forward().dot(d) > .2: game.hurt_player(damage)
+		if forward().dot(d) > .2: game.hurt_player(damage,"physical",self)
 
 # Instant: the blast goes off at once, the Oracle snapping into the release of
 # its casting pose and recovering briefly.
 func cast_nova() -> void:
 	face(game.player.position)
 	nova_cooldown = NOVA_COOLDOWN
-	game.frost_nova(position,NOVA_RADIUS,7.5*.6*Data.DAMAGE_SCALE[game.run.difficulty])
+	game.frost_nova(position,NOVA_RADIUS,7.5*.6*Data.DAMAGE_SCALE[game.run.difficulty],self)
 	var contact: float = Motion.NORMAL[Data.WEAPONS.find("staff")].contacts[0]
 	var duration = NOVA_RECOVERY/(1.0-contact)
 	visual.play("Cast",duration)
@@ -269,7 +284,7 @@ func stagger(seconds: float) -> void:
 # attack recoveries, the boss's gaze and running reactions are not interrupted.
 func react_to_hit(heavy: bool = false) -> void:
 	if dead or windup>0 or busy>0 or laser_time>0: return
-	if visual.reaction_time>0 and not (heavy and visual.state in ["Hit","HitHead"]): return
+	if visual.reaction_time>0 and not (heavy and visual.state.trim_prefix("Shield") in ["Hit","HitHead"]): return
 	hit_reactions += 1
 	if heavy: visual.react("HitStagger",.6)
 	else: visual.react("HitHead" if hit_reactions%2==0 else "Hit",.34)
@@ -285,12 +300,30 @@ func hit(damage: float, type: String = "physical") -> void:
 	else:
 		if not awake: game.awaken(self)
 		react_to_hit()
-		cooldown += .25
-		if windup > 0:
-			windup += .1
-			visual.animation_delay += .1
-			# Keep the fire warning up until the delayed fireball lands.
-			if not cast_ring.is_empty(): cast_ring.life += .1; cast_ring.total += .1
+		push_back()
+
+func push_back() -> void:
+	if pushback_step >= PUSHBACK.size(): return
+	var delay: float = PUSHBACK[pushback_step]*attack_cycle()
+	pushback_step += 1
+	if windup > 0:
+		# Caught winding up or casting: the attack is pushed back, the pose held.
+		windup += delay
+		visual.animation_delay += delay
+		# Keep the fire warning up until the delayed fireball lands.
+		if not cast_ring.is_empty(): cast_ring.life += delay; cast_ring.total += delay
+	else:
+		cooldown += delay
+		hit_stun = maxf(hit_stun,delay)
+
+# The unit's normal time between attacks: its interval plus its wind-up.
+func attack_cycle() -> float:
+	var typical = FIRE_CAST if kind == "wizard" else (.65 if kind == "boss" else (ARCHER_DRAW if kind == "archer" else .42))
+	return config.interval + typical
+
+# An attack of this enemy damaged the hero: its pushback starts over.
+func landed_attack() -> void:
+	pushback_step = 0
 
 func die(reward: bool = true) -> void:
 	if dead: return
@@ -300,5 +333,7 @@ func die(reward: bool = true) -> void:
 	if windup>0 and not cast_ring.is_empty(): cast_ring.life = minf(cast_ring.life,.15)
 	cast_total = 0
 	if is_instance_valid(laser_model): laser_model.queue_free()
-	visual.play("Death")
+	# Statues crumble into a rubble pile, with the original game's crumble sound.
+	visual.crumble()
+	game.sound.play("stone-crumble",-8)
 	if reward: game.enemy_died(self)

@@ -5,7 +5,7 @@ root=Path(__file__).resolve().parents[1]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=str(root/'assets/models/character/warrior.glb'))
 # The hero's boots are the hero's own; statues stay barefoot stone.
-for o in [o for o in bpy.data.objects if o.name.startswith(('HeroBoots','HeroHelmet'))]:bpy.data.objects.remove(o,do_unlink=True)
+for o in [o for o in bpy.data.objects if o.name.startswith(('HeroBoots','HeroHelmet','HeroArmor'))]:bpy.data.objects.remove(o,do_unlink=True)
 meshes=[o for o in bpy.data.objects if o.type=='MESH']
 bpy.ops.object.select_all(action='DESELECT')
 for o in meshes:o.select_set(True)

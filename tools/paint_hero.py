@@ -3,7 +3,7 @@
 Run with Blender --background --python tools/paint_hero.py after
 import_character.py. Every face of the supplied body is assigned a region from
 its skin weights and rest-pose height: bronze scale armor (chest, back,
-shoulders and upper arms), a leather belt, brown cloth shorts to mid-thigh,
+shoulders and upper arms), a leather belt, long brown cloth trousers,
 leather forearm bracers, or bare skin. Scales are projected onto the body in 3D
 from the existing bronze scale texture, so their size and direction stay
 continuous across UV seams; skin comes from the character's original texture.
@@ -22,10 +22,9 @@ SCALES = ROOT/'assets/textures/bronze_scales.png'
 TRIM = ROOT/'source_art/props/Textures/T_Trim_Furniture_BaseColor.png'
 OUT = ROOT/'assets/textures'
 SIZE = 2048
-# Rest-pose heights (metres): cuirass above the belt, shorts to mid-thigh.
+# Rest-pose heights (metres): cuirass above the belt; trousers below it.
 CUIRASS_BOTTOM = 1.05
 BELT_BOTTOM = .97
-SHORTS_BOTTOM = .66
 # One tile of the scale texture spans this many metres on the body.
 SCALE_TILE = .8
 
@@ -41,7 +40,8 @@ def region(bone: str, height: float) -> str:
     if bone.startswith(('spine_01','pelvis','root')):
         if height>=CUIRASS_BOTTOM: return 'scales'
         return 'belt' if height>=BELT_BOTTOM else 'cloth'
-    if bone.startswith('thigh') and height>=SHORTS_BOTTOM: return 'cloth'
+    # Long trousers down both legs into the boots.
+    if bone.startswith(('thigh','calf')): return 'cloth'
     return 'skin'
 
 

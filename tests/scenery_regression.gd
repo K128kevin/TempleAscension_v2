@@ -68,6 +68,7 @@ func test():
 			if group.root.visible: shown_walls += 1
 			else: hidden_walls += 1
 		check(shown_walls>0 and hidden_walls>0,"Walls facing seen floor are revealed; walls of unseen rooms stay hidden (%d)" % (index+1))
+		check(world.fog_material.get_shader_parameter("walkable_mask")!=null,"Fog knows which cells are temple floor (%d)" % (index+1))
 		check(world.fog_material.render_priority==Material.RENDER_PRIORITY_MAX and world.fog_material.shader.get_mode()==Shader.MODE_SPATIAL,"Line-of-sight fog uses scene depth (%d)" % (index+1))
 		if index==2:
 			var fountain = world.fountain
@@ -132,9 +133,11 @@ func test():
 				world.follow(inside+direction,1)
 				check(world.desert_backdrop.visible and world.terrace_moonlight.visible,"Stepping out of doorway %d reveals landscape and moonlight on floor %d" % [i,index+1])
 				check(world.fog_material.get_shader_parameter("outdoors")==true,"Fog leaves the desert and outer storeys unfogged outdoors at doorway %d, floor %d" % [i,index+1])
+				check(not world.outdoor_scenery.is_empty() and world.outdoor_scenery.all(func(n): return n.visible),"The building's storeys show below the terrace at doorway %d, floor %d" % [i,index+1])
 				world.follow(inside,.016)
 				check(not world.desert_backdrop.visible and not world.terrace_moonlight.visible,"Stepping back inside hides landscape immediately at doorway %d, floor %d" % [i,index+1])
 				check(world.fog_material.get_shader_parameter("outdoors")==false,"Fog returns to interior line of sight inside at doorway %d, floor %d" % [i,index+1])
+				check(world.outdoor_scenery.all(func(n): return not n.visible),"The storeys hide again inside at doorway %d, floor %d" % [i,index+1])
 			var terrace: Rect2i = world.layout.terrace[0]
 			var cell = terrace.position+Vector2i(2,terrace.size.y/2)
 			game.player.position = world.layout.to_world(cell)

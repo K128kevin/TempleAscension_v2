@@ -1,5 +1,16 @@
 extends Node3D
 const Art = preload("res://scripts/assets.gd")
+const Motion = preload("res://scripts/combat_animation.gd")
+const Vfx = preload("res://scripts/vfx.gd")
+# A slain statue crumbles, as in the original game: the body collapses into a
+# rubble pile while stone chips burst out and fall around it.
+const CRUMBLE_TIME = .7
+const CHIPS = 12
+var crumbling = -1.0
+var crumble_size = 1.0
+var rubble: Node3D
+var chips: Array = []
+var dust: CPUParticles3D
 var animator: AnimationPlayer
 var skeleton: Skeleton3D
 var clips: Dictionary = {}
@@ -67,14 +78,14 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		elif "Hair" in mesh.name:
 			# The closed helm covers the hair.
 			mesh.visible = false
-		elif "SuperHero" in mesh.name:
+		elif "SuperHero" in mesh.name or "HeroArmor" in mesh.name:
 			# Keep supplied head/skin surfaces; armor only on the torso/limb mesh.
 			var skin = StandardMaterial3D.new()
 			skin.albedo_texture = load("res://assets/textures/hero_kit.png")
 			skin.roughness = .65
 			mesh.material_override = skin
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
+		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
@@ -167,6 +178,10 @@ func align_weapon() -> void:
 		if state=="BowShot":
 			draw = draw_amount(phase,.62,.12)
 			arrow_visible = phase<.62
+		elif state=="ArcherShot":
+			# The arrow appears once the draw hand brings it from the quiver to the bow.
+			draw = draw_amount(phase,Motion.ARCHER_SHOT.contacts[0],.56)
+			arrow_visible = phase>=.44 and phase<Motion.ARCHER_SHOT.contacts[0]
 		elif state=="BowRapid":
 			for pair in [Vector2(0,.30),Vector2(.40,.54),Vector2(.64,.78)]:
 				draw = maxf(draw,draw_amount(phase,pair.y,pair.x))
@@ -186,9 +201,10 @@ func crown() -> void:
 	var attachment = BoneAttachment3D.new()
 	attachment.bone_name = "Head"
 	skeleton.add_child(attachment)
-	var c = Art.model("crown", Vector3(.47,.24,.47), Art.statue_material() if is_stone else Art.material("gold"))
+	# Sized to the statue's head (about 18cm across) and seated on its crown.
+	var c = Art.model("crown", Vector3(.22,.12,.22), Art.statue_material() if is_stone else Art.material("gold"))
 	attachment.add_child(c)
-	c.position = Vector3(0,.16,0)
+	c.position = Vector3(0,.17,0)
 
 func petrify() -> void:
 	is_stone = true
@@ -214,10 +230,73 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 # replace a reaction through play(); locomotion resumes once it finishes.
 func react(action: String, duration: float) -> void:
 	if dead or not clips.has(action): return
+	# Shield bearers keep the forearm turned so the strapped shield stays put.
+	if is_instance_valid(shield_item) and clips.has("Shield"+action): action = "Shield"+action
 	play(action,duration)
 	reaction_time = duration
 
+# `settled` shows the finished pile at once (a statue already slain on load).
+func crumble(settled: bool = false) -> void:
+	if crumbling >= 0.0: return
+	dead = true
+	state = "Crumble"
+	animator.pause()
+	crumbling = 0.0
+	crumble_size = rig.scale.x
+	var size = crumble_size
+	rubble = Art.model("rubble",Vector3(1.0,.5,1.0)*size,Art.statue_material())
+	add_child(rubble)
+	rubble.rotation.y = fposmod(global_position.x*7.1+global_position.z*3.3,TAU)
+	if not settled:
+		var seed = global_position.x*12.9898+global_position.z*78.233
+		for i in CHIPS:
+			var angle = TAU*i/CHIPS+sin(seed+i)*.4
+			var chip = Art.model("rock",Vector3.ONE*(.14+.1*fposmod(seed*.37+i*.61,1.0))*size,Art.statue_material())
+			add_child(chip)
+			var reach = (.5+.6*fposmod(seed*.13+i*.29,1.0))*size
+			chip.position = Vector3(0,(.4+1.1*fposmod(i*.47,1.0))*size,0)
+			chips.append({"node":chip,"velocity":Vector3(sin(angle)*reach*2.2,1.6*size,cos(angle)*reach*2.2),"spin":Vector3(3,5,2)*(1+i%3)})
+		dust = Vfx.particles(self,18,1.2,true,false)
+		dust.explosiveness = .9
+		dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		dust.emission_sphere_radius = .35*size
+		dust.direction = Vector3.UP
+		dust.spread = 80
+		dust.initial_velocity_min = .3; dust.initial_velocity_max = .9
+		dust.gravity = Vector3(0,.25,0)
+		dust.scale_amount_min = .5*size; dust.scale_amount_max = .9*size
+		dust.scale_amount_curve = Vfx.curve(.5,1.5)
+		dust.color_ramp = Vfx.ramp([0,.2,1],[Color(.42,.42,.4,0),Color(.4,.4,.38,.55),Color(.36,.36,.34,0)])
+		dust.position.y = .3*size
+		dust.emitting = true
+	crumble_step(CRUMBLE_TIME if settled else 0.0)
+
+func crumble_step(dt: float) -> void:
+	crumbling += dt
+	var u = clampf(crumbling/CRUMBLE_TIME,0.0,1.0)
+	var eased = u*u
+	var size = crumble_size
+	# The body sinks and spreads into the pile, then is gone.
+	rig.scale = Vector3(size*(1.0+.25*eased),size*maxf(.02,1.0-eased),size*(1.0+.25*eased))
+	rig.visible = u<1.0
+	if is_instance_valid(weapon_item): weapon_item.visible = u<.4
+	if is_instance_valid(nocked_arrow): nocked_arrow.visible = false
+	rubble.scale = Vector3(1.0,.5,1.0)*size*clampf(u*1.3,0.0,1.0)
+	for chip in chips:
+		var node: Node3D = chip.node
+		if node.position.y <= 0.0 and chip.velocity.y < 0.0: continue
+		chip.velocity.y -= 9.8*dt
+		node.position += chip.velocity*dt
+		node.rotation += chip.spin*dt
+		if node.position.y <= 0.0:
+			node.position.y = 0.0
+			chip.velocity = Vector3(0,-1,0)
+	if is_instance_valid(dust): dust.speed_scale = 1.0 if dt>0 else dust.speed_scale
+
 func advance(dt: float) -> void:
+	if crumbling >= 0.0:
+		if crumbling < CRUMBLE_TIME+1.5: crumble_step(dt)
+		return
 	reaction_time = maxf(0,reaction_time-dt)
 	var held = minf(dt,animation_delay)
 	animation_delay -= held

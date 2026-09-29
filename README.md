@@ -46,7 +46,11 @@ The temple's dark interiors are illuminated mainly by torch stations, placed so 
 hallway and room stays readable, with
 animated flames, rising embers and subtle independent light flicker. The
 terraces on floors four and five look down onto nearby moonlit dunes and ruins,
-with mountains and a river farther away. The dark panorama appears only while the player is on a terrace,
+with mountains and a river farther away. Below the summit, the building steps down: one storey lower, the stone roof of floor 5
+wraps its south and east sides, and a storey below that, floor 4's quartz-paved terrace.
+The south and east sides of the building on the terrace floors, and of the summit, drop away
+as several storeys of stone wall, ledges and columns, so the galleries read as the roof
+of a tall building. The dark panorama appears only while the player is on a terrace,
 where a dim cool moonlight also catches the paving and parapets.
 
 ## Debug mode
@@ -96,7 +100,10 @@ ascent. Invulnerability is a session toggle and starts off on each launch.
 
 The original 24 / 32 / 54 / 57 / 80 enemy counts are preserved. Gladiators,
 archers, fast Lion Guardians, spellcasting oracles and centurions activate as
-statues and alert nearby allies. Oracles cast two-second fireballs, shown by a cast
+statues and alert nearby allies. Hitting an enemy pushes back its next attack by 50% of its normal
+time between attacks and roots it for that time; further hits add 30%, then 15%,
+then nothing, until it lands an attack. Wind-ups and Oracle casts are pushed back
+the same way. Oracles cast two-second fireballs, shown by a cast
 bar, and answer a close approach with an instant frost nova that slows the hero. The five floors now use the original game's
 seeded room-and-corridor format: 8–15 tile rooms, five-tile-wide passages,
 extra connections that form loops, and ascent stairs in the most distant room.
@@ -121,7 +128,7 @@ of maximum per second. Above the base:
 | Willpower | +3 maximum energy and +0.1 energy per second |
 
 Warrior starts with a large sword, a round steel shield and Cleave, wearing a
-steel full helm, bronze scale armor, brown shorts and brown leather boots; Ranger with bow and Power Shot;
+steel full helm, thick bronze scale armor, long brown trousers and brown leather boots; Ranger with bow and Power Shot;
 Wizard with staff and Firebolt. The first skill point is spent on that starter.
 Each class has the plan's eight active skills and four passives, unlocking at
 levels 1, 4, 8, 12 and 18. Active skills have five ranks; passives have three.

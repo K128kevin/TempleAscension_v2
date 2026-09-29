@@ -198,6 +198,42 @@ func test():
 	check(game.fireballs.is_empty(),"Explosion cleans itself up")
 	oracle.dead=true; oracle.visible=false
 	game.player.hp=game.player.max_hp; game.invincible_test=true
+	# Hit pushback: 50%, 30%, 15%, then 0% of the unit's normal time between
+	# attacks, rooting it for that time; landing an attack resets it to 50%.
+	var pushed=game.spawn_enemy("gladiator","pushback",game.world.spawn)
+	pushed.awake=true
+	game.player.position=game.world.move(game.world.spawn,Vector3(0,0,-6))
+	var cycle: float=pushed.attack_cycle()
+	for share in [.5,.3,.15,0.0]:
+		pushed.cooldown=0; pushed.windup=0; pushed.busy=0; pushed.hit_stun=0
+		pushed.hit(0)
+		check(absf(pushed.cooldown-share*cycle)<.001 and absf(pushed.hit_stun-share*cycle)<.001,"Hit pushback of %d%% delays the next attack and roots the enemy" % roundi(share*100))
+	pushed.cooldown=0; pushed.hit_stun=0; pushed.pushback_step=0
+	pushed.hit(0)
+	var rooted_at: Vector3=pushed.position
+	for step in 20: pushed.tick(1.0/60)
+	check(pushed.position.distance_to(rooted_at)<.001,"A pushed-back enemy cannot move")
+	for step in 60: pushed.tick(1.0/60)
+	check(pushed.position.distance_to(rooted_at)>.05,"It moves again once the pushback ends")
+	game.invincible_test=false; game.player.invulnerable=0; game.player.hp=game.player.max_hp
+	pushed.pushback_step=3
+	game.hurt_player(1,"physical",pushed)
+	check(pushed.pushback_step==0,"Landing an attack resets the pushback to 50%")
+	pushed.pushback_step=3; game.player.invulnerable=1
+	game.hurt_player(1,"physical",pushed)
+	check(pushed.pushback_step==3,"An attack that deals no damage does not reset it")
+	game.player.invulnerable=0; game.player.hp=game.player.max_hp; game.invincible_test=true
+	pushed.dead=true; pushed.visible=false
+	# Slain statues crumble into a rubble pile with the original crumble sound.
+	var fallen=game.spawn_enemy("centurion","crumble",game.world.spawn)
+	fallen.awake=true; fallen.visible=true
+	fallen.die(false)
+	check(fallen.visual.state=="Crumble" and fallen.visual.rubble!=null and fallen.visual.chips.size()==fallen.visual.CHIPS,"A slain statue crumbles, throwing stone chips")
+	for step in 90: fallen.tick(1.0/60)
+	check(not fallen.visual.rig.visible and fallen.visual.rubble.scale.y>.4,"The body is gone, leaving a rubble pile")
+	check(ResourceLoader.exists("res://assets/audio/stone-crumble.wav") and load("res://assets/audio/stone-crumble.wav") is AudioStreamWAV,"The original crumble sound is available")
+	check(game.player.visual.crumbling<0,"The hero is not stone and never crumbles")
+	fallen.visible=false
 	# Only wizards back away from a nearby hero; archers hold their ground.
 	for kind in ["archer","wizard"]:
 		var ranged=game.spawn_enemy(kind,"retreat:"+kind,game.world.spawn)
@@ -221,6 +257,7 @@ func test():
 			if enemy.cooldown>old_cooldown:
 				starts+=1
 				check(is_zero_approx(phase(enemy.visual)),"AI attack starts at wind-up: "+kind)
+				if kind=="archer": check(enemy.visual.state=="ArcherShot" and absf(enemy.attack_cycle()-2.42)<.001,"Archers notch, draw and shoot, at the same time between shots")
 				var duration: float=enemy.visual.animator.current_animation_length/enemy.visual.animator.get_playing_speed()
 				# The Oracle's long cast keeps a brief follow-through rather than the
 				# whole stretched clip; everyone else plays the clip to its end.
@@ -228,17 +265,19 @@ func test():
 				else: check(absf(duration-enemy.windup-enemy.attack_recovery)<.001,"AI contact and recovery fit the clip: "+kind)
 			clock+=1.0/60
 			if clock>15: check(false,"AI attack test timed out: "+kind); break
-		# Taking a hit delays both the telegraph and the animation equally.
-		enemy.cooldown=0; enemy.busy=0; enemy.windup=0
+		# A hit mid-wind-up pushes the attack back by half the unit's normal time
+		# between attacks, holding the pose for that time.
+		enemy.cooldown=0; enemy.busy=0; enemy.windup=0; enemy.pushback_step=0
 		enemy.tick(.01); enemy.tick(.1)
 		var before_phase: float=phase(enemy.visual); var before_windup: float=enemy.windup
 		enemy.hit(0); enemy.tick(.1)
-		check(absf(phase(enemy.visual)-before_phase)<.001 and absf(enemy.windup-before_windup)<.001,"Enemy hit delay keeps pose and contact synchronized: "+kind)
+		var push: float=.5*enemy.attack_cycle()
+		check(absf(phase(enemy.visual)-before_phase)<.001 and absf(enemy.windup-(before_windup+push-.1))<.001,"Hit mid-wind-up pushes the attack back by half the attack time and holds the pose: "+kind)
 		enemy.windup=0; enemy.busy=0; enemy.warning.visible=false
 		enemy.hit(0)
-		check(enemy.visual.state in ["Hit","HitHead"] and enemy.visual.reaction_time>0,"Idle enemy flinches when hit: "+kind)
+		check(enemy.visual.state.trim_prefix("Shield") in ["Hit","HitHead"] and enemy.visual.reaction_time>0,"Idle enemy flinches when hit: "+kind)
 		for bash in (3 if kind=="boss" else 1): enemy.stagger(1.5)
-		check(enemy.visual.state==("HitStagger" if kind=="boss" else "HitKnockdown"),"Bashed enemy is knocked down, boss staggers: "+kind)
+		check(enemy.visual.state.trim_prefix("Shield")==("HitStagger" if kind=="boss" else "HitKnockdown"),"Bashed enemy is knocked down, boss staggers: "+kind)
 		enemy.dead=true
 	game.player.visual.play("SwordSwing",1.0)
 	game.player.visual.animator.active=false; game.player.visual.advance(.4)

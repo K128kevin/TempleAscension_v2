@@ -22,7 +22,11 @@ func play(id: String, volume: float = -11) -> void:
 	var now := Time.get_ticks_msec()
 	if now-int(last_sound.get(id,0))<80: return
 	last_sound[id] = now
-	if not streams.has(id): streams[id] = load("res://assets/audio/%s.mp3" % id)
+	if not streams.has(id):
+		var path = "res://assets/audio/%s.mp3" % id
+		# A few effects were decoded to WAV from the original game's m4a files.
+		if not ResourceLoader.exists(path): path = "res://assets/audio/%s.wav" % id
+		streams[id] = load(path)
 	var sound := AudioStreamPlayer.new()
 	add_child(sound)
 	sound.stream = streams[id]

@@ -19,6 +19,8 @@ var arc = 1.5
 var age = 0.0
 var exploded = false
 var since_impact = 0.0
+# The Oracle that cast it; landing the blast resets its hit pushback.
+var source = null
 
 var core: MeshInstance3D
 var core_material: ShaderMaterial
@@ -116,7 +118,7 @@ func explode() -> void:
 	core.visible = false
 	carry_light.visible = false
 	trail.emitting = false
-	game.area_damage(target,radius,damage,false)
+	game.area_damage(target,radius,damage,false,source)
 	game.sound.play("whirl-impact",-9)
 	burst_material = fire_material(1.0)
 	burst = billboard(burst_material,radius*.55)

@@ -46,6 +46,9 @@ var visibility_floor_batches: Array[Dictionary] = []
 var visibility_nodes: Array[Node3D] = []
 # Cells whose line of sight reveals each node; nodes absent here use their own cell.
 var visibility_cells: Dictionary = {}
+# Stonework below floor level (the terrace masonry and the summit's storeys):
+# outdoor scenery, shown with the desert rather than by line of sight.
+var outdoor_scenery: Array[Node3D] = []
 var visibility_timer = 0.0
 var visibility_player_position = Vector3(INF,INF,INF)
 var fog_material: ShaderMaterial
@@ -148,7 +151,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		fountain = preload("res://scripts/fountain.gd").new()
 		add_child(fountain)
 		fountain.setup(layout)
-	if floor_index in [3,4,5]: setup_desert()
+	if floor_index in [3,4,5]: setup_desert(stone)
 	# A downward stair marks arrival; ascent is in the furthest generated room.
 	var arrival = place("stairs",spawn+Vector3(0,-.25,1.1),Vector3(1.5,.3,1.5),stone)
 	arrival.rotation.y = PI
@@ -173,7 +176,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	if floor_index==5:
 		boss_point = layout.to_world(Vector2i(14,10))
 		setup_boss_moonlight()
-		setup_summit_understructure(stone)
+		setup_summit_understructure(facade_stone(stone))
 		for corner in [Vector2i(2,2),Vector2i(25,2),Vector2i(2,17),Vector2i(25,17)]:
 			var dx = 1 if corner.x<14 else -1
 			var dz = 1 if corner.y<10 else -1
@@ -186,10 +189,11 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	for x in range(lower.x,upper.x+1):
 		for z in range(lower.y,upper.y+1):
 			if not fits(Vector3(x,0,z),.4): nav.set_point_solid(Vector2i(x,z))
+	setup_walkable_mask()
 	batch_floors()
 	follow(spawn,1)
 
-func setup_desert() -> void:
+func setup_desert(stone: Material) -> void:
 	# The image lies far beyond/below the gallery. A dark imported foundation under
 	# the building keeps the desert out of interior gaps between generated rooms.
 	if level<5:
@@ -205,7 +209,8 @@ func setup_desert() -> void:
 	var masonry = Art.material("stone",Color(.22,.27,.34))
 	for strip in layout.terrace:
 		var corner: Vector3 = layout.to_world(strip.position)-Vector3(.5,0,.5)
-		place("wall",corner+Vector3(strip.size.x*.5,-7,strip.size.y*.5),Vector3(strip.size.x,6.84,strip.size.y),masonry)
+		place_scenery("wall",corner+Vector3(strip.size.x*.5,-7,strip.size.y*.5),Vector3(strip.size.x,6.84,strip.size.y),masonry)
+	if level<5: setup_terrace_facades(facade_stone(stone))
 	desert_backdrop = Sprite3D.new()
 	desert_backdrop.name = "MoonlitDesertBelowTerrace"
 	desert_backdrop.texture = preload("res://assets/textures/desert_moonlit_ruins_v2.png")
@@ -227,6 +232,22 @@ func setup_desert() -> void:
 	terrace_moonlight.shadow_enabled = false
 	terrace_moonlight.visible = false
 	add_child(terrace_moonlight)
+
+# Which cells are the temple's floor (walkable, or the fountain and stairs that
+# stand on it). Outdoors, the fog leaves everything at floor height elsewhere
+# alone: the tops of the storeys below the terraces and the summit are scenery.
+func setup_walkable_mask() -> void:
+	var image = Image.create(visibility_grid_size.x,visibility_grid_size.y,false,Image.FORMAT_R8)
+	image.fill(Color.BLACK)
+	var interior: Array = layout.cells.keys()+solid_floor.keys()
+	if level==2:
+		for y in range(layout.court_obstacle.position.y,layout.court_obstacle.end.y):
+			for x in range(layout.court_obstacle.position.x,layout.court_obstacle.end.x): interior.append(Vector2i(x,y))
+	for cell in interior:
+		var pixel: Vector2i = cell-VISIBILITY_GRID_ORIGIN
+		if pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y:
+			image.set_pixel(pixel.x,pixel.y,Color.WHITE)
+	fog_material.set_shader_parameter("walkable_mask",ImageTexture.create_from_image(image))
 
 func setup_visibility_fog() -> void:
 	visibility_grid_size = Vector2i(layout.size+10,layout.size+10)
@@ -278,26 +299,97 @@ func setup_court_torches() -> void:
 		torch(Vector3(first.x-.28,0,center.z+offset),true,Vector3.LEFT)
 		torch(Vector3(last.x+.28,0,center.z+offset),true,Vector3.RIGHT)
 
+# The summit crowns a stepped building. On its camera-facing south and east
+# sides, one storey below the boss floor, the stone roof of floor 5 wraps
+# around it; a storey lower again, floor 4's quartz-paved terrace wraps around
+# that, and the rest of the building drops away to the desert.
+const SUMMIT_ROOF_WIDTH = 7.0
+const SUMMIT_TERRACE_WIDTH = 7.0
 func setup_summit_understructure(stone: Material) -> void:
-	# A continuous stone body wraps beneath the southern front and full east
-	# edge, keeping the desert out of view around the southeast corner.
-	for story in 4:
-		var story_base = -8.0*(story+1)
-		place("wall",Vector3(-.5,story_base,10.65),Vector3(26,8,1.0),stone)
-		place("wall",Vector3(-13.5,story_base,25.5),Vector3(1.0,8,30),stone)
-		place("wall",Vector3(12.5,story_base,1.5),Vector3(1.0,8,18),stone)
-		place("wall",Vector3(12.5,story_base,25.5),Vector3(1.0,8,30),stone)
-		# Projecting stone courses articulate each storey and join the corner returns.
-		place("wall",Vector3(-.5,story_base-.55,10.95),Vector3(26,.55,1.6),stone)
-		place("wall",Vector3(-13.5,story_base-.55,25.5),Vector3(1.6,.55,30),stone)
-		place("wall",Vector3(12.5,story_base-.55,1.5),Vector3(1.6,.55,18),stone)
-		place("wall",Vector3(12.5,story_base-.55,25.5),Vector3(1.6,.55,30),stone)
-		for x in [-12,-7,-2,3,8,12]:
-			place("column",Vector3(x,story_base,11.15),Vector3(.95,8,.95),stone)
-		for z in [17,28,39]:
-			place("column",Vector3(-13.5,story_base,z),Vector3(.95,8,.95),stone)
-		for z in [-5,0,5,10,17,28,39]:
-			place("column",Vector3(12.5,story_base,z),Vector3(.95,8,.95),stone)
+	var room: Rect2i = layout.rooms[0]
+	var near: Vector3 = layout.to_world(room.position)-Vector3(.5,0,.5)
+	var far: Vector3 = layout.to_world(room.end-Vector2i.ONE)+Vector3(.5,0,.5)
+	# Summit storey: the boss floor's own south and east walls.
+	summit_tier(near,far,0.0,1,stone)
+	var roof_far = far+Vector3(SUMMIT_ROOF_WIDTH,0,SUMMIT_ROOF_WIDTH)
+	tier_roof(near,far,roof_far,-8.0,stone)
+	summit_tier(near,roof_far,-8.0,1,stone)
+	var terrace_far = roof_far+Vector3(SUMMIT_TERRACE_WIDTH,0,SUMMIT_TERRACE_WIDTH)
+	tier_roof(near,roof_far,terrace_far,-16.0,Art.quartz_material())
+	summit_tier(near,terrace_far,-16.0,3,stone)
+
+# One step of the building: storeys along the south and east edges of the
+# rectangle from `near` to `far` (world edges), starting at height `top`.
+func summit_tier(near: Vector3, far: Vector3, top: float, storeys: int, stone: Material) -> void:
+	facade(far.z-.5,Vector2i(0,1),Vector2(near.x,far.x),stone,top,storeys)
+	facade(far.x-.5,Vector2i(1,0),Vector2(near.z,far.z),stone,top,storeys)
+
+# The L-shaped roof between an upper tier (ending at `inner`) and the tier
+# below (ending at `outer`), at height `top`, with a low parapet on its edge.
+func tier_roof(near: Vector3, inner: Vector3, outer: Vector3, top: float, surface: Material) -> void:
+	var south = Rect2(Vector2(near.x,inner.z),Vector2(outer.x-near.x,outer.z-inner.z))
+	var east = Rect2(Vector2(inner.x,near.z),Vector2(outer.x-inner.x,inner.z-near.z))
+	for strip in [south,east]:
+		var middle: Vector2 = strip.get_center()
+		place_scenery("floor",Vector3(middle.x,top-.3,middle.y),Vector3(strip.size.x,.3,strip.size.y),surface)
+	var parapet = Art.material("stone",Color(.72,.68,.6))
+	place_scenery("wall",Vector3((near.x+outer.x)*.5,top,outer.z-.14),Vector3(outer.x-near.x,1.0,.28),parapet)
+	place_scenery("wall",Vector3(outer.x-.14,top,(near.z+outer.z)*.5),Vector3(.28,1.0,outer.z-near.z),parapet)
+
+# Storeys of the building below a terrace edge, like the summit's: a wall per
+# storey, a projecting stone course and columns, so the gallery reads as the
+# roof of a tall building. `line` is the edge's world coordinate, `outward` the
+# direction the face looks, `span` its extent along the other axis.
+const FACADE_STOREYS = 3
+func facade(line: float, outward: Vector2i, span: Vector2, stone: Material, top: float = 0.0, storeys: int = FACADE_STOREYS) -> void:
+	var along_x = outward.y!=0
+	var length = span.y-span.x
+	var middle = (span.x+span.y)*.5
+	for story in storeys:
+		var base = top-8.0*(story+1)
+		var face = line+(outward.y if along_x else outward.x)*.5
+		var at = Vector3(middle,base,face) if along_x else Vector3(face,base,middle)
+		var out = Vector3(outward.x,0,outward.y)
+		place_scenery("wall",at,Vector3(length,8,1.0) if along_x else Vector3(1.0,8,length),stone)
+		place_scenery("wall",at+Vector3(0,-.55,0)+out*.3,Vector3(length+.3,.55,1.6) if along_x else Vector3(1.6,.55,length+.3),stone)
+		var count = maxi(1,roundi(length/5.0))
+		for i in count+1:
+			var d = span.x+length*i/float(count)
+			var column = Vector3(d,base,face) if along_x else Vector3(face,base,d)
+			place_scenery("column",column+out*.5,Vector3(.95,8,.95),stone)
+
+# The building with its terraces fills one rectangle on the terrace floors.
+# Its camera-facing south and east sides get the facade along their full
+# length, so the whole structure, not just the terrace ends, stands on storeys.
+func setup_terrace_facades(stone: Material) -> void:
+	var footprint = Rect2i(0,0,layout.size,layout.size)
+	for strip in layout.terrace: footprint = footprint.merge(strip)
+	var first: Vector3 = layout.to_world(footprint.position)
+	var last: Vector3 = layout.to_world(footprint.end-Vector2i.ONE)
+	# Floor 5 stands a storey higher above the desert than floor 4.
+	var storeys = FACADE_STOREYS+(1 if level==4 else 0)
+	facade(last.z,Vector2i(0,1),Vector2(first.x-.5,last.x+.5),stone,0.0,storeys)
+	facade(last.x,Vector2i(1,0),Vector2(first.z-.5,last.z+.5),stone,0.0,storeys)
+
+# Stone for the building's exterior storeys, projected at world scale so the
+# texture keeps its size on long, tall walls instead of stretching with them.
+func facade_stone(stone: StandardMaterial3D) -> StandardMaterial3D:
+	var m: StandardMaterial3D = stone.duplicate()
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE*.25
+	return m
+
+func place_scenery(id: String, pos: Vector3, size: Vector3, mat: Material) -> Node3D:
+	var n = place(id,pos,size,mat)
+	# Outdoor stone catches the terrace moonlight.
+	for mesh in n.find_children("*","MeshInstance3D",true,false): mesh.layers |= TERRACE_LIGHT_LAYER
+	visibility_nodes.erase(n)
+	visibility_cells.erase(n)
+	# Roof slabs reuse the paving mesh but are scenery, not batched floor tiles.
+	floor_nodes.erase(n)
+	outdoor_scenery.append(n)
+	n.visible = false
+	return n
 
 func terrace_surface(at: Vector3) -> bool:
 	# Include parapets offset just outside a gallery tile. Interior paving
@@ -618,7 +710,9 @@ func follow(pos: Vector3, delta: float) -> void:
 		var outdoors = layout.on_terrace(layout.to_cell(pos))
 		desert_backdrop.visible = outdoors or level==5
 		fog_material.set_shader_parameter("outdoors",desert_backdrop.visible)
-		terrace_moonlight.visible = outdoors
+		for n in outdoor_scenery: n.visible = desert_backdrop.visible
+		# The summit's lower roofs and terrace are always in view, in moonlight.
+		terrace_moonlight.visible = outdoors or level==5
 		var width = camera.size*viewport_size.x/viewport_size.y
 		var texture_size = desert_backdrop.texture.get_size()
 		desert_backdrop.pixel_size = maxf(width/texture_size.x,camera.size/texture_size.y)*1.08

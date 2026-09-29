@@ -174,7 +174,7 @@ func load_floor() -> void:
 		toast("The Crowned Statue: ‘Turn back… I cannot stop it…’")
 		if "boss" in run.dead:
 			boss.dead = true
-			boss.visual.play("Death")
+			boss.visual.crumble(true)
 			crown_available = true
 			crown_position = boss.position
 			place_crown()
@@ -519,7 +519,8 @@ func awaken(enemy) -> void:
 		if other.awake or other.dead or other.kind=="offering": continue
 		if other.position.distance_to(enemy.position)<6.56 and other.position.distance_to(player.position)<18 and world.clear_line(enemy.position,other.position): awaken(other)
 
-func hurt_player(damage: float, type: String = "physical") -> void:
+# `source` is the enemy whose attack this is; landing it resets its pushback.
+func hurt_player(damage: float, type: String = "physical", source = null) -> void:
 	if player.dead or player.invulnerable>0 or invincible_test or (debug.enabled and debug.invulnerable): return
 	damage = Data.mitigate(damage,10.0,0.0,Data.ENEMY_LEVELS[run.floor],type)
 	damage *= 1.0-Data.passive(run,"bulwark")*.01
@@ -529,6 +530,7 @@ func hurt_player(damage: float, type: String = "physical") -> void:
 	damage -= absorbed
 	player.hp -= damage
 	combat_age = 0
+	if is_instance_valid(source): source.landed_attack()
 	float_text(player.position+Vector3.UP*1.8,"−%d" % roundi(damage),Color(1,.35,.25))
 	if player.hp<=0:
 		player.dead = true
@@ -608,7 +610,7 @@ func tick_pickups(dt: float) -> void:
 		pickups.remove_at(i)
 		save_run()
 
-func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type: String, piercing: bool = false) -> void:
+func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type: String, piercing: bool = false, source = null) -> void:
 	var direction = (at-from).normalized()
 	var finish: Material = Art.statue_material() if not friendly and type=="arrow" else Art.material("gold" if friendly else "marble",Color(.35,.7,1) if type=="ice" else (Color(.65,.35,1) if type=="arcane" else (Color(1,.3,.05) if type=="fire" else Color(.9,.67,.45))))
 	var node = Art.model("arrow" if type=="arrow" else "gem",Vector3(.09,.9,.09) if type=="arrow" else Vector3(1.5,.5,.6),finish)
@@ -616,7 +618,7 @@ func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type:
 	node.position = from + Vector3.UP
 	# The imported arrow tip points down local Y; rotate it into flight.
 	node.rotation = Vector3(-PI/2 if type=="arrow" else 0,atan2(direction.x,direction.z),0)
-	projectiles.append({"node":node,"direction":direction,"damage":damage,"friendly":friendly,"age":0.0,"type":type,"piercing":piercing,"hit":[]})
+	projectiles.append({"node":node,"direction":direction,"damage":damage,"friendly":friendly,"age":0.0,"type":type,"piercing":piercing,"hit":[],"source":source})
 
 func tick_projectiles(dt: float) -> void:
 	for i in range(projectiles.size()-1,-1,-1):
@@ -637,7 +639,7 @@ func tick_projectiles(dt: float) -> void:
 						a.hit(p.damage,"physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type))
 						p.hit.append(a.uid)
 					else:
-						hurt_player(p.damage,"frost" if p.type=="ice" else "physical")
+						hurt_player(p.damage,"frost" if p.type=="ice" else "physical",p.source)
 						if p.type=="ice" and player.invulnerable<=0: slowed = 5
 					if not p.piercing:
 						remove = true
@@ -650,18 +652,19 @@ func blast(at: Vector3, radius: float, damage: float, friendly: bool) -> void:
 	effect(at,radius*2,Color(1,.55,.13,.95),.6)
 	area_damage(at,radius,damage,friendly)
 
-func area_damage(at: Vector3, radius: float, damage: float, friendly: bool) -> void:
+func area_damage(at: Vector3, radius: float, damage: float, friendly: bool, source = null) -> void:
 	var candidates: Array = enemies if friendly else [player]
 	for a in candidates:
 		if a.dead or a.position.distance_to(at)>radius or not world.clear_line(at,a.position): continue
 		if friendly: a.hit(damage)
-		else: hurt_player(damage)
+		else: hurt_player(damage,"physical",source)
 
 # The Oracle's lobbed fireball; it deals area damage when it lands.
-func fireball(from: Vector3, at: Vector3, radius: float, damage: float, seconds: float) -> void:
+func fireball(from: Vector3, at: Vector3, radius: float, damage: float, seconds: float, source = null) -> void:
 	var ball = preload("res://scripts/fireball.gd").new()
 	world.add_child(ball)
 	ball.setup(self,from,at,radius,damage,seconds)
+	ball.source = source
 	fireballs.append(ball)
 
 func tick_fireballs(dt: float) -> void:
@@ -673,13 +676,13 @@ func tick_fireballs(dt: float) -> void:
 
 # The Oracle's frost nova: frost damage and the ice slow to the hero anywhere
 # within the blast, unless evading or behind a wall.
-func frost_nova(center: Vector3, radius: float, damage: float) -> void:
+func frost_nova(center: Vector3, radius: float, damage: float, source = null) -> void:
 	var nova = preload("res://scripts/frost_nova.gd").new()
 	world.add_child(nova)
 	nova.setup(self,center,radius)
 	novas.append(nova)
 	if player.dead or player.position.distance_to(center)>radius or not world.clear_line(center,player.position): return
-	hurt_player(damage,"frost")
+	hurt_player(damage,"frost",source)
 	if player.invulnerable<=0: slowed = 5
 
 func effect(at: Vector3, diameter: float, color: Color, duration: float) -> Dictionary:
