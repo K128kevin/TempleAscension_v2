@@ -58,8 +58,8 @@ func setup(owner_game) -> void:
 		theme.set_stylebox(state,"Button",panel_style(Color(.12,.13,.14,.96) if state=="normal" else Color(.24,.23,.20),gold))
 	root.theme = theme
 	hover_health = bar(Color(.88,.055,.04),root)
-	hover_health.custom_minimum_size = Vector2(72,8)
-	hover_health.size = Vector2(72,8)
+	hover_health.custom_minimum_size = Vector2(72,5)
+	hover_health.size = Vector2(72,5)
 	hover_health.z_index = 1
 	hover_health.visible = false
 	var hover_background = StyleBoxFlat.new()

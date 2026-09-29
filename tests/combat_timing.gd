@@ -257,6 +257,7 @@ func test():
 			if enemy.cooldown>old_cooldown:
 				starts+=1
 				check(is_zero_approx(phase(enemy.visual)),"AI attack starts at wind-up: "+kind)
+				check(not enemy.warning.visible,"No red seal under an attacking enemy: "+kind)
 				if kind=="archer": check(enemy.visual.state=="ArcherShot" and absf(enemy.attack_cycle()-2.42)<.001,"Archers notch, draw and shoot, at the same time between shots")
 				var duration: float=enemy.visual.animator.current_animation_length/enemy.visual.animator.get_playing_speed()
 				# The Oracle's long cast keeps a brief follow-through rather than the
@@ -265,14 +266,21 @@ func test():
 				else: check(absf(duration-enemy.windup-enemy.attack_recovery)<.001,"AI contact and recovery fit the clip: "+kind)
 			clock+=1.0/60
 			if clock>15: check(false,"AI attack test timed out: "+kind); break
-		# A hit mid-wind-up pushes the attack back by half the unit's normal time
-		# between attacks, holding the pose for that time.
-		enemy.cooldown=0; enemy.busy=0; enemy.windup=0; enemy.pushback_step=0
+		# A hit mid-wind-up breaks the attack off: the enemy flinches, is rooted
+		# for half its normal time between attacks, then starts a fresh swing.
+		enemy.cooldown=0; enemy.busy=0; enemy.windup=0; enemy.pushback_step=0; enemy.hit_stun=0
 		enemy.tick(.01); enemy.tick(.1)
-		var before_phase: float=phase(enemy.visual); var before_windup: float=enemy.windup
-		enemy.hit(0); enemy.tick(.1)
+		check(enemy.windup>0,"Enemy is mid-wind-up: "+kind)
+		enemy.hit(0)
 		var push: float=.5*enemy.attack_cycle()
-		check(absf(phase(enemy.visual)-before_phase)<.001 and absf(enemy.windup-(before_windup+push-.1))<.001,"Hit mid-wind-up pushes the attack back by half the attack time and holds the pose: "+kind)
+		check(enemy.windup==0 and enemy.visual.state.trim_prefix("Shield") in ["Hit","HitHead"] and absf(enemy.cooldown-push)<.001 and absf(enemy.hit_stun-push)<.001,"Hit mid-wind-up interrupts the swing with a flinch: "+kind)
+		var restarted=false
+		for step in int((push+.2)*60):
+			enemy.tick(1.0/60)
+			if enemy.windup>0 and not restarted:
+				restarted=true
+				check(is_zero_approx(phase(enemy.visual)) or phase(enemy.visual)<.05,"The swing starts again from the beginning after the delay: "+kind)
+		check(restarted,"The enemy attacks again after the delay: "+kind)
 		enemy.windup=0; enemy.busy=0; enemy.warning.visible=false
 		enemy.hit(0)
 		check(enemy.visual.state.trim_prefix("Shield") in ["Hit","HitHead"] and enemy.visual.reaction_time>0,"Idle enemy flinches when hit: "+kind)

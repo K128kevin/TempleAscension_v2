@@ -56,7 +56,7 @@ func verify():
 				enemy.hp=enemy.max_hp*ratio; game.update_enemy_hover()
 				check(absf(bar.value/bar.max_value-ratio)<.001,"Hover bar tracks the enemy's current health")
 			var head: Vector2=game.world.camera.unproject_position(enemy.position+Vector3.UP*enemy.config.size*2.25)
-			check(bar.size==Vector2(72,8) and absf(bar.get_global_rect().get_center().x-head.x)<1 and bar.get_global_rect().end.y<head.y,"Small bar follows the head in logical viewport coordinates")
+			check(bar.size==Vector2(72,5) and absf(bar.get_global_rect().get_center().x-head.x)<1 and bar.get_global_rect().end.y<head.y,"Small bar follows the head in logical viewport coordinates")
 			check(bar.mouse_filter==Control.MOUSE_FILTER_IGNORE,"Health bar does not intercept attacks")
 			if size==Vector2i(1280,800) and zoom==15:
 				enemy.hp=enemy.max_hp*.5; game.update_enemy_hover()

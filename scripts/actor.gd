@@ -77,6 +77,8 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 		visual.setup(true,config.color,config.weapon,config.size,kind)
 		if kind == "boss": visual.crown()
 		visual.animator.pause()
+	# The red ground seal is no longer shown under attacking enemies; the node
+	# stays for the attack code that hides it.
 	warning = Art.seal(3.4,Color(1,.2,.08,.75))
 	warning.position.y = .06
 	warning.visible = false
@@ -144,7 +146,6 @@ func tick(dt: float) -> void:
 			windup = 1.0
 			cast_count = -1
 			attack_point = player.position
-			warning.visible = true
 			visual.play("Cast",windup/.5)
 			game.toast("THE CROWN'S GAZE — keep moving around the statue")
 	if windup > 0:
@@ -170,7 +171,6 @@ func tick(dt: float) -> void:
 			cast_total = windup
 			cast_ring = game.effect(attack_point,4.4,Color(1,.25,.12),FIRE_CAST+fireball_flight)
 		cooldown = config.interval + windup
-		warning.visible = true
 		var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
 		var duration = windup+.25
 		var weapon_index = Data.WEAPONS.find(config.weapon)
@@ -307,11 +307,22 @@ func push_back() -> void:
 	var delay: float = PUSHBACK[pushback_step]*attack_cycle()
 	pushback_step += 1
 	if windup > 0:
-		# Caught winding up or casting: the attack is pushed back, the pose held.
-		windup += delay
-		visual.animation_delay += delay
-		# Keep the fire warning up until the delayed fireball lands.
-		if not cast_ring.is_empty(): cast_ring.life += delay; cast_ring.total += delay
+		# Caught winding up or casting: the attack is broken off. The enemy
+		# flinches, stays rooted for the delay, then starts a fresh attack.
+		windup = 0
+		warning.visible = false
+		if not cast_ring.is_empty(): cast_ring.life = minf(cast_ring.life,.15)
+		cast_ring = {}
+		cast_total = 0
+		busy = 0
+		if kind == "boss" and cast_count == -1:
+			# The crown's gaze is retried after the delay, not lost to its cooldown.
+			cast_count = 0
+			laser_cooldown = delay
+		cooldown = delay
+		hit_stun = delay
+		hit_reactions += 1
+		visual.react("HitHead" if hit_reactions%2==0 else "Hit",minf(delay,.4))
 	else:
 		cooldown += delay
 		hit_stun = maxf(hit_stun,delay)

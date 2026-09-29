@@ -561,7 +561,6 @@ func enemy_died(enemy) -> void:
 		var levels = Data.gain_xp(run,reward)
 		float_text(enemy.position,"+%d XP" % reward,Color(.55,.8,1))
 		run.energy = minf(Data.max_energy(run),run.energy+Data.passive(run,"battle_rhythm"))
-		if levels>0: toast("Level %d! +%d attribute points and +%d skill points. C: attributes · K: skills" % [run.level,levels*3,levels])
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
 	if carriers.has(enemy.uid):
 		var drop: Dictionary = carriers[enemy.uid].duplicate()
