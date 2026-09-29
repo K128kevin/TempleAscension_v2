@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
+outputs=['SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -204,6 +204,35 @@ for f,pose in enumerate(poses):
  bpy.context.view_layer.update()
  keys(length*30*f/60)
 finish('SwordIdle',a,length)
+
+# Sword-and-shield run: the sprint's legs and body, with each arm eased most of
+# the way toward the SwordIdle carry, so the sword stays low and forward instead
+# of swinging back through the head, and the shield stays at his side.
+idle_arms={}
+rig.animation_data.action=bpy.data.actions['SwordIdle'];frame(0)
+for b in rig.pose.bones:idle_arms[b.name]=b.matrix_basis.copy()
+ARM_CARRY={'_r':.75,'_l':.8}
+def carried(name):
+ if not name.startswith(('clavicle','upperarm','lowerarm','hand')):return 0.0
+ return ARM_CARRY.get(name[-2:],0.0)
+run=bpy.data.actions['Run']
+length=run.frame_range.y/30
+rig.animation_data.action=run
+poses=[]
+for f in range(61):
+ frame(length*f/60)
+ poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+a=action('SwordRun')
+for f,pose in enumerate(poses):
+ for b in rig.pose.bones:
+  m=pose[b.name];w=carried(b.name)
+  if w>0:
+   l1,r1,s1=m.decompose();l2,r2,s2=idle_arms[b.name].decompose()
+   m=Matrix.LocRotScale(l1.lerp(l2,w),r1.slerp(r2,w),s1)
+  b.matrix_basis=m
+ bpy.context.view_layer.update()
+ keys(length*30*f/60)
+finish('SwordRun',a,length)
 
 # Two-bone leg IK; the foot keeps its planted orientation.
 def leg(side,target,pole):

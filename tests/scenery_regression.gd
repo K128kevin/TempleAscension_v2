@@ -47,11 +47,20 @@ func test():
 				if index==2 and world.layout.court.grow(1).has_point(cell): continue
 				var lit = 0.0
 				for at in world.torch_lights: lit += world.torch_light(at,world.layout.to_world(cell))
-				if lit<world.LIT_LEVEL: dark += 1
-			check(dark==0,"Torches light every hallway and room tile (%d)" % (index+1))
+				if lit<world.LIT_LEVEL and not world.ambient_only.has(cell): dark += 1
+			check(dark==0,"Wall torches light every tile they can reach (%d)" % (index+1))
+			var near_wall = 0
+			for cell in world.ambient_only:
+				var at: Vector3 = world.layout.to_world(cell)
+				for spot in world.torch_walls:
+					if spot.distance_to(at)<3.0: near_wall += 1; break
+			check(near_wall<=maxi(1,world.ambient_only.size()/20),"Tiles left to ambient light are room centers beyond a wall torch's reach (%d)" % (index+1))
+			var on_walls = true
+			for at in world.torch_lights: on_walls = on_walls and world.torch_walls.has(at)
+			check(on_walls,"Every torch is mounted on a wall (%d)" % (index+1))
 			var solid = true
 			for cell in world.solid_floor: solid = solid and not world.fits(world.layout.to_world(cell),.1)
-			check(solid,"Standing braziers and stairs are solid (%d)" % (index+1))
+			check(solid,"The ascent stairs are solid (%d)" % (index+1))
 		world.visibility_timer = 0
 		world.update_visibility(world.spawn,1.0)
 		var shown_walls = 0; var hidden_walls = 0

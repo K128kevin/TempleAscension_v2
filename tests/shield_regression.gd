@@ -42,6 +42,17 @@ func verify():
 	for i in [0,1]:
 		var side: Vector3=actors[i].global_basis.x.normalized()
 		check(actors[i].state=="SwordIdle" and actors[i].shield_item.global_basis.z.normalized().dot(side)>.9,"Sword-and-shield idle holds the shield facing sideways: %d" % i)
+	# Running with the larger sword never swings the blade through the head.
+	for i in [0,1]:
+		var nearest = INF
+		for step in 20:
+			pose(actors[i],"SwordRun",step/20.0); await frames(1)
+			var head: Vector3=(actors[i].skeleton.global_transform*actors[i].skeleton.get_bone_global_pose(actors[i].skeleton.find_bone("Head"))).origin+Vector3.UP*.08
+			var sword: Node3D=actors[i].weapon_item
+			nearest=minf(nearest,Geometry3D.get_closest_point_to_segment(head,sword.global_transform*Vector3.ZERO,sword.global_transform*Vector3.UP).distance_to(head))
+		check(nearest>.3,"The sword clears the head while running (%.2fm): %d" % [nearest,i])
+		actors[i].state="Idle"; actors[i].locomotion(true,false)
+		check(actors[i].state=="SwordRun","A sword bearer runs with the sword carried low: %d" % i)
 	# The gladiator carries a spear and a tall scutum, upright and facing forward.
 	for i in [2,3]:
 		var actor=actors[i]; var shield: Node3D=actor.shield_item
@@ -78,7 +89,8 @@ func verify():
 				var along_arm: float=(center-forearm.origin).dot((wrist-forearm.origin).normalized())/forearm.origin.distance_to(wrist)
 				check(absf(local_wrist.x)<.35 and local_wrist.y>.18 and local_wrist.y<.82,"Wrist is behind the shield interior, clear of the rim: %s %.2f / %d" % [clip,phase,i])
 				check(along_arm>.35 and along_arm<.75,"Shield center rests over the forearm: %s %.2f / %d" % [clip,phase,i])
-				check(shield.global_basis.z.normalized().dot(-forearm.basis.z.normalized())>.99,"Shield face stays on the outside of the forearm: %s %.2f / %d" % [clip,phase,i])
+				# The tower shield is turned upright from the forearm, its face still outward.
+				check(shield.global_basis.z.normalized().dot(-forearm.basis.z.normalized())>.9,"Shield face stays on the outside of the forearm: %s %.2f / %d" % [clip,phase,i])
 		for actor in actors: pose(actor,clip,.35)
 		await snapshot(clip)
 	for actor in actors.slice(0,2):

@@ -22,8 +22,11 @@ var locomotion_rate = 1.0
 var enemy_kind = ""
 # Remaining time of a hit reaction; locomotion waits for it to finish.
 var reaction_time = 0.0
-const SHIELD_SIZE = Vector3(.48,.62,.12)
-const SHIELD_CENTER = Vector3(0,.14,-.135)
+# The warrior's wooden tower shield (the scutum mesh in planked wood). Measured
+# from the SwordIdle stance: upright at his side, face turned outward.
+const SHIELD_SIZE = Vector3(.56,1.15,.18)
+const SHIELD_ROTATION = Quaternion(.982,-.167,-.046,-.076)
+const SHIELD_CENTER = Vector3(-.008,.142,-.118)
 # The gladiator's tall curved scutum, strapped over the same forearm.
 const SCUTUM_SIZE = Vector3(.58,.95,.2)
 # Measured from the SpearShieldIdle stance: upright, facing forward and 20° out
@@ -60,14 +63,14 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		elif "SuperHero" in mesh.name:
 			# Keep supplied head/skin surfaces; armor only on the torso/limb mesh.
 			var skin = StandardMaterial3D.new()
-			skin.albedo_texture = load("res://assets/textures/hero_skin.png")
+			skin.albedo_texture = load("res://assets/textures/hero_kit.png")
 			skin.roughness = .65
 			mesh.material_override = skin
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
+		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","SpearShieldIdle","SpearLunge","ShieldStab","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
-				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
+				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
 	skeleton.skeleton_updated.connect(align_weapon)
 	equip(weapon)
 	play(idle_action())
@@ -88,14 +91,15 @@ func equip(weapon: String) -> void:
 	hand.bone_name = "hand_l" if weapon == "bow" else "hand_r"
 	skeleton.add_child(hand)
 	equipment = hand
-	var sizes = {"sword":Vector3(.15,1.0,.07),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22)}
+	var sizes = {"sword":Vector3(.19,1.3,.09),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22)}
 	weapon_size = sizes[weapon]
 	var item = Art.model(weapon, weapon_size,Art.statue_material() if is_stone else null)
 	weapon_item = item
 	hand.add_child(item)
 	# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
 	item.rotation.x = PI / 2
-	item.position = Vector3(0,.075,-.17 if weapon != "bow" else -.55)
+	# The grip sits a fixed share up each hilt; the larger sword's hilt is longer.
+	item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22}.get(weapon,-.17))
 	if weapon in ["spear","bow"]:
 		item.top_level = true
 		if weapon == "bow":
@@ -113,13 +117,14 @@ func equip(weapon: String) -> void:
 		shield_attachment = BoneAttachment3D.new()
 		shield_attachment.bone_name = "lowerarm_l"
 		skeleton.add_child(shield_attachment)
-		var shield = Art.model("scutum" if scutum else "shield",TOWER_SIZE if tower else (SCUTUM_SIZE if scutum else SHIELD_SIZE),Art.statue_material() if is_stone else null)
+		var finish = Art.statue_material() if is_stone else Art.material("wood",Color(.92,.85,.78))
+		var shield = Art.model("scutum",TOWER_SIZE if tower else (SCUTUM_SIZE if scutum else SHIELD_SIZE),finish)
 		shield_item = shield
 		shield_attachment.add_child(shield)
 		# The imported shield pivots at its bottom edge. Center its back against
 		# the outer forearm, keeping the wrist inside its face rather than at a rim.
 		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(TOWER_SIZE if tower else SCUTUM_SIZE)
-		else: shield.rotation.y = PI
+		else: shield.basis = Basis(SHIELD_ROTATION.normalized())*Basis.from_scale(SHIELD_SIZE)
 		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5+(TOWER_DROP if tower else 0.0),0)
 	if state in ["Idle","SwordIdle","SpearShieldIdle","BowIdle","SpearIdle"]: play(idle_action())
 
@@ -189,7 +194,7 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	animation_delay = 0
 	pending_animation_time = 0
 	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
-	if action == "BowRun": locomotion_rate = speed_scale
+	if action in ["BowRun","SwordRun"]: locomotion_rate = speed_scale
 	animator.play(clips[action], minf(.08,duration*.1) if duration>0 else .08, speed)
 	# play() resumes an already assigned clip. Repeated attacks must each
 	# start a fresh wind-up, even when the last recovery is still playing.
@@ -219,6 +224,8 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 	if dead or busy or reaction_time>0: return
 	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
 	if moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
+	# Carry the sword low while running so the blade never swings through the head.
+	elif moving and not crouch and weapon_kind=="sword" and clips.has("SwordRun"): wanted = "SwordRun"
 	var rate = clampf(speed_scale, .1, 4.0)
-	if wanted != state or (wanted == "BowRun" and not is_equal_approx(rate,locomotion_rate)):
+	if wanted != state or (wanted in ["BowRun","SwordRun"] and not is_equal_approx(rate,locomotion_rate)):
 		play(wanted,0.0,rate)

@@ -120,7 +120,8 @@ of maximum per second. Above the base:
 | Vitality | +10 maximum health |
 | Willpower | +3 maximum energy and +0.1 energy per second |
 
-Warrior starts with sword/shield and Cleave; Ranger with bow and Power Shot;
+Warrior starts with a large sword, a wooden tower shield and Cleave, wearing bronze
+scale armor and brown shorts; Ranger with bow and Power Shot;
 Wizard with staff and Firebolt. The first skill point is spent on that starter.
 Each class has the plan's eight active skills and four passives, unlocking at
 levels 1, 4, 8, 12 and 18. Active skills have five ranks; passives have three.

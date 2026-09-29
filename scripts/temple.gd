@@ -17,6 +17,10 @@ var occlusion_tick = 0.0
 var floor_nodes: Array = []
 var shadow_torches: Array[OmniLight3D] = []
 var torch_lights: Array[Vector3] = []
+# The wall each torch spot is mounted on, as a direction from the torch.
+var torch_walls: Dictionary = {}
+# Room-center tiles no wall torch reaches; the ambient light keeps them readable.
+var ambient_only: Dictionary = {}
 var fountain
 var desert_backdrop: Sprite3D
 var terrace_moonlight: DirectionalLight3D
@@ -57,7 +61,8 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	e.background_color = Color.BLACK
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(.35,.40,.50)
-	e.ambient_light_energy = .12
+	# Enough fill that the middle of a large room, beyond the wall torches, stays readable.
+	e.ambient_light_energy = .24
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.fog_enabled = false
 	env.environment = e
@@ -97,7 +102,10 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			if not edges.has(key): edges[key] = {"horizontal":horizontal_edge,"line":line,"direction":direction,"low":low,"along":[]}
 			edges[key].along.append(int(at.x if horizontal_edge else at.z))
 			# Small wall torches sit inside the boundary, with no floor obstruction.
-			if not layout.stairs.has_point(cell): torch_candidates.append(at+Vector3(direction.x,0,direction.y)*.28)
+			if not layout.stairs.has_point(cell):
+				var spot = at+Vector3(direction.x,0,direction.y)*.28
+				torch_candidates.append(spot)
+				torch_walls[spot] = Vector3(direction.x,0,direction.y)
 	bounds = Rect2(Vector2(lower)-Vector2(.5,.5),Vector2(upper-lower)+Vector2.ONE)
 	for edge in edges.values():
 		edge.along.sort()
@@ -264,11 +272,11 @@ func setup_court_torches() -> void:
 	var last: Vector3 = layout.to_world(layout.court.end-Vector2i.ONE)
 	var center = (first+last)*.5
 	for offset in [-8.0,8.0]:
-		torch(Vector3(center.x+offset,0,first.z-.28),true)
-		torch(Vector3(center.x+offset,0,last.z+.28),true)
+		torch(Vector3(center.x+offset,0,first.z-.28),true,Vector3.FORWARD)
+		torch(Vector3(center.x+offset,0,last.z+.28),true,Vector3.BACK)
 	for offset in [-4.5,4.5]:
-		torch(Vector3(first.x-.28,0,center.z+offset),true)
-		torch(Vector3(last.x+.28,0,center.z+offset),true)
+		torch(Vector3(first.x-.28,0,center.z+offset),true,Vector3.LEFT)
+		torch(Vector3(last.x+.28,0,center.z+offset),true,Vector3.RIGHT)
 
 func setup_summit_understructure(stone: Material) -> void:
 	# A continuous stone body wraps beneath the southern front and full east
@@ -349,8 +357,9 @@ func add_light(levels: Dictionary, at: Vector3) -> void:
 			var cell = Vector2i(x,y)
 			if levels.has(cell): levels[cell] += torch_light(at,layout.to_world(cell))
 
-# Evenly spaced wall torches first, then more wherever any floor tile is still
-# too dark: another wall torch if one is close, otherwise a standing brazier.
+# Evenly spaced wall torches first, then another wall torch wherever a floor
+# tile is still too dark and a wall is close. Torches are only ever on walls;
+# the few room-center tiles beyond their reach rely on the ambient light.
 func light_floor(candidates: Array[Vector3]) -> void:
 	var levels: Dictionary = {}
 	for cell in layout.cells:
@@ -363,7 +372,7 @@ func light_floor(candidates: Array[Vector3]) -> void:
 	for at in candidates:
 		if level==2 and layout.court.grow(1).has_point(layout.to_cell(at)): continue
 		if nearest_torch(placed,at)<5.5: continue
-		torch(at,true)
+		torch(at,true,torch_walls[at])
 		placed.append(at)
 		add_light(levels,at)
 	var given_up: Dictionary = {}
@@ -381,48 +390,24 @@ func light_floor(candidates: Array[Vector3]) -> void:
 		for at in candidates:
 			var d = at.distance_to(target)
 			if d<best and nearest_torch(placed,at)>=3.0: best = d; choice = at
-		if choice==Vector3.INF: choice = brazier_spot(target,placed)
 		if choice==Vector3.INF:
 			given_up[darkest] = true
 			continue
-		torch(choice,true)
+		torch(choice,true,torch_walls[choice])
 		placed.append(choice)
 		add_light(levels,choice)
-		var cell = layout.to_cell(choice)
-		if choice.is_equal_approx(layout.to_world(cell)):
-			# Standing braziers are solid; the room around them stays open.
-			layout.cells.erase(cell)
-			solid_floor[cell] = true
+	ambient_only = given_up
 
 func nearest_torch(placed: Array[Vector3], at: Vector3) -> float:
 	var nearest = INF
 	for other in placed: nearest = minf(nearest,other.distance_to(at))
 	return nearest
 
-# An open floor tile near `target` for a freestanding brazier: surrounded by
-# floor, clear of the entrance, the ascent and other torches.
-func brazier_spot(target: Vector3, placed: Array[Vector3]) -> Vector3:
-	# The summit arena stays open for the boss fight; its moonlight fills the middle.
-	if level==5: return Vector3.INF
-	var center = layout.to_cell(target)
-	var best = Vector3.INF
-	var distance = 2.5
-	for x in range(center.x-2,center.x+3):
-		for y in range(center.y-2,center.y+3):
-			var cell = Vector2i(x,y)
-			var at = layout.to_world(cell)
-			var d = at.distance_to(target)
-			if d>=distance or layout.on_terrace(cell): continue
-			if at.distance_to(spawn)<3.0 or at.distance_to(exit_point)<3.0 or nearest_torch(placed,at)<3.0: continue
-			var open = true
-			for dx in range(-1,2):
-				for dy in range(-1,2):
-					if not layout.cells.has(cell+Vector2i(dx,dy)): open = false
-			if open: best = at; distance = d
-	return best
-
-func torch(at: Vector3, cast_shadows: bool) -> void:
-	place("brazier",at,Vector3(.6,1.6,.6),Art.material("gold"))
+func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
+	torch_walls[at] = wall
+	var fixture = place("brazier",at,Vector3(.6,1.6,.6),Art.material("gold"))
+	# The fixture's back plate is on its local -Z side; turn it flat to the wall.
+	fixture.rotation.y = atan2(-wall.x,-wall.z)
 	var flame = place("torch_lit",at+Vector3.UP,Vector3(.5,1.0,.5))
 	for mesh in flame.find_children("*","MeshInstance3D",true,false):
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

@@ -27,10 +27,11 @@ static func material(kind: String, tint: Color = Color.WHITE) -> StandardMateria
 	var m = StandardMaterial3D.new()
 	m.albedo_color = tint
 	m.roughness = .85
-	var texture_name = {"stone":"limestone", "marble":"statue_marble", "armor":"bronze_scales"}.get(kind, "statue_marble")
+	var texture_name = {"stone":"limestone", "marble":"statue_marble", "armor":"bronze_scales", "wood":"wood_planks"}.get(kind, "statue_marble")
 	m.albedo_texture = load("res://assets/textures/%s.png" % texture_name)
 	m.uv1_triplanar = true
-	m.uv1_scale = Vector3.ONE * (1.1 if kind == "armor" else .35)
+	# Wood is projected in the prop's own unit space: about six planks over its height.
+	m.uv1_scale = Vector3.ONE * {"armor":1.1,"wood":1.0}.get(kind,.35)
 	if kind in ["armor","gold"]:
 		m.metallic = .65
 		m.roughness = .4

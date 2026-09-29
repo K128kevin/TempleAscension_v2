@@ -35,15 +35,22 @@ are preserved.
 Hallways are five tiles wide and rooms 8–15 tiles across. Torches are spaced
 along the walls, then added wherever the estimated floor light (the omni falloff
 and floor incidence of every torch) would fall below a dim but readable level.
-Where no wall is close enough, a standing brazier is placed on open floor; it is
-solid. Torches beyond line of sight are switched off, keeping about a dozen lights
-active in any view.
+Every torch is mounted on a wall, its fixture turned so the back plate lies flat
+against it; there are no freestanding torches. Room centers beyond a wall torch's
+reach rely on a raised ambient fill (0.24), enough to keep the middle of large rooms
+readable. Torches beyond line of sight are switched off, keeping about a dozen lights
+active in any view. The torch shader hides the fixture's authored flame, both its
+orange tongues and its pale core, so only the particle flame shows.
 
 Warrior, Ranger and Wizard share the imported hero rig and armor. Starting
-equipment distinguishes them: sword/shield, bow, or staff. The shield uses the
-existing imported model centered against the left forearm, with its face pointing
-outward. This mounting follows idle, movement and attack poses. With a sword equipped, the SwordIdle stance (the library idle with the
-left forearm turned 60° outward) holds the shield facing out to the side. Staff attacks reuse the Cast
+equipment distinguishes them: a larger sword with a wooden tower shield, a bow, or
+a staff. The tower shield is the scutum mesh (1.15m) in planked wood, projected in
+the shield's own space from the plank area of the Quaternius furniture trim sheet
+(`assets/textures/wood_planks.png`, cut by `tools/paint_hero.py`). It rides the left
+forearm through idle, movement and attack poses; in the SwordIdle stance (the library
+idle with the left forearm turned 60° outward) it stands upright at his side, face
+outward. SwordRun is the sprint with both arms eased toward that carry, so the sword
+stays low and never swings through the head. Staff attacks reuse the Cast
 animation. Class projectiles reuse the arrow and gem meshes; traps, defensive
 effects and area warnings reuse the transparent seal sprite with distinct colors
 and timing. This update adds no externally sourced or generated image assets.
@@ -138,12 +145,12 @@ are under `assets/models/props/`. Original downloads are under `source_art/` on
 this workstation and excluded from native exports. Prop normalization preserves mesh topology; it recenters bounds, corrects orientation, and repacks textures.
 `tools/prepare_guardian.py` makes a crowd variant of the supplied character: it
 merges the stone surfaces and reduces the mesh to about 5,450 export vertices,
-while retaining the skeleton and all twenty-nine clips. The full hero remains unchanged.
+while retaining the skeleton and all thirty clips. The full hero remains unchanged.
 
 `tools/prepare_enemy_outfits.py` fits the KayKit clothing meshes to that existing
 Quaternius skeleton, remaps their skin weights, and joins each outfit into one
 crowd surface. It exports `guardian_gladiator.glb`, `guardian_archer.glb`,
-`guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 29 clips.
+`guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 30 clips.
 The gladiator is a murmillo: the bare statue torso wears the barbarian's studded
 belt and fringe (trimmed below the chest) and the knight's plated right arm, with
 bare legs, and the knight helm reshaped from its own vertices, sized to the statue's
@@ -223,7 +230,7 @@ external output folder. The icon reuses the generated seal.
    luminous dust and delicate radial wisps, hollow transparent center and
    background. No text or letters. White linework tintable for danger, healing
    and exit markers."
-5. `assets/textures/hero_skin.png`
+5. `assets/textures/hero_skin.png` (retained; the hero now wears `hero_kit.png`, below)
    Edited from the base character's `T_Superhero_Male_Dark.png`, after inspecting it.
    Prompt: "This is a UV texture atlas, not a picture of a character. Preserve
    canvas dimensions, UV island locations, silhouettes, face, hands, feet, torso,
@@ -264,8 +271,14 @@ external output folder. The icon reuses the generated seal.
    Final prompt:
    > Use case: stylized-concept. Asset type: edited landscape background matte for a game. Input image 1 is the edit target: the existing dark moonlit desert with ancient ruins. Change the viewpoint and perspective: look downward from the fourth or fifth floor of a building, approximately 15 metres above the nearby desert floor, with a distinctly steeper downward camera angle. Bring the desert much closer to the viewer: nearby dunes, scattered rocks, ruined stone foundations and a few weathered columns should be larger, with clearly visible top surfaces below us. It must feel like looking down from an upper-story terrace at ground nearby, rather than looking straight out across a distant valley. Frame the ground across almost the entire image; push the distant mountain horizon into the uppermost 8 percent with only a very narrow sky strip, allowing the moon to be outside the frame. Preserve the same ancient desert setting, winding river farther back to the right, scattered colonnade ruins, restrained painterly realism, and very dark navy-charcoal and sand-brown palette. Preserve dim cool silver-blue moonlight along dunes and stone edges; no daylight or bright illumination. Keep a convincing natural transition from nearby ground at the bottom to distant mountains at the top. No foreground balcony, railing, building facade, people, interface, text, border or watermark. Landscape 3:2.
 
-The generated atlas uses the original UV layout and is applied to the hero's
-body surface. Statue materials use generated marble; architecture uses generated
+The hero's body texture, `assets/textures/hero_kit.png`, is baked by
+`tools/paint_hero.py` through the character's own UVs. Each vertex takes a region from
+its skin weights and rest-pose height: bronze scale armor over the chest, back,
+shoulders and upper arms, projected onto the body in 3D from generated image 2 so
+its scales keep one size and direction across seams; a dark leather belt; brown
+woven shorts to mid-thigh; leather forearm bracers; and bare skin from the
+character's original `T_Superhero_Male_Dark.png` elsewhere, including both legs.
+Cloth and leather are procedural. Statue materials use generated marble; architecture uses generated
 limestone and marble. Original source-pack materials remain on selected small
 props and vegetation. The bronze tile is also available as a reusable material.
 
