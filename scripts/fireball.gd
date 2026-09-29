@@ -5,9 +5,9 @@ extends Node3D
 ## or light; no mesh geometry is generated.
 const SHADER = preload("res://assets/shaders/fireball.gdshader")
 const Art = preload("res://scripts/assets.gd")
+const Vfx = preload("res://scripts/vfx.gd")
 const EXPLOSION_TIME = .75
 const LIFETIME_AFTER_IMPACT = 4.0
-static var soft_dot: GradientTexture2D
 
 var game
 var origin = Vector3.ZERO
@@ -49,7 +49,7 @@ func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_da
 	carry_light.omni_range = 4.5
 	carry_light.omni_attenuation = 1.4
 	add_child(carry_light)
-	trail = particles(48,.4,false,true)
+	trail = Vfx.particles(self,48,.4,false,true)
 	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	trail.emission_sphere_radius = .12
 	trail.direction = Vector3.UP
@@ -59,8 +59,8 @@ func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_da
 	trail.gravity = Vector3(0,1.4,0)
 	trail.scale_amount_min = .25
 	trail.scale_amount_max = .45
-	trail.scale_amount_curve = shrink_curve()
-	trail.color_ramp = ramp([0,.25,.6,1],[Color(1,.62,.22,.55),Color(1,.4,.08,.45),Color(.55,.12,.03,.25),Color(.1,.08,.07,0)])
+	trail.scale_amount_curve = Vfx.curve(1,0)
+	trail.color_ramp = Vfx.ramp([0,.25,.6,1],[Color(1,.62,.22,.55),Color(1,.4,.08,.45),Color(.55,.12,.03,.25),Color(.1,.08,.07,0)])
 	position = origin
 	game.sound.play("dash-whoosh",-17)
 
@@ -80,45 +80,6 @@ func billboard(material: ShaderMaterial, size: float) -> MeshInstance3D:
 	node.scale = Vector3.ONE*size
 	add_child(node)
 	return node
-
-func particles(count: int, lifetime: float, one_shot: bool, additive: bool) -> CPUParticles3D:
-	if soft_dot == null:
-		soft_dot = GradientTexture2D.new()
-		soft_dot.width = 64; soft_dot.height = 64
-		soft_dot.fill = GradientTexture2D.FILL_RADIAL
-		soft_dot.fill_from = Vector2(.5,.5); soft_dot.fill_to = Vector2(1,.5)
-		soft_dot.gradient = Gradient.new()
-		soft_dot.gradient.colors = PackedColorArray([Color(1,1,1,1),Color(1,1,1,0)])
-	var material = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	material.vertex_color_use_as_albedo = true
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD if additive else BaseMaterial3D.BLEND_MODE_MIX
-	material.albedo_texture = soft_dot
-	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	var quad = QuadMesh.new()
-	quad.material = material
-	var p = CPUParticles3D.new()
-	p.mesh = quad
-	p.amount = count
-	p.lifetime = lifetime
-	p.one_shot = one_shot
-	p.local_coords = false
-	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(p)
-	return p
-
-func shrink_curve() -> Curve:
-	var c = Curve.new()
-	c.add_point(Vector2(0,1)); c.add_point(Vector2(1,0))
-	return c
-
-func ramp(offsets: Array, colors: Array) -> Gradient:
-	var g = Gradient.new()
-	g.offsets = PackedFloat32Array(offsets)
-	g.colors = PackedColorArray(colors)
-	return g
 
 # Returns false once every part of the effect has finished.
 func tick(dt: float) -> bool:
@@ -147,10 +108,7 @@ func tick(dt: float) -> bool:
 	return t<LIFETIME_AFTER_IMPACT
 
 func _process(_delta: float) -> void:
-	# Particles run on the engine clock; hold them while combat is paused.
-	var running = game!=null and game.mode=="playing"
-	for p in [trail,sparks,smoke]:
-		if is_instance_valid(p): p.speed_scale = 1.0 if running else 0.0
+	Vfx.hold_when_paused(game,[trail,sparks,smoke])
 
 func explode() -> void:
 	exploded = true
@@ -168,7 +126,7 @@ func explode() -> void:
 	flash.omni_attenuation = 1.3
 	flash.position = Vector3.UP*.7
 	add_child(flash)
-	sparks = particles(40,.75,true,true)
+	sparks = Vfx.particles(self,40,.75,true,true)
 	sparks.explosiveness = 1.0
 	sparks.direction = Vector3.UP
 	sparks.spread = 75
@@ -177,9 +135,9 @@ func explode() -> void:
 	sparks.gravity = Vector3(0,-9.0,0)
 	sparks.scale_amount_min = .07
 	sparks.scale_amount_max = .13
-	sparks.color_ramp = ramp([0,.4,1],[Color(1,.95,.6,1),Color(1,.5,.1,.9),Color(.7,.15,.03,0)])
+	sparks.color_ramp = Vfx.ramp([0,.4,1],[Color(1,.95,.6,1),Color(1,.5,.1,.9),Color(.7,.15,.03,0)])
 	sparks.emitting = true
-	smoke = particles(16,1.7,true,false)
+	smoke = Vfx.particles(self,16,1.7,true,false)
 	smoke.explosiveness = .85
 	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	smoke.emission_sphere_radius = radius*.35
@@ -192,9 +150,8 @@ func explode() -> void:
 	smoke.damping_max = 1.2
 	smoke.scale_amount_min = .9
 	smoke.scale_amount_max = 1.5
-	var grow = Curve.new(); grow.add_point(Vector2(0,.45)); grow.add_point(Vector2(1,1.6))
-	smoke.scale_amount_curve = grow
-	smoke.color_ramp = ramp([0,.15,1],[Color(.22,.18,.15,0),Color(.16,.14,.12,.6),Color(.09,.08,.08,0)])
+	smoke.scale_amount_curve = Vfx.curve(.45,1.6)
+	smoke.color_ramp = Vfx.ramp([0,.15,1],[Color(.22,.18,.15,0),Color(.16,.14,.12,.6),Color(.09,.08,.08,0)])
 	smoke.emitting = true
 	# Ground shockwave from the existing seal VFX, and a fading scorch mark.
 	shock = Art.seal(radius*2.2,Color(1,.6,.2,.9))
@@ -205,7 +162,7 @@ func explode() -> void:
 	dark.width = 128; dark.height = 128
 	dark.fill = GradientTexture2D.FILL_RADIAL
 	dark.fill_from = Vector2(.5,.5); dark.fill_to = Vector2(1,.5)
-	dark.gradient = ramp([0,.55,1],[Color(.05,.03,.02,.85),Color(.07,.04,.03,.5),Color(.08,.05,.03,0)])
+	dark.gradient = Vfx.ramp([0,.55,1],[Color(.05,.03,.02,.85),Color(.07,.04,.03,.5),Color(.08,.05,.03,0)])
 	scorch.texture = dark
 	scorch.pixel_size = radius*1.7/128.0
 	scorch.rotation.x = -PI/2

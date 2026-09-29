@@ -96,8 +96,9 @@ ascent. Invulnerability is a session toggle and starts off on each launch.
 
 The original 24 / 32 / 54 / 57 / 80 enemy counts are preserved. Gladiators,
 archers, fast Lion Guardians, spellcasting oracles and centurions activate as
-statues and alert nearby allies. The five floors now use the original game's
-seeded room-and-corridor format: 5–10 tile rooms, three-tile-wide passages,
+statues and alert nearby allies. Oracles cast two-second fireballs, shown by a cast
+bar, and answer a close approach with an instant frost nova that slows the hero. The five floors now use the original game's
+seeded room-and-corridor format: 8–15 tile rooms, five-tile-wide passages,
 extra connections that form loops, and ascent stairs in the most distant room.
 Floors grow from 50×50 to 74×74 tiles. The third floor includes a large central
 court with two entrances; floors four and five add mirrored wraparound galleries.

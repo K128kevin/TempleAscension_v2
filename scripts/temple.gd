@@ -27,7 +27,7 @@ const WALL_HEIGHT = 3.2
 const TORCH_ENERGY = 2.4
 const TORCH_RANGE = 9.0
 const TORCH_DECAY = 1.6
-const TORCH_HEIGHT = 2.05
+const TORCH_HEIGHT = 2.22
 # Estimated floor light, with Godot's omni falloff and floor incidence, that
 # still reads clearly in the dark temple: one torch at about three metres.
 const LIT_LEVEL = .12
@@ -450,7 +450,8 @@ func torch(at: Vector3, cast_shadows: bool) -> void:
 	add_child(light)
 	visibility_nodes.append(light)
 	var fire = preload("res://scripts/torch_flame.gd").new()
-	fire.position = at+Vector3.UP*2.08
+	# The flame rises from the torch's wick.
+	fire.position = at+Vector3.UP*1.96
 	# Stable spatial phases keep neighboring torches from pulsing in unison.
 	fire.setup(light,fposmod(at.x*12.9898+at.z*78.233,100.0))
 	add_child(fire)

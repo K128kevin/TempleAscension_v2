@@ -22,12 +22,16 @@ light floor contrasts with the dark stone statues; floor 3's court uses a faint 
 tint. It is procedural and adds no image asset.
 
 Torch fixtures retain the imported brazier and torch meshes. The static authored
-flame is masked out in `assets/shaders/torch.gdshader` and replaced by a small,
-camera-facing VFX sprite. `assets/shaders/torch_flame.gdshader` draws animated
-flame tongues, a warm core, soft edges and rising embers procedurally; it requires
-no new image asset. `scripts/torch_flame.gd` varies each existing local light
-smoothly by at most ten percent, with independent phases and slight warmth
-variation. Light range and the nearby-shadow budget are preserved.
+flame is masked out in `assets/shaders/torch.gdshader` and replaced by a living
+particle flame (`scripts/torch_flame.gd`): a small volume of soft glowing particles,
+so it has depth from every angle. Tongues rise from a white-hot core, stretch, and
+cool through orange to red as they fade, with the odd ember drifting up. A
+per-torch noise field drives random flicker and occasional gusts that gutter the
+flame; the same field sways the flame and shifts the light's brightness (within 14%),
+warmth and position, so the light shimmers with the flame. The light sits just
+above the torch cup. Particles stop simulating while a torch is out of sight. No
+image asset or mesh geometry is added. Light range and the nearby-shadow budget
+are preserved.
 Hallways are five tiles wide and rooms 8–15 tiles across. Torches are spaced
 along the walls, then added wherever the estimated floor light (the omni falloff
 and floor incidence of every torch) would fall below a dim but readable level.
@@ -55,8 +59,18 @@ card drawn by `assets/shaders/fireball.gdshader` renders procedural, flowing fir
 ember trail and a travelling light follow it. On impact it swells into an explosion
 that cools from white-hot through orange and red into smoke, with sparks, a light
 flash, a ground shockwave from the existing seal VFX and a fading scorch mark. Damage
-lands on impact; the wind-up is shortened by the flight time, keeping the 1.5-second
-ground warning. It adds no image asset or mesh geometry.
+lands on impact. The Oracle casts it for two seconds, shown by an amber cast bar over
+its head, and the ground warning lasts through the cast and the flight. It adds no
+image asset or mesh geometry.
+
+The Oracle's frost nova (`scripts/frost_nova.gd`) replaces its ice bolt. It is
+instant, cast when the hero comes within 3.8m (twice a sword's reach) at most once
+every 15 seconds, and deals the old bolt's frost damage and five-second slow to the
+hero anywhere in that radius. A cold flash and a frost shockwave race outward; ice
+shards streak out along the ground, a ring of ice spikes erupts as the wave passes and
+then sinks, and frost mist and glints roll out over a pale frost patch. Shards and
+spikes reuse the imported gem mesh with a translucent ice material; the rest is
+particles, sprites and light, with shared helpers in `scripts/vfx.gd`.
 
 Enemy hover feedback uses a flat red sprite with a procedural radial gradient
 from `scripts/assets.gd`, plus a 72×8 HUD health bar projected above the head.

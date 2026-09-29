@@ -40,7 +40,7 @@ func test():
 	var max_energy = 0.0
 	var previous = first.light.light_energy
 	var max_step = 0.0
-	var start_time: float = first.flame_material.get_shader_parameter("flame_time")
+	var start_time: float = first.elapsed
 	for i in 600:
 		first.advance(1.0/60.0)
 		second.advance(1.0/60.0)
@@ -51,10 +51,15 @@ func test():
 		previous = energy
 		if absf(energy-second.light.light_energy)>.02: different = true
 	var base: float = first.base_energy
-	check(min_energy>=base*.9 and max_energy<=base*1.1 and max_energy-min_energy>base*.05,"Flicker varies visibly while remaining within ten percent of the torch's brightness")
-	check(max_step<.04,"Light changes smoothly without frame-to-frame flashes")
+	check(min_energy>=base*(1-TorchFlame.FLICKER)-.001 and max_energy<=base*(1+TorchFlame.FLICKER)+.001 and max_energy-min_energy>base*.1,"Flicker varies randomly and visibly within the torch's flicker range")
+	check(max_step<base*.02,"Light changes smoothly: under 2% brightness per frame, no flashes")
 	check(different,"Neighboring torches flicker independently")
-	check(is_equal_approx(first.flame_material.get_shader_parameter("flame_time"),start_time+10.0),"Flame animation advances with elapsed time at the same rate as the light")
+	check(is_equal_approx(first.elapsed,start_time+10.0),"Flame and light advance on the same clock")
+	check(first.flame is CPUParticles3D and not first.flame.local_coords and first.flame.amount>=20,"The flame is a volume of rising particles, not a flat image")
+	first.visible=false
+	check(first.flame.process_mode==Node.PROCESS_MODE_DISABLED,"Hidden torches stop simulating their flames")
+	first.visible=true
+	check(first.flame.process_mode==Node.PROCESS_MODE_INHERIT,"Visible torches resume their flames")
 	check(first.light.omni_range==9.0 and first.light.shadow_caster_mask==2,"Flicker preserves the existing light reach and shadow mask")
 	if rendered:
 		fires.sort_custom(func(a,b): return a.position.distance_squared_to(world.spawn)<b.position.distance_squared_to(world.spawn))

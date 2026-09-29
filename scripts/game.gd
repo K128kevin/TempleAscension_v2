@@ -17,6 +17,7 @@ var enemies: Array = []
 var effects: Array = []
 var projectiles: Array = []
 var fireballs: Array = []
+var novas: Array = []
 var pickups: Array = []
 var scheduled: Array = []
 var carriers: Dictionary = {}
@@ -105,6 +106,7 @@ func load_floor() -> void:
 	effects.clear()
 	projectiles.clear()
 	fireballs.clear()
+	novas.clear()
 	pickups.clear()
 	scheduled.clear()
 	carriers.clear()
@@ -663,10 +665,22 @@ func fireball(from: Vector3, at: Vector3, radius: float, damage: float, seconds:
 	fireballs.append(ball)
 
 func tick_fireballs(dt: float) -> void:
-	for i in range(fireballs.size()-1,-1,-1):
-		if not fireballs[i].tick(dt):
-			fireballs[i].queue_free()
-			fireballs.remove_at(i)
+	for list in [fireballs,novas]:
+		for i in range(list.size()-1,-1,-1):
+			if not list[i].tick(dt):
+				list[i].queue_free()
+				list.remove_at(i)
+
+# The Oracle's frost nova: frost damage and the ice slow to the hero anywhere
+# within the blast, unless evading or behind a wall.
+func frost_nova(center: Vector3, radius: float, damage: float) -> void:
+	var nova = preload("res://scripts/frost_nova.gd").new()
+	world.add_child(nova)
+	nova.setup(self,center,radius)
+	novas.append(nova)
+	if player.dead or player.position.distance_to(center)>radius or not world.clear_line(center,player.position): return
+	hurt_player(damage,"frost")
+	if player.invulnerable<=0: slowed = 5
 
 func effect(at: Vector3, diameter: float, color: Color, duration: float) -> Dictionary:
 	var node = Art.seal(diameter,color)

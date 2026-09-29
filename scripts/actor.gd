@@ -35,11 +35,19 @@ var mark_time = 0.0
 var stagger_time = 0.0
 var stagger_meter = 0.0
 var hit_reactions = 0
-# Seconds the Oracle's fireball spends in the air; its wind-up is shortened
-# by the same amount so the ground warning still lasts 1.5 seconds.
+# The Oracle's fireball takes two seconds to cast, shown by a cast bar; the
+# ground warning lasts through the cast and the fireball's flight.
+const FIRE_CAST = 2.0
+const FIRE_RECOVERY = .6
 var fireball_flight = 0.0
-var fire_ring: Dictionary = {}
-const FIRE_WARNING = 1.5
+var cast_total = 0.0
+var cast_ring: Dictionary = {}
+# The Oracle's frost nova: an instant blast of ice all around it when the hero
+# comes within twice a sword's reach, at most once every 15 seconds.
+const NOVA_RADIUS = 3.8
+const NOVA_RECOVERY = .5
+const NOVA_COOLDOWN = 15.0
+var nova_cooldown = 0.0
 
 func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 	game = owner_game
@@ -75,6 +83,7 @@ func tick(dt: float) -> void:
 	invulnerable = maxf(0,invulnerable-dt)
 	busy = maxf(0,busy-dt)
 	cooldown = maxf(0,cooldown-dt)
+	nova_cooldown = maxf(0,nova_cooldown-dt)
 	if dead:
 		death_age += dt
 		if death_age > 8 and kind != "player": visible = false
@@ -131,17 +140,20 @@ func tick(dt: float) -> void:
 			release_attack()
 		return
 	if busy > 0: return
+	if kind == "wizard" and nova_cooldown <= 0 and distance <= NOVA_RADIUS and game.world.clear_line(position,player.position):
+		cast_nova()
+		return
 	var reach: float = config.range
 	if distance <= reach and game.world.clear_line(position,player.position) and cooldown <= 0:
 		face(player.position)
 		attack_point = player.position
 		windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else .42)
 		if kind == "wizard":
-			cast_count += 1
-			if cast_count % 2 == 1:
-				fireball_flight = clampf(distance/14.0,.4,.8)
-				windup = FIRE_WARNING-fireball_flight
-				fire_ring = game.effect(attack_point,4.4,Color(1,.25,.12),FIRE_WARNING)
+			# Every ranged cast is the fireball; frost comes only as the nova.
+			fireball_flight = clampf(distance/14.0,.4,.8)
+			windup = FIRE_CAST
+			cast_total = windup
+			cast_ring = game.effect(attack_point,4.4,Color(1,.25,.12),FIRE_CAST+fireball_flight)
 		cooldown = config.interval + windup
 		warning.visible = true
 		var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
@@ -155,6 +167,8 @@ func tick(dt: float) -> void:
 			clip = Motion.NORMAL[weapon_index].clip
 			duration = windup/Motion.NORMAL[weapon_index].contacts[0]
 		attack_recovery = maxf(.25,duration-windup)
+		# The long cast plays its wind-up slowly; the follow-through is brief.
+		if kind == "wizard": attack_recovery = FIRE_RECOVERY
 		visual.play(clip,duration)
 	elif distance > reach * .85:
 		walk_to(player.position,dt)
@@ -181,14 +195,25 @@ func release_attack() -> void:
 	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]
 	if kind == "archer": game.projectile(position,attack_point,damage,false,"arrow")
 	elif kind == "wizard":
-		if cast_count % 2 == 1:
-			var hand: Vector3 = visual.skeleton.global_transform*visual.skeleton.get_bone_global_pose(visual.skeleton.find_bone("hand_r")).origin
-			game.fireball(hand+forward()*.25,attack_point,2.2,damage,fireball_flight)
-			fire_ring = {}
-		else: game.projectile(position,attack_point,7.5*.6*Data.DAMAGE_SCALE[game.run.difficulty],false,"ice")
+		cast_total = 0
+		var hand: Vector3 = visual.skeleton.global_transform*visual.skeleton.get_bone_global_pose(visual.skeleton.find_bone("hand_r")).origin
+		game.fireball(hand+forward()*.25,attack_point,2.2,damage,fireball_flight)
+		cast_ring = {}
 	elif position.distance_to(game.player.position) <= config.range + .6 and game.world.clear_line(position,game.player.position):
 		var d: Vector3 = (game.player.position-position).normalized()
 		if forward().dot(d) > .2: game.hurt_player(damage)
+
+# Instant: the blast goes off at once, the Oracle snapping into the release of
+# its casting pose and recovering briefly.
+func cast_nova() -> void:
+	face(game.player.position)
+	nova_cooldown = NOVA_COOLDOWN
+	game.frost_nova(position,NOVA_RADIUS,7.5*.6*Data.DAMAGE_SCALE[game.run.difficulty])
+	var contact: float = Motion.NORMAL[Data.WEAPONS.find("staff")].contacts[0]
+	var duration = NOVA_RECOVERY/(1.0-contact)
+	visual.play("Cast",duration)
+	visual.advance(duration*contact)
+	busy = NOVA_RECOVERY
 
 func walk_to(destination: Vector3, dt: float) -> void:
 	repath -= dt
@@ -234,8 +259,9 @@ func stagger(seconds: float) -> void:
 	windup = 0
 	warning.visible = false
 	# A cancelled cast clears its ground warning.
-	if not fire_ring.is_empty(): fire_ring.life = minf(fire_ring.life,.15)
-	fire_ring = {}
+	if not cast_ring.is_empty(): cast_ring.life = minf(cast_ring.life,.15)
+	cast_ring = {}
+	cast_total = 0
 	# Long staggers knock the statue down and let it rise as the stagger ends.
 	if not dead and laser_time<=0: visual.react("HitKnockdown" if seconds>=1.2 else "HitStagger",seconds if seconds>=1.2 else .6)
 
@@ -264,14 +290,15 @@ func hit(damage: float, type: String = "physical") -> void:
 			windup += .1
 			visual.animation_delay += .1
 			# Keep the fire warning up until the delayed fireball lands.
-			if not fire_ring.is_empty(): fire_ring.life += .1; fire_ring.total += .1
+			if not cast_ring.is_empty(): cast_ring.life += .1; cast_ring.total += .1
 
 func die(reward: bool = true) -> void:
 	if dead: return
 	dead = true
 	hp = 0
 	warning.visible = false
-	if windup>0 and not fire_ring.is_empty(): fire_ring.life = minf(fire_ring.life,.15)
+	if windup>0 and not cast_ring.is_empty(): cast_ring.life = minf(cast_ring.life,.15)
+	cast_total = 0
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	visual.play("Death")
 	if reward: game.enemy_died(self)

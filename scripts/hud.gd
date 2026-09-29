@@ -19,6 +19,8 @@ var prompt: Label
 var boss_bar: ProgressBar
 var boss_name: Label
 var hover_health: ProgressBar
+# One amber cast bar over each Oracle while it casts a fireball.
+var cast_bars: Array = []
 var modal: PanelContainer
 var modal_body: VBoxContainer
 var weapon_slots: Array[Button] = []
@@ -224,6 +226,7 @@ func bar(color: Color, parent: Node) -> ProgressBar:
 
 func tick(dt: float) -> void:
 	game.debug.refresh()
+	show_cast_bars()
 	var r: Dictionary = game.run
 	var maximum_health = Data.max_health(r)
 	var maximum_energy = Data.max_energy(r)
@@ -272,6 +275,34 @@ func tick(dt: float) -> void:
 func toast(value: String) -> void:
 	notice.text = value
 	notice_time = 5
+
+func cast_bar() -> ProgressBar:
+	var p = bar(Color(1,.64,.18),root)
+	p.custom_minimum_size = Vector2(64,6)
+	p.size = Vector2(64,6)
+	p.max_value = 1.0
+	p.step = 0.0
+	p.z_index = 1
+	var background = StyleBoxFlat.new()
+	background.bg_color = Color(.05,.03,.015,.94)
+	background.border_color = Color(.34,.2,.08)
+	background.set_border_width_all(1)
+	background.set_corner_radius_all(2)
+	p.add_theme_stylebox_override("background",background)
+	return p
+
+func show_cast_bars() -> void:
+	var casting: Array = game.enemies.filter(func(e): return e.kind=="wizard" and not e.dead and e.visible and e.cast_total>0 and e.windup>0)
+	while cast_bars.size()<casting.size(): cast_bars.append(cast_bar())
+	for i in cast_bars.size():
+		var shown: bool = i<casting.size()
+		cast_bars[i].visible = shown
+		if not shown: continue
+		var caster = casting[i]
+		cast_bars[i].value = clampf(1.0-caster.windup/caster.cast_total,0.0,1.0)
+		# Just above where the hover health bar sits.
+		var head: Vector3 = caster.position+Vector3.UP*caster.config.size*2.25
+		cast_bars[i].position = game.world.camera.unproject_position(head)-Vector2(cast_bars[i].size.x*.5,24)
 
 func show_enemy_hover(enemy) -> void:
 	hover_health.visible = is_instance_valid(enemy) and not enemy.dead

@@ -144,6 +144,30 @@ func test():
 		check(game.scheduled.size()==jobs,"Basic cannot interrupt a skill recovery: "+id)
 	# Actual AI attacks use the same timed clip on each enemy rig.
 	game.run=Data.new_run(); game.invincible_test=true
+	# The Oracle's frost nova: cast when the hero comes close, blasting frost
+	# all around it with the old ice bolt's damage and slow, every 15 seconds.
+	game.invincible_test=false; game.player.invulnerable=0; game.slowed=0
+	var frost_oracle=game.spawn_enemy("wizard","frost:oracle",game.world.spawn)
+	frost_oracle.awake=true; frost_oracle.cooldown=1000000
+	game.player.position=game.world.move(game.world.spawn,Vector3(0,0,-3.0))
+	game.player.hp=game.player.max_hp
+	var nova_hp: float=game.player.hp
+	for step in 60: frost_oracle.tick(1.0/60); game.tick_fireballs(1.0/60)
+	check(game.novas.size()==1 and game.player.hp<nova_hp and game.slowed>=4.0,"Frost nova hits and slows the hero within twice a sword's reach")
+	check(game.projectiles.filter(func(p): return p.type=="ice").is_empty(),"The Oracle no longer fires ice bolts")
+	check(frost_oracle.nova_cooldown>14.0,"Frost nova starts its 15-second cooldown")
+	game.player.hp=game.player.max_hp; nova_hp=game.player.hp
+	for step in 120: frost_oracle.tick(1.0/60); game.tick_fireballs(1.0/60)
+	check(game.novas.size()<=1 and game.player.hp==nova_hp,"Frost nova waits for its cooldown")
+	frost_oracle.nova_cooldown=0; frost_oracle.busy=0; frost_oracle.windup=0
+	game.player.position=game.world.move(game.world.spawn,Vector3(0,0,-5.0))
+	var before_novas: int=game.novas.size()
+	for step in 60: frost_oracle.tick(1.0/60)
+	check(frost_oracle.nova_cooldown==0 and game.novas.size()==before_novas,"Frost nova is only cast at close range")
+	for step in 300: game.tick_fireballs(1.0/60)
+	check(game.novas.is_empty(),"Frost nova effect cleans itself up")
+	frost_oracle.dead=true; frost_oracle.visible=false
+	game.slowed=0; game.player.hp=game.player.max_hp
 	# The Oracle's fire spell: a lobbed fireball that damages only on impact,
 	# with the ground warning lasting the full wind-up plus flight.
 	game.invincible_test=false; game.player.invulnerable=0
@@ -153,12 +177,22 @@ func test():
 	game.player.hp=game.player.max_hp
 	var before_hp: float=game.player.hp
 	var fire_clock=0.0; var launched=-1.0; var landed=-1.0
+	var bar_seen=false; var bar_progress=0.0
+	oracle.visible=true
 	while fire_clock<4.0 and landed<0:
 		oracle.tick(1.0/60); game.tick_fireballs(1.0/60); fire_clock+=1.0/60
+		oracle.visible=true
+		if launched<0:
+			game.hud.show_cast_bars()
+			var shown: Array=game.hud.cast_bars.filter(func(b): return b.visible)
+			if not shown.is_empty(): bar_seen=true; bar_progress=maxf(bar_progress,shown[0].value)
 		if launched<0 and not game.fireballs.is_empty(): launched=fire_clock; check(game.player.hp==before_hp,"Fireball launch deals no damage")
 		if launched>=0 and game.player.hp<before_hp: landed=fire_clock
 	check(launched>0 and landed>launched+.3,"Fireball flies before it explodes")
-	check(absf(landed-Oracle.FIRE_WARNING)<.05,"Fire warning lasts exactly until impact (%.2fs)" % landed)
+	check(absf(landed-Oracle.FIRE_CAST-oracle.fireball_flight)<.05,"Fireball lands after its 2-second cast and flight (%.2fs)" % landed)
+	check(bar_seen and bar_progress>.9,"A cast bar over the Oracle fills during the fireball cast")
+	game.hud.show_cast_bars()
+	check(game.hud.cast_bars.all(func(b): return not b.visible),"The cast bar clears once the fireball is released")
 	check(game.fireballs.size()==1 and game.fireballs[0].exploded,"Explosion effect lingers after impact")
 	for step in 300: game.tick_fireballs(1.0/60)
 	check(game.fireballs.is_empty(),"Explosion cleans itself up")
@@ -167,7 +201,7 @@ func test():
 	# Only wizards back away from a nearby hero; archers hold their ground.
 	for kind in ["archer","wizard"]:
 		var ranged=game.spawn_enemy(kind,"retreat:"+kind,game.world.spawn)
-		ranged.awake=true; ranged.cooldown=1000000
+		ranged.awake=true; ranged.cooldown=1000000; ranged.nova_cooldown=1000000
 		game.player.position=game.world.move(game.world.spawn,Vector3(0,0,-3))
 		var start: Vector3=ranged.position
 		for step in 30: ranged.tick(1.0/30)
@@ -188,7 +222,10 @@ func test():
 				starts+=1
 				check(is_zero_approx(phase(enemy.visual)),"AI attack starts at wind-up: "+kind)
 				var duration: float=enemy.visual.animator.current_animation_length/enemy.visual.animator.get_playing_speed()
-				check(absf(duration-enemy.windup-enemy.attack_recovery)<.001,"AI contact and recovery fit the clip: "+kind)
+				# The Oracle's long cast keeps a brief follow-through rather than the
+				# whole stretched clip; everyone else plays the clip to its end.
+				if kind=="wizard": check(enemy.windup==Oracle.FIRE_CAST and enemy.attack_recovery==Oracle.FIRE_RECOVERY and duration>enemy.windup,"Oracle casts its fireball for two seconds")
+				else: check(absf(duration-enemy.windup-enemy.attack_recovery)<.001,"AI contact and recovery fit the clip: "+kind)
 			clock+=1.0/60
 			if clock>15: check(false,"AI attack test timed out: "+kind); break
 		# Taking a hit delays both the telegraph and the animation equally.
