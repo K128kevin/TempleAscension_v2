@@ -49,6 +49,13 @@ var visibility_cells: Dictionary = {}
 # Stonework below floor level (the terrace masonry and the summit's storeys):
 # outdoor scenery, shown with the desert rather than by line of sight.
 var outdoor_scenery: Array[Node3D] = []
+# Awake enemies near the hero, as {position, height}, set by Game each frame:
+# walls that would hide them fade just as for the hero.
+var occlusion_targets: Array = []
+# Opacity of a wall faded to show whoever stands behind it.
+const FADED_ALPHA = .45
+# Only walls this close to someone can hide them from the camera.
+const OCCLUSION_REACH = 7.0
 var visibility_timer = 0.0
 var visibility_player_position = Vector3(INF,INF,INF)
 var fog_material: ShaderMaterial
@@ -559,7 +566,7 @@ func place(id: String, pos: Vector3, size: Vector3, mat: Material = null) -> Nod
 	if (id in ["wall","arch","column","bookcase"] or (id=="stairs" and size.y>=WALL_HEIGHT)) and mat:
 		var faded = mat.duplicate()
 		faded.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		faded.albedo_color.a = .16
+		faded.albedo_color.a = FADED_ALPHA
 		occluders.append({"root":n,"meshes":n.find_children("*","MeshInstance3D",true,false),"normal":mat,"faded":faded,"hidden":false})
 	return n
 
@@ -730,14 +737,18 @@ func follow(pos: Vector3, delta: float) -> void:
 		for i in shadow_torches.size():
 			shadow_torches[i].shadow_enabled = i<2 and shadow_torches[i].position.distance_squared_to(pos)<100
 
+		var targets: Array = [{"position":pos,"height":1.8}]+occlusion_targets
 		for group in occluders:
 			if group.root.position.distance_squared_to(pos)>900 and not group.hidden: continue
 			var blocked = false
-			for mesh in group.meshes:
-				var box: AABB = mesh.global_transform * mesh.get_aabb()
-				# Fade anything hiding the hero's feet, body or head.
-				for height in [.15,1.0,1.8]:
-					if box.intersects_segment(camera.position,pos+Vector3.UP*height): blocked = true; break
+			for target in targets:
+				if Vector2(group.root.position.x-target.position.x,group.root.position.z-target.position.z).length()>OCCLUSION_REACH: continue
+				for mesh in group.meshes:
+					var box: AABB = mesh.global_transform * mesh.get_aabb()
+					# Fade anything hiding someone's feet, body or head.
+					for share in [.08,.55,1.0]:
+						if box.intersects_segment(camera.position,target.position+Vector3.UP*target.height*share): blocked = true; break
+					if blocked: break
 				if blocked: break
 			if blocked != group.hidden:
 				group.hidden = blocked

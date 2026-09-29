@@ -306,8 +306,14 @@ func push_back() -> void:
 	if pushback_step >= PUSHBACK.size(): return
 	var delay: float = PUSHBACK[pushback_step]*attack_cycle()
 	pushback_step += 1
-	if windup > 0:
-		# Caught winding up or casting: the attack is broken off. The enemy
+	if windup > 0 and kind == "wizard" and cast_total > 0:
+		# An Oracle's cast is not cancelled but pushed back: the cast bar loses
+		# ground, the casting pose holds, and the target ring waits for it.
+		windup += delay
+		visual.animation_delay += delay
+		if not cast_ring.is_empty(): cast_ring.life += delay; cast_ring.total += delay
+	elif windup > 0:
+		# Caught winding up: the attack is broken off. The enemy
 		# flinches, stays rooted for the delay, then starts a fresh attack.
 		windup = 0
 		warning.visible = false

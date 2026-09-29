@@ -271,8 +271,15 @@ func test():
 		enemy.cooldown=0; enemy.busy=0; enemy.windup=0; enemy.pushback_step=0; enemy.hit_stun=0
 		enemy.tick(.01); enemy.tick(.1)
 		check(enemy.windup>0,"Enemy is mid-wind-up: "+kind)
-		enemy.hit(0)
 		var push: float=.5*enemy.attack_cycle()
+		if kind=="wizard":
+			# An Oracle's cast is pushed back, not cancelled.
+			var before_cast: float=enemy.windup; var before_phase: float=phase(enemy.visual)
+			enemy.hit(0); enemy.tick(.1)
+			check(absf(enemy.windup-(before_cast+push-.1))<.001 and enemy.visual.state=="Cast" and absf(phase(enemy.visual)-before_phase)<.001,"A hit pushes the Oracle's cast back without cancelling it")
+			enemy.dead=true
+			continue
+		enemy.hit(0)
 		check(enemy.windup==0 and enemy.visual.state.trim_prefix("Shield") in ["Hit","HitHead"] and absf(enemy.cooldown-push)<.001 and absf(enemy.hit_stun-push)<.001,"Hit mid-wind-up interrupts the swing with a flinch: "+kind)
 		var restarted=false
 		for step in int((push+.2)*60):

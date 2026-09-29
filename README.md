@@ -102,8 +102,9 @@ The original 24 / 32 / 54 / 57 / 80 enemy counts are preserved. Gladiators,
 archers, fast Lion Guardians, spellcasting oracles and centurions activate as
 statues and alert nearby allies. Hitting an enemy pushes back its next attack by 50% of its normal
 time between attacks and roots it for that time; further hits add 30%, then 15%,
-then nothing, until it lands an attack. A hit during a wind-up or Oracle cast breaks
-it off: the enemy flinches and starts the attack over once the delay ends. Oracles cast two-second fireballs, shown by a cast
+then nothing, until it lands an attack. A hit during a wind-up breaks it off: the
+enemy flinches and starts the attack over once the delay ends. A hit during an Oracle's
+cast pushes the cast back by the same amount instead. Oracles cast two-second fireballs, shown by a cast
 bar, and answer a close approach with an instant frost nova that slows the hero. The five floors now use the original game's
 seeded room-and-corridor format: 8–15 tile rooms, five-tile-wide passages,
 extra connections that form loops, and ascent stairs in the most distant room.

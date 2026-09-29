@@ -238,6 +238,10 @@ func _process(dt: float) -> void:
 			save_timer = 0
 			save_run()
 		tick_effects(dt)
+	world.occlusion_targets.clear()
+	for enemy in enemies:
+		if enemy.dead or not enemy.awake or not enemy.visible or enemy.position.distance_squared_to(player.position)>900: continue
+		world.occlusion_targets.append({"position":enemy.position,"height":1.8*enemy.config.size})
 	world.follow(player.position,dt)
 	if is_instance_valid(world.fountain): world.fountain.tick(dt,player.position,mode=="playing")
 	hud.tick(dt)

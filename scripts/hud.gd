@@ -299,6 +299,7 @@ func show_cast_bars() -> void:
 		cast_bars[i].visible = shown
 		if not shown: continue
 		var caster = casting[i]
+		# Pushback can add more than the cast has left; the bar then sits empty.
 		cast_bars[i].value = clampf(1.0-caster.windup/caster.cast_total,0.0,1.0)
 		# Just above where the hover health bar sits.
 		var head: Vector3 = caster.position+Vector3.UP*caster.config.size*2.25

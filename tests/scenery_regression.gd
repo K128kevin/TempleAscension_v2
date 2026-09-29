@@ -68,6 +68,18 @@ func test():
 			if group.root.visible: shown_walls += 1
 			else: hidden_walls += 1
 		check(shown_walls>0 and hidden_walls>0,"Walls facing seen floor are revealed; walls of unseen rooms stay hidden (%d)" % (index+1))
+		# A wall between the camera and an enemy fades to half-opacity, as it
+		# does for the hero; it returns once nobody stands behind it.
+		var wall = world.occluders.filter(func(g): return g.root.scale.y>3.0 and absf(g.root.position.y)<.01)[0]
+		var away: Vector3 = Vector3(-12,0,-19).normalized()
+		var behind: Vector3 = Vector3(wall.root.position.x,0,wall.root.position.z)+away*1.2
+		var hero_at: Vector3 = Vector3(wall.root.position.x,0,wall.root.position.z)-away*6
+		world.occlusion_targets = [{"position":behind,"height":1.8}]
+		world.occlusion_tick = 0; world.follow(hero_at,1.0); world.occlusion_tick = 0; world.follow(hero_at,1.0)
+		check(wall.hidden and is_equal_approx(wall.faded.albedo_color.a,world.FADED_ALPHA) and wall.meshes[0].material_override==wall.faded,"A wall hiding an enemy turns semi-transparent (%d)" % (index+1))
+		world.occlusion_targets = []
+		world.occlusion_tick = 0; world.follow(hero_at,1.0)
+		check(not wall.hidden,"The wall returns when no one stands behind it (%d)" % (index+1))
 		check(world.fog_material.get_shader_parameter("walkable_mask")!=null,"Fog knows which cells are temple floor (%d)" % (index+1))
 		check(world.fog_material.render_priority==Material.RENDER_PRIORITY_MAX and world.fog_material.shader.get_mode()==Shader.MODE_SPATIAL,"Line-of-sight fog uses scene depth (%d)" % (index+1))
 		if index==2:
