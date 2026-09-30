@@ -17,6 +17,11 @@ var exit_cell = Vector2i.ZERO
 # `cells`; exit_cell is the floor tile at its foot.
 var stairs = Rect2i()
 var stairs_dir = Vector2i.UP
+# The stairwell the hero climbed from the floor below: a flight descending into
+# an opening in the entrance room, its deep end against a wall. Its cells are
+# removed from `cells` like the ascent's.
+var arrival = Rect2i()
+var arrival_dir = Vector2i.UP
 const STAIR_WIDTH = 2
 const STAIR_DEPTH = 4
 var size = 50
@@ -85,7 +90,7 @@ func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 
 func generate(run_seed: int, floor_index: int) -> void:
 	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear()
-	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i()
+	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i()
 	rng_state = floor_seed(run_seed,floor_index+1)
 	if floor_index==5:
 		size = 30
@@ -148,7 +153,7 @@ func generate(run_seed: int, floor_index: int) -> void:
 	place_stairs()
 
 func is_open(cell: Vector2i) -> bool:
-	return cells.has(cell) or stairs.has_point(cell)
+	return cells.has(cell) or stairs.has_point(cell) or arrival.has_point(cell)
 
 # The world point at the middle of the stair's foot.
 func exit_position() -> Vector3:
@@ -201,6 +206,36 @@ func stays_connected(rect: Rect2i) -> bool:
 	return seen.size()==open
 
 func place_stairs() -> void:
+	place_ascent()
+	place_arrival()
+
+# The arrival stairwell, in the entrance room clear of the spawn tile, or, if
+# it has no room for one, in the nearest room other than the ascent's.
+func place_arrival() -> void:
+	var order: Array = rooms.filter(func(r): return r!=court and not r.encloses(stairs))
+	order.sort_custom(func(a,b): return center(a).distance_squared_to(start)<center(b).distance_squared_to(start))
+	for room in order:
+		if try_arrival(room): return
+
+func try_arrival(room: Rect2i) -> bool:
+	var best = {}
+	for dir in [Vector2i.UP,Vector2i.LEFT,Vector2i.DOWN,Vector2i.RIGHT]:
+		var span = room.size.x if dir.y!=0 else room.size.y
+		var depth = room.size.y if dir.y!=0 else room.size.x
+		if depth<=STAIR_DEPTH: continue
+		for offset in range(0,span-STAIR_WIDTH+1):
+			var option = stair_candidate(room,dir,offset)
+			if option.is_empty() or (not best.is_empty() and option.score<=best.score): continue
+			if option.rect.grow(1).has_point(start) or not stays_connected(option.rect): continue
+			best = option
+	if best.is_empty(): return false
+	arrival = best.rect
+	arrival_dir = best.dir
+	for y in range(arrival.position.y,arrival.end.y):
+		for x in range(arrival.position.x,arrival.end.x): cells.erase(Vector2i(x,y))
+	return true
+
+func place_ascent() -> void:
 	# Farthest rooms first, so the ascent stays at the far end of the floor.
 	var order: Array = []
 	for room in rooms:

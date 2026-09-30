@@ -739,19 +739,6 @@ func remaining() -> int:
 		if not e.dead and e.kind!="offering": count += 1
 	return count
 
-func direction_hint() -> String:
-	var nearest = null
-	var best = INF
-	for e in enemies:
-		if e.dead or e.kind=="offering" or not world.can_see(e.position): continue
-		var distance: float = e.position.distance_to(player.position)
-		if distance < best: best = distance; nearest = e
-	if nearest == null: return "The ascent is open"
-	var direction: Vector3 = nearest.position-player.position
-	var compass = "north" if direction.z<0 else "south"
-	if abs(direction.x)>abs(direction.z): compass = "east" if direction.x>0 else "west"
-	return "Nearest statue %dm %s" % [best,compass]
-
 func interact() -> void:
 	if crown_available and player.position.distance_to(crown_position)<3:
 		ending()

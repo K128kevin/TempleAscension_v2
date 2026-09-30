@@ -14,6 +14,10 @@ var status: Label
 var experience: ProgressBar
 var character_info: Label
 var direction: Label
+# Points toward the nearest remaining statue once five or fewer are left.
+var enemy_arrow: Polygon2D
+const ARROW_SHOW_AT = 5
+const ARROW_RADIUS = 92.0
 var recovery: Label
 var prompt: Label
 var boss_bar: ProgressBar
@@ -90,21 +94,25 @@ func setup(owner_game) -> void:
 	direction = label("",14,Color(.7,.68,.59),root)
 	anchor(direction,Vector2(1,0),Vector2(-464,108),Vector2(440,24))
 	direction.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	var pause = Button.new()
-	pause.text = "ESC · Pause"
-	root.add_child(pause)
-	anchor(pause,Vector2.ZERO,Vector2(24,24),Vector2(150,42))
-	pause.pressed.connect(game.pause_game)
 	character_info = label("",15,gold,root)
-	anchor(character_info,Vector2.ZERO,Vector2(24,76),Vector2(370,24))
+	anchor(character_info,Vector2.ZERO,Vector2(24,24),Vector2(370,24))
 	experience = bar(Color(.36,.58,.9),root)
-	anchor(experience,Vector2.ZERO,Vector2(24,103),Vector2(300,8))
+	anchor(experience,Vector2.ZERO,Vector2(24,51),Vector2(300,8))
 	for i in 3:
 		var b = Button.new()
 		b.text = ["C · Character","K · Skills","I · Equipment"][i]
 		root.add_child(b)
-		anchor(b,Vector2.ZERO,Vector2(24+i*126,122),Vector2(120,34))
-		b.add_theme_font_size_override("font_size",13)
+		anchor(b,Vector2.ZERO,Vector2(24+i*80,66),Vector2(76,20))
+		b.add_theme_font_size_override("font_size",9)
+		b.focus_mode = Control.FOCUS_NONE
+		# The HUD's button style has generous padding; keep these compact.
+		for state in ["normal","hover","pressed","focus","disabled"]:
+			var style = b.get_theme_stylebox(state)
+			if style == null: continue
+			style = style.duplicate()
+			style.content_margin_left = 6; style.content_margin_right = 6
+			style.content_margin_top = 2; style.content_margin_bottom = 2
+			b.add_theme_stylebox_override(state,style)
 		b.pressed.connect(func():
 			if game.mode!="playing": return
 			if i==0: game.ProgressionUI.character(game)
@@ -238,7 +246,8 @@ func tick(dt: float) -> void:
 	difficulty.text = "%s mode" % Data.DIFFICULTIES[r.difficulty]
 	var remaining: int = game.remaining()
 	status.text = "%d statues remain" % remaining if remaining>0 else ("The crown awaits" if r.floor==5 else "The way up is open")
-	direction.text = game.direction_hint() if r.floor<5 else "Intercept the crown's offerings"
+	direction.text = "" if r.floor<5 else "Intercept the crown's offerings"
+	point_to_nearest_enemy()
 	character_info.text = "%s · Lv %d · %d XP · %d attribute / %d skill points" % [r.class_id.capitalize(),r.level,r.xp,r.points,r.skill_points]
 	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<30 else 1
 	experience.value = r.xp-Data.xp_at_level(r.level) if r.level<30 else 1
@@ -338,6 +347,40 @@ func dialog(title: String, subtitle: String) -> void:
 	var sub = label(subtitle,18,cream,modal_body)
 	sub.custom_minimum_size.x = 620
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+func make_enemy_arrow() -> void:
+	enemy_arrow = Polygon2D.new()
+	enemy_arrow.polygon = PackedVector2Array([Vector2(18,0),Vector2(-10,-11),Vector2(-4,0),Vector2(-10,11)])
+	enemy_arrow.color = Color(.95,.72,.3,.92)
+	var outline = Line2D.new()
+	outline.points = PackedVector2Array([Vector2(18,0),Vector2(-10,-11),Vector2(-4,0),Vector2(-10,11),Vector2(18,0)])
+	outline.width = 2.0
+	outline.default_color = Color(.12,.07,.02,.9)
+	enemy_arrow.add_child(outline)
+	enemy_arrow.visible = false
+	root.add_child(enemy_arrow)
+
+# Circles the hero on screen, pointing at the nearest statue still standing.
+func point_to_nearest_enemy() -> void:
+	if enemy_arrow == null: make_enemy_arrow()
+	var remaining: int = game.remaining()
+	enemy_arrow.visible = false
+	if game.mode!="playing" or game.player.dead or remaining==0 or remaining>ARROW_SHOW_AT: return
+	var nearest = null
+	var best = INF
+	for e in game.enemies:
+		if e.dead or e.kind=="offering": continue
+		var d: float = e.position.distance_squared_to(game.player.position)
+		if d<best: best = d; nearest = e
+	if nearest == null: return
+	var camera: Camera3D = game.world.camera
+	var from: Vector2 = camera.unproject_position(game.player.position+Vector3.UP)
+	var to: Vector2 = camera.unproject_position(nearest.position+Vector3.UP)
+	if from.distance_to(to) < ARROW_RADIUS*1.2: return
+	var heading: Vector2 = (to-from).normalized()
+	enemy_arrow.position = from+heading*ARROW_RADIUS
+	enemy_arrow.rotation = heading.angle()
+	enemy_arrow.visible = true
 
 func button(text: String, callback: Callable) -> Button:
 	var b = Button.new()

@@ -99,15 +99,37 @@ func verify():
 		enemy.dead=true; game.update_enemy_hover()
 		check(not game.hover_ring.visible and not bar.visible,"Enemy death immediately clears hover feedback")
 		enemy.dead=false
-		# Put a projected target behind the Pause button to verify UI priority.
+		# Put a projected target behind the Character button to verify UI priority.
 		var pause: Button
 		for node in game.hud.root.get_children():
-			if node is Button and node.text=="ESC · Pause": pause=node
+			if node is Button and node.text=="C · Character": pause=node
 		var button_center: Vector2=pause.get_global_rect().get_center()
 		enemy.position=game.world.camera.project_position(button_center,10)-Vector3.UP*enemy.config.size
 		await mouse(button_center)
 		check(game.enemy_at_screen(button_center)==enemy and game.clicked_enemy()==null,"HUD buttons take priority over enemies behind them")
 		check(not game.hover_ring.visible and not bar.visible,"Hovering UI does not highlight an enemy behind it")
+	# The on-screen arrow: hidden while many statues stand, then pointing to the
+	# nearest once five or fewer remain. No Pause button or statue text.
+	game.mode="playing"
+	var names: Array=game.hud.root.get_children().filter(func(n): return n is Button).map(func(n): return n.text)
+	check(not "ESC · Pause" in names,"No Pause button")
+	var menu: Array=game.hud.root.get_children().filter(func(n): return n is Button and n.text=="C · Character")
+	check(menu.size()==1 and menu[0].size.y<=20,"Character, skills and equipment buttons are small")
+	for e in game.enemies: e.dead=false
+	game.hud.tick(0)
+	check(game.remaining()>5 and not game.hud.enemy_arrow.visible and game.hud.direction.text=="","No arrow or statue text while many statues remain")
+	var alive: Array=game.enemies.filter(func(e): return e.kind!="offering")
+	for i in alive.size():
+		if i>=3: alive[i].dead=true
+	var target=alive[0]
+	for e in alive.slice(1,3): e.position=game.player.position+Vector3(0,0,40)
+	target.position=game.player.position+Vector3(12,0,0)
+	game.hud.tick(0)
+	var expected: Vector2=(game.world.camera.unproject_position(target.position+Vector3.UP)-game.world.camera.unproject_position(game.player.position+Vector3.UP)).normalized()
+	check(game.hud.enemy_arrow.visible and absf(angle_difference(game.hud.enemy_arrow.rotation,expected.angle()))<.05,"With five or fewer left, an arrow points at the nearest statue")
+	for e in alive: e.dead=true
+	game.hud.tick(0)
+	check(not game.hud.enemy_arrow.visible,"The arrow hides when no statues remain")
 	game.load_floor()
 	check(not game.hover_ring.visible and not bar.visible,"Changing floors clears old hover feedback")
 	print("ENEMY_HOVER ",passed," passed; ",failures)

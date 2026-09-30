@@ -112,7 +112,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			if not edges.has(key): edges[key] = {"horizontal":horizontal_edge,"line":line,"direction":direction,"low":low,"along":[]}
 			edges[key].along.append(int(at.x if horizontal_edge else at.z))
 			# Small wall torches sit inside the boundary, with no floor obstruction.
-			if not layout.stairs.has_point(cell):
+			if not layout.stairs.has_point(cell) and not layout.arrival.has_point(cell+direction):
 				var spot = at+Vector3(direction.x,0,direction.y)*.28
 				torch_candidates.append(spot)
 				torch_walls[spot] = Vector3(direction.x,0,direction.y)
@@ -159,9 +159,8 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		add_child(fountain)
 		fountain.setup(layout)
 	if floor_index in [3,4,5]: setup_desert(stone)
-	# A downward stair marks arrival; ascent is in the furthest generated room.
-	var arrival = place("stairs",spawn+Vector3(0,-.25,1.1),Vector3(1.5,.3,1.5),stone)
-	arrival.rotation.y = PI
+	# The stairwell up from the floor below; the ascent is in the furthest room.
+	if layout.arrival.has_area(): build_arrival(stone)
 	if layout.stairs.has_area():
 		# The imported flight climbs toward its local -Z from a base at its origin.
 		# Scaled to wall height, its top step meets the top of the wall it climbs into.
@@ -385,6 +384,36 @@ func facade_stone(stone: StandardMaterial3D) -> StandardMaterial3D:
 	m.uv1_world_triplanar = true
 	m.uv1_scale = Vector3.ONE*.25
 	return m
+
+# A flight descending a full storey into an opening in the floor, its top step
+# level with the floor at the room side, lined with stone walls down to the
+# floor below. Its cells are solid; sight passes over them.
+func build_arrival(stone: Material) -> void:
+	var rect: Rect2i = layout.arrival
+	var dir: Vector2i = layout.arrival_dir
+	var middle = layout.to_world(rect.position)+Vector3(rect.size.x-1,0,rect.size.y-1)*.5
+	var flight = place("stairs",middle+Vector3.DOWN*WALL_HEIGHT,Vector3(Layout.STAIR_WIDTH,WALL_HEIGHT,Layout.STAIR_DEPTH),stone)
+	# The imported flight climbs toward its local -Z; this one climbs away from the wall.
+	flight.rotation.y = atan2(dir.x,dir.y)
+	var cells: Array[Vector2i] = []
+	for y in range(rect.position.y,rect.end.y):
+		for x in range(rect.position.x,rect.end.x): cells.append(Vector2i(x,y))
+	for cell in cells: solid_floor[cell] = true
+	visibility_cells[flight] = cells
+	var lining = Art.material("stone",Color(.42,.4,.37))
+	var near: Vector3 = layout.to_world(rect.position)-Vector3(.5,0,.5)
+	var far: Vector3 = layout.to_world(rect.end-Vector2i.ONE)+Vector3(.5,0,.5)
+	var size = far-near
+	var walls = [
+		[Vector3((near.x+far.x)*.5,-WALL_HEIGHT,near.z-.14),Vector3(size.x,WALL_HEIGHT,.28),Vector2i.UP],
+		[Vector3((near.x+far.x)*.5,-WALL_HEIGHT,far.z+.14),Vector3(size.x,WALL_HEIGHT,.28),Vector2i.DOWN],
+		[Vector3(near.x-.14,-WALL_HEIGHT,(near.z+far.z)*.5),Vector3(.28,WALL_HEIGHT,size.z),Vector2i.LEFT],
+		[Vector3(far.x+.14,-WALL_HEIGHT,(near.z+far.z)*.5),Vector3(.28,WALL_HEIGHT,size.z),Vector2i.RIGHT]]
+	for w in walls:
+		# No wall across the top step, where the flight meets the room floor.
+		if w[2] == -dir: continue
+		var lined = place("wall",w[0],w[1],lining)
+		visibility_cells[lined] = cells
 
 func place_scenery(id: String, pos: Vector3, size: Vector3, mat: Material) -> Node3D:
 	var n = place(id,pos,size,mat)

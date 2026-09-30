@@ -4,7 +4,10 @@ No visible game object is built from Godot primitive meshes, CSG, surface tools,
 or scripted Blender primitives. `tools/prepare_models.py` imports and normalizes
 existing meshes. `scripts/layout.gd` adapts the original room-and-corridor generator;
 `scripts/temple.gd` places those authored modules on its tile layout and constructs
-only navigation/collision data. Each floor's ascent reuses the imported stairs mesh,
+only navigation/collision data. The stairwell the hero climbed from the floor below opens in the entrance room (or the
+nearest room with space): the same stairs mesh descends a full storey into an opening
+in the floor, its top step level with the room, its deep end against a wall, lined
+with stone walls; its cells are solid. Each floor's ascent reuses the imported stairs mesh,
 scaled to a two-tile-wide flight four tiles deep and exactly wall height. It stands
 against a solid wall of the farthest suitable room, so its top step meets the top
 of that wall; its footprint is solid and the ascent point is the floor at its foot. Runtime generation places imported meshes and

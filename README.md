@@ -32,8 +32,8 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | F11 | Fullscreen |
 
 Clicking the ground cancels a combat order. While idle, the hero faces the cursor. Architecture
-between the camera and the hero becomes translucent. The HUD reports the nearest
-remaining statue and the direction to it.
+between the camera and the hero, or an enemy near a wall, turns semi-transparent. Once
+five or fewer statues remain, an arrow around the hero points to the nearest one.
 
 The HUD has a red health orb at bottom left, a blue energy orb at bottom right,
 and four compact clickable ability icons centered below the action: LMB basic

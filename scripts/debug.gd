@@ -43,15 +43,10 @@ func setup(owner_game) -> void:
 	game = owner_game
 	if not enabled: return
 	var hud = game.hud
-	toggle = Button.new()
-	toggle.focus_mode = Control.FOCUS_NONE
-	hud.root.add_child(toggle)
-	hud.anchor(toggle,Vector2.ZERO,Vector2(190,24),Vector2(300,42))
-	toggle.pressed.connect(func(): execute("panel"))
 	panel = PanelContainer.new()
 	panel.add_theme_stylebox_override("panel",hud.panel_style(Color(.035,.04,.045,.96),hud.gold))
 	hud.root.add_child(panel)
-	hud.anchor(panel,Vector2.ZERO,Vector2(24,80),Vector2(310,0))
+	hud.anchor(panel,Vector2.ZERO,Vector2(24,96),Vector2(310,0))
 	var body = VBoxContainer.new()
 	body.add_theme_constant_override("separation",4)
 	panel.add_child(body)
@@ -82,7 +77,7 @@ func add_button(parent: Control, text: String, callback: Callable) -> Button:
 
 func refresh() -> void:
 	if not enabled or not is_instance_valid(panel): return
-	toggle.text = "DEBUG · God %s · P %s" % ["ON" if invulnerable else "OFF","hide" if panel.visible else "show"]
+	if is_instance_valid(toggle): toggle.text = "DEBUG · God %s · P %s" % ["ON" if invulnerable else "OFF","hide" if panel.visible else "show"]
 	buttons.god.text = "G · Invulnerable: %s" % ("ON" if invulnerable else "OFF")
 	for action in buttons: buttons[action].disabled = not available(action)
 	panel.reset_size()

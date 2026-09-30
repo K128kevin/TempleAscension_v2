@@ -47,6 +47,11 @@ func test():
 					if not flight.has_point(above): backed = backed and not layout.is_open(above)
 			check(blocked and backed,"Stair is solid and climbs into a continuous wall: "+label)
 			check(flight.has_point(layout.exit_cell+layout.stairs_dir) and not flight.has_point(layout.exit_cell),"Ascent point is the floor at the stair's foot: "+label)
+			var well: Rect2i = layout.arrival
+			var well_ok = well.has_area() and layout.rooms.any(func(r): return r.encloses(well)) and not well.grow(1).has_point(layout.start) and not well.intersects(layout.stairs)
+			for y in range(well.position.y,well.end.y):
+				for x in range(well.position.x,well.end.x): well_ok = well_ok and not layout.cells.has(Vector2i(x,y))
+			check(well_ok,"The arrival stairwell opens in the entrance room, clear of the spawn: "+label)
 			var copy = Layout.new(); copy.generate(run_seed,floor_index)
 			check(layout.cells==copy.cells and layout.rooms==copy.rooms and layout.start==copy.start and layout.exit_cell==copy.exit_cell,"Deterministic retry: "+label)
 			var total = 0
