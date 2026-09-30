@@ -21,6 +21,7 @@ var stairs_dir = Vector2i.UP
 # an opening in the entrance room, its deep end against a wall. Its cells are
 # removed from `cells` like the ascent's.
 var arrival = Rect2i()
+var level_index = 0
 var arrival_dir = Vector2i.UP
 const STAIR_WIDTH = 2
 const STAIR_DEPTH = 4
@@ -92,6 +93,7 @@ func generate(run_seed: int, floor_index: int) -> void:
 	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear()
 	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i()
 	rng_state = floor_seed(run_seed,floor_index+1)
+	level_index = floor_index
 	if floor_index==5:
 		size = 30
 		rooms.append(Rect2i(1,1,26,18))
@@ -207,7 +209,8 @@ func stays_connected(rect: Rect2i) -> bool:
 
 func place_stairs() -> void:
 	place_ascent()
-	place_arrival()
+	# The first floor is the temple's ground level: nothing leads up into it.
+	if level_index > 0: place_arrival()
 
 # The arrival stairwell, in the entrance room clear of the spawn tile, or, if
 # it has no room for one, in the nearest room other than the ascent's.

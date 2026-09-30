@@ -172,7 +172,8 @@ func test():
 	# 2-second cast, then the flight.
 	game.invincible_test=false; game.player.invulnerable=0
 	var oracle=game.spawn_enemy("wizard","fire:oracle",game.world.spawn)
-	oracle.awake=true; oracle.cast_count=0
+	# Only the fireball here: the nova would fire if the hero stood close.
+	oracle.awake=true; oracle.cast_count=0; oracle.nova_cooldown=1000
 	game.player.position=game.world.move(game.world.spawn,Vector3(0,0,-7))
 	game.player.hp=game.player.max_hp
 	var before_hp: float=game.player.hp
@@ -225,7 +226,7 @@ func test():
 	for step in 20: pushed.tick(1.0/60)
 	check(pushed.position.distance_to(rooted_at)<.001,"A pushed-back enemy cannot move")
 	for step in 60: pushed.tick(1.0/60)
-	check(pushed.position.distance_to(rooted_at)>.05,"It moves again once the pushback ends")
+	check(pushed.position.distance_to(rooted_at)>.05 or pushed.windup>0 or pushed.busy>0,"It moves or attacks again once the pushback ends")
 	game.invincible_test=false; game.player.invulnerable=0; game.player.hp=game.player.max_hp
 	pushed.pushback_step=3
 	game.hurt_player(1,"physical",pushed)
@@ -235,6 +236,24 @@ func test():
 	check(pushed.pushback_step==3,"An attack that deals no damage does not reset it")
 	game.player.invulnerable=0; game.player.hp=game.player.max_hp; game.invincible_test=true
 	pushed.dead=true; pushed.visible=false
+	# The crown's gaze: a lightning beam from the boss's eyes, sweeping toward the
+	# hero at a steady 30 degrees a second.
+	var crowned=game.spawn_enemy("boss","gaze",game.world.spawn)
+	crowned.awake=true; crowned.visible=true; crowned.laser_cooldown=1000
+	game.player.position=game.world.spawn+Vector3(4,0,3)
+	crowned.attack_point=game.world.spawn+Vector3(-4,0,3); crowned.cast_count=-1
+	crowned.release_attack()
+	check(crowned.laser_model!=null and crowned.laser_model.get_script().resource_path.ends_with("boss_laser.gd"),"The gaze is a beam, not a stretched arrow")
+	var eyes: Array=crowned.laser_model.eyes()
+	var head: Vector3=(crowned.visual.skeleton.global_transform*crowned.visual.skeleton.get_bone_global_pose(crowned.visual.skeleton.find_bone("Head"))).origin
+	check(eyes[0].distance_to(head)<.4*crowned.visual.rig.scale.x and eyes[0].y>head.y,"The beam leaves the boss's eyes")
+	var before_angle: float=crowned.laser_angle
+	crowned.tick(.5)
+	check(absf(absf(angle_difference(before_angle,crowned.laser_angle))-deg_to_rad(15))<.01,"The beam sweeps toward the hero at a steady 30 degrees a second")
+	crowned.die(false)
+	check(not is_instance_valid(crowned.laser_model) or crowned.laser_model.is_queued_for_deletion(),"The beam ends with the boss")
+	game.enemies.erase(crowned); crowned.queue_free()
+	game.player.hp=game.player.max_hp; game.slowed=0
 	# Slain statues crumble into a rubble pile with the original crumble sound.
 	var fallen=game.spawn_enemy("centurion","crumble",game.world.spawn)
 	fallen.awake=true; fallen.visible=true

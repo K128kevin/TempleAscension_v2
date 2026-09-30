@@ -96,11 +96,16 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	var surface: Array = layout.cells.keys()
 	for y in range(layout.stairs.position.y,layout.stairs.end.y):
 		for x in range(layout.stairs.position.x,layout.stairs.end.x): surface.append(Vector2i(x,y))
+	# The arrival stairwell is unpaved, but the room's walls still run round it,
+	# rising above the flight's deep end.
+	for y in range(layout.arrival.position.y,layout.arrival.end.y):
+		for x in range(layout.arrival.position.x,layout.arrival.end.x): surface.append(Vector2i(x,y))
 	for cell in surface:
 		var at = layout.to_world(cell)
 		lower = lower.min(Vector2i(at.x,at.z))
 		upper = upper.max(Vector2i(at.x,at.z))
-		place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),court_paving if layout.court.has_point(cell) else paving)
+		if not layout.arrival.has_point(cell):
+			place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),court_paving if layout.court.has_point(cell) else paving)
 		for direction in Layout.DIRS:
 			if layout.is_open(cell+direction): continue
 			# The court's solid centerpiece is the fountain, not a wall.
@@ -112,7 +117,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			if not edges.has(key): edges[key] = {"horizontal":horizontal_edge,"line":line,"direction":direction,"low":low,"along":[]}
 			edges[key].along.append(int(at.x if horizontal_edge else at.z))
 			# Small wall torches sit inside the boundary, with no floor obstruction.
-			if not layout.stairs.has_point(cell) and not layout.arrival.has_point(cell+direction):
+			if not layout.stairs.has_point(cell) and not layout.arrival.has_point(cell) and not layout.arrival.has_point(cell+direction):
 				var spot = at+Vector3(direction.x,0,direction.y)*.28
 				torch_candidates.append(spot)
 				torch_walls[spot] = Vector3(direction.x,0,direction.y)
@@ -412,8 +417,38 @@ func build_arrival(stone: Material) -> void:
 	for w in walls:
 		# No wall across the top step, where the flight meets the room floor.
 		if w[2] == -dir: continue
-		var lined = place("wall",w[0],w[1],lining)
-		visibility_cells[lined] = cells
+		# Plain solid blocks (the paving slab mesh), flush with the flight's
+		# sides; the decorated wall mesh showed its moulding at the pit's rim.
+		# Stop just below the floor so the block's carved top stays hidden.
+		var block = Art.model("floor",w[1]-Vector3(0,.17,0),lining)
+		add_child(block)
+		block.position = w[0]
+		visibility_nodes.append(block)
+		visibility_cells[block] = cells
+	# Torchlight from the room above: a dim, shadowless glow down the stairwell,
+	# so its deep end and lining read as stone rather than a black hole.
+	var glow = OmniLight3D.new()
+	glow.light_color = Color(1,.72,.45)
+	glow.light_energy = 1.1
+	glow.omni_range = 5.0
+	glow.omni_attenuation = 1.2
+	glow.shadow_enabled = false
+	glow.position = middle+Vector3.DOWN*1.2-Vector3(dir.x,0,dir.y)*.6
+	add_child(glow)
+	visibility_nodes.append(glow)
+	visibility_cells[glow] = cells
+	# A flat quartz coping round the opening covers the paving's chipped edges.
+	var copings = [
+		[Vector3((near.x+far.x)*.5,-.19,near.z),Vector3(size.x+.5,.2,.5)],
+		[Vector3((near.x+far.x)*.5,-.19,far.z),Vector3(size.x+.5,.2,.5)],
+		[Vector3(near.x,-.19,(near.z+far.z)*.5),Vector3(.5,.2,size.z+.5)],
+		[Vector3(far.x,-.19,(near.z+far.z)*.5),Vector3(.5,.2,size.z+.5)]]
+	for c in copings:
+		var lip = Art.model("floor",c[1],Art.quartz_material())
+		add_child(lip)
+		lip.position = c[0]+Vector3.UP*.01
+		visibility_nodes.append(lip)
+		visibility_cells[lip] = cells
 
 func place_scenery(id: String, pos: Vector3, size: Vector3, mat: Material) -> Node3D:
 	var n = place(id,pos,size,mat)

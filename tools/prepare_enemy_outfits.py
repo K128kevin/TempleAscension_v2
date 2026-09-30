@@ -158,12 +158,60 @@ def armor_up(piece, body, rig, suffix, thickness=None, relief=None, reach=None):
 LEATHER={'thickness':.018,'relief':.3}
 CLOSE_FIT={
     'legion':{},
+    # The cuirass fits the chest; below the waist it flares into a skirt.
+    'general':{'_Body':{'thickness':.035,'relief':.35},'_ArmLeft':{'thickness':.03,'relief':.4},'_ArmRight':{'thickness':.03,'relief':.4}},
     'light':{'_Body':{'thickness':.028,'relief':.3},'_ArmLeft':LEATHER,'_ArmRight':LEATHER,'_LegLeft':LEATHER,'_LegRight':LEATHER},
     # The gladiator's belt keeps more of its studs and fringe; the plated arm fits.
     'murmillo':{'_Body':{'thickness':.03,'relief':.45},'_ArmRight':{'thickness':.025,'relief':.35}},
     # The robe fits over the chest and sleeves; the lengthened skirt stays loose.
     'robes':{'_Body':{'thickness':.028,'relief':.3,'reach':lambda co: max(0.0,min(1.0,(co.z-.98)/.14))},'_ArmLeft':LEATHER,'_ArmRight':LEATHER},
 }
+
+
+GENERAL_SHOULDER = .5
+HAIRSTYLES = Path('/Users/ktabb/Documents/3dAssets/Universal Base Characters[Standard]/Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)')
+
+def trim_outside_x(obj, reach):
+    # Keep only the part of a sleeve within `reach` of the body's centre line.
+    world=obj.matrix_world
+    remove_faces(obj,lambda f: all(abs((world@v.co).x)>reach for v in f.verts))
+    import bmesh
+    bm=bmesh.new(); bm.from_mesh(obj.data)
+    bmesh.ops.delete(bm,geom=[v for v in bm.verts if not v.link_faces],context='VERTS')
+    bm.to_mesh(obj.data); bm.free()
+
+def add_general_head(body, rig):
+    # A full beard from the base character's hairstyles, and the statue's short
+    # hair worked into tight curls with a lumpy noise along the scalp.
+    import bpy
+    from mathutils import noise
+    before=set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=str(HAIRSTYLES/'Hair_Beard.gltf'))
+    for obj in set(bpy.data.objects)-before:
+        # The file also carries a stray Icosphere; only the beard is kept.
+        if obj.type=='MESH' and obj.name.startswith('Hair_Beard'):
+            world=obj.matrix_world.copy(); obj.parent=rig; obj.matrix_world=world
+            for mod in obj.modifiers:
+                if mod.type=='ARMATURE': mod.object=rig
+            obj.name='GeneralBeard'
+            # The hairstyle beard sits inside this statue's jaw; bring it out
+            # over the chin and cheeks.
+            center=Vector((0,-.01,1.63))
+            for v in obj.data.vertices:
+                p=obj.matrix_world@v.co
+                p=center+(p-center)*1.06+Vector((0,-.012,-.004))
+                v.co=obj.matrix_world.inverted()@p
+            obj.select_set(True)
+            body['beard']=obj.name
+        else: bpy.data.objects.remove(obj,do_unlink=True)
+    names={g.index:g.name for g in body.vertex_groups}
+    for v in body.data.vertices:
+        best=max(v.groups,key=lambda g:g.weight,default=None)
+        if not best or names[best.group]!='Head': continue
+        scalp=v.co.z>1.775 or (v.co.z>1.62 and v.co.y>.03)
+        if not scalp: continue
+        curl=noise.noise(v.co*38.0)*.6+noise.noise(v.co*90.0)*.35
+        v.co+=v.normal*(.007+.011*max(-.5,curl))
 
 
 def remove_faces(obj, predicate):
@@ -272,7 +320,10 @@ def fit(source, source_rig, target_rig, style):
 MURMILLO=[('Barbarian','Barbarian_Body','light',.66),('Knight','Knight_ArmRight','plate',None),
     ('Knight','Knight_Helmet','murmillo',None)]
 def build_outfits():
-    for output,pack,style in [('gladiator','Barbarian','murmillo'),('archer','Rogue','light'),('centurion','Knight','legion'),('wizard','Mage','robes')]:
+    # The Crowned Statue ('general') is armored like a Roman general's statue:
+    # a cuirass flaring into an armored skirt, shoulder guards, a cape, bare
+    # legs, a full beard and curled hair under its crown.
+    for output,pack,style in [('gladiator','Barbarian','murmillo'),('archer','Rogue','light'),('centurion','Knight','legion'),('wizard','Mage','robes'),('boss','Knight','general')]:
         if '--only' in sys.argv and output != sys.argv[sys.argv.index('--only')+1]: continue
         bpy.ops.wm.read_factory_settings(use_empty=True)
         bpy.ops.import_scene.gltf(filepath=str(OUTPUT/'guardian.glb'))
@@ -280,7 +331,7 @@ def build_outfits():
         target.name='StatueRig'
         body=next(o for o in bpy.data.objects if o.type=='MESH' and o.name=='StoneGuardian')
         imported=set(); fitted=[]
-        packs=sorted({piece[0] for piece in MURMILLO}) if style=='murmillo' else [pack]
+        packs=sorted({piece[0] for piece in MURMILLO}) if style=='murmillo' else (['Barbarian',pack] if style=='general' else [pack])
         for source_pack in packs:
             before=set(bpy.data.objects)
             bpy.ops.import_scene.gltf(filepath=str(SOURCE/(source_pack+'.glb')))
@@ -290,19 +341,44 @@ def build_outfits():
             chosen=[]
             for obj in new:
                 if obj.type!='MESH':continue
+                if style=='general':
+                    # The barbarian's belt and hanging tabs become the pteruges.
+                    if obj.name=='Barbarian_Body':
+                        trim_above(obj,.66)
+                        obj.name='Pteruges_Skirt'
+                        chosen.append((obj,'light'))
+                    if source_pack!=pack: continue
+                    if obj.name in (pack+'_Body',pack+'_Cape'): chosen.append((obj,'plate'))
+                    elif obj.name in (pack+'_ArmLeft',pack+'_ArmRight'):
+                        # Only the shoulder guards: bare forearms, as on the statue.
+                        trim_outside_x(obj,GENERAL_SHOULDER)
+                        chosen.append((obj,'plate'))
+                    continue
                 if style=='murmillo':
                     piece=next((p for p in MURMILLO if p[0]==source_pack and obj.name==p[1]),None)
                     if piece:
                         if piece[3] is not None: trim_above(obj,piece[3])
                         chosen.append((obj,piece[2]))
                     continue
-                if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append((obj,'plate' if style=='legion' else style))
+                if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append((obj,'plate' if style in ['legion','royal'] else style))
                 if style in ['plate','legion'] and obj.name==pack+'_Helmet':chosen.append((obj,style))
                 if style=='robes' and obj.name==pack+'_Cape':chosen.append((obj,style))
             fitted+=[fit(obj,source,target,piece_style) for obj,piece_style in chosen]
         if style=='legion':
             # Reshape the body first, then close-fit the armor over the new build.
             reproportion(body,target,shoulder=.045,thigh_cut=0,calf_cut=0,muscle=LEGION_MUSCLE)
+        if style=='general':
+            add_general_head(body,target)
+            # The tabs hang to mid-thigh, flaring a little, clear of the legs.
+            skirt=next((p for p in fitted if p.name.startswith('Pteruges')),None)
+            if skirt:
+                top=max(v.co.z for v in skirt.data.vertices)
+                belt=top-.07
+                for v in skirt.data.vertices:
+                    if v.co.z<belt:
+                        v.co.z=belt-(belt-v.co.z)*2.2
+                        spread=1.08+(belt-v.co.z)*.6
+                        v.co.x*=spread; v.co.y=(v.co.y-.01)*spread+.01
         # Every outfit is close-fitted over its wearer, so no unit keeps the
         # KayKit pieces' toy-proportioned tubes and barrels.
         for piece in fitted:
@@ -316,6 +392,7 @@ def build_outfits():
             remove_faces(body,lambda f: all(v.index in covered for v in f.verts))
         for obj in imported:
             if obj not in fitted and obj.name in bpy.data.objects:bpy.data.objects.remove(obj,do_unlink=True)
+        if style=='general': fitted.append(bpy.data.objects[body['beard']])
         bpy.ops.object.select_all(action='DESELECT')
         for obj in [body]+fitted:obj.select_set(True)
         bpy.context.view_layer.objects.active=body

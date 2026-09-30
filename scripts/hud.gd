@@ -365,7 +365,8 @@ func point_to_nearest_enemy() -> void:
 	if enemy_arrow == null: make_enemy_arrow()
 	var remaining: int = game.remaining()
 	enemy_arrow.visible = false
-	if game.mode!="playing" or game.player.dead or remaining==0 or remaining>ARROW_SHOW_AT: return
+	# Not on the summit, where the only statue left is the Crowned Statue itself.
+	if game.run.floor==5 or game.mode!="playing" or game.player.dead or remaining==0 or remaining>ARROW_SHOW_AT: return
 	var nearest = null
 	var best = INF
 	for e in game.enemies:

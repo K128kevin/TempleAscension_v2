@@ -4,10 +4,12 @@ No visible game object is built from Godot primitive meshes, CSG, surface tools,
 or scripted Blender primitives. `tools/prepare_models.py` imports and normalizes
 existing meshes. `scripts/layout.gd` adapts the original room-and-corridor generator;
 `scripts/temple.gd` places those authored modules on its tile layout and constructs
-only navigation/collision data. The stairwell the hero climbed from the floor below opens in the entrance room (or the
-nearest room with space): the same stairs mesh descends a full storey into an opening
-in the floor, its top step level with the room, its deep end against a wall, lined
-with stone walls; its cells are solid. Each floor's ascent reuses the imported stairs mesh,
+only navigation/collision data. From the second floor up, the stairwell the hero climbed from the floor below opens in
+the entrance room (or the nearest room with space): the same stairs mesh descends a full
+storey into an opening in the floor, its top step level with the room, its deep end
+against a wall. Plain stone blocks (the paving slab mesh) line it flush with the flight,
+and a flat quartz coping frames the opening; its cells are solid. The first floor has
+no stairwell. Each floor's ascent reuses the imported stairs mesh,
 scaled to a two-tile-wide flight four tiles deep and exactly wall height. It stands
 against a solid wall of the farthest suitable room, so its top step meets the top
 of that wall; its footprint is solid and the ascent point is the floor at its foot. Runtime generation places imported meshes and
@@ -73,6 +75,23 @@ every attack at its wind-up. `scripts/actor.gd` advances animation manually on t
 combat clock, so held attacks finish their recovery before the next swing.
 Damage and projectile jobs follow the same clock. Enemy hit delays pause the
 pose and telegraph together; culled actors retain elapsed animation time.
+
+The Crowned Statue (`guardian_boss.glb`) is armored after a Roman general's statue the
+user shared: the knight's cuirass close-fitted over the chest, the shoulder guards of
+the knight's arm plates (bare forearms), the barbarian's studded belt with its tabs
+lengthened into pteruges to mid-thigh, the knight's cape down its back, and bare legs.
+Its face and hair follow the statue too: the base character pack's `Hair_Beard`,
+brought out over the jaw, and the statue's short hair worked into tight curls with a
+noise along the scalp. The crown sits on its head. It wields a great sword (the hero's sword in statue stone, 1.35 times
+as large before its double stature) and fights with the sword swing; statues carry a
+shield only if they are shield bearers. The Crowned Statue's gaze (`scripts/boss_laser.gd`) is drawn like Temple Ascension v1's
+laser: a red lightning beam in three passes (a faint broad glow, a red band and a bright
+core) along a path whose sideways jitter re-rolls every 55 ms. A beam leaves each of the
+boss's eyes; the two converge on the aim point, sloping from the eyes through the
+hero's chest height, and run on until they strike the floor or a wall. Red lights glow
+at the eyes and the point of impact. As in v1, the beam sweeps toward the hero at a
+steady 30 degrees a second for five seconds. The beams are camera-facing ribbons
+built each frame; no image asset or solid geometry is added.
 
 The Oracle carries a slender staff crowned with a round, pointed diamond, after a
 reference staff the user shared: `tools/prepare_staff.py` reshapes the Kenney Mini
@@ -173,7 +192,7 @@ while retaining the skeleton and all thirty clips. The full hero remains unchang
 `tools/prepare_enemy_outfits.py` fits the KayKit clothing meshes to that existing
 Quaternius skeleton, remaps their skin weights, and joins each outfit into one
 crowd surface. It exports `guardian_gladiator.glb`, `guardian_archer.glb`,
-`guardian_centurion.glb` and `guardian_wizard.glb`, each retaining all 30 clips.
+`guardian_centurion.glb`, `guardian_wizard.glb` and `guardian_boss.glb`, each retaining all 30 clips.
 Every outfit piece is then close-fitted over its wearer: shrink-wrapped onto its
 own region of the statue (torso, each arm, each leg) at a garment's thickness, with
 part of its authored shape kept so belts, cuffs, plate edges and pauldrons still

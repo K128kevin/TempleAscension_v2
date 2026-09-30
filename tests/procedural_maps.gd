@@ -51,7 +51,8 @@ func test():
 			var well_ok = well.has_area() and layout.rooms.any(func(r): return r.encloses(well)) and not well.grow(1).has_point(layout.start) and not well.intersects(layout.stairs)
 			for y in range(well.position.y,well.end.y):
 				for x in range(well.position.x,well.end.x): well_ok = well_ok and not layout.cells.has(Vector2i(x,y))
-			check(well_ok,"The arrival stairwell opens in the entrance room, clear of the spawn: "+label)
+			if floor_index==0: check(not well.has_area(),"No stairwell leads up into the first floor: "+label)
+			else: check(well_ok,"The arrival stairwell opens in the entrance room, clear of the spawn: "+label)
 			var copy = Layout.new(); copy.generate(run_seed,floor_index)
 			check(layout.cells==copy.cells and layout.rooms==copy.rooms and layout.start==copy.start and layout.exit_cell==copy.exit_cell,"Deterministic retry: "+label)
 			var total = 0

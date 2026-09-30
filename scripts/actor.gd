@@ -121,7 +121,7 @@ func tick(dt: float) -> void:
 			laser_time -= dt
 			laser_angle = rotate_toward(laser_angle,atan2(player.position.x-position.x,player.position.z-position.z),deg_to_rad(30)*dt)
 			face(position + Vector3(sin(laser_angle),0,cos(laser_angle)))
-			laser_model.rotation.y = laser_angle
+			laser_model.tick(dt,laser_angle)
 			laser_tick -= dt
 			if laser_tick <= 0:
 				laser_tick = .1
@@ -188,11 +188,11 @@ func release_attack() -> void:
 		cast_count = 0
 		laser_time = 5
 		laser_angle = atan2(attack_point.x-position.x,attack_point.z-position.z)
-		laser_model = Node3D.new()
+		# A red lightning beam from the boss's eyes, as in the original game.
+		laser_model = preload("res://scripts/boss_laser.gd").new()
 		add_child(laser_model)
-		var beam = Art.model("arrow",Vector3(.25,.25,28),Art.material("gold"))
-		laser_model.add_child(beam)
-		beam.position = Vector3(0,1.0,14)
+		laser_model.setup(game,self)
+		laser_model.tick(0.0,laser_angle)
 		return
 	busy = attack_recovery
 	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]

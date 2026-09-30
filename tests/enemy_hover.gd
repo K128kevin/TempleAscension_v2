@@ -130,6 +130,9 @@ func verify():
 	for e in alive: e.dead=true
 	game.hud.tick(0)
 	check(not game.hud.enemy_arrow.visible,"The arrow hides when no statues remain")
+	alive[0].dead=false; game.run.floor=5; game.hud.tick(0)
+	check(not game.hud.enemy_arrow.visible,"No arrow on the summit, where the boss is in plain view")
+	game.run.floor=0; alive[0].dead=true
 	game.load_floor()
 	check(not game.hover_ring.visible and not bar.visible,"Changing floors clears old hover feedback")
 	print("ENEMY_HOVER ",passed," passed; ",failures)

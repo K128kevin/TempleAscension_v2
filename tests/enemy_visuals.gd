@@ -59,6 +59,12 @@ func verify():
 	for actor in actors:
 		actor.state=actor.idle_action(); actor.animator.play(actor.clips[actor.state],0); actor.animator.seek(0,true); actor.animator.advance(0); actor.animator.pause(); actor.rotation.y=PI; actor.skeleton.force_update_all_bone_transforms(); actor.align_weapon()
 	await snapshot("back")
+	# The Crowned Statue wears close-fitted plate, bareheaded under its crown.
+	var boss = Visual.new(); scene.add_child(boss)
+	boss.setup(true,Data.ENEMIES.boss.color,Data.ENEMIES.boss.weapon,2.0,"boss"); boss.crown()
+	check(boss.skin_meshes.size()==1 and boss.skin_meshes[0].name=="StoneBoss" and boss.skin_meshes[0].skin.get_bind_count()>50,"The boss wears its plate as one skinned surface")
+	check(boss.weapon_kind=="sword" and boss.shield_item==null,"The boss wields a great sword and no shield")
+	boss.queue_free()
 	print("ENEMY_VISUALS ",passed," passed; ",failures)
 	scene.queue_free(); await process_frame
 	quit(0 if failures.is_empty() else 1)

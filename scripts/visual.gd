@@ -49,6 +49,7 @@ const TOWER_SIZE = Vector3(.68,1.3,.24)
 const TOWER_DROP = .12
 const SHIELD_BEARERS = ["gladiator","centurion"]
 const ORACLE_STAFF_SIZE = Vector3(.13,1.9,.13)
+const BOSS_SWORD_SCALE = 1.35
 # Where the hand holds the Oracle's staff, as a share of its length from the foot.
 const ORACLE_GRIP = .45
 # The staff's lean through OracleCast (phase, up, forward): upright while the
@@ -65,7 +66,7 @@ const BOW_HAND_BASIS = Basis(Vector3(0,-1,0),Vector3(0,0,1),Vector3(-1,0,0))
 func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enemy_kind: String = "") -> void:
 	is_stone = stone
 	self.enemy_kind = enemy_kind
-	var character = "guardian_%s" % enemy_kind if stone and enemy_kind in ["gladiator","archer","centurion","wizard"] else ("guardian" if stone else "warrior")
+	var character = "guardian_%s" % enemy_kind if stone and enemy_kind in ["gladiator","archer","centurion","wizard","boss"] else ("guardian" if stone else "warrior")
 	rig = load("res://assets/models/character/%s.glb" % character).instantiate()
 	# The supplied Godot rig faces +Z, matching Actor.forward().
 	rig.rotation.y = 0
@@ -124,6 +125,8 @@ func equip(weapon: String) -> void:
 	# The Oracle carries a slender staff crowned with a diamond (tools/prepare_staff.py).
 	var oracle = weapon=="staff" and enemy_kind=="wizard"
 	if oracle: weapon_size = ORACLE_STAFF_SIZE
+	# The Crowned Statue wields a great sword.
+	if weapon=="sword" and enemy_kind=="boss": weapon_size *= BOSS_SWORD_SCALE
 	var item = Art.model("oracle_staff" if oracle else weapon, weapon_size,weapon_finish)
 	weapon_item = item
 	hand.add_child(item)
@@ -145,7 +148,8 @@ func equip(weapon: String) -> void:
 			nocked_arrow.top_level = true
 			nocked_arrow.visible = false
 		align_weapon()
-	if weapon=="sword" or enemy_kind in SHIELD_BEARERS:
+	# The hero's sword comes with a shield; among statues only shield bearers carry one.
+	if (weapon=="sword" and not is_stone) or enemy_kind in SHIELD_BEARERS:
 		var scutum = enemy_kind in SHIELD_BEARERS
 		var tower = enemy_kind=="centurion"
 		shield_attachment = BoneAttachment3D.new()
