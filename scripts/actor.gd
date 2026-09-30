@@ -18,7 +18,6 @@ var busy = 0.0
 var windup = 0.0
 var attack_recovery = .25
 var attack_point = Vector3.ZERO
-var warning: Sprite3D
 var route = PackedVector3Array()
 var repath = 0.0
 var death_age = 0.0
@@ -45,13 +44,11 @@ const PUSHBACK = [.5,.3,.15]
 const ARCHER_DRAW = 1.2
 var pushback_step = 0
 var hit_stun = 0.0
-# The Oracle's fireball takes two seconds to cast, shown by a cast bar; the
-# ground warning lasts through the cast and the fireball's flight.
+# The Oracle's fireball takes two seconds to cast, shown by a cast bar.
 const FIRE_CAST = 2.0
 const FIRE_RECOVERY = .6
 var fireball_flight = 0.0
 var cast_total = 0.0
-var cast_ring: Dictionary = {}
 # The Oracle's frost nova: an instant blast of ice all around it when the hero
 # comes within twice a sword's reach, at most once every 15 seconds.
 const NOVA_RADIUS = 3.8
@@ -77,12 +74,6 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 		visual.setup(true,config.color,config.weapon,config.size,kind)
 		if kind == "boss": visual.crown()
 		visual.animator.pause()
-	# The red ground seal is no longer shown under attacking enemies; the node
-	# stays for the attack code that hides it.
-	warning = Art.seal(3.4,Color(1,.2,.08,.75))
-	warning.position.y = .06
-	warning.visible = false
-	add_child(warning)
 
 func tick(dt: float) -> void:
 	if kind!="player" and not dead:
@@ -150,9 +141,7 @@ func tick(dt: float) -> void:
 			game.toast("THE CROWN'S GAZE — keep moving around the statue")
 	if windup > 0:
 		windup -= dt
-		warning.modulate.a = .5 + .35 * sin(Time.get_ticks_msec()*.025)
 		if windup <= 0:
-			warning.visible = false
 			release_attack()
 		return
 	if busy > 0: return
@@ -169,12 +158,11 @@ func tick(dt: float) -> void:
 			fireball_flight = clampf(distance/14.0,.4,.8)
 			windup = FIRE_CAST
 			cast_total = windup
-			cast_ring = game.effect(attack_point,4.4,Color(1,.25,.12),FIRE_CAST+fireball_flight)
 		cooldown = config.interval + windup
 		var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
 		var duration = windup+.25
 		var weapon_index = Data.WEAPONS.find(config.weapon)
-		var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT}.get(kind,{})
+		var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT,"wizard":Motion.ORACLE_CAST}.get(kind,{})
 		if not signature.is_empty() and visual.clips.has(signature.clip):
 			clip = signature.clip
 			duration = windup/signature.contacts[0]
@@ -211,9 +199,9 @@ func release_attack() -> void:
 	if kind == "archer": game.projectile(position,attack_point,damage,false,"arrow",false,self)
 	elif kind == "wizard":
 		cast_total = 0
-		var hand: Vector3 = visual.skeleton.global_transform*visual.skeleton.get_bone_global_pose(visual.skeleton.find_bone("hand_r")).origin
-		game.fireball(hand+forward()*.25,attack_point,2.2,damage,fireball_flight,self)
-		cast_ring = {}
+		# The fireball leaves the crown of the staff, where the flame formed.
+		visual.align_weapon()
+		game.fireball(visual.staff_tip(),attack_point,2.2,damage,fireball_flight,self)
 	elif position.distance_to(game.player.position) <= config.range + .6 and game.world.clear_line(position,game.player.position):
 		var d: Vector3 = (game.player.position-position).normalized()
 		if forward().dot(d) > .2: game.hurt_player(damage,"physical",self)
@@ -224,9 +212,11 @@ func cast_nova() -> void:
 	face(game.player.position)
 	nova_cooldown = NOVA_COOLDOWN
 	game.frost_nova(position,NOVA_RADIUS,7.5*.6*Data.DAMAGE_SCALE[game.run.difficulty],self)
-	var contact: float = Motion.NORMAL[Data.WEAPONS.find("staff")].contacts[0]
+	# Straight to the staff swing: the nova needs no flame.
+	var clip = "OracleCast" if visual.clips.has("OracleCast") else "Cast"
+	var contact: float = Motion.ORACLE_CAST.contacts[0] if clip=="OracleCast" else Motion.NORMAL[Data.WEAPONS.find("staff")].contacts[0]
 	var duration = NOVA_RECOVERY/(1.0-contact)
-	visual.play("Cast",duration)
+	visual.play(clip,duration)
 	visual.advance(duration*contact)
 	busy = NOVA_RECOVERY
 
@@ -272,10 +262,6 @@ func stagger(seconds: float) -> void:
 		seconds = minf(seconds,.6)
 	stagger_time = maxf(stagger_time,seconds)
 	windup = 0
-	warning.visible = false
-	# A cancelled cast clears its ground warning.
-	if not cast_ring.is_empty(): cast_ring.life = minf(cast_ring.life,.15)
-	cast_ring = {}
 	cast_total = 0
 	# Long staggers knock the statue down and let it rise as the stagger ends.
 	if not dead and laser_time<=0: visual.react("HitKnockdown" if seconds>=1.2 else "HitStagger",seconds if seconds>=1.2 else .6)
@@ -308,17 +294,13 @@ func push_back() -> void:
 	pushback_step += 1
 	if windup > 0 and kind == "wizard" and cast_total > 0:
 		# An Oracle's cast is not cancelled but pushed back: the cast bar loses
-		# ground, the casting pose holds, and the target ring waits for it.
+		# ground and the casting pose holds.
 		windup += delay
 		visual.animation_delay += delay
-		if not cast_ring.is_empty(): cast_ring.life += delay; cast_ring.total += delay
 	elif windup > 0:
 		# Caught winding up: the attack is broken off. The enemy
 		# flinches, stays rooted for the delay, then starts a fresh attack.
 		windup = 0
-		warning.visible = false
-		if not cast_ring.is_empty(): cast_ring.life = minf(cast_ring.life,.15)
-		cast_ring = {}
 		cast_total = 0
 		busy = 0
 		if kind == "boss" and cast_count == -1:
@@ -346,8 +328,6 @@ func die(reward: bool = true) -> void:
 	if dead: return
 	dead = true
 	hp = 0
-	warning.visible = false
-	if windup>0 and not cast_ring.is_empty(): cast_ring.life = minf(cast_ring.life,.15)
 	cast_total = 0
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	# Statues crumble into a rubble pile, with the original game's crumble sound.

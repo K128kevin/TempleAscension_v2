@@ -169,7 +169,7 @@ func test():
 	frost_oracle.dead=true; frost_oracle.visible=false
 	game.slowed=0; game.player.hp=game.player.max_hp
 	# The Oracle's fire spell: a lobbed fireball that damages only on impact,
-	# with the ground warning lasting the full wind-up plus flight.
+	# 2-second cast, then the flight.
 	game.invincible_test=false; game.player.invulnerable=0
 	var oracle=game.spawn_enemy("wizard","fire:oracle",game.world.spawn)
 	oracle.awake=true; oracle.cast_count=0
@@ -178,6 +178,7 @@ func test():
 	var before_hp: float=game.player.hp
 	var fire_clock=0.0; var launched=-1.0; var landed=-1.0
 	var bar_seen=false; var bar_progress=0.0
+	var straight=true
 	oracle.visible=true
 	while fire_clock<4.0 and landed<0:
 		oracle.tick(1.0/60); game.tick_fireballs(1.0/60); fire_clock+=1.0/60
@@ -186,9 +187,19 @@ func test():
 			game.hud.show_cast_bars()
 			var shown: Array=game.hud.cast_bars.filter(func(b): return b.visible)
 			if not shown.is_empty(): bar_seen=true; bar_progress=maxf(bar_progress,shown[0].value)
-		if launched<0 and not game.fireballs.is_empty(): launched=fire_clock; check(game.player.hp==before_hp,"Fireball launch deals no damage")
+		if launched<0 and not game.fireballs.is_empty():
+			launched=fire_clock; check(game.player.hp==before_hp,"Fireball launch deals no damage")
+			check(game.fireballs[0].origin.distance_to(oracle.visual.staff_tip())<.35 and oracle.visual.state=="OracleCast","The fireball leaves the crown of the Oracle's staff")
+		if launched<0 and absf(fire_clock-1.2)<.01:
+			oracle.visual.skeleton.force_update_all_bone_transforms(); oracle.visual.align_weapon()
+			check(oracle.visual.oracle_flame.visible,"A flame forms in the staff's crown during the cast")
+		if launched<0: check(game.effects.all(func(e): return not (e.node is Sprite3D)),"No red target ring on the ground during the cast")
+		if launched>=0 and landed<0 and not game.fireballs.is_empty() and not game.fireballs[0].exploded:
+			var ball=game.fireballs[0]
+			straight=straight and Geometry3D.get_closest_point_to_segment(ball.position,ball.origin,ball.target).distance_to(ball.position)<.01
 		if launched>=0 and game.player.hp<before_hp: landed=fire_clock
 	check(launched>0 and landed>launched+.3,"Fireball flies before it explodes")
+	check(straight,"The fireball flies in a straight line from the staff to its target")
 	check(absf(landed-Oracle.FIRE_CAST-oracle.fireball_flight)<.05,"Fireball lands after its 2-second cast and flight (%.2fs)" % landed)
 	check(bar_seen and bar_progress>.9,"A cast bar over the Oracle fills during the fireball cast")
 	game.hud.show_cast_bars()
@@ -257,7 +268,7 @@ func test():
 			if enemy.cooldown>old_cooldown:
 				starts+=1
 				check(is_zero_approx(phase(enemy.visual)),"AI attack starts at wind-up: "+kind)
-				check(not enemy.warning.visible,"No red seal under an attacking enemy: "+kind)
+				check(enemy.find_children("*","Sprite3D",true,false).all(func(n): return not n.visible or n.texture==null or not n.texture.resource_path.ends_with("seal.png")),"No red seal under an attacking enemy: "+kind)
 				if kind=="archer": check(enemy.visual.state=="ArcherShot" and absf(enemy.attack_cycle()-2.42)<.001,"Archers notch, draw and shoot, at the same time between shots")
 				var duration: float=enemy.visual.animator.current_animation_length/enemy.visual.animator.get_playing_speed()
 				# The Oracle's long cast keeps a brief follow-through rather than the
@@ -276,7 +287,7 @@ func test():
 			# An Oracle's cast is pushed back, not cancelled.
 			var before_cast: float=enemy.windup; var before_phase: float=phase(enemy.visual)
 			enemy.hit(0); enemy.tick(.1)
-			check(absf(enemy.windup-(before_cast+push-.1))<.001 and enemy.visual.state=="Cast" and absf(phase(enemy.visual)-before_phase)<.001,"A hit pushes the Oracle's cast back without cancelling it")
+			check(absf(enemy.windup-(before_cast+push-.1))<.001 and enemy.visual.state=="OracleCast" and absf(phase(enemy.visual)-before_phase)<.001,"A hit pushes the Oracle's cast back without cancelling it")
 			enemy.dead=true
 			continue
 		enemy.hit(0)
@@ -288,7 +299,7 @@ func test():
 				restarted=true
 				check(is_zero_approx(phase(enemy.visual)) or phase(enemy.visual)<.05,"The swing starts again from the beginning after the delay: "+kind)
 		check(restarted,"The enemy attacks again after the delay: "+kind)
-		enemy.windup=0; enemy.busy=0; enemy.warning.visible=false
+		enemy.windup=0; enemy.busy=0
 		enemy.hit(0)
 		check(enemy.visual.state.trim_prefix("Shield") in ["Hit","HitHead"] and enemy.visual.reaction_time>0,"Idle enemy flinches when hit: "+kind)
 		for bash in (3 if kind=="boss" else 1): enemy.stagger(1.5)

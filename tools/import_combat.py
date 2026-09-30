@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['ShieldHit','ShieldHitHead','ShieldHitStagger','ShieldHitKnockdown','ArcherShot','ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
+outputs=['OracleCast','ShieldHit','ShieldHitHead','ShieldHitStagger','ShieldHitKnockdown','ArcherShot','ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -429,6 +429,31 @@ bow_hand=[(0,(.12,-.26,.96)),(.3,(.1,-.28,1.0)),(.42,(-.04,-.34,1.18)),(.52,BOW_
 draw_hand=[(0,(-.2,-.1,.95)),(.14,(-.26,.05,1.45)),(.26,(-.2,.16,1.62)),(.32,(-.18,.12,1.6)),(.43,(-.06,-.3,1.2)),(.52,NOCK),(.56,NOCK),(.74,CHEEK),(.78,CHEEK),(.82,(-.3,.34,1.4)),(.9,(-.3,.3,1.3)),(1,(-.2,-.1,.95))]
 draw_pole=[(0,(-.7,.2,.85)),(.2,(-.6,.3,1.9)),(.34,(-.6,.2,1.7)),(.45,(-.7,.3,1.2)),(.52,(-.65,.3,1.38)),(1,(-.7,.2,.85))]
 side_on=[(0,0),(.3,-.12),(.46,-.45),(.86,-.45),(1,0)]
+# The Oracle's fireball cast: the right hand holds the staff at its side while
+# the left hand weaves slow circles before the chest (the flame forms in the
+# staff's crown); then the staff is drawn up and back and swung out in front
+# as the fireball leaves it, at 0.8. The staff's own angle is set in the game
+# (scripts/visual.gd), following the hand.
+staff_hand=[(0,(-.3,-.12,1.02)),(.1,(-.3,-.14,1.06)),(.66,(-.3,-.14,1.1)),(.76,(-.26,.06,1.42)),(.8,(-.18,-.46,1.3)),(.86,(-.2,-.4,1.18)),(1,(-.3,-.12,1.02))]
+staff_pole=[(0,(-.7,.2,.85)),(.66,(-.7,.2,.85)),(.76,(-.7,.3,1.2)),(.8,(-.7,-.1,1.0)),(1,(-.7,.2,.85))]
+a=action('OracleCast')
+for f in range(61):
+ t=f/60;reset_pose()
+ weave=sample([(0,0),(.12,1),(.64,1),(.72,0),(1,0)],t)
+ angle=t/.66*3.0*math.pi
+ circle=Vector((math.cos(angle)*.17,-.36+math.sin(angle)*.05,1.28+math.sin(angle)*.15))
+ rest=Vector((.26,-.06,.98))
+ left=rest.lerp(circle,weave)
+ arm('l',left,(.6,.1,.95))
+ sway=math.sin(t/.66*2*math.pi)*.05*weave
+ swing=sample([(0,0),(.66,0),(.76,-.35),(.8,.4),(.88,.2),(1,0)],t)
+ rotate_body('spine_01',(0,0,1),sway+swing*.5)
+ rotate_body('spine_01',(1,0,0),.12*max(0,swing)-.06*max(0,-swing))
+ bob=Vector((0,-.05*max(0,swing),0))
+ arm('r',vsample(staff_hand,t)+bob,vsample(staff_pole,t))
+ keys(f)
+finish('OracleCast',a,2.0)
+
 # The whole body shoots, as in the reference: the archer steps into a
 # staggered stance (left foot forward toward the target, right foot back) and
 # sinks into soft knees; the hips carry half of the side-on turn; the weight

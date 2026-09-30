@@ -71,13 +71,23 @@ combat clock, so held attacks finish their recovery before the next swing.
 Damage and projectile jobs follow the same clock. Enemy hit delays pause the
 pose and telegraph together; culled actors retain elapsed animation time.
 
-The Oracle's fire spell is a lobbed fireball (`scripts/fireball.gd`). A camera-facing
+The Oracle carries a slender staff crowned with a round, pointed diamond, after a
+reference staff the user shared: `tools/prepare_staff.py` reshapes the Kenney Mini
+Dungeon spear's own vertices (shaft drawn out, collar kept, head enlarged and rounded)
+into `assets/models/props/oracle_staff.glb`, in statue stone. Its cast, OracleCast,
+holds the staff at its side while the left hand weaves slow circles and a small flame
+(particles and a warm light) grows in the crown; then the staff is drawn back and
+swung out in front, and the fireball leaves the crown at the release. The staff's
+lean through the cast is set in `scripts/visual.gd`; the frost nova goes straight
+to the swing. The player Wizard's staff is unchanged.
+
+The Oracle's fire spell is a fireball shot in a straight line (`scripts/fireball.gd`). A camera-facing
 card drawn by `assets/shaders/fireball.gdshader` renders procedural, flowing fire; an
 ember trail and a travelling light follow it. On impact it swells into an explosion
 that cools from white-hot through orange and red into smoke, with sparks, a light
 flash, a ground shockwave from the existing seal VFX and a fading scorch mark. Damage
 lands on impact. The Oracle casts it for two seconds, shown by an amber cast bar over
-its head, and the ground warning lasts through the cast and the flight. It adds no
+its head; no ground marking shows where it will land. It adds no
 image asset or mesh geometry.
 
 The Oracle's frost nova (`scripts/frost_nova.gd`) replaces its ice bolt. It is

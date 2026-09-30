@@ -135,7 +135,6 @@ func execute(job: Dictionary) -> void:
 		"mark":
 			if not victims.is_empty():
 				victims[0].mark_time = value
-				game.effect(victims[0].position,2,Color(1,.2,.25),value)
 		"snare","trap","rain","blizzard","whirlwind","meteor":
 			var duration: float = s.duration
 			if s.effect in ["snare","trap"]: duration = 15.0*(1+Data.passive(game.run,"trapcraft")*.01)

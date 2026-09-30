@@ -1,6 +1,6 @@
 extends Node3D
-## The Oracle's fire spell: a lobbed fireball that bursts where the ground
-## telegraph was drawn. Advanced by Game on the combat clock; damage lands on
+## The Oracle's fire spell: a fireball shot in a straight line from the staff,
+## bursting at its target. Advanced by Game on the combat clock; damage lands on
 ## impact through Game.area_damage. Every visible piece is a billboard, particle
 ## or light; no mesh geometry is generated.
 const SHADER = preload("res://assets/shaders/fireball.gdshader")
@@ -15,7 +15,6 @@ var target = Vector3.ZERO
 var radius = 2.2
 var damage = 0.0
 var flight_time = .6
-var arc = 1.5
 var age = 0.0
 var exploded = false
 var since_impact = 0.0
@@ -41,7 +40,6 @@ func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_da
 	radius = blast_radius
 	damage = blast_damage
 	flight_time = seconds
-	arc = 1.1+from.distance_to(to)*.08
 	name = "OracleFireball"
 	core_material = fire_material(0.0)
 	core = billboard(core_material,.75)
@@ -88,7 +86,8 @@ func tick(dt: float) -> bool:
 	age += dt
 	if not exploded:
 		var u = minf(1.0,age/flight_time)
-		position = origin.lerp(target,u)+Vector3.UP*arc*4.0*u*(1.0-u)
+		# Straight from the staff's crown to the burst point.
+		position = origin.lerp(target,u)
 		core_material.set_shader_parameter("flame_time",age)
 		carry_light.light_energy = 1.8*(1.0+sin(age*23.0)*.08)
 		visible = game.world.can_see(position)

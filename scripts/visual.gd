@@ -48,6 +48,15 @@ const SCUTUM_ROTATION = Quaternion(.753,-.397,-.466,-.238)
 const TOWER_SIZE = Vector3(.68,1.3,.24)
 const TOWER_DROP = .12
 const SHIELD_BEARERS = ["gladiator","centurion"]
+const ORACLE_STAFF_SIZE = Vector3(.13,1.9,.13)
+# Where the hand holds the Oracle's staff, as a share of its length from the foot.
+const ORACLE_GRIP = .45
+# The staff's lean through OracleCast (phase, up, forward): upright while the
+# flame forms, drawn back, swung out to point ahead at the release, upright again.
+const ORACLE_STAFF_KEYS = [[0.0,1.0,.08],[.66,1.0,.1],[.76,.75,-.65],[.8,.3,1.0],[.86,.45,.9],[1.0,1.0,.08]]
+var oracle_flame: Node3D
+var oracle_flame_light: OmniLight3D
+var oracle_flame_parts: Array = []
 const BOW_GRIP = Vector3(-.42,.51,0)
 const BOW_PALM = Vector3(0,.065,0)
 # Imported left-hand axes to the bow's grip: +Y along the stave, -X forward.
@@ -85,7 +94,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			skin.roughness = .65
 			mesh.material_override = skin
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
+		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
@@ -112,13 +121,19 @@ func equip(weapon: String) -> void:
 	var sizes = {"sword":Vector3(.19,1.3,.09),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22)}
 	weapon_size = sizes[weapon]
 	var weapon_finish = Art.statue_material() if is_stone else (Art.sword_material() if weapon=="sword" else null)
-	var item = Art.model(weapon, weapon_size,weapon_finish)
+	# The Oracle carries a slender staff crowned with a diamond (tools/prepare_staff.py).
+	var oracle = weapon=="staff" and enemy_kind=="wizard"
+	if oracle: weapon_size = ORACLE_STAFF_SIZE
+	var item = Art.model("oracle_staff" if oracle else weapon, weapon_size,weapon_finish)
 	weapon_item = item
 	hand.add_child(item)
 	# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
 	item.rotation.x = PI / 2
 	# The grip sits a fixed share up each hilt; the larger sword's hilt is longer.
 	item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22}.get(weapon,-.17))
+	if oracle:
+		item.top_level = true
+		oracle_staff_flame()
 	if weapon in ["spear","bow"]:
 		item.top_level = true
 		if weapon == "bow":
@@ -157,7 +172,81 @@ func draw_amount(t: float, release: float, start: float) -> float:
 	if t>release: return lerpf(1,0,(t-release)/.06)
 	return smoothstep(start,release-.06,t)
 
+# The flame that forms in the crown of the Oracle's staff while it casts.
+func oracle_staff_flame() -> void:
+	oracle_flame = Node3D.new()
+	oracle_flame.top_level = true
+	add_child(oracle_flame)
+	var core = Vfx.particles(oracle_flame,16,.45,false,true)
+	core.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	core.emission_sphere_radius = .03
+	core.direction = Vector3.UP
+	core.spread = 25
+	core.initial_velocity_min = .15; core.initial_velocity_max = .4
+	core.gravity = Vector3(0,.8,0)
+	core.scale_amount_min = .16; core.scale_amount_max = .24
+	core.scale_amount_curve = Vfx.curve(1,.2)
+	core.color_ramp = Vfx.ramp([0,.2,.6,1],[Color(1,.95,.7,0),Color(1,.8,.4,.8),Color(1,.45,.1,.5),Color(.6,.12,.03,0)])
+	var embers = Vfx.particles(oracle_flame,6,.9,false,true)
+	embers.direction = Vector3.UP
+	embers.spread = 60
+	embers.initial_velocity_min = .3; embers.initial_velocity_max = .7
+	embers.gravity = Vector3(0,.4,0)
+	embers.scale_amount_min = .03; embers.scale_amount_max = .05
+	embers.color_ramp = Vfx.ramp([0,1],[Color(1,.7,.3,1),Color(1,.3,.05,0)])
+	oracle_flame_parts = [core,embers]
+	oracle_flame_light = OmniLight3D.new()
+	oracle_flame_light.light_color = Color(1,.55,.2)
+	oracle_flame_light.omni_range = 3.5
+	oracle_flame_light.omni_attenuation = 1.4
+	oracle_flame.add_child(oracle_flame_light)
+	oracle_flame.visible = false
+
+# How far the flame has grown at this point of the cast (0 to 1).
+func cast_glow(phase: float) -> float:
+	if state != "OracleCast": return 0.0
+	if phase >= Motion.ORACLE_CAST.contacts[0]: return 0.0
+	return smoothstep(.06,.74,phase)
+
+# The top of the Oracle's staff, where the flame sits and the fireball leaves.
+func staff_tip() -> Vector3:
+	if not is_instance_valid(weapon_item) or enemy_kind != "wizard": return global_position+Vector3.UP*1.5
+	return weapon_item.global_transform*Vector3(0,.93,0)
+
+func oracle_staff_direction(phase: float) -> Vector2:
+	var keys: Array = ORACLE_STAFF_KEYS if state=="OracleCast" else [[0.0,1.0,.08],[1.0,1.0,.08]]
+	for i in keys.size()-1:
+		var a: Array = keys[i]; var b: Array = keys[i+1]
+		if phase <= b[0]:
+			var u = smoothstep(0.0,1.0,(phase-a[0])/maxf(.001,b[0]-a[0]))
+			return Vector2(lerpf(a[1],b[1],u),lerpf(a[2],b[2],u))
+	return Vector2(keys[-1][1],keys[-1][2])
+
+func align_oracle_staff() -> void:
+	var facing = global_basis.orthonormalized()
+	var hand = (skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone("hand_r"))).origin
+	# The assigned clip, so a held (paused) pose keeps its staff angle and flame.
+	var phase = 0.0
+	if not animator.assigned_animation.is_empty():
+		phase = animator.current_animation_position/maxf(.001,animator.get_animation(animator.assigned_animation).length)
+	var lean = oracle_staff_direction(phase)
+	var up = (Vector3.UP*lean.x+facing.z*lean.y).normalized()
+	var side = facing.x.cross(up).normalized()
+	var across = up.cross(side).normalized()
+	var length = weapon_size.y*rig.scale.x
+	weapon_item.global_basis = Basis(across,up,side)*Basis.from_scale(weapon_size*rig.scale.x)
+	weapon_item.global_position = hand-up*length*ORACLE_GRIP
+	var glow = cast_glow(phase)
+	oracle_flame.visible = glow>.01 and not dead
+	if oracle_flame.visible:
+		oracle_flame.global_position = staff_tip()
+		oracle_flame.scale = Vector3.ONE*maxf(.05,glow)*rig.scale.x
+		oracle_flame_light.light_energy = 2.2*glow
+
 func align_weapon() -> void:
+	if enemy_kind == "wizard" and weapon_kind == "staff" and is_instance_valid(weapon_item) and is_instance_valid(oracle_flame):
+		if is_inside_tree() and skeleton.is_inside_tree() and weapon_item.is_inside_tree(): align_oracle_staff()
+		return
 	if weapon_kind not in ["spear","bow"] or not is_instance_valid(weapon_item): return
 	if not is_inside_tree() or not skeleton.is_inside_tree() or not weapon_item.is_inside_tree(): return
 	var facing = global_basis.orthonormalized()

@@ -16,6 +16,8 @@ const SPECIAL = [
 	{"clip":"Cast","seconds":.8,"contacts":[.5]}]
 # The statue archer's notch-and-shoot, released at full draw.
 const ARCHER_SHOT = {"clip":"ArcherShot","contacts":[.78]}
+# The Oracle's fireball cast: weave, draw the staff back, swing and release.
+const ORACLE_CAST = {"clip":"OracleCast","contacts":[.8]}
 # The centurion's stepping, full-body thrust past its tower shield.
 const SHIELD_STAB = {"clip":"ShieldStab","contacts":[.5]}
 static func profile(weapon: int, special: bool, attack_speed_percent: float, minimum_duration: float = 0.0) -> Dictionary:
