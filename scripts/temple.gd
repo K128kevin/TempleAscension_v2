@@ -73,6 +73,11 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	e.ambient_light_color = Color(.35,.40,.50)
 	# Enough fill that the middle of a large room, beyond the wall torches, stays readable.
 	e.ambient_light_energy = .24
+	if floor_index==Layout.PLAYGROUND:
+		# The playground is evenly lit so models and animations read clearly.
+		e.background_color = Color(.16,.18,.22)
+		e.ambient_light_color = Color(.85,.85,.9)
+		e.ambient_light_energy = .42
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.fog_enabled = false
 	env.environment = e
@@ -83,9 +88,17 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	camera.far = 200
 	add_child(camera)
 	setup_visibility_fog()
+	if floor_index==Layout.PLAYGROUND:
+		camera.get_node("LineOfSightFog").visible = false
+		var sun = DirectionalLight3D.new()
+		sun.rotation_degrees = Vector3(-55,-35,0)
+		sun.light_energy = .8
+		sun.shadow_enabled = true
+		add_child(sun)
 	var stone = Art.material("stone", [Color(.91,.87,.77),Color(.74,.80,.77),Color(.73,.70,.66),Color(.70,.76,.82),Color(.75,.69,.61),Color(.94,.87,.70)][floor_index])
 	# Pale quartz paving keeps the dark stone statues readable against the floor.
-	var paving = Art.quartz_material()
+	# The playground's floor is a mid grey, so every model reads against it.
+	var paving = Art.quartz_material(Color(.46,.47,.5) if floor_index==Layout.PLAYGROUND else Color(.70,.70,.72))
 	var court_paving = Art.quartz_material(Color(.74,.64,.64))
 	var lower = Vector2i(10000,10000)
 	var upper = Vector2i(-10000,-10000)
@@ -106,6 +119,8 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		upper = upper.max(Vector2i(at.x,at.z))
 		if not layout.arrival.has_point(cell):
 			place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),court_paving if layout.court.has_point(cell) else paving)
+		# The playground is an open plane, without walls.
+		if level==Layout.PLAYGROUND: continue
 		for direction in Layout.DIRS:
 			if layout.is_open(cell+direction): continue
 			# The court's solid centerpiece is the fountain, not a wall.
@@ -183,7 +198,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	add_child(exit_seal)
 	exit_seal.visible = false
 	if floor_index==2: setup_court_torches()
-	light_floor(torch_candidates)
+	if level!=Layout.PLAYGROUND: light_floor(torch_candidates)
 	if floor_index==5:
 		boss_point = layout.to_world(Vector2i(14,10))
 		setup_boss_moonlight()
@@ -855,6 +870,7 @@ func mark_visibility_cell(cell: Vector2i, pos: Vector3) -> void:
 		visibility_image.set_pixel(pixel.x,pixel.y,Color.WHITE)
 
 func cell_is_visible(cell: Vector2i) -> bool:
+	if level==Layout.PLAYGROUND: return true
 	var pixel = cell-VISIBILITY_GRID_ORIGIN
 	return pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y and visibility_image.get_pixel(pixel.x,pixel.y).r>.5
 

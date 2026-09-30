@@ -86,6 +86,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | R | Reset the run and turn off invulnerability |
 | F10 | Jump to this adaptation's crown ending and completion summary |
 | P | Hide/show the panel; shortcuts remain active |
+| Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Hits play their reactions but deal no damage and nothing dies; X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
 
 The panel also offers an instant summit jump without extra XP. Bare
 1 and 2 cast assigned skills. Floor jumps retain level and point budgets, refill health/energy, and reset enemies,

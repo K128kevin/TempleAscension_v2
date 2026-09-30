@@ -34,6 +34,9 @@ var mark_time = 0.0
 var stagger_time = 0.0
 var stagger_meter = 0.0
 var hit_reactions = 0
+# Driven by the debug playground instead of the AI.
+var puppet = false
+var puppet_goal = null
 # Hit pushback: each hit delays the next attack by a share of the unit's normal
 # time between attacks, rooting it for that time; a wind-up or cast in progress
 # is pushed back by the same amount. The share steps down with repeated hits
@@ -97,6 +100,9 @@ func tick(dt: float) -> void:
 	if hit_stun>0 and windup<=0 and laser_time<=0:
 		visual.locomotion(false,false)
 		return
+	if puppet:
+		puppet_tick(dt)
+		return
 	var player = game.player
 	var distance: float = position.distance_to(player.position)
 	if kind == "offering":
@@ -118,26 +124,11 @@ func tick(dt: float) -> void:
 				game.wake_offerings(i)
 		laser_cooldown -= dt
 		if laser_time > 0:
-			laser_time -= dt
-			laser_angle = rotate_toward(laser_angle,atan2(player.position.x-position.x,player.position.z-position.z),deg_to_rad(30)*dt)
-			face(position + Vector3(sin(laser_angle),0,cos(laser_angle)))
-			laser_model.tick(dt,laser_angle)
-			laser_tick -= dt
-			if laser_tick <= 0:
-				laser_tick = .1
-				var forward = Vector3(sin(laser_angle),0,cos(laser_angle))
-				var offset: Vector3 = player.position-position
-				if offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(10*.6*Data.DAMAGE_SCALE[game.run.difficulty],"physical",self)
-			if laser_time <= 0:
-				laser_model.queue_free()
-				busy = 0
+			gaze_tick(dt)
 			return
 		if laser_cooldown <= 0 and windup <= 0:
 			laser_cooldown = 16
-			windup = 1.0
-			cast_count = -1
-			attack_point = player.position
-			visual.play("Cast",windup/.5)
+			start_gaze(player.position)
 			game.toast("THE CROWN'S GAZE — keep moving around the statue")
 	if windup > 0:
 		windup -= dt
@@ -150,29 +141,7 @@ func tick(dt: float) -> void:
 		return
 	var reach: float = config.range
 	if distance <= reach and game.world.clear_line(position,player.position) and cooldown <= 0:
-		face(player.position)
-		attack_point = player.position
-		windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else (ARCHER_DRAW if kind == "archer" else .42))
-		if kind == "wizard":
-			# Every ranged cast is the fireball; frost comes only as the nova.
-			fireball_flight = clampf(distance/14.0,.4,.8)
-			windup = FIRE_CAST
-			cast_total = windup
-		cooldown = config.interval + windup
-		var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
-		var duration = windup+.25
-		var weapon_index = Data.WEAPONS.find(config.weapon)
-		var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT,"wizard":Motion.ORACLE_CAST}.get(kind,{})
-		if not signature.is_empty() and visual.clips.has(signature.clip):
-			clip = signature.clip
-			duration = windup/signature.contacts[0]
-		elif weapon_index>=0 and visual.clips.has(Motion.NORMAL[weapon_index].clip):
-			clip = Motion.NORMAL[weapon_index].clip
-			duration = windup/Motion.NORMAL[weapon_index].contacts[0]
-		attack_recovery = maxf(.25,duration-windup)
-		# The long cast plays its wind-up slowly; the follow-through is brief.
-		if kind == "wizard": attack_recovery = FIRE_RECOVERY
-		visual.play(clip,duration)
+		start_attack(player.position)
 	elif distance > reach * .85:
 		walk_to(player.position,dt)
 	elif kind == "wizard" and distance < 5:
@@ -182,6 +151,98 @@ func tick(dt: float) -> void:
 		face(player.position)
 		visual.locomotion(position.distance_to(before)>.005,false)
 	else: visual.locomotion(false,false)
+
+# Begin this statue's attack at `point`: face it, wind up and play the clip.
+func start_attack(point: Vector3) -> void:
+	face(point)
+	attack_point = point
+	windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else (ARCHER_DRAW if kind == "archer" else .42))
+	if kind == "wizard":
+		# Every ranged cast is the fireball; frost comes only as the nova.
+		fireball_flight = clampf(position.distance_to(point)/14.0,.4,.8)
+		windup = FIRE_CAST
+		cast_total = windup
+	cooldown = config.interval + windup
+	var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
+	var duration = windup+.25
+	var weapon_index = Data.WEAPONS.find(config.weapon)
+	var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT,"wizard":Motion.ORACLE_CAST}.get(kind,{})
+	if not signature.is_empty() and visual.clips.has(signature.clip):
+		clip = signature.clip
+		duration = windup/signature.contacts[0]
+	elif weapon_index>=0 and visual.clips.has(Motion.NORMAL[weapon_index].clip):
+		clip = Motion.NORMAL[weapon_index].clip
+		duration = windup/Motion.NORMAL[weapon_index].contacts[0]
+	attack_recovery = maxf(.25,duration-windup)
+	# The long cast plays its wind-up slowly; the follow-through is brief.
+	if kind == "wizard": attack_recovery = FIRE_RECOVERY
+	visual.play(clip,duration)
+
+# The Crowned Statue's gaze: a one-second wind-up, then the beam.
+func start_gaze(point: Vector3) -> void:
+	windup = 1.0
+	cast_count = -1
+	attack_point = point
+	visual.play("Cast",windup/.5)
+
+# The beam sweeps toward the hero, ticking damage while it crosses them.
+func gaze_tick(dt: float) -> void:
+	var player = game.player
+	laser_time -= dt
+	laser_angle = rotate_toward(laser_angle,atan2(player.position.x-position.x,player.position.z-position.z),deg_to_rad(30)*dt)
+	face(position + Vector3(sin(laser_angle),0,cos(laser_angle)))
+	laser_model.tick(dt,laser_angle)
+	laser_tick -= dt
+	if laser_tick <= 0:
+		laser_tick = .1
+		var forward = Vector3(sin(laser_angle),0,cos(laser_angle))
+		var offset: Vector3 = player.position-position
+		if offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(10*.6*Data.DAMAGE_SCALE[game.run.difficulty],"physical",self)
+	if laser_time <= 0:
+		laser_model.queue_free()
+		busy = 0
+
+# Playground control: the statue acts only when told to.
+func puppet_tick(dt: float) -> void:
+	if laser_time > 0:
+		gaze_tick(dt)
+		return
+	if windup > 0:
+		windup -= dt
+		if windup <= 0: release_attack()
+		return
+	if busy > 0: return
+	if puppet_goal != null and position.distance_to(puppet_goal) > .3:
+		walk_to(puppet_goal,dt)
+	else:
+		puppet_goal = null
+		visual.locomotion(false,false)
+
+# Playground: fall as if slain (statues crumble), with no rewards.
+func playground_kill() -> void:
+	if dead: return
+	dead = true
+	windup = 0; busy = 0; cast_total = 0; laser_time = 0
+	if is_instance_valid(laser_model): laser_model.queue_free()
+	if kind == "player": visual.play("Death")
+	else:
+		visual.crumble()
+		game.sound.play("stone-crumble",-8)
+
+# Playground: stand back up, whole, with a freshly built model.
+func playground_revive(weapon: String = "") -> void:
+	dead = false
+	death_age = 0
+	hp = max_hp
+	visible = true
+	stagger_time = 0; hit_stun = 0; pushback_step = 0
+	visual.queue_free()
+	visual = Visual.new()
+	add_child(visual)
+	if kind == "player": visual.setup(false,Color.WHITE,weapon)
+	else:
+		visual.setup(true,config.color,config.weapon,config.size,kind)
+		if kind == "boss": visual.crown()
 
 func release_attack() -> void:
 	if kind == "boss" and cast_count == -1:
@@ -277,6 +338,12 @@ func react_to_hit(heavy: bool = false) -> void:
 
 func hit(damage: float, type: String = "physical") -> void:
 	if dead or (kind == "offering" and dormant_offering): return
+	if game.playground != null:
+		# The playground shows every hit, but nothing takes damage.
+		game.sound.play("weapon-impact",-15)
+		react_to_hit()
+		push_back()
+		return
 	damage = Data.mitigate(damage,35.0 if kind=="boss" else (20.0 if kind=="centurion" else 0.0),0.0,int(game.run.level),type)
 	if mark_time>0: damage *= 1.2+Data.passive(game.run,"predator")*.01
 	hp -= damage
@@ -325,7 +392,7 @@ func landed_attack() -> void:
 	pushback_step = 0
 
 func die(reward: bool = true) -> void:
-	if dead: return
+	if dead or game.playground != null: return
 	dead = true
 	hp = 0
 	cast_total = 0

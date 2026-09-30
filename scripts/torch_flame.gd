@@ -94,7 +94,7 @@ func _process(delta: float) -> void:
 # that briefly gutter the flame.
 func flicker_at(t: float) -> float:
 	var slow = noise.get_noise_2d(t*1.6,0.0)
-	var fast = noise.get_noise_2d(t*3.2,37.0)
+	var fast = noise.get_noise_2d(t*2.3,37.0)
 	var gust = minf(0.0,noise.get_noise_2d(t*.45,91.0)+.35)*1.6
 	return clampf(slow*.8+fast*.35+gust*.6,-1.0,1.0)
 

@@ -22,6 +22,7 @@ var stairs_dir = Vector2i.UP
 # removed from `cells` like the ascent's.
 var arrival = Rect2i()
 var level_index = 0
+const PLAYGROUND = -1
 var arrival_dir = Vector2i.UP
 const STAIR_WIDTH = 2
 const STAIR_DEPTH = 4
@@ -94,6 +95,14 @@ func generate(run_seed: int, floor_index: int) -> void:
 	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i()
 	rng_state = floor_seed(run_seed,floor_index+1)
 	level_index = floor_index
+	# The debug playground: one open, flat square.
+	if floor_index==PLAYGROUND:
+		size = 34
+		rooms.append(Rect2i(1,1,32,32))
+		carve(rooms[0])
+		start = Vector2i(17,20)
+		exit_cell = start
+		return
 	if floor_index==5:
 		size = 30
 		rooms.append(Rect2i(1,1,26,18))

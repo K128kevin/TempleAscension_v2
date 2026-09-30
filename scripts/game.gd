@@ -54,6 +54,8 @@ var sound
 var debug
 var skills
 var creating_character = false
+# The debug playground, while it is open (Shift+P in debug mode).
+var playground = null
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
@@ -214,7 +216,8 @@ func _process(dt: float) -> void:
 		# attack and its animation both start at time zero on this clock.
 		tick_scheduled(dt)
 		if not player.dead: skills.tick(dt)
-		player_control(dt)
+		if playground != null: playground.tick(dt)
+		if playground == null or playground.hero_selected(): player_control(dt)
 		world.update_visibility(player.position,dt)
 		for enemy in enemies: enemy.tick(dt)
 		tick_projectiles(dt)
@@ -234,7 +237,7 @@ func _process(dt: float) -> void:
 		heal_cd = maxf(0,heal_cd-dt)
 		slowed = maxf(0,slowed-dt)
 		save_timer += dt
-		if save_timer>8:
+		if save_timer>8 and playground == null:
 			save_timer = 0
 			save_run()
 		tick_effects(dt)
@@ -242,7 +245,7 @@ func _process(dt: float) -> void:
 	for enemy in enemies:
 		if enemy.dead or not enemy.awake or not enemy.visible or enemy.position.distance_squared_to(player.position)>900: continue
 		world.occlusion_targets.append({"position":enemy.position,"height":1.8*enemy.config.size})
-	world.follow(player.position,dt)
+	world.follow(playground.focus() if playground != null else player.position,dt)
 	if is_instance_valid(world.fountain): world.fountain.tick(dt,player.position,mode=="playing")
 	hud.tick(dt)
 	update_enemy_hover()
@@ -269,6 +272,9 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if mode!="playing": return
+	if playground != null and playground.unhandled(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP: world.zoom = maxf(15,world.zoom-1.5)
 		elif event.button_index==MOUSE_BUTTON_WHEEL_DOWN: world.zoom = minf(36,world.zoom+1.5)
@@ -525,6 +531,11 @@ func awaken(enemy) -> void:
 
 # `source` is the enemy whose attack this is; landing it resets its pushback.
 func hurt_player(damage: float, type: String = "physical", source = null) -> void:
+	if playground != null:
+		# The playground shows the hit, but the hero takes no damage.
+		if not player.dead: player.react_to_hit(false)
+		if is_instance_valid(source): source.landed_attack()
+		return
 	if player.dead or player.invulnerable>0 or invincible_test or (debug.enabled and debug.invulnerable): return
 	damage = Data.mitigate(damage,10.0,0.0,Data.ENEMY_LEVELS[run.floor],type)
 	damage *= 1.0-Data.passive(run,"bulwark")*.01
@@ -820,8 +831,22 @@ func new_run_menu() -> void:
 		hud.button(Data.DIFFICULTIES[i],func(): ProgressionUI.creation(self,i))
 	if not creating_character: hud.button("Back",resume_game)
 
+func enter_playground() -> void:
+	if playground != null: return
+	playground = preload("res://scripts/playground.gd").new()
+	add_child(playground)
+	playground.enter(self)
+
+func leave_playground() -> void:
+	if playground == null: return
+	playground.leave()
+	playground.queue_free()
+	playground = null
+	load_floor()
+
 func save_run() -> void:
-	if creating_character: return
+	# The playground's units and runs are never saved.
+	if creating_character or playground != null: return
 	run.heal_cooldown = heal_cd
 	if not is_instance_valid(player): return
 	run.health = maxf(1,player.hp)

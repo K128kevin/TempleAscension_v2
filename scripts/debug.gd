@@ -92,6 +92,13 @@ func handle_key(event: InputEventKey) -> bool:
 		execute("floor",key-KEY_1)
 		return true
 	if event.ctrl_pressed or event.alt_pressed or event.meta_pressed: return false
+	if key==KEY_P and event.shift_pressed:
+		if game.playground != null: game.leave_playground()
+		elif game.mode=="playing": game.enter_playground()
+		return true
+	# In the playground only the panel toggle applies; floor and run shortcuts
+	# would tear it down.
+	if game.playground != null and key != KEY_P: return false
 	if key==KEY_P:
 		execute("panel")
 		return true

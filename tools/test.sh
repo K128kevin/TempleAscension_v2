@@ -18,6 +18,7 @@ mkdir -p test-results
 "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"
 "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-normal.log"
 "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-regression.log" -- --debug-mode --floor=3 --bow --axe
+"$godot_bin" --headless --path . --script tests/playground.gd --log-file "$PWD/test-results/playground.log" -- --debug-mode
 if [ "${RENDER_TEST:-0}" = "1" ]; then
   "$godot_bin" --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover-native.log" -- --render-hover
   "$godot_bin" --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing-native.log" -- --live-attacks

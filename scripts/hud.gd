@@ -242,7 +242,7 @@ func tick(dt: float) -> void:
 	energy.material.set_shader_parameter("fill",clampf(r.energy/maximum_energy,0,1))
 	hp_text.text = "%d / %d" % [maxf(0,game.player.hp),maximum_health]
 	en_text.text = "%d / %d" % [r.energy,maximum_energy]
-	objective.text = "%s · %s" % ["SUMMIT" if r.floor==5 else "FLOOR %d" % (r.floor+1),Data.FLOORS[r.floor].to_upper()]
+	objective.text = "PLAYGROUND · Shift+P leaves" if game.playground != null else "%s · %s" % ["SUMMIT" if r.floor==5 else "FLOOR %d" % (r.floor+1),Data.FLOORS[r.floor].to_upper()]
 	difficulty.text = "%s mode" % Data.DIFFICULTIES[r.difficulty]
 	var remaining: int = game.remaining()
 	status.text = "%d statues remain" % remaining if remaining>0 else ("The crown awaits" if r.floor==5 else "The way up is open")
@@ -366,7 +366,7 @@ func point_to_nearest_enemy() -> void:
 	var remaining: int = game.remaining()
 	enemy_arrow.visible = false
 	# Not on the summit, where the only statue left is the Crowned Statue itself.
-	if game.run.floor==5 or game.mode!="playing" or game.player.dead or remaining==0 or remaining>ARROW_SHOW_AT: return
+	if game.playground != null or game.run.floor==5 or game.mode!="playing" or game.player.dead or remaining==0 or remaining>ARROW_SHOW_AT: return
 	var nearest = null
 	var best = INF
 	for e in game.enemies:
