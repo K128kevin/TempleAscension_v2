@@ -54,6 +54,14 @@ static func quartz_material(tint: Color = Color(.70,.70,.72)) -> ShaderMaterial:
 	materials[key] = m
 	return m
 
+# Grey cleft-slate pavers in an ashlar pattern, for the open-air terraces.
+static func slate_material() -> ShaderMaterial:
+	if materials.has("slate"): return materials.slate
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/slate_paving.gdshader")
+	materials.slate = m
+	return m
+
 static func material(kind: String, tint: Color = Color.WHITE) -> StandardMaterial3D:
 	var key = kind + tint.to_html()
 	if materials.has(key): return materials[key]
@@ -69,6 +77,18 @@ static func material(kind: String, tint: Color = Color.WHITE) -> StandardMateria
 		m.metallic = .65
 		m.roughness = .4
 	if kind == "gold": m.albedo_color = Color(.93,.62,.19)
+	materials[key] = m
+	return m
+
+# A stone material projected at a fixed size in the world rather than per
+# model, for walls of very different proportions: as dense as on a full-height
+# wall (where one 0.35 tile spans its 3.2m).
+static func world_stone(source: StandardMaterial3D) -> StandardMaterial3D:
+	var key = "world" + str(source.get_instance_id())
+	if materials.has(key): return materials[key]
+	var m: StandardMaterial3D = source.duplicate()
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE*(.35/3.2)
 	materials[key] = m
 	return m
 

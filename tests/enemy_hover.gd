@@ -63,6 +63,24 @@ func verify():
 				await snapshot("gladiator-half-health")
 			await mouse(center+Vector2(100,0))
 			check(not game.hover_ring.visible and not bar.visible,"Moving outside the click area hides both indicators")
+	# Attacks aimed while a statue is targeted fly at its centre, even with the
+	# cursor above its head, where the ground under the cursor lies far behind.
+	game.world.zoom=15; game.world.follow(at,1)
+	var above: Vector2=body(enemy)+Vector2(0,-45)
+	check(game.enemy_at_screen(above)==enemy and game.world.ground_at(above).distance_to(enemy.position)>1.0,"Aiming just above a statue still targets it")
+	check(game.aim_point(above).distance_to(enemy.position)<.001,"Attacks aim at the targeted statue's centre")
+	check(game.aim_point(body(enemy)+Vector2(140,0)).distance_to(game.world.ground_at(body(enemy)+Vector2(140,0)))<.001,"Away from statues, attacks aim at the ground under the cursor")
+	var reactions: int=enemy.hit_reactions
+	var shot_from: Vector3=enemy.position+Vector3(-6,0,0)
+	game.projectile(shot_from,game.aim_point(above),0,true,"arrow")
+	for i in 30: game.tick_projectiles(1.0/60)
+	check(enemy.hit_reactions>reactions or enemy.hp<enemy.max_hp,"An arrow aimed above a targeted statue hits it")
+	# The temple zooms in as close as the playground does.
+	game.mode="playing"
+	var wheel_in=InputEventMouseButton.new(); wheel_in.pressed=true; wheel_in.button_index=MOUSE_BUTTON_WHEEL_UP
+	for i in 40: game._unhandled_input(wheel_in)
+	check(is_equal_approx(game.world.zoom,game.MIN_ZOOM) and game.MIN_ZOOM==3.0,"The temple zooms in as close as the playground")
+	game.world.zoom=15
 	# Overlapping areas select the nearest body center consistently.
 	var other=game.enemies[1]; other.dead=false; other.visible=true
 	other.position=at+Vector3(1.5,0,0)

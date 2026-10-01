@@ -26,7 +26,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
 | 1 / 2 | Cast the other two assigned active skills |
 | C / K / I | Character attributes / skills and assignments / equipment |
-| Mouse wheel, trackpad scroll or pinch | Zoom |
+| Mouse wheel, trackpad scroll or pinch | Zoom (in close enough to look at the models) |
 | E | Ascend, claim the crown, or rest at a safe entrance |
 | Escape | Pause, continue saved game, choose new run/difficulty, sound, quit |
 | F11 | Fullscreen |
@@ -44,9 +44,13 @@ with an explanation. Character, skill and equipment screens pause combat.
 
 The temple's dark interiors are illuminated mainly by torch stations, placed so every
 hallway and room stays readable, with
-animated flames, rising embers and subtle independent light flicker. The
+animated flames, rising embers and subtle independent light flicker. On the
+low parapets of the terraces and the summit the light comes from bronze
+braziers standing on the wall tops, burning with the same flame. The
 terraces on floors four and five look down onto nearby moonlit dunes and ruins,
-with mountains and a river farther away. Below the summit, the building steps down: one storey lower, the stone roof of floor 5
+with mountains and a river farther away. The terraces are paved in grey
+cleft slate laid in an ashlar pattern of mixed-size slabs, unlike the halls'
+quartz. Below the summit, the building steps down: one storey lower, the stone roof of floor 5
 wraps its south and east sides, and a storey below that, floor 4's quartz-paved terrace.
 The south and east sides of the building on the terrace floors, and of the summit, drop away
 as several storeys of stone wall, ledges and columns, so the galleries read as the roof
@@ -86,7 +90,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | R | Reset the run and turn off invulnerability |
 | F10 | Jump to this adaptation's crown ending and completion summary |
 | P | Hide/show the panel; shortcuts remain active |
-| Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click on the ground, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Any unit attacks by left clicking another unit (hero or statue) or with Shift + left click, and every attack can hit any other unit. The camera zooms in much closer here. Hits play their reactions but deal no damage and nothing dies; X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
+| Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click on the ground, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Any unit attacks by left clicking another unit (hero or statue) or with Shift + left click, and every attack can hit any other unit. Hits play their reactions but deal no damage and nothing dies; X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
 
 The panel also offers an instant summit jump without extra XP. Bare
 1 and 2 cast assigned skills. Floor jumps retain level and point budgets, refill health/energy, and reset enemies,
@@ -204,7 +208,9 @@ separate from earlier games:
 
 Enemy click areas have a minimum radius of 64 logical pixels, with extra room
 for tall enemies at close zoom. Hovering shows a red ring at their feet and a
-small health bar above their head. Hover and attack selection use the same area;
+small health bar above their head. While the ring shows, every attack and
+ability (Shift+click, held clicks, right click, 1 and 2) aims at the centre of
+that enemy rather than the ground under the cursor. Hover and attack selection use the same area;
 HUD controls, dead enemies and dormant centurions do not trigger this feedback.
 
 The local library supplies humanoid rigs, so the original lion enemy is represented

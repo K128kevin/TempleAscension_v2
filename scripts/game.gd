@@ -277,10 +277,12 @@ func _input(event: InputEvent) -> void:
 			else: ProgressionUI.equipment(self)
 			get_viewport().set_input_as_handled()
 
-# Moves the camera in (negative) or out, within its limits. The playground
-# zooms in much closer, for looking at models.
+# Moves the camera in (negative) or out, within its limits; close in, the
+# wheel takes finer steps.
+const MIN_ZOOM = 3.0
+const MAX_ZOOM = 36.0
 func zoom_camera(amount: float) -> void:
-	world.zoom = clampf(world.zoom+amount,3.0 if playground != null else 15.0,36.0)
+	world.zoom = clampf(world.zoom+amount,MIN_ZOOM,MAX_ZOOM)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if mode!="playing": return
@@ -298,7 +300,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseButton and event.pressed:
-		if event.button_index==MOUSE_BUTTON_WHEEL_UP: zoom_camera(-(1.0 if playground != null and world.zoom<=12 else 1.5))
+		if event.button_index==MOUSE_BUTTON_WHEEL_UP: zoom_camera(-(1.0 if world.zoom<=12 else 1.5))
 		elif event.button_index==MOUSE_BUTTON_WHEEL_DOWN: zoom_camera(1.5)
 		elif event.button_index==MOUSE_BUTTON_LEFT:
 			left_held = true
@@ -311,8 +313,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_SPACE: dash()
 			KEY_Q: heal()
 			KEY_E: interact()
-			KEY_1: skills.cast_slot(1,world.pointer())
-			KEY_2: skills.cast_slot(2,world.pointer())
+			KEY_1: skills.cast_slot(1,aim_point())
+			KEY_2: skills.cast_slot(2,aim_point())
 			KEY_F11:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
@@ -349,6 +351,17 @@ func enemy_at_screen(mouse: Vector2, exclude = null):
 			nearest = a
 	return nearest
 
+# Where an attack or ability is aimed: the centre of the unit under the cursor
+# when it is targeted (its red ring showing), otherwise the ground under the
+# cursor. So an arrow loosed while hovering a statue flies at its middle.
+# `screen` is a viewport position; by default, the mouse.
+func aim_point(screen = null) -> Vector3:
+	if screen == null:
+		var hovered = clicked_enemy() if mode=="playing" else null
+		return hovered.position if is_instance_valid(hovered) else world.pointer()
+	var under = enemy_at_screen(screen)
+	return under.position if is_instance_valid(under) else world.ground_at(screen)
+
 func update_enemy_hover() -> void:
 	var hovered = clicked_enemy() if mode=="playing" and not player.dead else null
 	hover_ring.visible = is_instance_valid(hovered)
@@ -364,7 +377,7 @@ func issue_click(special: bool) -> void:
 	if Input.is_physical_key_pressed(KEY_SHIFT):
 		target = null
 		route.clear()
-		attack(special,world.pointer())
+		attack(special,aim_point())
 		return
 	var clicked = clicked_enemy()
 	if clicked:
@@ -377,7 +390,7 @@ func issue_click(special: bool) -> void:
 	elif special:
 		target = null
 		route.clear()
-		attack(true,world.pointer())
+		attack(true,aim_point())
 	else:
 		target = null
 		route = world.path(player.position,world.pointer())
@@ -404,7 +417,7 @@ func player_control(dt: float) -> void:
 		target = null
 		order_pending = false
 		route.clear()
-		if left_held or right_held: attack(right_held,world.pointer())
+		if left_held or right_held: attack(right_held,aim_point())
 	else:
 		if is_instance_valid(target) and (target.dead or (not order_pending and not left_held and not right_held)):
 			target = null

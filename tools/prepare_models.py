@@ -22,7 +22,9 @@ sources={
  'bow':ROOT/'source_art/bow.glb','gem':nature/'Pebble_Square_2.gltf',
  'rock':nature/'Rock_Medium_3.gltf','tree':nature/'DeadTree_1.gltf',
  'bookcase':props/'Bookcase_2.gltf','books':props/'BookGroup_Medium_1.gltf','chalice':props/'Chalice.gltf',
- 'grass':nature/'Grass_Wispy_Short.gltf', 'fern':nature/'Fern_1.gltf'
+ 'grass':nature/'Grass_Wispy_Short.gltf', 'fern':nature/'Fern_1.gltf',
+ # A three-legged fire bowl for the braziers on the terrace walls.
+ 'fire_bowl':props/'Cauldron.gltf'
 }
 out=ROOT/'assets/models/props';out.mkdir(parents=True,exist_ok=True)
 only = sys.argv[sys.argv.index("--only")+1] if "--only" in sys.argv else None

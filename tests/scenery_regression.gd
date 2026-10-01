@@ -1,5 +1,6 @@
 extends SceneTree
 const Save = preload("res://scripts/save.gd")
+const Art = preload("res://scripts/assets.gd")
 const Data = preload("res://scripts/data.gd")
 var game
 var passed: Array[String] = []
@@ -41,6 +42,31 @@ func test():
 		var world = game.world
 		check(is_instance_valid(world.fountain)==(index==2),"Fountain exists only on floor 3 (%d)" % (index+1))
 		check(is_instance_valid(world.desert_backdrop)==(index in [3,4]),"Desert backdrop exists only on terrace floors (%d)" % (index+1))
+		# Low parapets (terraces, summit) carry braziers on their tops, not wall
+		# torches, and are built of short pieces so their carved stones keep
+		# their shape.
+		var has_parapets = index==5 or not world.layout.terrace.is_empty()
+		check(world.braziers.is_empty()!=has_parapets,"Braziers stand only where there are low parapets (%d)" % (index+1))
+		var seated = true
+		for bowl in world.braziers:
+			seated = seated and is_equal_approx(bowl.position.y,world.LOW_WALL_HEIGHT) and not world.layout.cells.has(world.layout.to_cell(bowl.position))
+		check(seated,"Every brazier sits on top of a wall (%d)" % (index+1))
+		var unshaded = true
+		for bowl in world.braziers:
+			for mesh in bowl.find_children("*","MeshInstance3D",true,false): unshaded = unshaded and mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		check(unshaded,"Brazier bowls cast no shadow into themselves (%d)" % (index+1))
+		# The terraces are paved in grey slate, the halls in quartz.
+		var slate = false
+		for batch in world.visibility_floor_batches:
+			if batch.node.material_override == Art.slate_material():
+				slate = true
+				for cell in batch.cells: slate = slate and world.layout.on_terrace(cell)
+		check(slate == (not world.layout.terrace.is_empty()),"Terrace floors, and only they, are slate (%d)" % (index+1))
+		var longest_low = 0.0
+		for n in world.visibility_nodes:
+			if is_instance_valid(n) and n.scene_file_path.ends_with("wall.glb") and is_equal_approx(n.scale.y,world.LOW_WALL_HEIGHT):
+				longest_low = maxf(longest_low,maxf(n.scale.x,n.scale.z))
+		check(longest_low<1.5,"Low walls are built of short pieces (%d: %.2fm)" % [index+1,longest_low])
 		if index<5:
 			var dark = 0
 			for cell in world.layout.cells:

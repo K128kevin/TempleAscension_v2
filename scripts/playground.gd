@@ -209,24 +209,26 @@ func unhandled(event: InputEvent) -> bool:
 			return true
 	if hero_selected() or selected == null or selected.dead: return false
 	var point: Vector3 = game.world.pointer()
+	# As for the hero: attacks aim at the centre of a unit under the cursor.
+	var other = game.enemy_at_screen(game.get_viewport().get_mouse_position(),selected)
+	var aim: Vector3 = other.position if other != null else point
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			# Shift+click attacks in place; clicking another unit attacks it;
 			# clicking the ground walks there.
-			var other = game.enemy_at_screen(game.get_viewport().get_mouse_position(),selected)
 			if Input.is_physical_key_pressed(KEY_SHIFT) or event.shift_pressed or other != null:
 				if selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0:
-					selected.start_attack(other.position if other != null else point)
+					selected.start_attack(aim)
 			else: selected.puppet_goal = point
 			return true
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			if selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0:
-				selected.start_attack(point)
+				selected.start_attack(aim)
 			return true
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_1 and selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0:
 			if selected.kind == "wizard": selected.cast_nova()
-			elif selected.kind == "boss": selected.start_gaze(point)
+			elif selected.kind == "boss": selected.start_gaze(aim)
 			return true
 		if event.physical_keycode in [KEY_2,KEY_SPACE,KEY_Q,KEY_E]: return true
 	return false

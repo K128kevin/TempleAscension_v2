@@ -19,6 +19,8 @@ var shadow_torches: Array[OmniLight3D] = []
 var torch_lights: Array[Vector3] = []
 # The wall each torch spot is mounted on, as a direction from the torch.
 var torch_walls: Dictionary = {}
+# The fire bowls standing on low parapets.
+var braziers: Array[Node3D] = []
 # Room-center tiles no wall torch reaches; the ambient light keeps them readable.
 var ambient_only: Dictionary = {}
 var fountain
@@ -32,6 +34,13 @@ const TORCH_ENERGY = 2.4
 const TORCH_RANGE = 9.0
 const TORCH_DECAY = 1.6
 const TORCH_HEIGHT = 2.22
+# The low parapets' height, and the braziers that stand on them: the fire
+# bowl's size, and how far from the torch spot (inside the wall) to the
+# wall's centre line.
+const LOW_WALL_HEIGHT = 1.0
+const BRAZIER_SIZE = Vector3(.5,.42,.48)
+const BRAZIER_INSET = .36
+const BRAZIER_FIRE_LIFT = .06
 # Estimated floor light, with Godot's omni falloff and floor incidence, that
 # still reads clearly in the dark temple: one torch at about three metres.
 const LIT_LEVEL = .12
@@ -118,7 +127,9 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		lower = lower.min(Vector2i(at.x,at.z))
 		upper = upper.max(Vector2i(at.x,at.z))
 		if not layout.arrival.has_point(cell):
-			place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),court_paving if layout.court.has_point(cell) else paving)
+			# The open-air terraces are paved in grey slate, not the halls' quartz.
+			var tiles = court_paving if layout.court.has_point(cell) else (Art.slate_material() if layout.on_terrace(cell) else paving)
+			place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),tiles)
 		# The playground is an open plane, without walls.
 		if level==Layout.PLAYGROUND: continue
 		for direction in Layout.DIRS:
@@ -127,7 +138,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			if layout.court_obstacle.has_point(cell+direction): continue
 			var horizontal_edge: bool = direction.y!=0
 			var line: float = (at.z+direction.y*.5) if horizontal_edge else (at.x+direction.x*.5)
-			var low = floor_index==5 or (layout.on_terrace(cell) and not Rect2i(0,0,layout.size,layout.size).has_point(cell+direction))
+			var low = low_wall(cell,direction)
 			var key = "%s:%s:%s:%s" % [horizontal_edge,line,direction,low]
 			if not edges.has(key): edges[key] = {"horizontal":horizontal_edge,"line":line,"direction":direction,"low":low,"along":[]}
 			edges[key].along.append(int(at.x if horizontal_edge else at.z))
@@ -147,21 +158,32 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			while index<edge.along.size() and edge.along[index]==last+1 and last-first<3:
 				last = edge.along[index]
 				index += 1
-			var mid = (first+last)*.5
-			var pos = Vector3(mid,0,edge.line+edge.direction.y*.14) if edge.horizontal else Vector3(edge.line+edge.direction.x*.14,0,mid)
-			var height = 1.0 if edge.low else WALL_HEIGHT
-			# Extend each end to the adjacent wall's centerline. The authored
-			# molding is wider than its stone core, so a tiny cap overlap leaves
-			# open seams at right-angle corners.
-			var dimensions = Vector3(last-first+1.28,height,.28) if edge.horizontal else Vector3(.28,height,last-first+1.28)
-			var wall = place("wall",pos,dimensions,stone)
-			# Walls stand in solid cells that are never seen themselves. Reveal each
-			# one from the floor it faces, never from the far side of the wall.
-			var faces: Array[Vector2i] = []
-			for along in range(first,last+1):
-				var floor_at = Vector3(along,0,edge.line-edge.direction.y*.5) if edge.horizontal else Vector3(edge.line-edge.direction.x*.5,0,along)
-				faces.append(layout.to_cell(floor_at))
-			visibility_cells[wall] = faces
+			# Low parapets are built of short pieces, about a cell long, so the
+			# wall model's carved stones keep their shape: one squashed to a
+			# third of its height and stretched over four cells flattens them
+			# into long slabs. Full walls span up to four cells.
+			var pieces: Array = [[first,last]]
+			if edge.low:
+				pieces = []
+				for along in range(first,last+1): pieces.append([along,along])
+			for piece in pieces:
+				# Ends at the run's corners extend to the adjacent wall's
+				# centerline: the authored molding is wider than its stone core,
+				# so a tiny cap overlap leaves open seams at right-angle corners.
+				var start: float = piece[0]-.5-(.14 if piece[0]==first else 0.0)
+				var finish: float = piece[1]+.5+(.14 if piece[1]==last else 0.0)
+				var mid = (start+finish)*.5
+				var pos = Vector3(mid,0,edge.line+edge.direction.y*.14) if edge.horizontal else Vector3(edge.line+edge.direction.x*.14,0,mid)
+				var height = LOW_WALL_HEIGHT if edge.low else WALL_HEIGHT
+				var dimensions = Vector3(finish-start,height,.28) if edge.horizontal else Vector3(.28,height,finish-start)
+				var wall = place("wall",pos,dimensions,Art.world_stone(stone) if edge.low else stone)
+				# Walls stand in solid cells that are never seen themselves. Reveal
+				# each piece from the floor it faces, never from the far side.
+				var faces: Array[Vector2i] = []
+				for along in range(piece[0],piece[1]+1):
+					var floor_at = Vector3(along,0,edge.line-edge.direction.y*.5) if edge.horizontal else Vector3(edge.line-edge.direction.x*.5,0,along)
+					faces.append(layout.to_cell(floor_at))
+				visibility_cells[wall] = faces
 	# The generated rooms determine every landmark and decoration placement.
 	for i in layout.rooms.size():
 		var room: Rect2i = layout.rooms[i]
@@ -341,7 +363,7 @@ func setup_summit_understructure(stone: Material) -> void:
 	tier_roof(near,far,roof_far,-8.0,stone)
 	summit_tier(near,roof_far,-8.0,1,stone)
 	var terrace_far = roof_far+Vector3(SUMMIT_TERRACE_WIDTH,0,SUMMIT_TERRACE_WIDTH)
-	tier_roof(near,roof_far,terrace_far,-16.0,Art.quartz_material())
+	tier_roof(near,roof_far,terrace_far,-16.0,Art.slate_material())
 	summit_tier(near,terrace_far,-16.0,3,stone)
 
 # One step of the building: storeys along the south and east edges of the
@@ -358,9 +380,9 @@ func tier_roof(near: Vector3, inner: Vector3, outer: Vector3, top: float, surfac
 	for strip in [south,east]:
 		var middle: Vector2 = strip.get_center()
 		place_scenery("floor",Vector3(middle.x,top-.3,middle.y),Vector3(strip.size.x,.3,strip.size.y),surface)
-	var parapet = Art.material("stone",Color(.72,.68,.6))
-	place_scenery("wall",Vector3((near.x+outer.x)*.5,top,outer.z-.14),Vector3(outer.x-near.x,1.0,.28),parapet)
-	place_scenery("wall",Vector3(outer.x-.14,top,(near.z+outer.z)*.5),Vector3(.28,1.0,outer.z-near.z),parapet)
+	var parapet = Art.world_stone(Art.material("stone",Color(.72,.68,.6)))
+	parapet_run(Vector3(near.x,top,outer.z-.14),Vector3(outer.x,top,outer.z-.14),parapet)
+	parapet_run(Vector3(outer.x-.14,top,near.z),Vector3(outer.x-.14,top,outer.z),parapet)
 
 # Storeys of the building below a terrace edge, like the summit's: a wall per
 # storey, a projecting stone course and columns, so the gallery reads as the
@@ -464,6 +486,17 @@ func build_arrival(stone: Material) -> void:
 		lip.position = c[0]+Vector3.UP*.01
 		visibility_nodes.append(lip)
 		visibility_cells[lip] = cells
+
+# A low scenery parapet from `a` to `b` (along X or Z), in pieces about a
+# metre and a quarter long, so its carved stones keep their shape.
+func parapet_run(a: Vector3, b: Vector3, mat: Material) -> void:
+	var length = a.distance_to(b)
+	var count = maxi(1,roundi(length/1.28))
+	var along_x = absf(b.x-a.x)>absf(b.z-a.z)
+	for i in count:
+		var mid = a.lerp(b,(i+.5)/count)
+		var piece = length/count+.02
+		place_scenery("wall",mid,Vector3(piece,LOW_WALL_HEIGHT,.28) if along_x else Vector3(.28,LOW_WALL_HEIGHT,piece),mat)
 
 func place_scenery(id: String, pos: Vector3, size: Vector3, mat: Material) -> Node3D:
 	var n = place(id,pos,size,mat)
@@ -581,22 +614,48 @@ func nearest_torch(placed: Array[Vector3], at: Vector3) -> float:
 	for other in placed: nearest = minf(nearest,other.distance_to(at))
 	return nearest
 
+# Whether the wall on `direction`'s side of `cell` is a low parapet: every wall
+# of the summit, and a terrace's outer edge.
+func low_wall(cell: Vector2i, direction: Vector2i) -> bool:
+	return level==5 or (layout.on_terrace(cell) and not Rect2i(0,0,layout.size,layout.size).has_point(cell+direction))
+
 func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
 	torch_walls[at] = wall
-	var fixture = place("brazier",at,Vector3(.6,1.6,.6),Art.material("gold"))
-	# The fixture's back plate is on its local -Z side; turn it flat to the wall.
-	fixture.rotation.y = atan2(-wall.x,-wall.z)
-	var flame = place("torch_lit",at+Vector3.UP,Vector3(.5,1.0,.5))
-	for mesh in flame.find_children("*","MeshInstance3D",true,false):
-		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		for surface in mesh.mesh.get_surface_count():
-			var source = mesh.get_active_material(surface)
-			var material = ShaderMaterial.new()
-			material.shader = preload("res://assets/shaders/torch.gdshader")
-			if source is StandardMaterial3D: material.set_shader_parameter("atlas",source.albedo_texture)
-			mesh.set_surface_override_material(surface,material)
+	var cell = layout.to_cell(at)
+	# On a low parapet the light is a brazier standing on the wall's top: a
+	# bronze fire bowl on three legs, burning with the torches' own flame.
+	var brazier = level!=Layout.PLAYGROUND and low_wall(cell,Vector2i(roundi(wall.x),roundi(wall.z)))
+	var flame_at: Vector3
+	if brazier:
+		var bowl_at = at+wall*BRAZIER_INSET+Vector3.UP*LOW_WALL_HEIGHT
+		var bowl = place("fire_bowl",bowl_at,BRAZIER_SIZE,Art.bronze())
+		braziers.append(bowl)
+		# The fire lights the bowl from within: the bowl casts no shadow, so
+		# its inside is never shaded from its own flame.
+		for mesh in bowl.find_children("*","MeshInstance3D",true,false):
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# It stands on the wall; it is seen from the floor in front of it.
+		visibility_cells[bowl] = [cell]
+		flame_at = bowl_at+Vector3.UP*BRAZIER_SIZE.y*.82
+	else:
+		var fixture = place("brazier",at,Vector3(.6,1.6,.6),Art.material("gold"))
+		# The fixture's back plate is on its local -Z side; turn it flat to the wall.
+		fixture.rotation.y = atan2(-wall.x,-wall.z)
+		var flame = place("torch_lit",at+Vector3.UP,Vector3(.5,1.0,.5))
+		for mesh in flame.find_children("*","MeshInstance3D",true,false):
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			for surface in mesh.mesh.get_surface_count():
+				var source = mesh.get_active_material(surface)
+				var material = ShaderMaterial.new()
+				material.shader = preload("res://assets/shaders/torch.gdshader")
+				if source is StandardMaterial3D: material.set_shader_parameter("atlas",source.albedo_texture)
+				mesh.set_surface_override_material(surface,material)
+		# The flame rises from the torch's wick.
+		flame_at = at+Vector3.UP*1.96
 	var light = OmniLight3D.new()
-	light.position = at+Vector3.UP*TORCH_HEIGHT
+	# A torch's light hangs just above its wick; a brazier's sits in the fire,
+	# just inside the bowl's rim, so it lights the whole inside of the bowl.
+	light.position = flame_at+Vector3.UP*(BRAZIER_FIRE_LIFT if brazier else TORCH_HEIGHT-1.96)
 	light.light_color = Color(1,.60,.28)
 	torch_lights.append(at)
 	light.light_energy = TORCH_ENERGY
@@ -613,12 +672,14 @@ func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
 	add_child(light)
 	visibility_nodes.append(light)
 	var fire = preload("res://scripts/torch_flame.gd").new()
-	# The flame rises from the torch's wick.
-	fire.position = at+Vector3.UP*1.96
+	fire.position = flame_at
 	# Stable spatial phases keep neighboring torches from pulsing in unison.
 	fire.setup(light,fposmod(at.x*12.9898+at.z*78.233,100.0))
 	add_child(fire)
 	visibility_nodes.append(fire)
+	if brazier:
+		visibility_cells[light] = [cell]
+		visibility_cells[fire] = [cell]
 
 func place(id: String, pos: Vector3, size: Vector3, mat: Material = null) -> Node3D:
 	# The wall's continuous face runs along local X. Rotate north–south
