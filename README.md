@@ -133,16 +133,30 @@ of maximum per second. Above the base:
 | Vitality | +10 maximum health |
 | Willpower | +3 maximum energy and +0.1 energy per second |
 
-Warrior starts with a large sword, a round steel shield and Cleave, wearing a
-bronze full helm, thick bronze scale armor, long brown trousers and brown leather
-boots; Ranger with bow and Power Shot, in a wool tunic under a dark green hooded
-cloak whose brim shades his face (the mid-calf cloak swings on a spring
-simulation and flows back as he moves; its shader folds the cloth over his
-legs wherever they press into it, so they never show through). He stands,
-runs and crouches as the warrior does, the bow held upright in his right hand;
-to shoot he turns side-on, locks the bow arm out at the target and draws the
-string to his jaw; Wizard with staff and Firebolt, in a deep, dark blue robe,
-hood and cape. The first skill point is spent on that starter.
+Each hero wears a painted, detailed kit after his concept art
+(tools/paint_kits.py paints it through the body's UVs, with relief and sheen
+maps; outfit_hero.py adds raised shells and props). Warrior starts with a
+large sword, a round steel shield worked with a lion boss, a sunburst and a
+Greek-key band, and Cleave, wearing a gladiator's steel helm with a face mask
+(large eye openings, a nose bar, a brim and a low spiked ridge), a cuirass of
+large overlapping steel scales
+with lion medallions and a baldric, a broad studded belt with a lion boss,
+leather strips at the shoulders, a steel manica on the sword arm, a kilt of
+leather pteruges (studded tabs, steel leaf motifs and a Greek-key band) that
+swings and folds over his legs like the ranger's cloak, over a tattered
+underskirt, steel greaves and knee guards, and strapped
+sandals. Ranger with bow and Power Shot: knee-high strapped leather boots,
+leather knee guards, a tattered green wool tunic, a broad belt and crossed
+straps, laced bracers, fingerless gloves, a beard, and a quiver, sheathed
+dagger, pouch and brooch; over it a weathered, frayed dark green hooded cloak
+whose brim shades his face (the mid-calf cloak swings on a spring simulation
+and flows back as he moves; its shader folds the cloth over his legs wherever
+they press into it, so they never show through). He stands, runs and crouches
+as the warrior does, carrying the bow at his side in his left hand, the hand
+he shoots from; to shoot he turns side-on, locks the bow arm out at the target
+and draws the string to his jaw. Wizard with a twisted silver staff crowned
+with a pale crystal, and Firebolt, in a deep navy wool robe, hood and cape,
+with a knotted leather sash, wrapped leather bracers and worn leather boots. The first skill point is spent on that starter.
 Each class has the plan's eight active skills and four passives, unlocking at
 levels 1, 4, 8, 12 and 18. Active skills have five ranks; passives have three.
 Rank is limited to `1 + floor((level - unlock_level) / 3)`. K shows scaling,

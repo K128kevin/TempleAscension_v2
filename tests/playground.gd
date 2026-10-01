@@ -1,6 +1,7 @@
 extends SceneTree
 ## Debug playground: opens with Shift+P in debug mode, holds every hero class and
 ## statue, lets any be driven, takes no damage, and kills/revives on demand.
+const Art = preload("res://scripts/assets.gd")
 const Data = preload("res://scripts/data.gd")
 var passed: Array[String] = []
 var failed: Array[String] = []
@@ -112,15 +113,35 @@ func test():
 	var cloth: ShaderMaterial = pg.heroes[1].visual.cloak_mesh.material_override
 	pg.heroes[1].visual.cloak_capsules()
 	check(cloth.shader.resource_path.ends_with("cloak.gdshader") and cloth.get_shader_parameter("capsule_count") == 6 and (cloth.get_shader_parameter("capsule_a") as PackedVector3Array).size() == 6,"The ranger's cloak folds over his legs (cloth shader with leg capsules)")
-	check(pg.heroes[0].visual.cloak == null,"The warrior wears no simulated cloth")
+	# The warrior's kilt swings on its own chains and folds over his legs.
+	var kilt_sim = pg.heroes[0].visual.cloak
+	check(kilt_sim != null and kilt_sim.setting_count == 16 and pg.heroes[0].visual.cloth_feel == pg.heroes[0].visual.CLOTH_KILT and pg.heroes[0].visual.cloak_mesh.name.begins_with("HeroKilt"),"The warrior's kilt is simulated cloth")
 	# The wizard's cape, the Oracle's and the Crowned Statue's swing the same
 	# way, from the shoulders, as heavier cloth.
 	for unit in [pg.heroes[2]]+game.enemies.filter(func(e): return e.kind in ["wizard","boss"]):
 		var sim = unit.visual.cloak
 		var cape_mesh = unit.visual.cloak_mesh
 		check(sim != null and sim.setting_count == 13 and cape_mesh != null and unit.visual.cloth_feel == unit.visual.CLOTH_HEAVY,"The %s's cape swings and folds over the legs" % pg.unit_name(unit))
+	# The ranger's detailed kit (tools/paint_kits.py, outfit_hero.py) is his
+	# alone, and replaces the plain boots.
+	var kit = ["RangerBoots","RangerBracers","RangerBelt","RangerQuiver","RangerDagger","RangerPouch","RangerBrooch","RangerBeard"]
+	for hero in pg.heroes:
+		var worn = {}
+		for mesh in hero.visual.skin_meshes: worn[String(mesh.name)] = mesh.visible
+		var ranger = hero.uid == "hero:ranger"
+		check(kit.all(func(n): return worn.get(n,not ranger) == ranger) and not worn.get("HeroBoots",false),"Only the ranger wears the ranger's kit (%s)" % hero.uid)
+	# The warrior and wizard have their own detailed kits too.
+	var kits = {"hero:warrior":["HeroGreaves","HeroBracers","HeroBelt","HeroKilt","HeroArmor","HeroHelmet"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardCape","WizardHood"]}
+	for hero in pg.heroes:
+		var worn = {}
+		for mesh in hero.visual.skin_meshes: worn[String(mesh.name)] = mesh.visible
+		for owner in kits:
+			check(kits[owner].all(func(n): return worn.get(n,false) == (hero.uid == owner)),"%s's kit is worn only by %s" % [owner,owner] + " (%s)" % hero.uid)
+	for cls in ["ranger","warrior","wizard"]:
+		var kit_material: StandardMaterial3D = Art.hero_kit(cls)
+		check(kit_material.normal_enabled and kit_material.normal_texture != null and kit_material.roughness_texture != null,"The %s's kit has painted relief and sheen" % cls)
 	var helm = pg.heroes[0].visual.skin_meshes.filter(func(m): return m.name == "HeroHelmet")[0]
-	check(helm.material_override.albedo_color.r > helm.material_override.albedo_color.b*2,"The warrior's helm is bronze")
+	check(helm.material_override is ShaderMaterial and helm.material_override.shader.resource_path.ends_with("gladiator_helm.gdshader"),"The warrior wears a steel gladiator helm, as in his concept art")
 	# Statue stone is laid out from the rest pose, so it stays fixed to the body
 	# as it animates; only the gladiator's scale armor is marked for scales.
 	for enemy in game.enemies:

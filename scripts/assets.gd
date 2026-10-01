@@ -133,11 +133,88 @@ static func cloth(tint: Color) -> StandardMaterial3D:
 # The hero's painted body kit (tools/paint_hero.py); the ranger's has a
 # wool tunic in place of the scales.
 static func hero_kit(hero_class: String) -> StandardMaterial3D:
-	var key = "hero_kit_ranger" if hero_class == "ranger" else "hero_kit"
+	var key = "hero_kit_" + hero_class
+	if not ResourceLoader.exists("res://assets/textures/%s.png" % key): key = "hero_kit"
 	if materials.has(key): return materials[key]
 	var m = StandardMaterial3D.new()
 	m.albedo_texture = load("res://assets/textures/%s.png" % key)
 	m.roughness = .65
+	# Each hero's kit is painted in full (tools/paint_kits.py): with its relief
+	# in a normal map, and leather, cloth and steel each their own sheen.
+	if key != "hero_kit":
+		m.normal_enabled = true
+		m.normal_texture = load("res://assets/textures/%s_normal.png" % key)
+		m.normal_scale = 1.0
+		m.roughness = 1.0
+		m.roughness_texture = load("res://assets/textures/%s_rough.png" % key)
+		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+		# Steel shines as metal (the painter marks it in the roughness map's
+		# green channel).
+		# Half metal: the scenes have no reflections for full metal to show,
+		# which leaves it near black.
+		m.metallic = .45
+		m.metallic_texture = load("res://assets/textures/%s_rough.png" % key)
+		m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+	materials[key] = m
+	return m
+
+# The warrior's round shield, worked in steel (assets/shaders/gladiator_shield.gdshader).
+static func gladiator_shield() -> ShaderMaterial:
+	if materials.has("gladiator_shield"): return materials.gladiator_shield
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/gladiator_shield.gdshader")
+	materials.gladiator_shield = m
+	return m
+
+# The wizard's twisted silver staff and crystal (assets/shaders/wizard_staff.gdshader).
+static func wizard_staff() -> ShaderMaterial:
+	if materials.has("wizard_staff"): return materials.wizard_staff
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/wizard_staff.gdshader")
+	materials.wizard_staff = m
+	return m
+
+# A bladed prop in its sheath (assets/shaders/sheathed.gdshader).
+static func sheathed(source: Material) -> Material:
+	if not source is BaseMaterial3D or source.albedo_texture == null: return source
+	var key = "sheathed%d" % source.get_instance_id()
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/sheathed.gdshader")
+	m.set_shader_parameter("albedo_texture",source.albedo_texture)
+	materials[key] = m
+	return m
+
+# An imported prop's own material, darkened and roughened by `shade`.
+static func weathered(source: Material, shade: float) -> Material:
+	if not source is BaseMaterial3D: return source
+	var key = "weathered%d:%f" % [source.get_instance_id(),shade]
+	if materials.has(key): return materials[key]
+	var m: BaseMaterial3D = source.duplicate()
+	m.albedo_color = m.albedo_color*Color(shade,shade,shade,1)
+	m.roughness = maxf(m.roughness,.75)
+	materials[key] = m
+	return m
+
+# A material drawn from both sides, for single sheets (sashes, straps), its
+# colour multiplied by `tint`.
+static func two_sided(source: StandardMaterial3D, tint: Color = Color.WHITE) -> StandardMaterial3D:
+	var key = "two_sided%d%s" % [source.get_instance_id(),tint.to_html()]
+	if materials.has(key): return materials[key]
+	var m: StandardMaterial3D = source.duplicate()
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.albedo_color = m.albedo_color*tint
+	materials[key] = m
+	return m
+
+# Hair and beards: a dark matte colour with a soft sheen.
+static func hair(tint: Color) -> StandardMaterial3D:
+	var key = "hair" + tint.to_html()
+	if materials.has(key): return materials[key]
+	var m = StandardMaterial3D.new()
+	m.albedo_color = tint
+	m.roughness = .7
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	materials[key] = m
 	return m
 

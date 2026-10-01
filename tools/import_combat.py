@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['OracleCast','ShieldHit','ShieldHitHead','ShieldHitStagger','ShieldHitKnockdown','ArcherShot','ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle']
+outputs=['OracleCast','ShieldHit','ShieldHitHead','ShieldHitStagger','ShieldHitKnockdown','ArcherShot','ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle','RangerIdle','RangerRun','RangerCrouch','WizardIdle','WizardRun','WizardCrouch']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -222,6 +222,65 @@ for name,source_name in [('BowRun','Run'),('BowCrouch','Crouch')]:
   crouched=name=='BowCrouch'
   arm('l',shoulder+Vector((.20,-.10,-.22 if crouched else -.34)),shoulder+Vector((.45,.08,-.12)))
   bow_carry_grip(-.14+.035*math.sin(f/60*math.tau),.85 if crouched else .18)
+  keys(length*30*f/60)
+ finish(name,a,length)
+
+# The ranger's own idle, run and crouch: the supplied clips (the warrior's
+# stance and stride) with the left hand closed round the bow he carries in it,
+# the hand he shoots from, so it never changes hands.
+# The wizard's own idle, run and crouch: the supplied clips with his right
+# hand raised before his chest, gripping his staff near its top like a
+# walking stick (scripts/visual.gd stands the staff upright beneath it).
+for name,source_name in [('WizardIdle','Idle'),('WizardRun','Run'),('WizardCrouch','Crouch')]:
+ original=bpy.data.actions[source_name]
+ length=original.frame_range.y/30
+ poses=[]
+ rig.animation_data.action=original
+ for f in range(61):
+  frame(length*f/60)
+  poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+ a=action(name)
+ for f,pose in enumerate(poses):
+  frame(length*f/60)
+  for b in rig.pose.bones:b.matrix_basis=pose[b.name]
+  bpy.context.view_layer.update()
+  shoulder=rig.pose.bones['upperarm_r'].matrix.translation.copy()
+  bob=.02*math.sin(f/60*math.tau*2) if name=='WizardRun' else 0.0
+  arm('r',shoulder+Vector((-.2,-.2,-.2+bob)),shoulder+Vector((-.45,.15,-.15)))
+  keys(length*30*f/60)
+ finish(name,a,length)
+
+# The idle's wrist and forearm, which the run's bow arm follows so the
+# carried bow swings with the arm and never across the body.
+rig.animation_data.action=bpy.data.actions['Idle']; frame(0)
+idle_hand=rig.pose.bones['hand_l'].matrix.to_quaternion()
+idle_forearm=(rig.pose.bones['hand_l'].head-rig.pose.bones['lowerarm_l'].head).normalized()
+for name,source_name in [('RangerIdle','Idle'),('RangerRun','Run'),('RangerCrouch','Crouch')]:
+ original=bpy.data.actions[source_name]
+ length=original.frame_range.y/30
+ poses=[]
+ rig.animation_data.action=original
+ for f in range(61):
+  frame(length*f/60)
+  poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+ a=action(name)
+ for f,pose in enumerate(poses):
+  frame(length*f/60)
+  for b in rig.pose.bones:b.matrix_basis=pose[b.name]
+  bpy.context.view_layer.update()
+  if name=='RangerRun':
+   # Running, the bow arm swings low beside the hip, forward and back with
+   # the stride, rather than pumping the bow up across the chest.
+   shoulder=rig.pose.bones['upperarm_l'].matrix.translation.copy()
+   swing=math.sin(f/60*math.tau)
+   arm('l',shoulder+Vector((.17,-.05-.13*swing,-.43)),shoulder+Vector((.45,.15,-.12)))
+   hand=rig.pose.bones['hand_l']
+   # The idle's wrist, swung only as far as the forearm swings (never turned
+   # about it), so the bow keeps lying forward and back beside the leg.
+   forearm=(hand.head-rig.pose.bones['lowerarm_l'].head).normalized()
+   hand.matrix=Matrix.Translation(hand.matrix.translation) @ (idle_forearm.rotation_difference(forearm) @ idle_hand).to_matrix().to_4x4()
+   bpy.context.view_layer.update()
+  bow_fist()
   keys(length*30*f/60)
  finish(name,a,length)
 

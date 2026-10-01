@@ -323,7 +323,8 @@ def body_shell(body, rig, name, covered, offset, thickness, raised=(), raise_by=
     def bone(v):
         best=max(v.groups,key=lambda g:g.weight,default=None)
         return names[best.group] if best else ''
-    keep={v.index for v in shell.data.vertices if covered(bone(v),v.co.z)}
+    takes_position = covered.__code__.co_argcount >= 3
+    keep={v.index for v in shell.data.vertices if (covered(bone(v),v.co.z,v.co) if takes_position else covered(bone(v),v.co.z))}
     mesh=bmesh.new(); mesh.from_mesh(shell.data)
     bmesh.ops.delete(mesh,geom=[f for f in mesh.faces if not all(v.index in keep for v in f.verts)],context='FACES')
     bmesh.ops.delete(mesh,geom=[v for v in mesh.verts if not v.link_faces],context='VERTS')
@@ -565,17 +566,19 @@ def cloth_chains(rig, cloth, root_bone, root, blend, chains=13, segments=8, pref
 # back. Returned unjoined, skinned to `rig`.
 CAPE_ROOT = 1.36
 CAPE_BLEND = (1.28, 1.4)
-def shoulder_cape(rig, torso, name, hem=.34, flare=.32, prefix='cloak_'):
+def shoulder_cape(rig, torso, name, hem=.34, flare=.32, prefix='cloak_', offset=.018):
     import bpy
     # The torso's shoulders only, not sleeves joined to it.
     names={g.index:g.name for g in torso.vertex_groups}
     def on_arm(v):
         best=max(v.groups,key=lambda g:g.weight,default=None)
-        return best is not None and names[best.group].startswith(('upperarm','lowerarm','hand'))
+        # Every bone of the arm, fingers too (the rest pose holds the arms out
+        # at shoulder height).
+        return best is not None and (region_of_bone(names[best.group]) or '').startswith('arm')
     shoulders=[(torso,v) for v in torso.data.vertices if 1.3<=(torso.matrix_world@v.co).z<1.45 and not on_arm(v)]
     cape=bpy.data.objects.new(name,bpy.data.meshes.new(name))
     bpy.context.scene.collection.objects.link(cape)
-    cloth_sheet(cape,shoulders,top=1.42,hem=hem,flare=flare,reach=math.radians(78),rows=26,offset=.018)
+    cloth_sheet(cape,shoulders,top=1.42,hem=hem,flare=flare,reach=math.radians(78),rows=26,offset=offset)
     cloth_chains(rig,cape,'spine_03',CAPE_ROOT,CAPE_BLEND,prefix=prefix)
     cape.parent=rig
     cape.modifiers.new('Statue outfit skin','ARMATURE').object=rig
@@ -614,9 +617,13 @@ def fit(source, source_rig, target_rig, style):
                 # A closed helm sized to the statue's head, not the knight's box.
                 v.co=Vector((u.x*.26-.13,u.y*.30-.155,u.z*.33+1.575))
             if style=='fullhelm':
-                # The hero's full helm: close over the head, reaching below the
-                # jaw, its ridge kept low rather than raised into a crest.
+                # The hero's full helm, a gladiator's: close over the head,
+                # reaching below the jaw, its ridge (with the knight helm's
+                # spikes) kept low, no crest, and its lower rim flared into a
+                # short brim.
                 v.co=Vector((u.x*.25-.125,u.y*.29-.15,u.z*.37+1.525))
+                flare=1+max(0,.26-u.z)*.38
+                v.co.x*=flare; v.co.y=(v.co.y+.005)*flare-.005
             if style=='murmillo':
                 # Sized to the statue's own head (0.18 x 0.22 x 0.26m) rather
                 # than the knight helm's oversized box.

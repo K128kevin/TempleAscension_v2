@@ -19,6 +19,8 @@ const float MARGIN = 0.03;
 const float MIN_REACH = 0.16;
 // How far beside a limb the cloth is still eased outward.
 const float EASE = 0.12;
+// How many balls stand for each limb along its length.
+const int SAMPLES = 6;
 
 vec3 fold_cloth(vec3 vertex) {
 	vec2 across = vertex.xz - body_center.xz;
@@ -29,30 +31,29 @@ vec3 fold_cloth(vec3 vertex) {
 		if (i >= capsule_count) break;
 		vec3 a = capsule_a[i];
 		vec3 ab = capsule_b[i] - a;
-		float len2 = max(dot(ab, ab), 1e-6);
-		// The limb's slice level with this vertex: around the nearest point of
-		// its axis, a little wider (MARGIN) so the cloth eases over its edges,
-		// and wider again where the limb leans.
-		vec3 c = a + ab * clamp(dot(vertex - a, ab) / len2, 0.0, 1.0);
 		float r = capsule_radius[i] + MARGIN;
-		float dy = vertex.y - c.y;
-		if (abs(dy) >= r) continue;
-		float lean = abs(ab.y) / sqrt(len2);
-		float slice = sqrt(r * r - dy * dy) / (lean > 0.6 ? lean : 1.0);
-		// Where the outward line from the centre through this vertex leaves
-		// that slice, if it passes through it at all.
-		vec2 h = c.xz - body_center.xz;
-		float along = dot(h, out_dir);
-		float side2 = dot(h, h) - along * along;
-		if (along <= 0.0) continue;
-		float side = sqrt(max(side2, 0.0));
-		if (side < slice) {
-			needed = max(needed, along + sqrt(slice * slice - side2));
-		} else if (side < slice + EASE) {
-			// Beside the limb the push fades out, so the cloth eases round it
-			// in one smooth sheet instead of tearing at the limb's edge.
-			float fade = 1.0 - smoothstep(slice, slice + EASE, side);
-			needed = max(needed, along * fade + needed * (1.0 - fade));
+		// The limb, as a row of balls along its length: where each is cut by
+		// the level of this vertex, the outward line from the centre through
+		// the vertex must clear the cut. A limb lifted level with the cloth
+		// (a thigh in a stride) is cleared to its far end, the knee.
+		for (int k = 0; k <= SAMPLES; k++) {
+			vec3 c = a + ab * (float(k) / float(SAMPLES));
+			float dy = vertex.y - c.y;
+			if (abs(dy) >= r) continue;
+			float slice = sqrt(r * r - dy * dy);
+			vec2 h = c.xz - body_center.xz;
+			float along = dot(h, out_dir);
+			if (along <= 0.0) continue;
+			float side2 = dot(h, h) - along * along;
+			float side = sqrt(max(side2, 0.0));
+			if (side < slice) {
+				needed = max(needed, along + sqrt(slice * slice - side2));
+			} else if (side < slice + EASE) {
+				// Beside the limb the push fades out, so the cloth eases round
+				// it in one smooth sheet instead of tearing at its edge.
+				float fade = 1.0 - smoothstep(slice, slice + EASE, side);
+				needed = max(needed, (along + slice * 0.5) * fade + needed * (1.0 - fade));
+			}
 		}
 	}
 	// Below the hips the cloth hangs around the legs, never in between them.
