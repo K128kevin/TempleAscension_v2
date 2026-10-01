@@ -6,8 +6,10 @@ extends Node
 ##
 ## A selected hero is driven by the normal controls (it becomes Game.player, with
 ## its own run: every class skill learned, energy always full). A selected statue
-## walks with left click on the ground, attacks with left click on another unit,
-## Shift+left click or right click, and uses its special with 1: the Oracle's
+## is driven the same way: it turns to the cursor as it moves, walks where the
+## ground is clicked (following the cursor while the button is held), pursues
+## and attacks a clicked unit, attacks in place with Shift or the right button
+## (again and again while held), and uses its special with 1: the Oracle's
 ## frost nova or the Crowned Statue's gaze. Every attack can land on any other
 ## unit, hero or statue.
 const Data = preload("res://scripts/data.gd")
@@ -29,6 +31,13 @@ var panel: PanelContainer
 var title: Label
 var buttons: Dictionary = {}
 var kill_button: Button
+# A selected statue's orders, as the hero's (Game.player_control): the unit it
+# pursues to attack, and the clocks that pace a held button's fresh orders and
+# a pursuit's repathing.
+var statue_target = null
+var statue_order_pending = false
+var statue_hold = 0.0
+var statue_pursuit = 0.0
 
 func enter(owner_game) -> void:
 	game = owner_game
@@ -154,7 +163,10 @@ func unit_name(unit) -> String:
 	return Data.ENEMIES[unit.kind].title
 
 func select(unit) -> void:
+	if is_instance_valid(selected) and selected.kind != "player": selected.puppet_goal = null
 	selected = unit
+	statue_target = null
+	statue_order_pending = false
 	if unit.kind == "player":
 		game.player = unit
 		game.run = hero_runs[unit.uid.trim_prefix("hero:")]
@@ -208,30 +220,90 @@ func unhandled(event: InputEvent) -> bool:
 			toggle_death()
 			return true
 	if hero_selected() or selected == null or selected.dead: return false
-	var point: Vector3 = game.world.pointer()
-	# As for the hero: attacks aim at the centre of a unit under the cursor.
-	var other = game.enemy_at_screen(game.get_viewport().get_mouse_position(),selected)
-	var aim: Vector3 = other.position if other != null else point
 	if event is InputEventMouseButton and event.pressed:
+		# The buttons are held and released through the game's own state, as
+		# for the hero; the order is given at once and renewed while held.
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			# Shift+click attacks in place; clicking another unit attacks it;
-			# clicking the ground walks there.
-			if Input.is_physical_key_pressed(KEY_SHIFT) or event.shift_pressed or other != null:
-				if selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0:
-					selected.start_attack(aim)
-			else: selected.puppet_goal = point
+			game.left_held = true
+			statue_click(false)
 			return true
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			if selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0:
-				selected.start_attack(aim)
+			game.right_held = true
+			statue_click(true)
 			return true
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_1 and selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0:
+		if event.physical_keycode == KEY_1 and statue_ready():
 			if selected.kind == "wizard": selected.cast_nova()
-			elif selected.kind == "boss": selected.start_gaze(aim)
+			elif selected.kind == "boss": selected.start_gaze(statue_aim())
 			return true
 		if event.physical_keycode in [KEY_2,KEY_SPACE,KEY_Q,KEY_E]: return true
 	return false
+
+func statue_selected() -> bool:
+	return is_instance_valid(selected) and selected.kind != "player" and not selected.dead
+
+func statue_ready() -> bool:
+	return selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0
+
+# Where a statue's attack is aimed: the centre of a unit under the cursor, as
+# for the hero, or the ground there.
+func statue_aim() -> Vector3:
+	var other = game.enemy_at_screen(game.get_viewport().get_mouse_position(),selected)
+	return other.position if other != null else game.world.pointer()
+
+func statue_attack(at: Vector3) -> void:
+	if not statue_ready(): return
+	statue_order_pending = false
+	selected.puppet_goal = null
+	selected.start_attack(at)
+
+# A click (or a held button's renewed order), as Game.issue_click: Shift or
+# the right button attacks in place; a unit under the cursor is pursued and
+# attacked; the ground is walked to.
+func statue_click(special: bool) -> void:
+	statue_order_pending = false
+	statue_hold = .08
+	statue_pursuit = .15
+	var other = game.enemy_at_screen(game.get_viewport().get_mouse_position(),selected)
+	if Input.is_physical_key_pressed(KEY_SHIFT) or special:
+		statue_target = null
+		statue_attack(other.position if other != null else game.world.pointer())
+	elif other != null:
+		statue_target = other
+		statue_order_pending = true
+		selected.puppet_goal = other.position
+	else:
+		statue_target = null
+		selected.puppet_goal = game.world.pointer()
+
+# Each frame for a selected statue, as Game.player_control for the hero.
+func control(dt: float) -> void:
+	statue_hold -= dt
+	statue_pursuit -= dt
+	var held: bool = game.left_held or game.right_held
+	if Input.is_physical_key_pressed(KEY_SHIFT):
+		statue_target = null
+		statue_order_pending = false
+		selected.puppet_goal = null
+		if held: statue_attack(statue_aim())
+	else:
+		if is_instance_valid(statue_target) and (statue_target.dead or (not statue_order_pending and not held)):
+			statue_target = null
+			selected.puppet_goal = null
+		if game.right_held and statue_hold <= 0: statue_click(true)
+		elif game.left_held and not is_instance_valid(statue_target) and statue_hold <= 0: statue_click(false)
+		if is_instance_valid(statue_target):
+			var reach: float = selected.config.range+statue_target.config.size*.3 if statue_target.kind != "player" else selected.config.range
+			if selected.position.distance_to(statue_target.position) <= reach and game.world.clear_line(selected.position,statue_target.position):
+				selected.puppet_goal = null
+				statue_attack(statue_target.position)
+			elif statue_pursuit <= 0:
+				statue_pursuit = .15
+				selected.puppet_goal = statue_target.position
+	# Standing, it turns to face the cursor.
+	if selected.puppet_goal == null and statue_ready() and not is_instance_valid(statue_target):
+		var aim: Vector3 = game.world.pointer()
+		if selected.position.distance_to(aim) > .6: selected.face(aim)
 
 func leave() -> void:
 	panel.queue_free()

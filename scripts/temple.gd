@@ -641,6 +641,11 @@ func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
 		var fixture = place("brazier",at,Vector3(.6,1.6,.6),Art.material("gold"))
 		# The fixture's back plate is on its local -Z side; turn it flat to the wall.
 		fixture.rotation.y = atan2(-wall.x,-wall.z)
+		# Sitting right under its own flame, the holder would throw its outline
+		# across the wall beside it (most plainly into a corner): it casts no
+		# shadow.
+		for mesh in fixture.find_children("*","MeshInstance3D",true,false):
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var flame = place("torch_lit",at+Vector3.UP,Vector3(.5,1.0,.5))
 		for mesh in flame.find_children("*","MeshInstance3D",true,false):
 			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

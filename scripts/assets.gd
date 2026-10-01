@@ -6,14 +6,20 @@ static var target_ring_texture: GradientTexture2D
 
 # Stone for statues and their gear. `skinned` is for animated statue bodies
 # prepared with rest_pose_mesh(), whose stone stays fixed to the body.
-static func statue_material(skinned: bool = false) -> ShaderMaterial:
-	var key = "statue_skinned" if skinned else "statue"
+# `kit` (a hero class) carves a statue in that hero's likeness: the body's
+# own relief and the hero's kit, on the surfaces that carry the body's UVs.
+static func statue_material(skinned: bool = false, kit: String = "") -> ShaderMaterial:
+	var key = ("statue_skinned" if skinned else "statue") + kit
 	if materials.has(key): return materials[key]
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/statue_stone.gdshader")
 	m.set_shader_parameter("stone_texture",load("res://assets/textures/statue_marble.png"))
 	m.set_shader_parameter("scale_texture",load("res://assets/textures/hero_kit.png"))
 	m.set_shader_parameter("rest_pose",skinned)
+	if kit != "":
+		m.set_shader_parameter("body_detail",1.0)
+		m.set_shader_parameter("body_normal",load("res://assets/models/character/warrior_T_Superhero_Male_Normal.png"))
+		m.set_shader_parameter("kit_height",load("res://assets/textures/hero_kit_%s_height.png" % kit))
 	materials[key] = m
 	return m
 
@@ -100,12 +106,24 @@ static func sword_material() -> ShaderMaterial:
 	materials.sword = m
 	return m
 
+# The ranger's yew longbow (assets/shaders/bow_wood.gdshader), over the
+# bow model's own palette.
+static func bow_wood() -> ShaderMaterial:
+	if materials.has("bow_wood"): return materials.bow_wood
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/bow_wood.gdshader")
+	m.set_shader_parameter("palette",load("res://assets/models/props/bow_Diffuse_palette_2.jpg"))
+	materials.bow_wood = m
+	return m
+
 # Brown leather for the warrior's boots.
 static func leather() -> StandardMaterial3D:
 	if materials.has("leather"): return materials.leather
 	var m = StandardMaterial3D.new()
 	m.albedo_color = Color(.34,.2,.1)
-	m.roughness = .72
+	# Worn, matte leather.
+	m.roughness = .88
+	m.metallic_specular = .3
 	materials.leather = m
 	return m
 
@@ -155,6 +173,8 @@ static func hero_kit(hero_class: String) -> StandardMaterial3D:
 		m.metallic = .45
 		m.metallic_texture = load("res://assets/textures/%s_rough.png" % key)
 		m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		# The ranger's and the wizard's worn cloth and leather catch little light.
+		if hero_class in ["ranger","wizard"]: m.metallic_specular = .25
 	materials[key] = m
 	return m
 
@@ -172,6 +192,14 @@ static func wizard_staff() -> ShaderMaterial:
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/wizard_staff.gdshader")
 	materials.wizard_staff = m
+	return m
+
+# The ranger's quiver (assets/shaders/quiver.gdshader).
+static func quiver() -> ShaderMaterial:
+	if materials.has("quiver"): return materials.quiver
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/quiver.gdshader")
+	materials.quiver = m
 	return m
 
 # A bladed prop in its sheath (assets/shaders/sheathed.gdshader).

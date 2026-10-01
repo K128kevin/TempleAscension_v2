@@ -17,6 +17,13 @@ bpy.ops.object.mode_set(mode='EDIT')
 for bone in [b for b in rig.data.edit_bones if b.name.startswith(('cloak_','cape_','kilt_'))]:rig.data.edit_bones.remove(bone)
 bpy.ops.object.mode_set(mode='OBJECT')
 meshes=[o for o in bpy.data.objects if o.type=='MESH']
+# The statue mask (see statue_stone.gdshader): white, but 0 in blue on the
+# body, whose UVs are the hero's own, so the stone shader can lay the body's
+# relief and a hero's kit on it (the eyes, brows and hair have their own).
+for o in meshes:
+    mask=o.data.color_attributes.new('StoneMask','BYTE_COLOR','POINT')
+    shade=(1,1,0,1) if 'SuperHero' in o.name else (1,1,1,1)
+    for item in mask.data: item.color=shade
 bpy.ops.object.select_all(action='DESELECT')
 for o in meshes:o.select_set(True)
 bpy.context.view_layer.objects.active=next(o for o in meshes if 'SuperHero' in o.name)
@@ -27,8 +34,10 @@ body.data.materials.clear()
 mat=bpy.data.materials.new('Stone');mat.diffuse_color=(.65,.65,.65,1)
 body.data.materials.append(mat)
 for p in body.data.polygons:p.material_index=0
+body.data.color_attributes.active_color=body.data.color_attributes['StoneMask']
+body.data.color_attributes.render_color_index=body.data.color_attributes.active_color_index
 # Preserve the supplied shape and skinning, with a moderate mesh reduction for crowds.
 mod=body.modifiers.new('Crowd optimization','DECIMATE');mod.ratio=.55
 bpy.ops.object.modifier_apply(modifier=mod.name)
-bpy.ops.export_scene.gltf(filepath=str(root/'assets/models/character/guardian.glb'),export_format='GLB',export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True)
+bpy.ops.export_scene.gltf(filepath=str(root/'assets/models/character/guardian.glb'),export_format='GLB',export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True,export_vertex_color='ACTIVE')
 print('GUARDIAN_READY',len(body.data.vertices))

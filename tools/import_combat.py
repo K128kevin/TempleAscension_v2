@@ -378,11 +378,12 @@ def twist(name,angle):
 
 SHIELD_TWIST=math.radians(60)
 def shield_arm(forward=0.0,turn=0.0):
- # Left forearm raised across the front, carrying the gladiator's scutum;
- # `turn` swings it with the upper body.
+ # Left forearm held level across the front of the body, the elbow forward
+ # and out, the fist before the belly, as a scutum strapped flat along the
+ # forearm is carried, facing ahead (the game lays the board on the forearm,
+ # scripts/visual.gd); `turn` swings it with the upper body.
  spin=Matrix.Rotation(turn,3,'Z')
- arm('l',spin @ Vector((.24,-.32+forward,1.06)),spin @ Vector((.62,.12,.8)))
- twist('lowerarm_l',SHIELD_TWIST)
+ arm('l',spin @ Vector((-.05,-.2+forward,1.12)),spin @ Vector((.6,-.5,1.0)))
 
 # Gladiator stance: the relaxed idle with the spear held level at the hip and
 # the shield carried in front.

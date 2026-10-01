@@ -38,6 +38,10 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 SKIN = ROOT/'source_art/universal_stage/T_Superhero_Male_Dark.png'
+# The character's own relief (muscle, knuckles, the face's features) and the
+# sheen of its skin, kept wherever the kit leaves the skin bare.
+SKIN_NORMAL = ROOT/'source_art/universal_stage/T_Superhero_Male_Normal.png'
+SKIN_ROUGH = ROOT/'source_art/universal_stage/T_Superhero_Male_Roughness.png'
 OUT = ROOT/'assets/textures'
 SIZE = 2048
 RIGHT_SIGN = 1.0
@@ -146,7 +150,10 @@ def paint(maps, skin, recipe):
     albedo = np.zeros((n,3),np.float32)
     height = np.zeros(n,np.float32)
     rough = np.full(n,.8,np.float32)
+    # Texels the kit covers (all others are bare skin).
+    dressed = np.zeros(n,bool)
     def put(mask, color, h=None, r=None):
+        dressed[mask] = True
         albedo[mask] = color[mask] if isinstance(color,np.ndarray) and color.ndim==2 else color
         if h is not None: height[mask] = h[mask] if isinstance(h,np.ndarray) else h
         if r is not None: rough[mask] = r
@@ -173,8 +180,13 @@ def paint(maps, skin, recipe):
         return np.arctan2(x-cx, y-cy)
 
     # --- skin and face
+    # The character's skin, a little less saturated and warm than its own
+    # texture, which reads orange under the game's warm light.
     sk = skin[baked]
+    grey = sk.mean(1,keepdims=True)
+    sk = (grey+(sk-grey)*.72)*.94
     put(np.ones(n,bool), sk, 0.0, .6)
+    dressed[:] = False
     face = (C==HEAD)&(z<1.64)&(z>1.52)&(y<.0)
     stubble = np.clip((vnoise(P,900.0)-.35)*2.5,0,1)*face
     albedo[:] = albedo*(1-.22*stubble[:,None])
@@ -228,6 +240,15 @@ def paint(maps, skin, recipe):
         # Trousers: dark wool below the hem down into the boots.
         trous,wv2 = wool([.17,.13,.10],420.0)
         put(((C==THIGH)&(z<=hem))|(C==CALF), trous, wv2, .9)
+        # Two straps round the outside of the left thigh, holding the dagger's
+        # sheath (tools/outfit_hero.py), each with a small steel buckle.
+        left_thigh = (C==THIGH)&(np.sign(x)==-RIGHT_SIGN)
+        for zs in (.86,.72):
+            st = left_thigh & (np.abs(z-zs)<.011)
+            put(st, leather([.24,.13,.07],.9), leather_h+.0028, .6)
+            albedo[st & (np.abs(np.abs(z-zs)-.011)<.0022)] *= .55
+            buck = st & (y<-.04) & (np.abs(np.abs(x)-.13)<.012)
+            put(buck, np.array([.5,.49,.46])*(.85+grain[:,None]*.3), .004, .32)
         # Leather knee guards.
         knee = ((C==THIGH)|(C==CALF))&(np.abs(z-.5)<.085)&(y<-.02)
         kg = leather([.29,.16,.10],.95)
@@ -503,7 +524,7 @@ def paint(maps, skin, recipe):
 
     RECIPES = {'ranger':ranger,'warrior':warrior,'wizard':wizard}
     RECIPES[recipe]()
-    return albedo, height, rough, baked
+    return albedo, height, rough, baked, dressed
 
 
 def normal_map(height, baked, pos):
@@ -546,20 +567,46 @@ def main():
     skin_image.scale(SIZE,SIZE)
     sp = np.empty(SIZE*SIZE*4,np.float32); skin_image.pixels.foreach_get(sp)
     skin = sp.reshape(SIZE,SIZE,4)[...,:3]
+    def raw(path):
+        image = bpy.data.images.load(str(path))
+        image.colorspace_settings.name = 'Non-Color'
+        image.scale(SIZE,SIZE)
+        px = np.empty(SIZE*SIZE*4,np.float32); image.pixels.foreach_get(px)
+        return px.reshape(SIZE,SIZE,4)
+    skin_normal = raw(SKIN_NORMAL)[...,:3]*2-1
+    # The roughness is the green channel (glTF's packing).
+    skin_rough = raw(SKIN_ROUGH)[...,1]
     global RIGHT_SIGN
     RIGHT_SIGN = 1.0 if (rig.matrix_world @ rig.data.bones['upperarm_r'].head_local).x>0 else -1.0
     pos = maps['position'][...,:3]
     for recipe in ONLY or ['ranger','warrior','wizard']:
-        albedo,height,rough,baked = paint(maps,skin,recipe)
+        albedo,height,rough,baked,dressed = paint(maps,skin,recipe)
         colour = np.zeros((SIZE,SIZE,3),np.float32)
         colour[baked] = np.clip(albedo,0,1)
         save('hero_kit_'+recipe,colour)
-        save('hero_kit_'+recipe+'_normal',normal_map(height,baked,pos))
+        # Bare skin keeps the character's own relief, laid under the kit's
+        # (whiteout blend: the slopes add, the heights multiply).
+        nrm = normal_map(height,baked,pos)*2-1
+        bare = np.zeros((SIZE,SIZE),bool); bare[baked] = ~dressed
+        mixed = np.concatenate([nrm[...,:2]+skin_normal[...,:2],nrm[...,2:]*skin_normal[...,2:]],-1)
+        mixed /= np.linalg.norm(mixed,axis=2,keepdims=True)
+        nrm[bare] = mixed[bare]
+        save('hero_kit_'+recipe+'_normal',nrm*.5+.5)
         r = np.full((SIZE,SIZE),.8,np.float32); r[baked] = rough
         # Red: roughness. Green: metal, where the paint is steel (the only
-        # surfaces painted this glossy).
+        # surfaces painted this glossy); never the skin.
         metal = np.clip((.5-r)/.12,0,1)
+        if recipe in ('ranger','wizard'):
+            # A traveller's worn kit: wool, linen and leather all dulled to a
+            # matte, dusty finish.
+            r = np.where(baked & ~bare & (metal<.5),np.maximum(r,.88),r)
+        r[bare] = np.clip(skin_rough[bare],.35,.9)
+        metal[bare] = 0
         save('hero_kit_'+recipe+'_rough',np.stack([r,metal,np.zeros_like(r)],-1))
+        # The relief as a height map (0.5 the bare surface, 1/255 = 0.04mm),
+        # for the statues, which carve it into stone (statue_stone.gdshader).
+        hm = np.full((SIZE,SIZE),.5,np.float32); hm[baked] = np.clip(.5+height*100.0,0,1)
+        save('hero_kit_'+recipe+'_height',np.repeat(hm[...,None],3,2))
         print('KIT_READY',recipe)
 
 main()

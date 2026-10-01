@@ -459,11 +459,19 @@ def lengthen_kilt(kilt, body):
 # measured round the body from straight behind.
 def cloth_bearing(co): return math.atan2(co.x,co.y-KILT_CENTER_Y)
 
-def cloth_sheet(cloth, ring, top, hem, flare, reach, columns=56, rows=22, offset=-.012):
+def cloth_sheet(cloth, ring, top, hem, flare, reach, columns=56, rows=22, offset=-.012, top_ring=None, top_offset=.012, top_reach=None, corner_drop=0.0):
     # Adds a sheet to `cloth` hanging from `top` to `hem`, round the back
     # from bearing -reach to reach, flaring by `flare` at the hem. Its top
     # follows the girth of `ring` (vertices of any mesh, with their skin
     # weights) plus `offset`, and takes the weights of the nearest of them.
+    # With `top_ring` (vertices, as `ring`: a garment beneath), the sheet
+    # instead drapes smoothly over that garment (at least `top_offset` off it,
+    # easing out to `offset` by halfway down), and moves with it (taking its
+    # skin weights, smoothed); across the back only to `top_reach` at the top, its
+    # top edge dropping by `corner_drop` toward its corners, so they lie on
+    # the shoulder blades below the shoulders (which fall as the arms come
+    # down), widening to `reach` a third of the way down: a cape that sits on
+    # the back rather than standing off it.
     import bmesh
     from mathutils import kdtree
     cy = KILT_CENTER_Y
@@ -475,6 +483,25 @@ def cloth_sheet(cloth, ring, top, hem, flare, reach, columns=56, rows=22, offset
     girth = [sampled(-reach+2*reach*i/columns) for i in range(columns+1)]
     for _ in range(8):
         girth = [sum(girth[max(0,min(columns,i+d))] for d in (-2,-1,0,1,2))/5 for i in range(columns+1)]
+    def table_at(table, span, b):
+        u = (b+span)/(2*span)*columns
+        i = max(0,min(columns-1,int(u))); w = min(1.0,max(0.0,u-i))
+        return table[i]*(1-w)+table[i+1]*w
+    if top_ring is not None:
+        top_reach = top_reach or reach
+        under = [(ob.matrix_world @ v.co, [(ob.vertex_groups[g.group].name,g.weight) for g in v.groups]) for ob,v in top_ring]
+        # The garment's radius round the back, by height band and bearing.
+        bands = {}
+        for p,_ in under: bands.setdefault(round(p.z/.03),[]).append((cloth_bearing(p),math.hypot(p.x,p.y-cy)))
+        def under_girth(z, b):
+            best = None
+            for k in (round(z/.03)-1,round(z/.03),round(z/.03)+1):
+                for bp,r in bands.get(k,()):
+                    if abs(math.remainder(bp-b,2*math.pi))<.1 and (best is None or r>best): best = r
+            return best
+        under_tree = kdtree.KDTree(len(under))
+        for i,(p,_) in enumerate(under): under_tree.insert(p,i)
+        under_tree.balance()
     tree = kdtree.KDTree(len(points))
     for i,(p,_) in enumerate(points): tree.insert(p,i)
     tree.balance()
@@ -485,18 +512,53 @@ def cloth_sheet(cloth, ring, top, hem, flare, reach, columns=56, rows=22, offset
         if name not in groups:
             groups[name] = (cloth.vertex_groups.get(name) or cloth.vertex_groups.new(name=name)).index
         return groups[name]
-    grid = []
+    # Where each vertex goes: its bearing, radius and height.
+    layout = []
     for j in range(rows+1):
         t = j/rows
         z = top+(hem-top)*t
         row = []
+        if top_ring is not None:
+            widen = min(1.0,t/.33); widen = widen*widen*(3-2*widen)
+            span = top_reach+(reach-top_reach)*widen
+            ease = min(1.0,t/.5); ease = ease*ease*(3-2*ease)
+            for i in range(columns+1):
+                b = -span+2*span*i/columns
+                g = under_girth(z,b)
+                if g is None: g = table_at(girth,reach,b)-offset
+                across = 2*i/columns-1
+                # The least radius here: just outside the garment.
+                row.append([b,(g+top_offset+(offset-top_offset)*ease)*(1+flare*t*t*(3-2*t)),z-corner_drop*across*across*(1-widen)])
+        else:
+            for i in range(columns+1):
+                row.append([-reach+2*reach*i/columns,girth[i]*(1+flare*t*t*(3-2*t)),z])
+        layout.append(row)
+    if top_ring is not None:
+        # Drape: the cloth lies taut over the garment's high points rather
+        # than following every bulge (the sash, its knot, the skirt's flare):
+        # each radius eases toward its neighbours' but never in past the
+        # garment beneath, so the sheet comes out as one smooth surface.
+        # Its top edge stays pinned close on the garment.
+        least = [[cell[1] for cell in row] for row in layout]
+        r = [list(row) for row in least]
+        for _ in range(150):
+            r = [r[0]]+[[max(least[j][i],(r[j-1][i]+r[min(rows,j+1)][i])*.35+(r[j][max(0,i-1)]+r[j][min(columns,i+1)])*.15) for i in range(columns+1)] for j in range(1,rows+1)]
+        for j in range(rows+1):
+            for i in range(columns+1): layout[j][i][1] = r[j][i]
+    grid = []
+    for j in range(rows+1):
+        row = []
         for i in range(columns+1):
-            b = -reach+2*reach*i/columns
-            r = girth[i]*(1+flare*t*t*(3-2*t))
-            v = mesh.verts.new(Vector((math.sin(b)*r,cy+math.cos(b)*r,z)))
-            # The top rows move with the body; the chains take over below.
-            _,k,_ = tree.find(v.co)
-            for name,weight in points[k][1]: v[deform][group(name)] = weight
+            b,radius,z = layout[j][i]
+            v = mesh.verts.new(Vector((math.sin(b)*radius,cy+math.cos(b)*radius,z)))
+            # The top rows move with the body (or the garment beneath); the
+            # chains take over below.
+            if top_ring is not None:
+                _,k,_ = under_tree.find(v.co)
+                for name,weight in under[k][1]: v[deform][group(name)] = weight
+            else:
+                _,k,_ = tree.find(v.co)
+                for name,weight in points[k][1]: v[deform][group(name)] = weight
             row.append(v)
         grid.append(row)
     for j in range(rows):
@@ -566,7 +628,7 @@ def cloth_chains(rig, cloth, root_bone, root, blend, chains=13, segments=8, pref
 # back. Returned unjoined, skinned to `rig`.
 CAPE_ROOT = 1.36
 CAPE_BLEND = (1.28, 1.4)
-def shoulder_cape(rig, torso, name, hem=.34, flare=.32, prefix='cloak_', offset=.018):
+def shoulder_cape(rig, torso, name, hem=.34, flare=.32, prefix='cloak_', offset=.018, **close):
     import bpy
     # The torso's shoulders only, not sleeves joined to it.
     names={g.index:g.name for g in torso.vertex_groups}
@@ -578,7 +640,15 @@ def shoulder_cape(rig, torso, name, hem=.34, flare=.32, prefix='cloak_', offset=
     shoulders=[(torso,v) for v in torso.data.vertices if 1.3<=(torso.matrix_world@v.co).z<1.45 and not on_arm(v)]
     cape=bpy.data.objects.new(name,bpy.data.meshes.new(name))
     bpy.context.scene.collection.objects.link(cape)
-    cloth_sheet(cape,shoulders,top=1.42,hem=hem,flare=flare,reach=math.radians(78),rows=26,offset=offset)
+    cloth_sheet(cape,shoulders,top=1.42,hem=hem,flare=flare,reach=math.radians(78),rows=26,offset=offset,**close)
+    if close.get('top_ring'):
+        # Weights copied from the garment's nearest vertex jump from vertex to
+        # vertex; smoothed, the cloth bends as one sheet when posed.
+        bpy.ops.object.select_all(action='DESELECT')
+        cape.select_set(True); bpy.context.view_layer.objects.active = cape
+        bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
+        bpy.ops.object.vertex_group_smooth(group_select_mode='ALL',factor=.5,repeat=12)
+        bpy.ops.object.mode_set(mode='OBJECT')
     cloth_chains(rig,cape,'spine_03',CAPE_ROOT,CAPE_BLEND,prefix=prefix)
     cape.parent=rig
     cape.modifiers.new('Statue outfit skin','ARMATURE').object=rig
@@ -714,6 +784,11 @@ def build_outfits():
         target=next(o for o in bpy.data.objects if o.type=='ARMATURE')
         target.name='StatueRig'
         body=next(o for o in bpy.data.objects if o.type=='MESH' and o.name=='StoneGuardian')
+        # Which of the body's vertices carry the hero's own UVs (blue 0 in
+        # the guardian's mask, tools/prepare_guardian.py): kept for the body
+        # and the shells copied from it.
+        source_mask=body.data.color_attributes[0]
+        print('GUARDIAN_MASK',source_mask.name,source_mask.domain,len(body.data.color_attributes))
         imported=set(); fitted=[]
         packs=sorted({piece[0] for piece in MURMILLO}) if style=='murmillo' else [pack]
         for source_pack in packs:
@@ -773,9 +848,11 @@ def build_outfits():
         # Scale armor is marked for the stone shader, which cuts the warrior's
         # scale pattern into it: 0 in the mask's red channel is scales.
         scaled=[]
+        shells=[]
         if style=='murmillo':
             scaled.append(scale_cuirass(body,target,'ScaleCuirass'))
-            fitted+=scaled+[bracers(body,target,'Bracers')]
+            shells=scaled+[bracers(body,target,'Bracers')]
+            fitted+=shells
         if style in ['light','robes']: fitted.append(add_hood(target,deep=style=='robes'))
         cloth=[]
         if style in ['general','robes']:
@@ -798,11 +875,22 @@ def build_outfits():
         if style=='general': fitted.append(bpy.data.objects[body['beard']])
         for obj in [body]+fitted:
             if obj.type!='MESH': continue
+            # The body's own UVs, per vertex, before the new mask is added.
+            body_uv=None
+            if obj is body or obj in shells:
+                flags=obj.data.color_attributes.get(source_mask.name)
+                body_uv=[False]*len(obj.data.vertices)
+                if flags.domain=='POINT':
+                    for i,item in enumerate(flags.data): body_uv[i]=item.color[2]<.5
+                else:
+                    for loop in obj.data.loops: body_uv[loop.vertex_index]=flags.data[loop.index].color[2]<.5
             mask=obj.data.color_attributes.new('StoneMask','BYTE_COLOR','POINT')
             # Hanging cloth is marked 0 in the green channel, for the shader
-            # that folds it over the legs.
-            shade=(0,0,0,1) if obj in scaled else ((1,0,1,1) if obj in cloth else (1,1,1,1))
-            for item in mask.data: item.color=shade
+            # that folds it over the legs; scale armor 0 in red; surfaces on
+            # the hero's own UVs 0 in blue.
+            shade=(0,1,1,1) if obj in scaled else ((1,0,1,1) if obj in cloth else (1,1,1,1))
+            for i,item in enumerate(mask.data):
+                item.color=(shade[0],shade[1],0.0 if body_uv and body_uv[i] else shade[2],1)
         bpy.ops.object.select_all(action='DESELECT')
         for obj in [body]+fitted:obj.select_set(True)
         bpy.context.view_layer.objects.active=body

@@ -5,18 +5,25 @@
 // body's centre line, any cloth that lies inward of a leg, within the leg's
 // width, is carried out past that leg, level with where it was. So a leg
 // pressing into the cloak folds the cloth over its outer side, as real cloth
-// is pushed, rather than showing through it.
-const int CAPSULES = 8;
+// is pushed, rather than showing through it. The capsules after the legs
+// (the arms) only push cloth hanging behind the body, and only where they
+// have swung behind it themselves: in front, the arms are outside the cloak.
+const int CAPSULES = 12;
 uniform vec3 capsule_a[CAPSULES];
 uniform vec3 capsule_b[CAPSULES];
 uniform float capsule_radius[CAPSULES];
 uniform int capsule_count = 0;
-// The body's vertical centre line, through the hips.
+// The body's vertical centre line, through the hips, and its facing.
 uniform vec3 body_center = vec3(0.0);
+uniform vec3 body_forward = vec3(0.0, 0.0, 1.0);
+uniform int leg_capsules = 12;
+// The closest the hanging cloth comes to the body's centre line below the
+// hips, and round the waist (0: no limit); a cape over a robe keeps clear of
+// the robe's skirt and sash.
+uniform float min_reach = 0.16;
+uniform float waist_reach = 0.0;
 // How far past a limb's surface the cloth starts to be carried out.
 const float MARGIN = 0.03;
-// The closest the hanging cloth comes to the body's centre line.
-const float MIN_REACH = 0.16;
 // How far beside a limb the cloth is still eased outward.
 const float EASE = 0.12;
 // How many balls stand for each limb along its length.
@@ -27,8 +34,10 @@ vec3 fold_cloth(vec3 vertex) {
 	float reach = length(across);
 	vec2 out_dir = reach > 1e-4 ? across / reach : vec2(0.0, -1.0);
 	float needed = reach;
+	float behind = dot(vertex.xz - body_center.xz, normalize(body_forward.xz));
 	for (int i = 0; i < CAPSULES; i++) {
 		if (i >= capsule_count) break;
+		if (i >= leg_capsules && behind > -0.06) continue;
 		vec3 a = capsule_a[i];
 		vec3 ab = capsule_b[i] - a;
 		float r = capsule_radius[i] + MARGIN;
@@ -38,6 +47,7 @@ vec3 fold_cloth(vec3 vertex) {
 		// (a thigh in a stride) is cleared to its far end, the knee.
 		for (int k = 0; k <= SAMPLES; k++) {
 			vec3 c = a + ab * (float(k) / float(SAMPLES));
+			if (i >= leg_capsules && dot(c.xz - body_center.xz, normalize(body_forward.xz)) > -0.02) continue;
 			float dy = vertex.y - c.y;
 			if (abs(dy) >= r) continue;
 			float slice = sqrt(r * r - dy * dy);
@@ -57,7 +67,8 @@ vec3 fold_cloth(vec3 vertex) {
 		}
 	}
 	// Below the hips the cloth hangs around the legs, never in between them.
-	if (vertex.y < body_center.y - 0.1) needed = max(needed, MIN_REACH);
+	if (vertex.y < body_center.y - 0.1) needed = max(needed, min_reach);
+	else if (vertex.y < body_center.y + 0.3) needed = max(needed, waist_reach);
 	vertex.xz = body_center.xz + out_dir * needed;
 	return vertex;
 }

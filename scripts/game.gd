@@ -225,6 +225,7 @@ func _process(dt: float) -> void:
 		if not player.dead: skills.tick(dt)
 		if playground != null: playground.tick(dt)
 		if playground == null or playground.hero_selected(): player_control(dt)
+		elif playground.statue_selected(): playground.control(dt)
 		world.update_visibility(player.position,dt)
 		for enemy in enemies: enemy.tick(dt)
 		tick_projectiles(dt)

@@ -48,6 +48,11 @@ func verify():
 		check(mesh.name=="Stone"+kind.capitalize(),"Correct imported outfit: "+kind)
 		# Animated bodies use the stone laid out from their rest pose.
 		check(is_stone(mesh.material_override,true),"Body and outfit share gray cracked stone: "+kind)
+		# Carved in the likeness of its class's hero: the body's own relief and
+		# that hero's kit, cut into the stone.
+		var kit = Visual.STATUE_KITS[kind]
+		var carving = mesh.material_override.get_shader_parameter("kit_height")
+		check(mesh.material_override.get_shader_parameter("body_detail") == 1.0 and carving != null and carving.resource_path.ends_with("hero_kit_%s_height.png" % kit),"Statue carved with the %s's kit: %s" % [kit,kind])
 		check(actor.skin_meshes.size()==1 and mesh.skin.get_bind_count()>50,"Outfit remains one skinned surface: "+kind)
 		for clip in ["Run","Death","SwordSwing","SpearStab","BowShot","Cast","Hit","HitHead","HitStagger","HitKnockdown"]:
 			check(actor.clips.has(clip),"Outfit retains animation "+clip+": "+kind)
@@ -72,6 +77,11 @@ func verify():
 	check(boss.skin_meshes.size()==1 and boss.skin_meshes[0].name=="StoneBoss" and boss.skin_meshes[0].skin.get_bind_count()>50,"The boss wears its plate as one skinned surface")
 	check(boss.weapon_kind=="sword" and boss.shield_item==null,"The boss wields a great sword and no shield")
 	boss.queue_free()
+	# The lion stays plain stone.
+	var lion = Visual.new(); scene.add_child(lion)
+	lion.setup(true,Data.ENEMIES.lion.color,Data.ENEMIES.lion.weapon,Data.ENEMIES.lion.size,"lion")
+	check(lion.skin_meshes[0].material_override.get_shader_parameter("body_detail") in [null,0.0],"The lion is left uncarved")
+	lion.queue_free()
 	print("ENEMY_VISUALS ",passed," passed; ",failures)
 	scene.queue_free(); await process_frame
 	quit(0 if failures.is_empty() else 1)

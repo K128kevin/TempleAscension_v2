@@ -33,6 +33,14 @@ func test():
 			fires.append(child)
 			child.set_process(false)
 	check(fires.size()==world.shadow_torches.size() and fires.size()>2,"Every torch has an animated flame and its original local light")
+	# A wall torch's holder casts no shadow: under its own flame it would throw
+	# its outline across the wall beside it.
+	var holders = world.get_children().filter(func(n): return n is Node3D and n.scene_file_path.ends_with("brazier.glb"))
+	var shadowless = holders.size() > 0
+	for holder in holders:
+		for mesh in holder.find_children("*","MeshInstance3D",true,false):
+			if mesh.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF: shadowless = false
+	check(shadowless,"Torch holders cast no shadow on the walls beside them")
 	var first = fires[0]
 	var second = fires[1]
 	var different = false

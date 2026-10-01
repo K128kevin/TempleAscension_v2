@@ -65,6 +65,10 @@ const BOW_FULL_DRAW = 1.2
 
 # `hero_class` picks the hero's kit: the warrior's scale armor and bronze
 # helm, the ranger's leather jerkin and hood, or the wizard's robe and hood.
+# Each statue is carved in the likeness of a hero of its class, with his kit
+# (tools/paint_kits.py) cut into the stone; the lion stays plain.
+const STATUE_KITS = {"gladiator":"warrior","centurion":"warrior","boss":"warrior","archer":"ranger","wizard":"wizard"}
+
 func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enemy_kind: String = "", hero_class: String = "warrior") -> void:
 	is_stone = stone
 	self.enemy_kind = enemy_kind
@@ -83,7 +87,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		if stone:
 			if mesh.skin != null and mesh.mesh is ArrayMesh:
 				mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
-				mesh.material_override = Art.statue_material(true)
+				mesh.material_override = Art.statue_material(true,STATUE_KITS.get(enemy_kind,""))
 			else: mesh.material_override = Art.statue_material()
 		elif "HeroBoots" in mesh.name:
 			# Every hero now has his own: the ranger's and the wizard's boots,
@@ -124,13 +128,22 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			mesh.visible = hero_class == "ranger"
 			mesh.material_override = Art.bronze()
 		elif mesh.name.begins_with("RangerQuiver"):
-			# The quiver's own leather and fletching, weathered darker.
+			# Tooled leather and bronze, full of fletched arrows
+			# (assets/shaders/quiver.gdshader).
 			mesh.visible = hero_class == "ranger"
-			mesh.material_override = Art.weathered(mesh.get_active_material(0),.55)
+			mesh.material_override = Art.quiver()
 		elif mesh.name.begins_with("RangerDagger"):
-			# Worn in its sheath at the hip.
+			# Worn in its sheath on the outside of the left thigh, hilt up.
 			mesh.visible = hero_class == "ranger"
-			mesh.material_override = Art.sheathed(mesh.get_active_material(0))
+			var sheath = Art.sheathed(mesh.get_active_material(0))
+			if sheath is ShaderMaterial:
+				sheath = sheath.duplicate()
+				if mesh.skin != null and mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
+				var length: AABB = mesh.mesh.get_aabb()
+				sheath.set_shader_parameter("pommel_height",length.end.y)
+				sheath.set_shader_parameter("point_height",length.position.y)
+				sheath.set_shader_parameter("rest_pose",mesh.skin != null)
+			mesh.material_override = sheath
 		elif mesh.name.begins_with("Ranger") and not "RangerCloak" in mesh.name and not "RangerBody" in mesh.name:
 			mesh.visible = hero_class == "ranger"
 		elif "HeroHelmet" in mesh.name:
@@ -156,6 +169,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 				cloth.set_shader_parameter("rest_pose",true)
 			cloth.set_shader_parameter("tatter",1.0)
 			cloth.set_shader_parameter("hem_height",.3)
+			cloth.set_shader_parameter("fold_depth",.005)
 			mesh.material_override = cloth
 			if hero_class == "ranger": cloak_mesh = mesh
 		elif "WizardCape" in mesh.name or "WizardHood" in mesh.name or "WizardRobe" in mesh.name:
@@ -164,12 +178,18 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			mesh.visible = hero_class == "wizard"
 			var wool = ShaderMaterial.new()
 			wool.shader = load("res://assets/shaders/cloak.gdshader")
-			wool.set_shader_parameter("cloth_color",Color(.07,.09,.17))
+			# The slate navy of his concept art, a coarse wool that shows its folds.
+			wool.set_shader_parameter("cloth_color",Color(.13,.16,.27))
 			if mesh.skin != null and mesh.mesh is ArrayMesh:
 				mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 				wool.set_shader_parameter("rest_pose",true)
 			wool.set_shader_parameter("tatter",.35)
 			wool.set_shader_parameter("hem_height",.2 if "WizardCape" in mesh.name else (.14 if "WizardRobe" in mesh.name else -1.0))
+			if "WizardRobe" in mesh.name:
+				wool.set_shader_parameter("robe",1.0)
+				var box: AABB = mesh.get_aabb()
+				wool.set_shader_parameter("sleeve_end",maxf(absf(box.position.x),absf(box.end.x)))
+			if "WizardHood" in mesh.name: wool.set_shader_parameter("fold_depth",.0015)
 			mesh.material_override = wool
 			if hero_class == "wizard" and "WizardCape" in mesh.name: cloak_mesh = mesh
 		elif "Hair" in mesh.name:
@@ -203,6 +223,15 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 				mesh.material_override = mesh.material_override.duplicate()
 				cloak_mesh = mesh
 		setup_cloak()
+	# Cloth over something thicker than the bare legs stands further off them:
+	# the ranger's cloak over his boots, the warrior's kilt over the full
+	# muscle of his thighs, a cape over a robe's skirt and sash.
+	if cloak_mesh != null:
+		var robed = (not stone and hero_class == "wizard") or (stone and enemy_kind == "wizard")
+		cloth_clearance = .08 if robed else (.02 if not stone else 0.0)
+		if robed:
+			cloak_mesh.material_override.set_shader_parameter("min_reach",.24)
+			cloak_mesh.material_override.set_shader_parameter("waist_reach",.2)
 	equip(weapon)
 	play(idle_action())
 
@@ -225,7 +254,7 @@ func equip(weapon: String) -> void:
 	equipment = hand
 	var sizes = {"sword":Vector3(.19,1.3,.09),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22)}
 	weapon_size = sizes[weapon]
-	var weapon_finish = Art.statue_material() if is_stone else (Art.sword_material() if weapon=="sword" else null)
+	var weapon_finish = Art.statue_material() if is_stone else (Art.sword_material() if weapon=="sword" else (Art.bow_wood() if weapon=="bow" else null))
 	# The Oracle carries a slender staff crowned with a diamond (tools/prepare_staff.py).
 	var oracle = weapon=="staff" and enemy_kind=="wizard"
 	if oracle: weapon_size = ORACLE_STAFF_SIZE
@@ -244,6 +273,7 @@ func equip(weapon: String) -> void:
 	item.rotation.x = PI / 2
 	# The grip sits a fixed share up each hilt; the larger sword's hilt is longer.
 	item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22}.get(weapon,-.17))
+	weapon_rest = item.transform
 	if oracle or silver_staff:
 		item.top_level = true
 		if oracle: oracle_staff_flame()
@@ -274,6 +304,16 @@ func equip(weapon: String) -> void:
 		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(TOWER_SIZE if tower else SCUTUM_SIZE)
 		else: shield.rotation.y = PI
 		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5+(TOWER_DROP if tower else 0.0),0)
+		shield_rest = shield.position
+		shield_box = AABB()
+		# A scutum is laid along the forearm every frame (strap_scutum), in
+		# the world's own space.
+		strapped = scutum
+		strap_size = TOWER_SIZE if tower else SCUTUM_SIZE
+		# Crossed by the forearm a little above its middle, so its top
+		# stays below the chin.
+		strap_hold = .6+(TOWER_DROP if tower else 0.0)
+		shield.top_level = scutum
 	if state in ["Idle","SwordIdle","ScutumSwordIdle","SpearShieldIdle","BowIdle","SpearIdle"]: play(idle_action())
 
 # Clips in which an archer holds the bow out in the left hand, ready or
@@ -281,12 +321,20 @@ func equip(weapon: String) -> void:
 # through his own idle, run and crouch (the warrior's, with the left hand
 # closed on the bow), so it never changes hands.
 const BOW_READY_STATES = ["BowIdle","BowShot","BowRapid","ArcherShot"]
+# How long the ranger takes to lower his bow arm after a shot.
+const BOW_LOWER_TIME = .45
+var bow_lowering = 0.0
 
 func carries_bow() -> bool:
-	return not is_stone and weapon_kind == "bow" and not state in BOW_READY_STATES
+	return ranger_carry() and not state in BOW_READY_STATES
+
+# Archers who stand and move as the ranger does, the bow carried in the left
+# fist at the side: the ranger, and the stone archer in his likeness.
+func ranger_carry() -> bool:
+	return weapon_kind == "bow" and (not is_stone or enemy_kind == "archer") and clips.has("RangerIdle")
 
 func idle_action() -> String:
-	if not is_stone and weapon_kind == "bow": return "RangerIdle" if clips.has("RangerIdle") else "Idle"
+	if ranger_carry(): return "RangerIdle"
 	if not is_stone and weapon_kind == "staff": return "WizardIdle" if clips.has("WizardIdle") else "Idle"
 	var wanted = {"bow":"BowIdle","spear":"SpearIdle","sword":"SwordIdle"}.get(weapon_kind,"Idle")
 	if enemy_kind in SHIELD_BEARERS: wanted = "ScutumSwordIdle" if weapon_kind=="sword" else "SpearShieldIdle"
@@ -360,7 +408,10 @@ func align_oracle_staff() -> void:
 	var across = up.cross(side).normalized()
 	var length = weapon_size.y*rig.scale.x
 	weapon_item.global_basis = Basis(across,up,side)*Basis.from_scale(weapon_size*rig.scale.x)
-	weapon_item.global_position = hand-up*length*ORACLE_GRIP
+	# Thrust out toward the target, the staff slides through the hand to near
+	# its foot, so its lower end does not run back through the robe.
+	var thrust = smoothstep(.3,.85,clampf(lean.y/maxf(.001,lean.length()),0.0,1.0))
+	weapon_item.global_position = hand-up*length*lerpf(ORACLE_GRIP,.14,thrust)
 	var glow = cast_glow(phase)
 	oracle_flame.visible = glow>.01 and not dead
 	if oracle_flame.visible:
@@ -383,7 +434,120 @@ func align_walking_staff() -> void:
 	weapon_item.global_basis = Basis(across,up,side)*Basis.from_scale(size)
 	weapon_item.global_position = hand-up*size.y*WIZARD_GRIP
 
+# The shield's place on the forearm, and its board in its own space.
+var shield_rest = Vector3.ZERO
+var shield_box = AABB()
+# A strapped scutum: its size, and how far up the board the forearm crosses.
+var strapped = false
+var strap_size = Vector3.ONE
+var strap_hold = .5
+
+# The shield bearers' scutum is strapped flat along the left forearm, which
+# they carry level across the front of the body: the board's back against
+# the outside of the forearm, its middle over the middle of the forearm,
+# upright, and facing out from the body as nearly the way they face as the
+# forearm allows (out to the side when the forearm points ahead).
+func strap_scutum() -> void:
+	var k = rig.scale.x
+	var elbow = bone_position("lowerarm_l")
+	var wrist = bone_position("hand_l")
+	var forearm: Vector3 = (wrist-elbow).normalized()
+	var facing = global_basis.orthonormalized()
+	var out: Vector3 = facing.z-forearm*facing.z.dot(forearm)
+	if out.length() < .35: out = facing.x-forearm*facing.x.dot(forearm)
+	out = out.normalized()
+	var up: Vector3 = Vector3.UP-out*Vector3.UP.dot(out)
+	if up.length() < .2: up = facing.y
+	var side: Vector3 = up.normalized().cross(out).normalized()
+	up = out.cross(side).normalized()
+	var size: Vector3 = strap_size*k
+	# The board's back bulges to half its depth behind its rim.
+	var middle: Vector3 = elbow.lerp(wrist,.55)+out*(.045*k+size.z*.5)
+	shield_item.global_transform = Transform3D(Basis(side*size.x,up*size.y,out*size.z),middle-up*size.y*strap_hold)
+# What a shield is kept in front of, as capsules from bone to bone: the legs,
+# the body and head (leaning into a run or a swing), and the shield arm's own
+# forearm and fist behind the board.
+const SHIELD_LEG_CLEARANCE = [["thigh_l","calf_l",.09],["thigh_r","calf_r",.09],["calf_l","foot_l",.065],["calf_r","foot_r",.065],["pelvis","spine_03",.13],["spine_03","neck_01",.14],["neck_01","Head",.1],["lowerarm_l","hand_l",.045],["hand_l","middle_02_l",.04]]
+
+# A knee raised in a lunge or a stride would pass through a big shield held
+# low, a head leaning into a run through its top, and a clenched fist through
+# its middle; the shield stands off the forearm just far enough to keep them
+# behind its board.
+func keep_shield_off_legs() -> void:
+	if not is_instance_valid(shield_item) or not shield_item.is_inside_tree(): return
+	if strapped: strap_scutum()
+	else: shield_item.position = shield_rest
+	if shield_box.size == Vector3.ZERO:
+		var first = true
+		for mesh in shield_item.find_children("*","MeshInstance3D",true,false):
+			var box: AABB = shield_item.global_transform.affine_inverse()*mesh.global_transform*mesh.get_aabb()
+			shield_box = box if first else shield_box.merge(box)
+			first = false
+		if first: return
+	var t: Transform3D = shield_item.global_transform
+	# The board's thickness runs along its thinnest side (in the world: the
+	# model is scaled unevenly).
+	var thin = 0
+	for axis in 3: if shield_box.size[axis]*t.basis[axis].length() < shield_box.size[thin]*t.basis[thin].length(): thin = axis
+	var across = [(thin+1)%3,(thin+2)%3]
+	var centre: Vector3 = t*shield_box.get_center()
+	var normal: Vector3 = t.basis[thin].normalized()
+	# Outward: away from the body behind it.
+	if normal.dot(centre-bone_position("spine_02")) < 0: normal = -normal
+	var half_thick = shield_box.size[thin]*t.basis[thin].length()*.5
+	var k = rig.scale.x
+	var push = 0.0
+	for limb in SHIELD_LEG_CLEARANCE:
+		var a = bone_position(limb[0]); var b = bone_position(limb[1])
+		var r = limb[2]*k
+		for i in 7:
+			var p: Vector3 = a.lerp(b,i/6.0)
+			var inside = true
+			for axis in across:
+				var dir: Vector3 = t.basis[axis]
+				var reach = (p-centre).dot(dir.normalized())
+				if absf(reach) > shield_box.size[axis]*dir.length()*.5: inside = false
+			if not inside: continue
+			var depth = (p-centre).dot(normal)
+			# A leg behind the board but reaching into it, or through it.
+			if depth > -r-half_thick and depth < r: push = maxf(push,depth+r+half_thick)
+	if push > 0: shield_item.global_position += normal*minf(push,.3*k)
+
+# The sword's place in the hand, as equipped.
+var weapon_rest = Transform3D()
+
+# A sword carried low beside a strapped scutum would swing its blade through
+# the board as the bearer runs: it turns about the fist, out to the bearer's
+# right, just far enough to pass beside the board instead.
+func keep_blade_off_shield() -> void:
+	if not strapped or weapon_kind != "sword" or not is_instance_valid(weapon_item) or not is_instance_valid(shield_item): return
+	weapon_item.transform = weapon_rest
+	if not weapon_item.is_inside_tree(): return
+	var grip: Vector3 = weapon_item.get_parent().global_position
+	var right: Vector3 = -global_basis.x.normalized()
+	for step in 8:
+		if not blade_in_board(): return
+		var t: Transform3D = weapon_item.global_transform
+		var tip: Vector3 = t*Vector3(0,1,0)-grip
+		var turn = Basis(Vector3.UP,signf(Vector3.UP.dot(tip.cross(right)))*.12)
+		weapon_item.global_transform = Transform3D(turn*t.basis,grip+turn*(t.origin-grip))
+
+# Whether the blade (past the hilt) passes through the scutum's board.
+func blade_in_board() -> bool:
+	var board: Transform3D = shield_item.global_transform
+	var t: Transform3D = weapon_item.global_transform
+	var centre: Vector3 = board*Vector3(0,.5,0)
+	for i in 8:
+		var offset: Vector3 = t*Vector3(0,.3+.7*i/7.0,0)-centre
+		var inside = true
+		for axis in 3:
+			if absf(offset.dot(board.basis[axis].normalized())) > board.basis[axis].length()*.5: inside = false
+		if inside: return true
+	return false
+
 func align_weapon() -> void:
+	keep_shield_off_legs()
+	keep_blade_off_shield()
 	if enemy_kind == "wizard" and weapon_kind == "staff" and is_instance_valid(weapon_item) and is_instance_valid(oracle_flame):
 		if is_inside_tree() and skeleton.is_inside_tree() and weapon_item.is_inside_tree(): align_oracle_staff()
 		return
@@ -406,6 +570,20 @@ func align_weapon() -> void:
 		if carried and carry_in_hand != null:
 			# Fixed in the fist: the same place and angle in the hand always.
 			weapon_item.global_transform = hand_l*carry_in_hand
+			if bow_lowering > 0:
+				# Lowering after a shot: from held out to carried, turning in
+				# the hand as the arm comes down.
+				var w = 1.0-bow_lowering/BOW_LOWER_TIME
+				w = w*w*(3-2*w)
+				var hold = bow_hold("l")
+				var up: Vector3 = hold[1]
+				var front: Vector3 = (facing.z-up*facing.z.dot(up)).normalized()
+				var held_basis = Basis(-front,up,(-front).cross(up)).orthonormalized()
+				var held_position: Vector3 = hold[0]-(held_basis*Basis.from_scale(weapon_size*rig.scale.x))*BOW_GRIP
+				var carried_basis: Basis = weapon_item.global_basis.orthonormalized()
+				var turned = Basis(held_basis.get_rotation_quaternion().slerp(carried_basis.get_rotation_quaternion(),w))
+				weapon_item.global_basis = turned*Basis.from_scale(weapon_size*rig.scale.x)
+				weapon_item.global_position = held_position.lerp(weapon_item.global_position,w)
 			for string in bow_strings: string.mesh.set_blend_shape_value(string.index,0.0)
 			if is_instance_valid(nocked_arrow): nocked_arrow.visible = false
 			return
@@ -416,14 +594,18 @@ func align_weapon() -> void:
 			# Carried, the bow is fixed in the fist and turns with the hand.
 			var forearm: Vector3 = (bone_position("hand_l")-bone_position("lowerarm_l")).normalized()
 			# The stave runs forward and back beside the leg, square to the
-			# forearm, and the bow faces along the forearm, as it would shoot.
+			# forearm, and the bow faces along the forearm, as it would shoot;
+			# its back limb angled out from his side, clear of the cloak.
 			up = (facing.z-forearm*facing.z.dot(forearm)).normalized()
+			var outward: Vector3 = (facing.x-forearm*facing.x.dot(forearm)).normalized()
+			up = (up*cos(BOW_CARRY_SPLAY)-outward*sin(BOW_CARRY_SPLAY)).normalized()
 			front = forearm
 		else:
 			# Held out, the bow's curved front faces the way he faces.
 			front = (facing.z-up*facing.z.dot(up)).normalized()
 		weapon_item.global_basis = Basis(-front,up,(-front).cross(up)) * Basis.from_scale(weapon_size*rig.scale.x)
 		weapon_item.global_position = hold[0]-weapon_item.global_basis*BOW_GRIP
+		if not carried: keep_bow_off_legs()
 		# The grip is taken once, in the idle stance, and kept from then on.
 		if carried and state == "RangerIdle": carry_in_hand = hand_l.affine_inverse()*weapon_item.global_transform
 		var phase = 1.0
@@ -460,6 +642,63 @@ func align_weapon() -> void:
 # The carried bow's place in the left hand, taken from the idle stance.
 var carry_in_hand = null
 
+# How far the carried bow's back limb is angled out from his side (radians),
+# so it passes outside his cloak rather than through it.
+const BOW_CARRY_SPLAY = .32
+
+# The legs a held bow keeps outside of, as capsules from bone to bone.
+const BOW_LEG_CLEARANCE = [["thigh_l","calf_l",.1],["thigh_r","calf_r",.1],["calf_l","foot_l",.075],["calf_r","foot_r",.075]]
+
+# A held bow swung low (raised to shoot from the side, or a statue's as it
+# staggers) turns about the grip just enough to keep its limbs and string
+# outside the legs, rather than through them: a few small turns are tried
+# each way, keeping whichever clears the legs best, until they are clear. Its
+# curved front stays within 10 degrees of where it faced while the archer
+# stands or moves (53 as he staggers or raises it).
+func keep_bow_off_legs() -> void:
+	var legs = []
+	for limb in BOW_LEG_CLEARANCE: legs.append([bone_position(limb[0]),bone_position(limb[1]),limb[2]*rig.scale.x])
+	var t: Transform3D = weapon_item.global_transform
+	var gap = bow_leg_gap(t,legs)
+	if gap >= 0: return
+	var grip: Vector3 = t*BOW_GRIP
+	var facing = global_basis.orthonormalized()
+	var front: Vector3 = -t.basis.x.normalized()
+	var keep_front = .985 if state in ["BowIdle","BowRun","BowCrouch"] else .6
+	var step = .15
+	for attempt in 24:
+		var best = t
+		var best_gap = gap
+		for axis in [front,facing.x,facing.y]:
+			for turn_by in [-step,step]:
+				var turn = Basis(axis.normalized(),turn_by)
+				var turned = Transform3D(turn*t.basis,grip+turn*(t.origin-grip))
+				if (-turned.basis.x.normalized()).dot(front) < keep_front: continue
+				var turned_gap = bow_leg_gap(turned,legs)
+				if turned_gap > best_gap:
+					best = turned
+					best_gap = turned_gap
+		if best_gap <= gap: step *= .5
+		else:
+			t = best
+			gap = best_gap
+		if gap >= 0: break
+	weapon_item.global_transform = t
+
+# How far a bow placed at `t` stands clear of the legs (negative: into them),
+# along its limbs (from just past the fist toward each tip) and its string.
+# The fist itself may rest against a thigh.
+func bow_leg_gap(t: Transform3D, legs: Array) -> float:
+	var grip: Vector3 = t*BOW_GRIP
+	var gap = INF
+	var low: Vector3 = t*Vector3(.25,0,0)
+	var high: Vector3 = t*Vector3(.25,1,0)
+	for line in [[grip.lerp(low,.2),low],[grip.lerp(high,.2),high],[t*Vector3(.5,0,0),t*Vector3(.5,1,0)]]:
+		for leg in legs:
+			var closest = Geometry3D.get_closest_points_between_segments(line[0],line[1],leg[0],leg[1])
+			gap = minf(gap,closest[0].distance_to(closest[1])-leg[2])
+	return gap
+
 
 func bone_position(bone: String) -> Vector3:
 	return skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin
@@ -495,16 +734,25 @@ func petrify() -> void:
 
 func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> void:
 	if dead or not clips.has(action): return
+	var previous = state
 	state = action
 	reaction_time = 0
 	animation_delay = 0
 	pending_animation_time = 0
 	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
 	if action in ["BowRun","SwordRun","ScutumRun","RangerRun","WizardRun"]: locomotion_rate = speed_scale
-	animator.play(clips[action], minf(.08,duration*.1) if duration>0 else .08, speed)
+	var blend = minf(.08,duration*.1) if duration>0 else .08
+	# After a shot the ranger lowers his bow arm gradually, back to his side.
+	if ranger_carry() and previous in BOW_READY_STATES and not action in BOW_READY_STATES:
+		blend = BOW_LOWER_TIME
+		bow_lowering = BOW_LOWER_TIME
+	var replay = animator.assigned_animation == clips[action]
+	animator.play(clips[action], blend, speed)
 	# play() resumes an already assigned clip. Repeated attacks must each
-	# start a fresh wind-up, even when the last recovery is still playing.
-	animator.seek(0,true)
+	# start a fresh wind-up, even when the last recovery is still playing. A
+	# new clip starts from its beginning anyway, and seeking it would cut the
+	# crossfade from the last one short.
+	if replay: animator.seek(0,true)
 	animator.advance(0)
 	if action == "Death": dead = true
 
@@ -607,6 +855,12 @@ var cloak_mesh: MeshInstance3D
 # The limbs the cloak's cloth may never pass through, as capsules from bone to
 # bone with a radius a little over the limb's own (boots included).
 const CLOAK_BODY_CAPSULES = [["thigh_l","calf_l",.105],["thigh_r","calf_r",.105],["calf_l","foot_l",.085],["calf_r","foot_r",.085],["foot_l","ball_l",.075],["foot_r","ball_r",.075]]
+# The arms, which push only the cloth behind the body when they swing back
+# into it.
+const CLOAK_ARM_CAPSULES = [["upperarm_l","lowerarm_l",.07],["upperarm_r","lowerarm_r",.07],["lowerarm_l","hand_l",.065],["lowerarm_r","hand_r",.065]]
+# How much more the cloth stands off the legs than the bare limbs: boots, a
+# robe's skirt under a cape.
+var cloth_clearance = 0.0
 var cloak_last_position = null
 var cloak_clock = 0.0
 var cloak_velocity = Vector3.ZERO
@@ -676,12 +930,15 @@ func cloak_capsules() -> void:
 	if not is_instance_valid(cloak_mesh) or not cloak_mesh.is_inside_tree(): return
 	var to_mesh: Transform3D = cloak_mesh.global_transform.affine_inverse()*skeleton.global_transform
 	var a = PackedVector3Array(); var b = PackedVector3Array(); var r = PackedFloat32Array()
-	for capsule in CLOAK_BODY_CAPSULES:
+	for capsule in CLOAK_BODY_CAPSULES+CLOAK_ARM_CAPSULES:
 		a.append(to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(capsule[0])).origin)
 		b.append(to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(capsule[1])).origin)
 		# The mesh's own space is the rig's, before the rig's scale.
-		r.append(capsule[2])
+		r.append(capsule[2]+(cloth_clearance if capsule in CLOAK_BODY_CAPSULES else 0.0))
 	var m: ShaderMaterial = cloak_mesh.material_override
+	m.set_shader_parameter("leg_capsules",CLOAK_BODY_CAPSULES.size())
+	# The rig faces +Z.
+	m.set_shader_parameter("body_forward",(to_mesh.basis*Vector3.BACK).normalized())
 	m.set_shader_parameter("capsule_a",a)
 	m.set_shader_parameter("capsule_b",b)
 	m.set_shader_parameter("capsule_radius",r)
@@ -723,6 +980,7 @@ func cloak_tick(dt: float) -> void:
 
 func advance(dt: float) -> void:
 	cloak_tick(dt)
+	bow_lowering = maxf(0.0,bow_lowering-dt)
 	if crumbling >= 0.0:
 		if crumbling < CRUMBLE_TIME+1.5: crumble_step(dt)
 		return
@@ -739,7 +997,7 @@ func advance(dt: float) -> void:
 func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: float = 1.0) -> void:
 	if dead or busy or reaction_time>0: return
 	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
-	if moving and weapon_kind=="bow" and not is_stone: wanted = "RangerCrouch" if crouch else "RangerRun"
+	if moving and ranger_carry(): wanted = "RangerCrouch" if crouch else "RangerRun"
 	elif moving and weapon_kind=="staff" and not is_stone: wanted = "WizardCrouch" if crouch else "WizardRun"
 	elif moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
 	# Carry the sword low while running so the blade never swings through the head.

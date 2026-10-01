@@ -82,38 +82,42 @@ func test():
 		check(deepest>.34,"%s draws the string at least 34cm" % clip)
 		check(nock_error<.035,"%s string follows draw hand (%.3fm error)" % [clip,nock_error])
 		if nock_error>=.035: print("WORST_NOCK_PHASE ",clip," ",worst_nock_phase)
-	# The archer statue carries its bow low in the left hand while it moves.
+	# The archer statue stands, runs and crouches as the ranger does, its bow
+	# carried in the left fist beside it: seated in the fist, square to the
+	# forearm, the lower tip off the ground and clear of the body.
 	var statue = Visual.new()
 	scene.add_child(statue)
 	statue.setup(true,Color.WHITE,"bow",1,"archer")
 	statue.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
-	for clip in ["BowRun","BowCrouch"]:
-		var carrier = statue
-		check(carrier.clips.has(clip),"Dedicated carry clip exists: "+clip)
-		if not actor.clips.has(clip): continue
+	check(statue.idle_action()=="RangerIdle","An archer statue idles as the ranger does")
+	pose(statue,"RangerIdle",0.0)
+	for clip in ["RangerIdle","RangerRun","RangerCrouch"]:
 		var grip_error = 0.0
 		var lowest_tip = INF
-		var side_gap = INF
-		var faces_forward = true
-		for direction in 8:
-			carrier.rotation.y = direction*TAU/8
+		var squareness = 0.0
+		var body_gap = INF
+		for direction in 4:
+			statue.rotation.y = direction*TAU/4
 			for i in 31:
-				pose(carrier,clip,i/30.0)
-				var grip: Vector3 = carrier.weapon_item.global_transform*Visual.BOW_GRIP
-				grip_error = maxf(grip_error,grip.distance_to(carrier.bow_hold()[0]))
-				lowest_tip = minf(lowest_tip,(carrier.weapon_item.global_transform*Vector3(0,0,0)).y)
-				side_gap = minf(side_gap,(grip-bone(carrier,"pelvis")).dot(carrier.global_basis.x))
-				faces_forward = faces_forward and (-carrier.weapon_item.global_basis.x.normalized()).dot(carrier.global_basis.z)>.9
-		check(grip_error<.001,"Bow stays seated in the moving fist in every direction: "+clip)
+				pose(statue,clip,i/30.0)
+				var t: Transform3D = statue.weapon_item.global_transform
+				grip_error = maxf(grip_error,(t*Visual.BOW_GRIP).distance_to(statue.bow_hold("l")[0]))
+				lowest_tip = minf(lowest_tip,minf((t*Vector3(0,0,0)).y,(t*Vector3(0,1,0)).y))
+				var forearm: Vector3 = (bone(statue,"hand_l")-bone(statue,"lowerarm_l")).normalized()
+				squareness = maxf(squareness,absf(t.basis.y.normalized().dot(forearm)))
+				for limb in [["spine_01","neck_01",.16],["thigh_l","calf_l",.09],["calf_l","foot_l",.07]]:
+					body_gap = minf(body_gap,gap(t*Vector3(0,0,0),t*Vector3(0,1,0),bone(statue,limb[0]),bone(statue,limb[1]))-limb[2])
+		check(grip_error<.05,"The archer statue's bow stays in its left fist: %s (%.3fm)" % [clip,grip_error])
+		check(squareness<.17,"The archer statue's bow stays square to the forearm: %s (%.3f)" % [clip,squareness])
 		check(lowest_tip>.05,"Bow lower tip clears ground: %s (%.3fm)" % [clip,lowest_tip])
-		check(side_gap>.22,"Bow is carried beside the torso: %s (%.3fm)" % [clip,side_gap])
-		check(faces_forward,"Carried bow keeps its curved front forward: "+clip)
+		check(body_gap>0,"The archer statue's bow stays clear of its body: %s (%.3fm)" % [clip,body_gap])
+	statue.rotation.y = 0
 	statue.locomotion(true,false)
-	check(statue.state=="BowRun","A moving archer statue carries its bow")
+	check(statue.state=="RangerRun","A moving archer statue runs as the ranger does")
 	statue.locomotion(true,false,true)
-	check(statue.state=="BowCrouch","A crouching archer statue carries its bow")
+	check(statue.state=="RangerCrouch","A crouching archer statue crouches as the ranger does")
 	statue.locomotion(false,false)
-	check(statue.state=="BowIdle","An archer statue stops in its bow-ready stance")
+	check(statue.state=="RangerIdle","An archer statue stops in the ranger's idle")
 	# The ranger stands, runs and crouches as the warrior does, the bow in his
 	# right hand beside him; he holds it out in the left only to shoot.
 	actor.rotation.y = 0
@@ -125,6 +129,9 @@ func test():
 	check(actor.state=="RangerCrouch","The ranger crouches as the warrior does")
 	# Carried, the bow is fixed in the fist: the same angle to the hand in
 	# every frame, the stave square to the forearm, and clear of his body.
+	# (Switching from a shot to the idle starts the bow arm lowering; posing
+	# clips directly lets no time pass, so finish it first.)
+	actor.advance(1.0)
 	var carry_error = 0.0
 	var square = 0.0
 	var turn = 0.0
@@ -164,6 +171,27 @@ func test():
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_png("res://test-results/bow-%s-angles.png" % clip)
 	FileAccess.open("res://test-results/bow-regression.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
+	# Held out (raised to shoot, or a statue archer's through every clip), the
+	# bow turns about the grip as needed to keep its limbs and string outside
+	# the legs.
+	var archer = Visual.new()
+	scene.add_child(archer)
+	archer.setup(true,Color.WHITE,"bow",1.0,"archer")
+	archer.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	var leg_gap = INF
+	for pair in [[actor,"ArcherShot"],[actor,"BowShot"],[actor,"BowRapid"],[archer,"ArcherShot"],[archer,"Hit"]]:
+		var who = pair[0]
+		var k = who.rig.scale.x
+		for i in 41:
+			pose(who,pair[1],i/40.0)
+			var t: Transform3D = who.weapon_item.global_transform
+			var grip: Vector3 = t*Visual.BOW_GRIP
+			# (The fist itself may rest against a thigh.)
+			for line in [[grip.lerp(t*Vector3(.25,0,0),.2),t*Vector3(.25,0,0)],[grip.lerp(t*Vector3(.25,1,0),.2),t*Vector3(.25,1,0)],[t*Vector3(.5,0,0),t*Vector3(.5,1,0)]]:
+				for limb in [["thigh_l","calf_l",.08],["thigh_r","calf_r",.08],["calf_l","foot_l",.06],["calf_r","foot_r",.06]]:
+					leg_gap = minf(leg_gap,gap(line[0],line[1],bone(who,limb[0]),bone(who,limb[1]))-limb[2]*k)
+	check(leg_gap>0,"A held bow stays outside the legs (%.3fm)" % leg_gap)
+	archer.queue_free()
 	print("BOW_REGRESSION ",passed.size()," passed; ",failed)
 	scene.queue_free()
 	await process_frame

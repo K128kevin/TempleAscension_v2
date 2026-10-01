@@ -90,6 +90,16 @@ new_verts = [g for g in copy['geom'] if isinstance(g,bmesh.types.BMVert)]
 for v in new_verts: v.co.y = -v.co.y
 new_faces = [g for g in copy['geom'] if isinstance(g,bmesh.types.BMFace)]
 bmesh.ops.reverse_faces(mesh,faces=new_faces)
+# The knight helm's ridge of spikes is smoothed into the dome of the
+# concept's helm without its crest (the shader works a low riveted ridge
+# over it): above the brow, anything standing out of a smooth egg over the
+# head is drawn back onto it.
+for v in mesh.verts:
+    if v.co.z < 1.76: continue
+    d = math.sqrt((v.co.x/.122)**2+(v.co.y/.142)**2+((v.co.z-1.7)/.18)**2)
+    if d > 1.0:
+        centre = Vector((0,0,1.7))
+        v.co = centre+(v.co-centre)/d
 mesh.to_mesh(helm.data); mesh.free()
 helm.data.materials.clear()
 helm.data.materials.append(bpy.data.materials.new('HelmSteel'))
@@ -175,12 +185,106 @@ outfits.cloth_chains(rig,cloak,'pelvis',CLOAK_ROOT,CLOAK_BLEND)
 # shoulder caps always cover (they move with the body there), so no skin
 # shows through them as he draws; the head and neck, and everything under
 # the swinging lower cloak, are kept.
+# Which of `mesh`'s vertices lie truly under `covers` (objects): a ray from
+# the vertex straight out along its normal, and four more tilted 35 degrees
+# round it, must all strike a cover within `reach(co)` metres. A body face is
+# hidden only where all its corners are covered, so wherever the skin could
+# be seen past a garment's edge, it stays.
+def covered_vertices(mesh, covers, reach, keep=lambda v: False):
+    from mathutils.bvhtree import BVHTree
+    joined = bmesh.new()
+    for obj in covers:
+        part = bmesh.new(); part.from_mesh(obj.data); part.transform(obj.matrix_world)
+        temp = bpy.data.meshes.new('cover'); part.to_mesh(temp); part.free()
+        joined.from_mesh(temp); bpy.data.meshes.remove(temp)
+    tree = BVHTree.FromBMesh(joined); joined.free()
+    world = mesh.matrix_world; turn = world.to_3x3()
+    out = set()
+    for v in mesh.data.vertices:
+        if keep(v): continue
+        co = world @ v.co; n = (turn @ v.normal).normalized()
+        side = n.orthogonal().normalized(); other = n.cross(side)
+        directions = [n]+[(n*math.cos(.61)+d*math.sin(.61)).normalized() for d in (side,-side,other,-other)]
+        limit = reach(co)
+        if all(tree.ray_cast(co+d*.001,d,limit)[0] is not None for d in directions): out.add(v.index)
+    return out
+
+# The ranger's quiver, built here: a tube of tooled leather, a little
+# flattened against his back and flaring toward its mouth, with a rolled rim,
+# a lining showing inside the mouth and a hard cap at the foot, holding nine
+# arrows whose fletched ends stand out of it. Its UVs mark each part for
+# assets/shaders/quiver.gdshader: U in [0,1) the tube (round, from the seam at
+# the back), [1,2) the lining, [2,3) the rim, [3,4) the cap, [4,5) a shaft,
+# [5,6) a fletching vane, [6,7) a nock; V runs along each part, plus ten times
+# the arrow's number. Rigid on the upper back, centred at `at`, turned by
+# `turn` (its length along Z before turning).
+def quiver(at, turn):
+    L,r0,r1,flat,seg = .56,.05,.066,.78,20
+    mesh = bmesh.new(); uv = mesh.loops.layers.uv.new('UVMap')
+    def tube(rings, part):
+        # rings: [(z, radius, v)]; one row of quads between each pair.
+        rows = []
+        for z,r,v in rings:
+            rows.append([(mesh.verts.new((math.sin(2*math.pi*i/seg)*r,math.cos(2*math.pi*i/seg)*r*flat,z)),i/seg,v) for i in range(seg+1)])
+        for a,b in zip(rows,rows[1:]):
+            for i in range(seg):
+                quad = [a[i],a[i+1],b[i+1],b[i]]
+                face = mesh.faces.new([q[0] for q in quad])
+                for loop,q in zip(face.loops,quad): loop[uv].uv = (part+q[1],q[2])
+        return rows
+    radius = lambda t: r0+(r1-r0)*t
+    outside = tube([(L*j/12,radius(j/12),j/12) for j in range(13)],0)
+    tube([(L,r1,0.0),(L+.006,r1+.005,.35),(L+.012,r1-.001,.7),(L+.004,r1-.007,1.0)],2)
+    tube([(L+.004,r1-.007,0.0),(L-.12,radius(1-.12/L)-.007,1.0)],1)
+    # The cap: a shallow dome over the foot.
+    bottom = outside[0]
+    centre = mesh.verts.new((0,0,-.012))
+    for i in range(seg):
+        face = mesh.faces.new([bottom[i+1][0],bottom[i][0],centre])
+        for loop,(x,y) in zip(face.loops,[((i+1)/seg,1.0),(i/seg,1.0),(.5,0.0)]): loop[uv].uv = (3+x,y)
+    import random
+    rng = random.Random(7)
+    for n in range(9):
+        a = 2*math.pi*n/9+rng.uniform(-.2,.2); rad = .02+.022*rng.random()
+        base = Vector((math.sin(a)*rad,math.cos(a)*rad*flat,L*.3))
+        top = Vector((math.sin(a)*rad*1.5,math.cos(a)*rad*flat*1.5,L+.15+rng.uniform(0,.05)))
+        axis = (top-base).normalized()
+        u = axis.orthogonal().normalized(); w = axis.cross(u)
+        def ring(c, r, sides=6): return [c+(u*math.cos(2*math.pi*k/sides)+w*math.sin(2*math.pi*k/sides))*r for k in range(sides+1)]
+        def strip(c0, c1, r, part, v0, v1):
+            a0 = ring(c0,r); a1 = ring(c1,r)
+            vs0 = [mesh.verts.new(p) for p in a0]; vs1 = [mesh.verts.new(p) for p in a1]
+            for k in range(6):
+                face = mesh.faces.new([vs0[k],vs0[k+1],vs1[k+1],vs1[k]])
+                for loop,(x,y) in zip(face.loops,[(k/6,v0),((k+1)/6,v0),((k+1)/6,v1),(k/6,v1)]): loop[uv].uv = (part+x,y+10*n)
+        strip(base,top-axis*.016,.0035,4,0.0,1.0)
+        strip(top-axis*.016,top+axis*.006,.0046,6,0.0,1.0)
+        # Three vanes, a long tapering feather profile each.
+        for k in range(3):
+            out = u*math.cos(2*math.pi*k/3+.3)+w*math.sin(2*math.pi*k/3+.3)
+            steps = 6
+            inner = []; outer = []
+            for q in range(steps+1):
+                sq = q/steps
+                c = top-axis*(.02+.1*(1-sq))
+                height = .004+.012*min(1.0,sq/.55)-.004*max(0.0,sq-.85)/.15
+                inner.append(mesh.verts.new(c+out*.0035)); outer.append(mesh.verts.new(c+out*(.0035+height)))
+            for q in range(steps):
+                face = mesh.faces.new([inner[q],inner[q+1],outer[q+1],outer[q]])
+                for loop,(x,y) in zip(face.loops,[(q/steps,0.0),((q+1)/steps,0.0),((q+1)/steps,1.0),(q/steps,1.0)]): loop[uv].uv = (5+x,y+10*n)
+    obj = bpy.data.objects.new('RangerQuiver',bpy.data.meshes.new('RangerQuiver'))
+    mesh.to_mesh(obj.data); mesh.free()
+    bpy.context.scene.collection.objects.link(obj)
+    for poly in obj.data.polygons: poly.use_smooth = True
+    middle = Vector((0,0,(L+.2)/2))
+    for v in obj.data.vertices: v.co = at+turn @ (v.co-middle)
+    obj.vertex_groups.new(name='spine_03').add(list(range(len(obj.data.vertices))),1.0,'REPLACE')
+    obj.parent = rig
+    obj.modifiers.new('Armature','ARMATURE').object = rig
+    obj.data.materials.append(bpy.data.materials.new('QuiverLeather'))
+    return obj
+
 def ranger_body(cloak):
-    from mathutils import kdtree
-    shell = [v.co.copy() for v in cloak.data.vertices if v.co.z>=CLOAK_BLEND[1]]
-    tree = kdtree.KDTree(len(shell))
-    for i,co in enumerate(shell): tree.insert(co,i)
-    tree.balance()
     covered_body = body.copy(); covered_body.data = body.data.copy(); covered_body.name = 'RangerBody'
     bpy.context.scene.collection.objects.link(covered_body)
     names = {g.index:g.name for g in covered_body.vertex_groups}
@@ -190,7 +294,12 @@ def ranger_body(cloak):
     elbows = [rig.matrix_world @ rig.data.bones['lowerarm_'+side].head_local for side in 'lr']
     def near_elbow(v):
         return any((v.co-e).length<.12 for e in elbows) or any(names[g.group].startswith('lowerarm') and g.weight>.05 for g in v.groups)
-    hidden = {v.index for v in covered_body.data.vertices if v.co.z>=CLOAK_BLEND[1] and not dominant(v).startswith(('Head','neck')) and not near_elbow(v) and tree.find(v.co)[2]<.075}
+    # Under the mantle (the cloak above its swinging part), never the head,
+    # neck, hands or elbows.
+    mantle = cloak.copy(); mantle.data = cloak.data.copy()
+    outfits.remove_faces(mantle,lambda f: f.calc_center_median().z<CLOAK_BLEND[1])
+    hidden = covered_vertices(covered_body,[mantle],lambda co: .09,keep=lambda v: dominant(v).startswith(('Head','neck','hand','thumb','index','middle','ring','pinky')) or near_elbow(v) or v.co.z<CLOAK_BLEND[1])
+    bpy.data.meshes.remove(mantle.data)
     # The feet are inside the boots.
     hidden |= {v.index for v in covered_body.data.vertices if dominant(v).startswith(('foot','ball'))}
     outfits.remove_faces(covered_body,lambda f: all(v.index in hidden for v in f.verts))
@@ -334,10 +443,18 @@ def ranger_kit():
     rx = 1.0 if right.x>0 else -1.0
     # The quiver across the back: its mouth behind the right shoulder.
     tilt = Matrix.Rotation(math.radians(-24*rx),3,'Y')
-    prop('RangerQuiver',adv/'quiver.gltf',Vector((rx*.07,.2,1.22)),.62,tilt,'spine_03')
-    # A dagger hanging from the belt at the left hip, hilt up and forward.
-    hang = Matrix.Rotation(math.radians(8),3,'X') @ Matrix.Rotation(math.radians(-18*rx),3,'Y')
-    prop('RangerDagger',adv/'dagger.gltf',Vector((-rx*.16,-.105,.86)),.38,hang,'pelvis')
+    kit.append(quiver(Vector((rx*.07,.22,1.22)),tilt))
+    # A dagger in a sheath strapped to the outside of the left thigh, hilt up
+    # and leaning a little forward, blade down: it moves with the thigh, so
+    # the stride never drives it through the leg. Its flat lies against the
+    # thigh.
+    names = {g.index:g.name for g in body.vertex_groups}
+    left_thigh = 'thigh_'+('l' if bone_head('thigh_l').x*rx < 0 else 'r')
+    side = [v.co for v in body.data.vertices if v.groups and names[max(v.groups,key=lambda g:g.weight).group]==left_thigh and .74<v.co.z<.86]
+    outer = max(abs(c.x) for c in side)
+    depth = sum(c.y for c in side)/len(side)
+    sheathe = Matrix.Rotation(math.radians(10),3,'X') @ Matrix.Rotation(math.radians(90),3,'Z') @ Matrix.Rotation(math.radians(180),3,'Y')
+    prop('RangerDagger',adv/'dagger.gltf',Vector((-rx*(outer+.022),depth,.79)),.3,sheathe,left_thigh)
     # A leather pouch on the belt at the right front hip.
     face = Matrix.Rotation(math.radians(20*rx),3,'Z')
     prop('RangerPouch',props/'Pouch_Large.gltf',Vector((rx*.15,-.11,.93)),.12,face,'pelvis',axis=0)
@@ -483,17 +600,55 @@ print('HERO_HOODS_READY',len(cloak.data.vertices),len(wizard_hood.data.vertices)
 # The wizard's robe, with its sleeves, and over it a cape of cloth from the
 # shoulders, swung on its own chains (cape_*) as the ranger's cloak is.
 robe_object = mage_robe(('Mage_Body','Mage_ArmLeft','Mage_ArmRight'),'WizardRobe')
+# Wide sleeves, as in the concept: cut off halfway down the forearm and
+# flared open, hanging a little, so his bracers show below them instead of
+# pressing through them.
+def cut_sleeves(robe, flare=.045, droop=.02):
+    elbow = rig.matrix_world @ rig.data.bones['lowerarm_l'].head_local
+    wrist = rig.matrix_world @ rig.data.bones['hand_l'].head_local
+    end = abs(wrist.x)-.15
+    mesh = bmesh.new(); mesh.from_mesh(robe.data)
+    for sign in (1,-1):
+        bmesh.ops.bisect_plane(mesh,geom=mesh.verts[:]+mesh.edges[:]+mesh.faces[:],plane_co=(sign*end,0,0),plane_no=(sign,0,0),clear_outer=True)
+    mesh.to_mesh(robe.data); mesh.free()
+    start = abs(elbow.x)-.06
+    for v in robe.data.vertices:
+        co = robe.matrix_world @ v.co
+        t = min(max((abs(co.x)-start)/(end-start),0.0),1.0)
+        if t <= 0 or abs(co.z-elbow.z) > .2: continue
+        out = Vector((0,co.y-elbow.y,co.z-elbow.z))
+        if out.length < 1e-4: continue
+        co += out.normalized()*flare*t*t+Vector((0,0,-droop*t*t))
+        v.co = robe.matrix_world.inverted() @ co
+    print('WIZARD_SLEEVES_CUT',round(end,3))
+cut_sleeves(robe_object)
 # Its top follows his own shoulders, outside the robe's thickness: the
 # robe's boxy KayKit shoulders would spread it out like wings.
-wizard_cape = outfits.shoulder_cape(rig,body,'WizardCape',hem=.2,flare=.22,prefix='cape_',offset=.05)
+# Its top lies close on the robe across his upper back, between the
+# shoulder blades, rather than out over the shoulders, which drop away from
+# it as his arms come down from the rest pose.
+robe_names = {g.index:g.name for g in robe_object.vertex_groups}
+def robe_on_arm(v):
+    best = max(v.groups,key=lambda g:g.weight,default=None)
+    return best is not None and (outfits.region_of_bone(robe_names[best.group]) or '').startswith('arm')
+robe_surface = [(robe_object,v) for v in robe_object.data.vertices if not robe_on_arm(v)]
+# (It hangs outside the robe's own flaring skirt, so flares little itself.)
+wizard_cape = outfits.shoulder_cape(rig,body,'WizardCape',hem=.2,flare=.08,prefix='cape_',offset=.05,top_ring=robe_surface,top_offset=.014,top_reach=math.radians(44),corner_drop=.09)
 print('WIZARD_CAPE',len(wizard_cape.data.vertices))
 robed = body.copy(); robed.data = body.data.copy(); robed.name = 'WizardBody'
 bpy.context.scene.collection.objects.link(robed)
 groups = {g.index:g.name for g in robed.vertex_groups}
-# Under the robe: the legs above the ankles, the torso and the arms to the wrists.
-ROBED_BONES = ('spine_','pelvis','clavicle_','upperarm_','lowerarm_')
+# Under the robe (the torso, the arms in its sleeves, the legs in its skirt),
+# never the head, neck or hands. The skirt hangs well clear of the legs.
 def dominant(v): return groups[max(v.groups,key=lambda g:g.weight).group] if v.groups else ''
-covered = {v.index for v in robed.data.vertices if (v.co.z>.18 and sum(g.weight for g in v.groups if groups[g.group].startswith(('thigh_','calf_')))>.2) or dominant(v).startswith(ROBED_BONES)}
+covered = covered_vertices(robed,[robe_object],lambda co: .1 if co.z>1.0 else .4,keep=lambda v: dominant(v).startswith(('Head','neck','hand','thumb','index','middle','ring','pinky')))
+# The legs inside the skirt are hidden whole, so a running knee never pushes
+# skin through the cloth.
+covered |= {v.index for v in robed.data.vertices if .18<v.co.z<.95 and sum(g.weight for g in v.groups if groups[g.group].startswith(('thigh_','calf_')))>.2}
+# So are the torso, shoulders and arms inside the sleeves: the close robe is
+# thinner than a flexed shoulder, which would otherwise show through it.
+sleeve_end = max(abs((robe_object.matrix_world @ v.co).x) for v in robe_object.data.vertices)
+covered |= {v.index for v in robed.data.vertices if dominant(v).startswith(('spine_','pelvis','clavicle_','upperarm_')) or (dominant(v).startswith('lowerarm_') and abs(v.co.x)<sleeve_end-.03)}
 outfits.remove_faces(robed,lambda f: all(v.index in covered for v in f.verts))
 print('HERO_ROBE_READY',len(robe_object.data.vertices),len(robed.data.vertices))
 wizard_kit()

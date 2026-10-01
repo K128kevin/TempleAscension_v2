@@ -64,7 +64,7 @@ func verify():
 	for clip in ["SpearShieldIdle","ShieldStab"]:
 		pose(centurion,clip,.5); await frames(1)
 		var tower: Node3D=centurion.shield_item
-		check(tower.scene_file_path.ends_with("scutum.glb") and is_equal_approx(tower.basis.get_scale().y,Visual.TOWER_SIZE.y),"Centurion carries the tall tower shield: "+clip)
+		check(tower.scene_file_path.ends_with("scutum.glb") and is_equal_approx(tower.global_basis.get_scale().y,Visual.TOWER_SIZE.y*centurion.rig.scale.y),"Centurion carries the tall tower shield: "+clip)
 		check(tower.global_basis.y.normalized().dot(Vector3.UP)>.85,"Tower shield stays upright: "+clip)
 	check(centurion.idle_action()=="SpearShieldIdle","Centurion stands in the shield-and-spear stance")
 	centurion.queue_free()
@@ -82,6 +82,9 @@ func verify():
 				var actor=actors[i]
 				var forearm: Vector3=(actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("lowerarm_l"))).origin
 				check((actor.shield_item.global_transform*Vector3(0,.5,0)).distance_to(forearm)<.5,"Scutum stays strapped to the forearm: %s %.2f / %d" % [clip,phase,i])
+				# Strapped, not gripped: the board lies flat along the forearm.
+				var wrist: Vector3=(actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("hand_l"))).origin
+				check(absf(actor.shield_item.global_basis.z.normalized().dot((wrist-forearm).normalized()))<.2,"Scutum lies flat along the forearm: %s %.2f / %d" % [clip,phase,i])
 	# A hit must not flip the shield: each shield reaction starts with the shield
 	# facing where the sword-and-shield stance holds it.
 	for i in [0,1]:

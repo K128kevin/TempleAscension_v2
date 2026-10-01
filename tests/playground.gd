@@ -62,6 +62,35 @@ func test():
 	var start: Vector3 = gladiator.position
 	step(1.0)
 	check(gladiator.position.distance_to(start)>1.0,"A selected statue walks where it is sent")
+	# A statue is driven as the hero is: standing, it turns to the cursor; a
+	# held button keeps renewing its order to walk to the cursor. (The camera
+	# follows the selected unit, so the ground under the cursor moves with it;
+	# zoomed in, the cursor's corner of the screen lies on the plane.)
+	var zoom_before: float = game.world.zoom
+	game.world.zoom = game.MIN_ZOOM
+	# No other unit under the cursor (a unit there is pursued and attacked).
+	var others = pg.units.filter(func(u): return u != gladiator and u.visible)
+	for u in others: u.visible = false
+	step(1.0)
+	gladiator.position = game.world.pointer()+Vector3(4,0,0)
+	gladiator.rotation.y = 0
+	step(.2)
+	var to_cursor: Vector3 = (game.world.pointer()-gladiator.position).normalized()
+	check(gladiator.forward().dot(to_cursor)>.97,"A standing statue turns to face the cursor, as the hero does")
+	var start_held: Vector3 = gladiator.position
+	var heading: Vector3 = to_cursor
+	game.left_held = true
+	pg.statue_click(false)
+	var first_goal = gladiator.puppet_goal
+	gladiator.puppet_goal = null
+	step(.2)
+	check(first_goal != null and gladiator.puppet_goal != null and gladiator.puppet_goal.distance_to(game.world.pointer())<.5,"Holding the button keeps renewing the statue's route to the cursor")
+	step(1.0)
+	check((gladiator.position-start_held).dot(heading)>1.5,"The statue follows the held cursor")
+	game.world.zoom = zoom_before
+	for u in others: u.visible = true
+	game.left_held = false
+	step(1.5)
 	# Kill and revive.
 	await key(KEY_X)
 	check(gladiator.dead and gladiator.visual.state=="Crumble","X kills the selected unit and plays its death")
@@ -105,14 +134,21 @@ func test():
 		var kit = {"warrior":["HeroHelmet","HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardCape","WizardHood","WizardBody"]}[cls]
 		var hidden = ["HeroHelmet","RangerCloak","RangerBody","WizardRobe","WizardCape","WizardHood","WizardBody","HeroArmor","SuperHero_Male"].filter(func(n): return not n in kit)
 		check(kit.all(func(n): return shown.get(n,false)) and hidden.all(func(n): return not shown.get(n,true)),"The %s wears its own kit" % cls)
+	# The ranger's dagger hangs blade-down in a sheath strapped to his left
+	# thigh, moving with it (so a stride never drives it through the leg).
+	var dagger: MeshInstance3D = pg.heroes[1].visual.skin_meshes.filter(func(m): return m.name.begins_with("RangerDagger"))[0]
+	var dagger_bones = []
+	for i in dagger.skin.get_bind_count(): dagger_bones.append(dagger.skin.get_bind_name(i))
+	var sheath: ShaderMaterial = dagger.material_override
+	check(sheath.get_shader_parameter("pommel_height") > sheath.get_shader_parameter("point_height") and (dagger.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_WEIGHTS].size() > 0 and dagger_bones.any(func(n): return String(n).begins_with("thigh_")),"The ranger's dagger hangs blade-down, strapped to his thigh")
 	# The ranger's cloak swings on a spring simulation that collides with his legs.
 	var cloak_sim = pg.heroes[1].visual.cloak
 	check(cloak_sim != null and cloak_sim.setting_count == 13 and cloak_sim.get_collision_count(0) == 2,"The ranger's cloak has physics chains and hip colliders")
 	# Its cloth is kept outside his legs by the cloak shader, given the legs as
-	# capsules every frame.
+	# capsules every frame, and the arms (which push only the cloth behind him).
 	var cloth: ShaderMaterial = pg.heroes[1].visual.cloak_mesh.material_override
 	pg.heroes[1].visual.cloak_capsules()
-	check(cloth.shader.resource_path.ends_with("cloak.gdshader") and cloth.get_shader_parameter("capsule_count") == 6 and (cloth.get_shader_parameter("capsule_a") as PackedVector3Array).size() == 6,"The ranger's cloak folds over his legs (cloth shader with leg capsules)")
+	check(cloth.shader.resource_path.ends_with("cloak.gdshader") and cloth.get_shader_parameter("capsule_count") == 10 and (cloth.get_shader_parameter("capsule_a") as PackedVector3Array).size() == 10 and cloth.get_shader_parameter("leg_capsules") == 6,"The ranger's cloak folds over his legs and arms (cloth shader with limb capsules)")
 	# The warrior's kilt swings on its own chains and folds over his legs.
 	var kilt_sim = pg.heroes[0].visual.cloak
 	check(kilt_sim != null and kilt_sim.setting_count == 16 and pg.heroes[0].visual.cloth_feel == pg.heroes[0].visual.CLOTH_KILT and pg.heroes[0].visual.cloak_mesh.name.begins_with("HeroKilt"),"The warrior's kilt is simulated cloth")

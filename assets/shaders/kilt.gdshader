@@ -5,8 +5,8 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 // cloth that swings and folds over his legs (assets/shaders/cloth_fold.gdshaderinc):
 // a row of short rounded tabs with steel studs under the belt, then long
 // pteruges, strips of dark leather each with a steel leaf motif and a
-// Greek-key band, hanging apart over the tattered underskirt (painted on his
-// thighs), frayed at the hem. Laid on the kilt's rest pose (CUSTOM0), so the
+// Greek-key band, hanging apart over a dark red linen underskirt that shows
+// between them, frayed at the hem. Laid on the kilt's rest pose (CUSTOM0), so the
 // pattern stays on the cloth as it moves.
 #include "res://assets/shaders/cloth_fold.gdshaderinc"
 uniform bool rest_pose = false;
@@ -75,28 +75,35 @@ void fragment() {
 		}
 	}
 	if (t >= 0.24 || color == leather) {
-		// The long strips, hanging apart: gaps between them show the underskirt.
+		// The long strips, hanging apart: between them the underskirt shows,
+		// a dark red linen in shadow, sunk behind the strips (never the
+		// legs or the ground through the kilt).
 		float gap = 0.07 + 0.04 * smoothstep(0.3, 1.0, t);
-		if ((u < gap || u > 1.0 - gap) && t > 0.2) discard;
-		// A raised rim and stitched edges.
-		float rim = min(u - gap, 1.0 - gap - u);
-		color = leather * (0.8 + 0.35 * smoothstep(0.0, 0.08, rim));
-		h = 0.0015 * smoothstep(0.0, 0.06, rim);
-		if (abs(rim - 0.07) < 0.012 && fract(p.y * 90.0) < 0.5) color *= 1.5;
-		// A steel leaf motif, a diamond with a raised spine.
-		vec2 m = vec2((u - 0.5) * 3.2, (t - 0.5) / 0.14);
-		float leaf = abs(m.x) + abs(m.y) * 0.55;
-		if (leaf < 0.55) {
-			color = steel * (0.75 + 0.5 * (1.0 - leaf / 0.55));
-			h = 0.003 * (1.0 - leaf / 0.55);
-			metal = 0.85;
-		}
-		// A Greek-key band near the hem.
-		float kb = (t - 0.8) / 0.08;
-		if (kb > 0.0 && kb < 1.0) {
-			float kx = fract(u * 3.0);
-			bool line = kb < 0.15 || kb > 0.85 || kx < 0.15 || (kx < 0.65 && kb > 0.55 && kb < 0.7) || (kx > 0.5 && kx < 0.65 && kb > 0.3);
-			if (line) { color = steel * 0.95; h = 0.0012; metal = 0.7; }
+		if ((u < gap || u > 1.0 - gap) && t > 0.2) {
+			float threads = 0.85 + 0.15 * noise2(vec2(around * 900.0, p.y * 120.0));
+			color = vec3(0.13, 0.065, 0.06) * threads * (0.8 + wear * 0.3);
+			h = -0.002;
+		} else {
+			// A raised rim and stitched edges.
+			float rim = min(u - gap, 1.0 - gap - u);
+			color = leather * (0.8 + 0.35 * smoothstep(0.0, 0.08, rim));
+			h = 0.0015 * smoothstep(0.0, 0.06, rim);
+			if (abs(rim - 0.07) < 0.012 && fract(p.y * 90.0) < 0.5) color *= 1.5;
+			// A steel leaf motif, a diamond with a raised spine.
+			vec2 m = vec2((u - 0.5) * 3.2, (t - 0.5) / 0.14);
+			float leaf = abs(m.x) + abs(m.y) * 0.55;
+			if (leaf < 0.55) {
+				color = steel * (0.75 + 0.5 * (1.0 - leaf / 0.55));
+				h = 0.003 * (1.0 - leaf / 0.55);
+				metal = 0.85;
+			}
+			// A Greek-key band near the hem.
+			float kb = (t - 0.8) / 0.08;
+			if (kb > 0.0 && kb < 1.0) {
+				float kx = fract(u * 3.0);
+				bool line = kb < 0.15 || kb > 0.85 || kx < 0.15 || (kx < 0.65 && kb > 0.55 && kb < 0.7) || (kx > 0.5 && kx < 0.65 && kb > 0.3);
+				if (line) { color = steel * 0.95; h = 0.0012; metal = 0.7; }
+			}
 		}
 	}
 	// The hem frays.
