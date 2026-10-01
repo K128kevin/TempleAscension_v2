@@ -68,7 +68,7 @@ func cast(id: String, at: Vector3) -> bool:
 	return true
 
 func targets(at: Vector3, radius: float) -> Array:
-	return game.enemies.filter(func(e): return not e.dead and not (e.kind=="offering" and e.dormant_offering) and e.position.distance_to(at)<=radius and game.world.clear_line(at,e.position))
+	return game.targets(game.player).filter(func(e): return not e.dead and not e.dormant and e.position.distance_to(at)<=radius and game.world.clear_line(at,e.position))
 
 func hit(enemy, amount: float, type: String = "physical") -> void:
 	if war_cry>0: amount *= 1.25

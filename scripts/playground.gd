@@ -6,16 +6,17 @@ extends Node
 ##
 ## A selected hero is driven by the normal controls (it becomes Game.player, with
 ## its own run: every class skill learned, energy always full). A selected statue
-## walks with left click, attacks toward the cursor with right click, and uses
-## its special with 1: the Oracle's frost nova or the Crowned Statue's gaze.
-## Statue attacks land on the hero most recently selected.
+## walks with left click on the ground, attacks with left click on another unit,
+## Shift+left click or right click, and uses its special with 1: the Oracle's
+## frost nova or the Crowned Statue's gaze. Every attack can land on any other
+## unit, hero or statue.
 const Data = preload("res://scripts/data.gd")
 const Art = preload("res://scripts/assets.gd")
 const Temple = preload("res://scripts/temple.gd")
 const Actor = preload("res://scripts/actor.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const CLASSES = ["warrior","ranger","wizard"]
-const KINDS = ["gladiator","archer","lion","wizard","centurion","offering","boss"]
+const KINDS = ["gladiator","archer","lion","wizard","centurion","boss"]
 
 var game
 var saved_run: Dictionary
@@ -73,6 +74,8 @@ func build_world() -> void:
 		game.world.add_child(hero)
 		hero.setup(game,"player","hero:"+class_id,center+Vector3((i-1)*2.5,0,3))
 		hero.rotation.y = PI
+		# Enough of a statue's profile to be targeted, hovered and hit.
+		hero.config = {"title":class_id.capitalize(),"size":1.0,"range":1.9,"interval":.5,"damage":0.0,"weapon":Data.WEAPONS[int(run.weapon)]}
 		heroes.append(hero)
 		units.append(hero)
 	for i in KINDS.size():
@@ -81,7 +84,6 @@ func build_world() -> void:
 		var enemy = game.spawn_enemy(kind,"playground:"+kind,at)
 		enemy.puppet = true
 		enemy.awake = true
-		enemy.dormant_offering = false
 		enemy.visual.play(enemy.visual.idle_action())
 		if kind == "boss":
 			enemy.visual.crown()
@@ -129,7 +131,7 @@ func build_panel() -> void:
 	var leave = compact(Button.new(),"Leave (Shift+P)")
 	leave.pressed.connect(func(): game.leave_playground())
 	body.add_child(leave)
-	var help = hud.label("Hero: normal controls. Statue: LMB move, RMB attack, 1 special.",11,Color(.75,.72,.62),body)
+	var help = hud.label("Click a unit or Shift+click to attack. Statue: click ground to move, RMB attack, 1 special.",11,Color(.75,.72,.62),body)
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.custom_minimum_size.x = 170
 
@@ -188,6 +190,7 @@ func tick(dt: float) -> void:
 	for hero in heroes:
 		hero.hp = hero.max_hp
 		if hero != game.player: hero.tick(dt)
+	for enemy in game.enemies: enemy.hp = enemy.max_hp
 	if is_instance_valid(selected) and not selected.dead:
 		ring.visible = true
 		ring.position = selected.position+Vector3.UP*.05
@@ -208,10 +211,16 @@ func unhandled(event: InputEvent) -> bool:
 	var point: Vector3 = game.world.pointer()
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			selected.puppet_goal = point
+			# Shift+click attacks in place; clicking another unit attacks it;
+			# clicking the ground walks there.
+			var other = game.enemy_at_screen(game.get_viewport().get_mouse_position(),selected)
+			if Input.is_physical_key_pressed(KEY_SHIFT) or event.shift_pressed or other != null:
+				if selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0:
+					selected.start_attack(other.position if other != null else point)
+			else: selected.puppet_goal = point
 			return true
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			if selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0 and selected.kind != "offering":
+			if selected.windup <= 0 and selected.busy <= 0 and selected.laser_time <= 0:
 				selected.start_attack(point)
 			return true
 	if event is InputEventKey and event.pressed and not event.echo:

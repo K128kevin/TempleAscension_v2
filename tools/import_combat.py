@@ -34,7 +34,10 @@ def frame(time):
  bpy.context.scene.frame_set(math.floor(value),subframe=value%1)
  bpy.context.view_layer.update()
 
+# The draw hand's last solve (draw_to), cleared for each new clip.
+last_draw=[None]
 def action(name):
+ last_draw[0]=None
  a=bpy.data.actions.new(name);rig.animation_data.action=a
  return a
 
@@ -44,10 +47,13 @@ def keys(f):
   b.keyframe_insert('rotation_quaternion',frame=f)
   b.keyframe_insert('scale',frame=f)
 
-def finish(name,a,length):
+def finish(name,a,length,exact=False):
  rig.animation_data.action=None
  t=rig.animation_data.nla_tracks.new();t.name=name
  strip=t.strips.new(name,0,a);strip.action_frame_end=length*30
+ # The glTF export samples one frame past a strip's end; `exact` clips drop
+ # it, so in the game a phase lands on the same pose as in the bake.
+ if exact: strip.action_frame_end=length*30-1
  t.mute=True
  print('COMBAT_CLIP',name,length)
 
@@ -111,9 +117,16 @@ def arm(side,target,pole):
  elbow_plane=pole-s;elbow_plane=(elbow_plane-direction*elbow_plane.dot(direction)).normalized()
  along=(l1*l1-l2*l2+length*length)/(2*length)
  elbow=s+direction*along+elbow_plane*math.sqrt(max(0,l1*l1-along*along))
+ # The elbow is a hinge: the forearm bends about the normal of the arm's
+ # plane. Its shortest swing from the upper arm's line is ambiguous when the
+ # elbow folds nearly shut (a draw hand past the ear), and flipped its twist.
+ hinge=direction.cross(elbow_plane).normalized()
  for bone,head,end in [(upper,s,elbow),(lower,elbow,target)]:
-  q=bone.matrix.to_quaternion();y=q @ Vector((0,1,0))
-  rotation=y.rotation_difference((end-head).normalized()) @ q
+  q=bone.matrix.to_quaternion();y=q @ Vector((0,1,0));new=(end-head).normalized()
+  if bone==lower and hinge.length>.5:
+   q=Quaternion(hinge,math.atan2(y.cross(new).dot(hinge),y.dot(new))) @ q
+   y=q @ Vector((0,1,0))
+  rotation=y.rotation_difference(new) @ q
   bone.matrix=Matrix.Translation(head) @ rotation.to_matrix().to_4x4()
   bpy.context.view_layer.update()
  # Keep the closed grip from the supplied sword pose, relative to the forearm.
@@ -134,16 +147,37 @@ def rotate_body(name,axis,angle):
  b=rig.pose.bones[name];m=b.matrix.copy();q=Quaternion(Vector(axis),angle) @ m.to_quaternion()
  b.matrix=Matrix.Translation(m.translation) @ q.to_matrix().to_4x4();bpy.context.view_layer.update()
 
-def bow_grip(pitch=0.0,cant=0.0):
- hand=rig.pose.bones['hand_l'];origin=hand.matrix.translation.copy()
- rotation=Quaternion(Vector((1,0,0)),pitch) @ Quaternion(Vector((0,1,0)),cant) @ Quaternion(Vector((0,0,1)),math.pi)
- hand.matrix=Matrix.Translation(origin) @ rotation.to_matrix().to_4x4()
+def bow_fist():
+ # The left fingers close as the right hand's supplied grip does, mirrored.
  mirror=Matrix.Diagonal(Vector((-1,1,1)))
  for finger in rig.pose.bones:
   if finger.name.endswith('_l') and any(finger.name.startswith(prefix) for prefix in ['thumb','index','middle','ring','pinky']):
    other=finger.name[:-1]+'r'
    if other in base:
     finger.rotation_quaternion=(mirror @ base[other].to_3x3() @ mirror).to_quaternion()
+ bpy.context.view_layer.update()
+
+def bow_carry_grip(pitch=0.0,cant=0.0):
+ # Carrying the bow low: the wrist turns the bow up along the body.
+ hand=rig.pose.bones['hand_l'];origin=hand.matrix.translation.copy()
+ rotation=Quaternion(Vector((1,0,0)),pitch) @ Quaternion(Vector((0,1,0)),cant) @ Quaternion(Vector((0,0,1)),math.pi)
+ hand.matrix=Matrix.Translation(origin) @ rotation.to_matrix().to_4x4()
+ bow_fist()
+
+def bow_grip():
+ # Holding the bow out: the wrist straight in line with the forearm, turned
+ # about it until the fist's knuckles (pinky to index) stand upright, so the
+ # fingers wrap round the upright grip (placed there in scripts/visual.gd).
+ hand=rig.pose.bones['hand_l'];lower=rig.pose.bones['lowerarm_l']
+ origin=hand.matrix.translation.copy();turn=lower.matrix.to_quaternion()
+ hand.matrix=Matrix.Translation(origin) @ turn.to_matrix().to_4x4()
+ bow_fist()
+ axis=(turn @ Vector((0,1,0))).normalized()
+ knuckles=rig.pose.bones['index_01_l'].head-rig.pose.bones['pinky_01_l'].head
+ knuckles=(knuckles-axis*knuckles.dot(axis)).normalized()
+ up=Vector((0,0,1));up=(up-axis*up.dot(axis)).normalized()
+ roll=math.atan2(axis.dot(knuckles.cross(up)),knuckles.dot(up))
+ hand.matrix=Matrix.Translation(origin) @ (Quaternion(axis,roll) @ turn).to_matrix().to_4x4()
  bpy.context.view_layer.update()
 
 # The knockback's opening crumple, held briefly and blended back to the idle
@@ -187,7 +221,7 @@ for name,source_name in [('BowRun','Run'),('BowCrouch','Crouch')]:
   shoulder=rig.pose.bones['upperarm_l'].matrix.translation.copy()
   crouched=name=='BowCrouch'
   arm('l',shoulder+Vector((.20,-.10,-.22 if crouched else -.34)),shoulder+Vector((.45,.08,-.12)))
-  bow_grip(-.14+.035*math.sin(f/60*math.tau),.85 if crouched else .18)
+  bow_carry_grip(-.14+.035*math.sin(f/60*math.tau),.85 if crouched else .18)
   keys(length*30*f/60)
  finish(name,a,length)
 
@@ -423,12 +457,74 @@ def vsample(points,t):
    return Vector(v).lerp(Vector(w),u)
  return Vector(points[-1][1])
 BOW_OUT=(-.24,-.315,1.28)
-NOCK=(-.24,-.15,1.28)
-CHEEK=(-.24,.21,1.34)
-bow_hand=[(0,(.12,-.26,.96)),(.3,(.1,-.28,1.0)),(.42,(-.04,-.34,1.18)),(.52,BOW_OUT),(.9,BOW_OUT),(1,(.12,-.26,.96))]
-draw_hand=[(0,(-.2,-.1,.95)),(.14,(-.26,.05,1.45)),(.26,(-.2,.16,1.62)),(.32,(-.18,.12,1.6)),(.43,(-.06,-.3,1.2)),(.52,NOCK),(.56,NOCK),(.74,CHEEK),(.78,CHEEK),(.82,(-.3,.34,1.4)),(.9,(-.3,.3,1.3)),(1,(-.2,-.1,.95))]
-draw_pole=[(0,(-.7,.2,.85)),(.2,(-.6,.3,1.9)),(.34,(-.6,.2,1.7)),(.45,(-.7,.3,1.2)),(.52,(-.65,.3,1.38)),(1,(-.7,.2,.85))]
-side_on=[(0,0),(.3,-.12),(.46,-.45),(.86,-.45),(1,0)]
+# Firing, as in the reference: the chest turns side-on to the target
+# (AIM_TURN), the bow arm is locked straight out toward it at shoulder height
+# and the string is drawn to the jaw, BOW_FULL_DRAW times the bow's own .36m
+# draw (scripts/visual.gd shows the string that deep).
+AIM_TURN=-1.0
+# Angled a little to the right, so the string line runs beside the right
+# cheek rather than through the face.
+AIM_DIRECTION=Vector((-.3,-1,.1)).normalized()
+BOW_FULL_DRAW=1.2
+def aim_bow(ready,raised,shift=Vector()):
+ # The bow arm from its ready place to straight out at the target.
+ shoulder=rig.pose.bones['upperarm_l'].head.copy()
+ out=shoulder+AIM_DIRECTION*.9
+ arm('l',Vector(ready).lerp(out,raised)+shift*(1-raised),shoulder+Vector((.35,-.2,-.35)))
+ bow_grip()
+def string_point(draw):
+ # Where the string's nocking point is, drawn `draw` of the way, with the bow
+ # placed in the left fist exactly as the game places it (scripts/visual.gd:
+ # the grip in the fist, the stave along the knuckles, the front facing the
+ # way the archer faces).
+ b=rig.pose.bones
+ ring=[b[n+'_l'].head for n in ('middle_01','middle_02','middle_03','index_02','ring_02')]
+ fist=sum(ring,Vector())/len(ring)
+ up=(b['index_01_l'].head-b['pinky_01_l'].head).normalized()
+ facing=Vector((0,-1,0));front=(facing-up*facing.dot(up)).normalized()
+ return fist-front*(.23+.36*draw)+up*(-.013+.06*draw)
+def draw_pole_for(raised,ready_pole):
+ # The drawing elbow is aimed up, back and out behind the shoulder.
+ shoulder=rig.pose.bones['upperarm_r'].head
+ return Vector(ready_pole).lerp(shoulder+Vector((-.3,.35,.3)),raised)
+def draw_fingers():
+ b=rig.pose.bones
+ return (b['index_02_r'].head+b['middle_02_r'].head)/2
+def draw_to(point,pole):
+ # Folded tight, the forearm swings a lot for a small move of the wrist, so
+ # the correction takes small steps and the closest result is kept. Each
+ # solve starts from the last frame's, keeping the arm on one smooth branch.
+ point=Vector(point)
+ starts=[point.copy()]
+ if last_draw[0] is not None: starts.insert(0,last_draw[0][0]+(point-last_draw[0][1]))
+ best=(9.0,point)
+ for start in starts:
+  target=start.copy()
+  for _ in range(40):
+   arm('r',target,pole)
+   miss=point-draw_fingers()
+   if miss.length<best[0]: best=(miss.length,target.copy())
+   if miss.length<.002: break
+   target=target+miss*.35
+  if best[0]<.005: break
+ arm('r',best[1],pole)
+ last_draw[0]=(best[1].copy(),point.copy())
+ return best[1]
+# Wrist targets near the string, for the archer's path to and from it.
+NOCK=(-.426,.012,1.365)
+CHEEK=(-.341,.24,1.515)
+# After the release the hands return to the archer's idle, bow up and ready
+# (BowIdle's own targets), not to the rest pose.
+bow_hand=[(0,(.12,-.26,.96)),(.3,(.1,-.28,1.0)),(.42,(-.04,-.34,1.18)),(.52,BOW_OUT),(1,BOW_OUT)]
+draw_hand=[(0,(-.2,-.1,.95)),(.14,(-.26,.05,1.45)),(.26,(-.2,.16,1.62)),(.32,(-.18,.12,1.6)),(.43,(-.06,-.3,1.2)),(.52,NOCK),(.56,NOCK),(.74,CHEEK),(.78,CHEEK),(.82,(-.5,.33,1.55)),(.9,(-.54,.12,1.44)),(1,NOCK)]
+# While the draw hand is folded in by the shoulder (nock, draw, release and
+# return) the elbow is aimed up and back, above the arrow; the ready pose's
+# pole beside the shoulder lay almost along the hand's direction there, so
+# the arm's plane swung wildly and the forearm flipped down and back.
+DRAW_POLE=(-.49,.42,1.8)
+READY_POLE=(-.65,.3,1.38)
+draw_pole=[(0,(-.7,.2,.85)),(.2,(-.6,.3,1.9)),(.34,(-.6,.2,1.7)),(.45,(-.62,.36,1.5)),(.52,DRAW_POLE),(.9,DRAW_POLE),(1,READY_POLE)]
+side_on=[(0,0),(.3,-.12),(.46,-.45),(1,-.45)]
 # The Oracle's fireball cast: the right hand holds the staff at its side while
 # the left hand weaves slow circles before the chest (the flame forms in the
 # staff's crown); then the staff is drawn up and back and swung out in front
@@ -454,20 +550,62 @@ for f in range(61):
  keys(f)
 finish('OracleCast',a,2.0)
 
+
+# The shots move the draw hand fast, so they are sampled twice as finely (a
+# four-second clip, always played over the shot's own duration); between
+# coarser keys the blended fingers drifted off the string.
+SHOT_SAMPLES=120
+for name in ['BowIdle','BowShot','BowRapid','SpearIdle','SpearStab','SpearJab']:
+ a=action(name)
+ samples=SHOT_SAMPLES if name in ('BowShot','BowRapid') else 60
+ for f in range(samples+1):
+  t=f/samples;frame(f/30 if samples==60 else 0);reset_pose()
+  if name.startswith('Bow'):
+   # Ready (BowIdle), the bow is presented before the chest; shooting, the
+   # archer turns side-on and holds it straight out at the target.
+   # Straight out, the resting string is beyond the drawing hand's reach, so
+   # each arrow is nocked with the bow brought in a little and the bow arm
+   # locks out as the string comes back.
+   if name=='BowShot':raised=sample([(0,0),(.14,.3),(.42,1),(.86,1),(1,0)],t)
+   elif name=='BowRapid':raised=sample([(0,0),(.08,.3),(.2,1),(.36,1),(.44,.3),(.47,.3),(.52,1),(.6,1),(.68,.3),(.71,.3),(.76,1),(.9,1),(1,0)],t)
+   else:raised=0
+   turn=-.45+(AIM_TURN+.45)*raised
+   rotate_body('spine_01',(0,0,1),turn)
+   rotate_body('neck_01',(0,0,1),-turn*.55)
+   rotate_body('Head',(0,0,1),-turn*.45)
+   aim_bow(BOW_OUT,raised)
+   # How far back the drawing hand is. After each release the string snaps
+   # forward (scripts/visual.gd) but the hand stays back by the jaw, following
+   # through, until the bow comes in for the next arrow.
+   if name=='BowIdle': draw=0
+   elif name=='BowShot':draw=sample([(0,0),(.14,0),(.5,1),(.62,1),(.68,1.08),(.86,1.08),(1,0)],t)
+   else:draw=sample([(0,0),(.08,0),(.23,1),(.30,1),(.34,1.08),(.38,1.08),(.46,0),(.54,1),(.58,1.08),(.62,1.08),(.7,0),(.78,1),(.82,1.08),(.88,1.08),(1,0)],t)
+   # The drawing fingers stay on the string: from the nock back to the jaw.
+   draw_to(string_point(draw*BOW_FULL_DRAW),draw_pole_for(raised,READY_POLE))
+  else:
+   special=name=='SpearJab'
+   thrust=0 if name=='SpearIdle' else sample([(0,0),(.2,-.18),(.46 if not special else .52,1),(.57 if not special else .64,1),(.88,0),(1,0)],t)
+   rotate_body('spine_01',(1,0,0),max(0,thrust)*(.18 if special else .08))
+   arm('r',(-.28,.12-thrust*(.82 if special else .66),1.04),(-.7,.05,.85))
+   arm('l',(.15,-.36+max(0,thrust)*.14,1.1),(.65,-.10,.95))
+  keys(f)
+ finish(name,a,samples/30,exact=samples==SHOT_SAMPLES)
 # The whole body shoots, as in the reference: the archer steps into a
 # staggered stance (left foot forward toward the target, right foot back) and
 # sinks into soft knees; the hips carry half of the side-on turn; the weight
 # rises a touch on the quiver reach, settles back onto the rear leg through
 # the draw and rocks forward on the release, before stepping back to idle.
 # Leg IK keeps both feet planted while the hips move.
+side_on=[(0,0),(.3,-.12),(.46,-.45),(.56,AIM_TURN),(.84,AIM_TURN),(.95,-.45),(1,-.45)]
+bow_ready=clip_poses('BowIdle',2)[0][0]
 a=action('ArcherShot')
 reset_pose()
 planted={side:rig.pose.bones['foot_'+side].matrix.translation.copy() for side in 'lr'}
 stance_keys=[(0,0),(.16,1),(.9,1),(1,0)]
 settle_keys=[(0,0),(.5,0),(.74,.035),(.78,.035),(.84,-.02),(.95,0),(1,0)]
 FRONT=Vector((.02,-.16,0));BACK=Vector((-.03,.14,0))
-for f in range(61):
- t=f/60;reset_pose()
+for f in range(SHOT_SAMPLES+1):
+ t=f/SHOT_SAMPLES;reset_pose()
  stance=sample(stance_keys,t)
  turn=sample(side_on,t)
  reach=max(0,1-abs(t-.26)/.14)
@@ -488,37 +626,28 @@ for f in range(61):
  rotate_body('Head',(0,0,1),-turn*.45)
  # The quiver reach lifts the chest a little and tips the head away.
  rotate_body('spine_02',(1,0,0),-.12*reach)
- arm('l',vsample(bow_hand,t)+hips,(.45,-.25,1.08))
- arm('r',vsample(draw_hand,t)+hips,vsample(draw_pole,t))
+ # The bow comes up from the quiver reach and is held straight out at the
+ # target through the nock, draw and release.
+ raised=sample([(0,0),(.46,0),(.58,.15),(.76,1),(.84,1),(.94,0),(1,0)],t)
+ aim_bow(vsample(bow_hand,t)+hips,raised)
+ # On the string from the nock to the release, by the fingers; to and from
+ # it (the quiver reach, the follow-through) along the wrist path.
+ on_string=sample([(0,0),(.46,0),(.52,1),(.78,1),(.8,0),(1,0)],t)
+ pole=draw_pole_for(raised,vsample(draw_pole,t))
+ path=vsample(draw_hand,t)+hips
+ if on_string>0:
+  pull=sample([(0,0),(.56,0),(.74,1),(1,1)],t)
+  path=path.lerp(draw_to(string_point(pull*BOW_FULL_DRAW),pole),on_string)
+ arm('r',path,pole)
  bow_grip()
+ # The archer's idle holds the bow up, ready: the shot starts from it and
+ # settles back into it, so the arms do not snap between the two.
+ settle=sample([(0,1),(.1,0),(.9,0),(1,1)],t)
+ if settle>0:
+  for b in rig.pose.bones: b.matrix_basis=blend(b.matrix_basis,bow_ready[b.name],settle)
+  bpy.context.view_layer.update()
  keys(f)
-finish('ArcherShot',a,2.0)
-
-for name in ['BowIdle','BowShot','BowRapid','SpearIdle','SpearStab','SpearJab']:
- a=action(name)
- for f in range(61):
-  t=f/60;frame(f/30);reset_pose()
-  if name.startswith('Bow'):
-   rotate_body('spine_01',(0,0,1),-.45)
-   rotate_body('neck_01',(0,0,1),.25)
-   rotate_body('Head',(0,0,1),.2)
-   # Left arm presents the bow; right hand nocks, draws to the cheek, releases.
-   arm('l',(-.24,-.315,1.28),(.45,-.25,1.08))
-   if name=='BowIdle': draw=0
-   elif name=='BowShot':draw=sample([(0,0),(.12,0),(.5,1),(.62,1),(.68,1.12),(.85,0),(1,0)],t)
-   else:draw=sample([(0,0),(.23,1),(.30,1),(.34,1.12),(.40,0),(.48,1),(.54,1),(.58,1.12),(.64,0),(.72,1),(.78,1),(.82,1.12),(.94,0),(1,0)],t)
-   # Keep wrist and forearm on the right side of the face. The old +X target
-   # crossed the neck; this .36m draw reaches the cheek with the elbow outside.
-   arm('r',(-.24,-.15+draw*.36,1.28+draw*.06),(-.65,.30,1.38))
-   bow_grip()
-  else:
-   special=name=='SpearJab'
-   thrust=0 if name=='SpearIdle' else sample([(0,0),(.2,-.18),(.46 if not special else .52,1),(.57 if not special else .64,1),(.88,0),(1,0)],t)
-   rotate_body('spine_01',(1,0,0),max(0,thrust)*(.18 if special else .08))
-   arm('r',(-.28,.12-thrust*(.82 if special else .66),1.04),(-.7,.05,.85))
-   arm('l',(.15,-.36+max(0,thrust)*.14,1.1),(.65,-.10,.95))
-  keys(f)
- finish(name,a,2.0)
+finish('ArcherShot',a,SHOT_SAMPLES/30,exact=True)
 rig.animation_data.action=None
 for t in rig.animation_data.nla_tracks:t.mute=False
 for o in source_objects:

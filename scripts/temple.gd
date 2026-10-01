@@ -3,7 +3,7 @@ const Art = preload("res://scripts/assets.gd")
 const Layout = preload("res://scripts/layout.gd")
 var layout = Layout.new()
 var boss_point = Vector3.ZERO
-var offering_points: Array[Vector3] = []
+var summon_points: Array[Vector3] = []
 var nav = AStarGrid2D.new()
 var spawn = Vector3(0,0,9)
 var exit_point = Vector3.ZERO
@@ -207,7 +207,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			var dx = 1 if corner.x<14 else -1
 			var dz = 1 if corner.y<10 else -1
 			for offset in [Vector2i.ZERO,Vector2i(dx*2,0),Vector2i(dx*4,0),Vector2i(0,dz*2),Vector2i(0,dz*4)]:
-				offering_points.append(layout.to_world(corner+offset))
+				summon_points.append(layout.to_world(corner+offset))
 	nav.region = Rect2i(lower,upper-lower+Vector2i.ONE)
 	nav.cell_size = Vector2.ONE
 	nav.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES

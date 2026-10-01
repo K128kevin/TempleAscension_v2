@@ -4,13 +4,46 @@ static var scenes: Dictionary = {}
 static var materials: Dictionary = {}
 static var target_ring_texture: GradientTexture2D
 
-static func statue_material() -> ShaderMaterial:
-	if materials.has("statue"): return materials.statue
+# Stone for statues and their gear. `skinned` is for animated statue bodies
+# prepared with rest_pose_mesh(), whose stone stays fixed to the body.
+static func statue_material(skinned: bool = false) -> ShaderMaterial:
+	var key = "statue_skinned" if skinned else "statue"
+	if materials.has(key): return materials[key]
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/statue_stone.gdshader")
 	m.set_shader_parameter("stone_texture",load("res://assets/textures/statue_marble.png"))
-	materials.statue = m
+	m.set_shader_parameter("scale_texture",load("res://assets/textures/hero_kit.png"))
+	m.set_shader_parameter("rest_pose",skinned)
+	materials[key] = m
 	return m
+
+static var rest_meshes: Dictionary = {}
+
+# A copy of a skinned mesh carrying its rest-pose positions in CUSTOM0 and
+# normals in CUSTOM1, for the stone shader. Made once per mesh.
+static func rest_pose_mesh(mesh: ArrayMesh) -> ArrayMesh:
+	if rest_meshes.has(mesh): return rest_meshes[mesh]
+	var out = ArrayMesh.new()
+	out.blend_shape_mode = mesh.blend_shape_mode
+	for i in mesh.get_blend_shape_count(): out.add_blend_shape(mesh.get_blend_shape_name(i))
+	for s in mesh.get_surface_count():
+		var arrays = mesh.surface_get_arrays(s)
+		var custom: Array = []
+		for channel in [Mesh.ARRAY_VERTEX,Mesh.ARRAY_NORMAL]:
+			var values: PackedVector3Array = arrays[channel]
+			var packed = PackedFloat32Array()
+			packed.resize(values.size()*4)
+			for i in values.size():
+				packed[i*4] = values[i].x; packed[i*4+1] = values[i].y; packed[i*4+2] = values[i].z
+			custom.append(packed)
+		arrays[Mesh.ARRAY_CUSTOM0] = custom[0]
+		arrays[Mesh.ARRAY_CUSTOM1] = custom[1]
+		var flags = (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
+		flags |= mesh.surface_get_format(s) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
+		out.add_surface_from_arrays(mesh.surface_get_primitive_type(s),arrays,mesh.surface_get_blend_shape_arrays(s),{},flags)
+		out.surface_set_material(s,mesh.surface_get_material(s))
+	rest_meshes[mesh] = out
+	return out
 
 static func quartz_material(tint: Color = Color(.70,.70,.72)) -> ShaderMaterial:
 	var key = "quartz" + tint.to_html()
@@ -54,6 +87,38 @@ static func leather() -> StandardMaterial3D:
 	m.albedo_color = Color(.34,.2,.1)
 	m.roughness = .72
 	materials.leather = m
+	return m
+
+# Polished bronze for the warrior's helm, matching his scale armor.
+static func bronze() -> StandardMaterial3D:
+	if materials.has("bronze"): return materials.bronze
+	var m = StandardMaterial3D.new()
+	m.albedo_color = Color(.6,.4,.19)
+	m.metallic = .8
+	m.roughness = .36
+	materials.bronze = m
+	return m
+
+# Matte woven cloth for hoods and robes, seen from inside as well.
+static func cloth(tint: Color) -> StandardMaterial3D:
+	var key = "cloth" + tint.to_html()
+	if materials.has(key): return materials[key]
+	var m = StandardMaterial3D.new()
+	m.albedo_color = tint
+	m.roughness = .92
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	materials[key] = m
+	return m
+
+# The hero's painted body kit (tools/paint_hero.py); the ranger's has a
+# wool tunic in place of the scales.
+static func hero_kit(hero_class: String) -> StandardMaterial3D:
+	var key = "hero_kit_ranger" if hero_class == "ranger" else "hero_kit"
+	if materials.has(key): return materials[key]
+	var m = StandardMaterial3D.new()
+	m.albedo_texture = load("res://assets/textures/%s.png" % key)
+	m.roughness = .65
+	materials[key] = m
 	return m
 
 # Worn grey steel for the warrior's round shield.

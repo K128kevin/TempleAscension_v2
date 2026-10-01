@@ -1,36 +1,46 @@
 #!/bin/sh
-set -eu
+set -u
+# Every test runs even when an earlier one fails; failures are listed at the end.
+failed=""
+run() {
+  "$@" || failed="$failed
+  $*"
+}
 cd "$(dirname "$0")/.."
 godot_bin="${GODOT_BIN:-.tools/Godot.app/Contents/MacOS/Godot}"
 mkdir -p test-results
 "$godot_bin" --headless --path . --editor --import --quit
-"$godot_bin" --headless --path . --script tests/progression_regression.gd --log-file "$PWD/test-results/progression-regression.log"
-"$godot_bin" --headless --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-runtime.log"
-"$godot_bin" --headless --path . --script tests/procedural_maps.gd --log-file "$PWD/test-results/procedural-maps.log"
-"$godot_bin" --headless --path . --script tests/map_integration.gd --log-file "$PWD/test-results/map-integration.log"
-"$godot_bin" --headless --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-regression.log"
-"$godot_bin" --headless --path . --script tests/torch_regression.gd --log-file "$PWD/test-results/torch-regression.log"
-"$godot_bin" --headless --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-regression.log"
-"$godot_bin" --headless --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-visuals.log"
-"$godot_bin" --headless --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-regression.log"
-"$godot_bin" --headless --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover.log"
-"$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log" -- --test
-"$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"
-"$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-normal.log"
-"$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-regression.log" -- --debug-mode --floor=3 --bow --axe
-"$godot_bin" --headless --path . --script tests/playground.gd --log-file "$PWD/test-results/playground.log" -- --debug-mode
+run "$godot_bin" --headless --path . --script tests/progression_regression.gd --log-file "$PWD/test-results/progression-regression.log"
+run "$godot_bin" --headless --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-runtime.log"
+run "$godot_bin" --headless --path . --script tests/procedural_maps.gd --log-file "$PWD/test-results/procedural-maps.log"
+run "$godot_bin" --headless --path . --script tests/map_integration.gd --log-file "$PWD/test-results/map-integration.log"
+run "$godot_bin" --headless --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-regression.log"
+run "$godot_bin" --headless --path . --script tests/torch_regression.gd --log-file "$PWD/test-results/torch-regression.log"
+run "$godot_bin" --headless --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-regression.log"
+run "$godot_bin" --headless --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-visuals.log"
+run "$godot_bin" --headless --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-regression.log"
+run "$godot_bin" --headless --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover.log"
+run "$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log" -- --test
+run "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"
+run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-normal.log"
+run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-regression.log" -- --debug-mode --floor=3 --bow --axe
+run "$godot_bin" --headless --path . --script tests/playground.gd --log-file "$PWD/test-results/playground.log" -- --debug-mode
 if [ "${RENDER_TEST:-0}" = "1" ]; then
-  "$godot_bin" --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover-native.log" -- --render-hover
-  "$godot_bin" --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing-native.log" -- --live-attacks
-  "$godot_bin" --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-render.log" -- --render-enemies
-  "$godot_bin" --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-render.log" -- --render-shields
-  "$godot_bin" --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-render.log" -- --render-classes
-  "$godot_bin" --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-render.log" -- --render-bow
-  "$godot_bin" --path . --script tests/torch_regression.gd --log-file "$PWD/test-results/torch-render.log" -- --render-torches
-  "$godot_bin" --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-render.log" -- --render-scenery
-  "$godot_bin" --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-render.log" -- --debug-mode --render-debug-test
-  "$godot_bin" --path . --script tests/hud_regression.gd --log-file "$PWD/test-results/hud-regression.log"
-  "$godot_bin" --path . --script tests/attack_preview.gd --log-file "$PWD/test-results/attack-preview.log"
-  "$godot_bin" --path . --script tests/controls_regression.gd --log-file "$PWD/test-results/controls-regression.log"
-  "$godot_bin" --path . --script tests/input_playtest.gd --log-file "$PWD/test-results/input-playtest.log"
+  run "$godot_bin" --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover-native.log" -- --render-hover
+  run "$godot_bin" --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing-native.log" -- --live-attacks
+  run "$godot_bin" --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-render.log" -- --render-enemies
+  run "$godot_bin" --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-render.log" -- --render-shields
+  run "$godot_bin" --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-render.log" -- --render-classes
+  run "$godot_bin" --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-render.log" -- --render-bow
+  run "$godot_bin" --path . --script tests/torch_regression.gd --log-file "$PWD/test-results/torch-render.log" -- --render-torches
+  run "$godot_bin" --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-render.log" -- --render-scenery
+  run "$godot_bin" --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-render.log" -- --debug-mode --render-debug-test
+  run "$godot_bin" --path . --script tests/hud_regression.gd --log-file "$PWD/test-results/hud-regression.log"
+  run "$godot_bin" --path . --script tests/attack_preview.gd --log-file "$PWD/test-results/attack-preview.log"
+  run "$godot_bin" --path . --script tests/controls_regression.gd --log-file "$PWD/test-results/controls-regression.log"
+  run "$godot_bin" --path . --script tests/input_playtest.gd --log-file "$PWD/test-results/input-playtest.log"
+fi
+if [ -n "$failed" ]; then
+  printf "Failed:%b\n" "$failed"
+  exit 1
 fi

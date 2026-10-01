@@ -11,7 +11,8 @@ var hp = 100.0
 var max_hp = 100.0
 var config: Dictionary = {}
 var awake = false
-var dormant_offering = true
+# A summit centurion held in reserve until the Crowned Statue summons it.
+var dormant = false
 var dead = false
 var cooldown = 0.0
 var busy = 0.0
@@ -69,7 +70,7 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 	if kind == "player":
 		max_hp = Data.max_health(game.run)
 		hp = max_hp
-		visual.setup(false,Color.WHITE,Data.WEAPONS[game.run.weapon])
+		visual.setup(false,Color.WHITE,Data.WEAPONS[game.run.weapon],1.0,"",game.run.class_id)
 	else:
 		config = Data.ENEMIES[kind]
 		max_hp = config.hp * Data.HEALTH_SCALE[game.run.difficulty]
@@ -105,10 +106,13 @@ func tick(dt: float) -> void:
 		return
 	var player = game.player
 	var distance: float = position.distance_to(player.position)
-	if kind == "offering":
-		if dormant_offering: return
-		if not is_instance_valid(game.boss) or game.boss.dead: die(false); return
-		if position.distance_to(game.boss.position) < 1.8:
+	if dormant: return
+	if summoned():
+		# The crown's summons never attack: they run to it and each one that
+		# reaches it heals it by 5%. They fall with it.
+		if not is_instance_valid(game.boss) or game.boss.dead:
+			die(false)
+		elif position.distance_to(game.boss.position) < 1.8+game.boss.config.size*.4:
 			game.boss.hp = minf(game.boss.max_hp,game.boss.hp+game.boss.max_hp*.05)
 			game.float_text(position,"+5%",Color(.7,.4,1))
 			die(false)
@@ -121,7 +125,7 @@ func tick(dt: float) -> void:
 		for i in range(thresholds,4):
 			if hp/max_hp <= .8 - i*.2:
 				thresholds = i+1
-				game.wake_offerings(i)
+				game.summon_centurions(i)
 		laser_cooldown -= dt
 		if laser_time > 0:
 			gaze_tick(dt)
@@ -197,7 +201,11 @@ func gaze_tick(dt: float) -> void:
 		laser_tick = .1
 		var forward = Vector3(sin(laser_angle),0,cos(laser_angle))
 		var offset: Vector3 = player.position-position
-		if offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(10*.6*Data.DAMAGE_SCALE[game.run.difficulty],"physical",self)
+		if game.puppet_attack(self):
+			for other in game.targets(self):
+				var along: Vector3 = other.position-position
+				if not other.dead and along.dot(forward)>0 and along.cross(forward).length()<.65 and game.world.clear_line(position,other.position): other.hit(0)
+		elif offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(10*.6*Data.DAMAGE_SCALE[game.run.difficulty],"physical",self)
 	if laser_time <= 0:
 		laser_model.queue_free()
 		busy = 0
@@ -239,7 +247,7 @@ func playground_revive(weapon: String = "") -> void:
 	visual.queue_free()
 	visual = Visual.new()
 	add_child(visual)
-	if kind == "player": visual.setup(false,Color.WHITE,weapon)
+	if kind == "player": visual.setup(false,Color.WHITE,weapon,1.0,"",game.run.class_id)
 	else:
 		visual.setup(true,config.color,config.weapon,config.size,kind)
 		if kind == "boss": visual.crown()
@@ -263,6 +271,11 @@ func release_attack() -> void:
 		# The fireball leaves the crown of the staff, where the flame formed.
 		visual.align_weapon()
 		game.fireball(visual.staff_tip(),attack_point,2.2,damage,fireball_flight,self)
+	elif game.puppet_attack(self):
+		# A playground statue's swing lands on whoever stands in front of it.
+		for other in game.targets(self):
+			if other.dead or position.distance_to(other.position) > config.range+.6 or not game.world.clear_line(position,other.position): continue
+			if forward().dot((other.position-position).normalized()) > .2: other.hit(damage)
 	elif position.distance_to(game.player.position) <= config.range + .6 and game.world.clear_line(position,game.player.position):
 		var d: Vector3 = (game.player.position-position).normalized()
 		if forward().dot(d) > .2: game.hurt_player(damage,"physical",self)
@@ -280,6 +293,10 @@ func cast_nova() -> void:
 	visual.play(clip,duration)
 	visual.advance(duration*contact)
 	busy = NOVA_RECOVERY
+
+# One of the centurions the Crowned Statue summons on the summit.
+func summoned() -> bool:
+	return uid.begins_with("summoned:")
 
 func walk_to(destination: Vector3, dt: float) -> void:
 	repath -= dt
@@ -337,12 +354,12 @@ func react_to_hit(heavy: bool = false) -> void:
 	else: visual.react("HitHead" if hit_reactions%2==0 else "Hit",.34)
 
 func hit(damage: float, type: String = "physical") -> void:
-	if dead or (kind == "offering" and dormant_offering): return
+	if dead or dormant: return
 	if game.playground != null:
 		# The playground shows every hit, but nothing takes damage.
 		game.sound.play("weapon-impact",-15)
 		react_to_hit()
-		push_back()
+		if kind != "player": push_back()
 		return
 	damage = Data.mitigate(damage,35.0 if kind=="boss" else (20.0 if kind=="centurion" else 0.0),0.0,int(game.run.level),type)
 	if mark_time>0: damage *= 1.2+Data.passive(game.run,"predator")*.01

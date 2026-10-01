@@ -75,7 +75,14 @@ func start(owner_game):
 		check(game.run.points==points and game.run.xp==xp,"Stairs grant neither XP nor attribute points")
 		await get_tree().process_frame
 	check(total==247 and game.run.level>=18,"All temple enemies grant enough XP to unlock level 18 skills")
-	check(game.enemies.size()==21 and game.boss.max_hp==1125,"Summit and offerings remain intact")
+	check(game.enemies.size()==21 and game.boss.max_hp==1125,"Summit holds the boss and its reserve")
+	var reserve: Array=game.enemies.filter(func(e): return e.uid.begins_with("summoned:"))
+	check(reserve.size()==20 and reserve.all(func(e): return e.kind=="centurion" and e.dormant),"The boss's reserve is twenty dormant centurions")
+	check(not "offering" in Data.ENEMIES,"There is no Crown's Offering unit")
+	check(game.remaining()==1,"Dormant centurions are not counted as remaining statues")
+	var dormant_hp: float=reserve[0].hp
+	reserve[0].hit(50)
+	check(reserve[0].hp==dormant_hp,"Dormant centurions cannot be hurt")
 	game.player.position=game.boss.position+Vector3(0,0,4)
 	game.boss.awake=true
 	for wave in 4:
@@ -83,20 +90,31 @@ func start(owner_game):
 		game.boss.tick(.016)
 		var awake=0
 		for enemy in game.enemies:
-			if enemy.kind=="offering" and not enemy.dormant_offering: awake+=1
-		check(awake==(wave+1)*5,"Boss threshold wakes offering wave")
-	var offering=game.enemies[1]
-	offering.position=game.boss.position
-	var boss_hp: float=game.boss.hp
+			if enemy.uid.begins_with("summoned:") and not enemy.dormant and enemy.awake: awake+=1
+		check(awake==(wave+1)*5,"Each boss threshold summons five centurions")
+	var runner=reserve[0]
+	runner.position=game.boss.position+Vector3(6,0,0)
+	var start_gap: float=runner.position.distance_to(game.boss.position)
+	game.player.position=runner.position+Vector3(0,0,1.2)
+	var player_hp: float=game.player.hp
+	for i in 60: runner.tick(1.0/60)
+	check(runner.position.distance_to(game.boss.position)<start_gap-1.0 and runner.windup<=0 and game.player.hp==player_hp,"Summoned centurions run to the boss without attacking")
 	var xp: int=game.run.xp
-	offering.tick(.016)
-	check(game.boss.hp>boss_hp and offering.dead and game.run.xp==xp,"Absorbed offering heals boss and grants no kill XP")
+	runner.hit(100000)
+	check(runner.dead and game.run.xp==xp,"Summoned centurions grant no experience")
+	var healer=reserve[1]
+	healer.position=game.boss.position+Vector3(0,0,1.0)
+	var boss_hp: float=game.boss.hp
+	healer.tick(.016)
+	check(healer.dead and game.boss.hp>boss_hp,"A summoned centurion that reaches the boss heals it")
 	game.boss.laser_cooldown=0; game.boss.windup=0; game.boss.tick(.016)
 	check(game.boss.windup>0,"Boss laser telegraphs")
 	game.boss.tick(1.1)
 	check(game.boss.laser_time==5,"Boss gaze lasts five seconds")
 	game.boss.hit(10000)
 	check(game.crown_available and game.run.xp>xp,"Boss death grants XP and releases crown")
+	for enemy in reserve: enemy.tick(.016)
+	check(reserve.all(func(e): return e.dead),"Summoned centurions fall with the boss")
 	game.player.position=game.crown_position
 	game.interact()
 	check(game.mode=="ending" and game.run.completed,"Crown opens ending")

@@ -2,13 +2,26 @@ shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 
 uniform sampler2D stone_texture : source_color, filter_linear_mipmap, repeat_enable;
+// The hero's painted kit, whose scale pattern is cut into a statue's scale armor.
+uniform sampler2D scale_texture : source_color, hint_default_black, filter_linear_mipmap, repeat_enable;
+// Skinned statues carry their rest pose in CUSTOM0 (position) and CUSTOM1
+// (normal), so the stone stays fixed to the body as it animates rather than
+// the moving surface sliding through a still pattern.
+uniform bool rest_pose = false;
 varying vec3 stone_position;
 varying vec3 stone_normal;
+varying float scale_mask;
 
 float hash3(vec3 p) {
 	p = fract(p * 0.1031);
 	p += dot(p, p.yzx + 33.33);
 	return fract((p.x + p.y) * p.z);
+}
+
+vec3 hash33(vec3 p) {
+	p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+	p += dot(p, p.yxz + 33.33);
+	return fract((p.xxy + p.yxx) * p.zyx);
 }
 
 float grain_noise(vec3 p) {
@@ -21,10 +34,31 @@ float grain_noise(vec3 p) {
 		mix(hash3(cell + vec3(0,1,1)), hash3(cell + vec3(1,1,1)), f.x), f.y), f.z);
 }
 
+// Distance to the nearest border between cells of a 3D Voronoi pattern.
+float cell_border(vec3 p) {
+	vec3 cell = floor(p);
+	vec3 f = fract(p);
+	float d1 = 8.0;
+	float d2 = 8.0;
+	for (int x = -1; x <= 1; x++)
+	for (int y = -1; y <= 1; y++)
+	for (int z = -1; z <= 1; z++) {
+		vec3 o = vec3(float(x), float(y), float(z));
+		vec3 r = o + hash33(cell + o) - f;
+		float d = dot(r, r);
+		if (d < d1) { d2 = d1; d1 = d; }
+		else if (d < d2) { d2 = d; }
+	}
+	return sqrt(d2) - sqrt(d1);
+}
+
 void vertex() {
 	// Preserve a consistent grain size on the body and differently scaled gear.
-	stone_position = VERTEX * vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
-	stone_normal = NORMAL;
+	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
+	stone_position = (rest_pose ? CUSTOM0.xyz : VERTEX) * scale;
+	stone_normal = rest_pose ? CUSTOM1.xyz : NORMAL;
+	// Meshes without vertex colors read white: no scales.
+	scale_mask = 1.0 - COLOR.r;
 }
 
 void fragment() {
@@ -39,10 +73,26 @@ void fragment() {
 	float fine_detail = 1.0 - smoothstep(0.006, 0.02, footprint);
 	float grain = mix(grain_noise(stone_position * 45.0), grain_noise(stone_position * 110.0), fine_detail * 0.35);
 	float wear = grain_noise(stone_position * 11.0);
-	float pits = smoothstep(0.56, 0.72, grain_noise(stone_position * 28.0));
-	ALBEDO = vec3(clamp(0.17 + gray * 0.20 + (grain - 0.5) * 0.12 + (wear - 0.5) * 0.08 - pits * 0.055, 0.07, 0.42));
+	float pits = smoothstep(0.62, 0.76, grain_noise(stone_position * 28.0));
+	// A few fine cracks: the borders of large, wandering cells, shown only
+	// where a slow noise allows, so most of the surface stays whole. Lines
+	// narrower than a pixel are widened and faded instead of flickering.
+	vec3 warp = vec3(grain_noise(stone_position * 9.0), grain_noise(stone_position * 9.0 + 17.0), grain_noise(stone_position * 9.0 + 31.0)) - 0.5;
+	float border = cell_border(stone_position * 5.0 + warp * 0.7);
+	float width = max(0.03, footprint * 5.0 * 1.5);
+	float crack = (1.0 - smoothstep(width * 0.35, width, border)) * (0.03 / width);
+	crack *= smoothstep(0.55, 0.68, grain_noise(stone_position * 2.6 + 5.0));
+	float shade = 0.17 + gray * 0.20 + (grain - 0.5) * 0.05 + (wear - 0.5) * 0.07 - pits * 0.025 - crack * 0.075;
 	// Millimeter-scale grain and pits affect the light, not just the color.
-	float height = (grain - 0.5) * 0.0018 + (wear - 0.5) * 0.006 - pits * 0.003;
+	float height = (grain - 0.5) * 0.0007 + (wear - 0.5) * 0.006 - pits * 0.0012 - crack * 0.0025;
+	if (scale_mask > 0.01) {
+		// Overlapping scales, from the hero's kit: raised centres, sunken rims.
+		float scales = dot(texture(scale_texture, UV).rgb, vec3(0.2126, 0.7152, 0.0722));
+		float relief = smoothstep(0.03, 0.3, scales);
+		shade *= mix(1.0, 0.72 + 0.4 * relief, scale_mask);
+		height += (relief - 0.5) * 0.004 * scale_mask;
+	}
+	ALBEDO = vec3(clamp(shade, 0.06, 0.42));
 	vec3 surface_x = dFdx(VERTEX);
 	vec3 surface_y = dFdy(VERTEX);
 	vec3 r1 = cross(surface_y, NORMAL);

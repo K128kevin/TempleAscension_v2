@@ -1,7 +1,8 @@
 """Paint the hero's kit into a new body texture, and cut a wood texture.
 
 Run with Blender --background --python tools/paint_hero.py after
-import_character.py. Every face of the supplied body is assigned a region from
+import_character.py. The ranger's kit (hero_kit_ranger.png) is the same with a
+wool tunic in place of the scales. Every face of the supplied body is assigned a region from
 its skin weights and rest-pose height: bronze scale armor (chest, back,
 shoulders and upper arms), a leather belt, long brown cloth trousers,
 leather forearm bracers, or bare skin. Scales are projected onto the body in 3D
@@ -59,7 +60,7 @@ def paint_regions(body):
     print('HERO_REGIONS',counts)
 
 
-def bake_material(body, target):
+def bake_material(body, target, armor='scales'):
     mat = bpy.data.materials.new('HeroKitBake'); mat.use_nodes = True
     nodes = mat.node_tree.nodes; links = mat.node_tree.links
     nodes.clear()
@@ -105,8 +106,10 @@ def bake_material(body, target):
     links.new(attribute.outputs['Alpha'],invert.inputs[1])
     darken = node('ShaderNodeMath',operation='MULTIPLY'); darken.inputs[1].default_value = 1.8
     links.new(invert.outputs[0],darken.inputs[0]); links.new(darken.outputs[0],belt.inputs['Factor'])
+    # Under the ranger's cloak is a plain tunic of undyed wool.
+    cuirass = scales.outputs['Color'] if armor=='scales' else material_color(150,(.05,.04,.025,1),(.1,.08,.05,1),True)
     color = skin.outputs['Color']
-    for factor,layer in [(split.outputs['Blue'],belt.outputs['Result']),(split.outputs['Green'],cloth),(split.outputs['Red'],scales.outputs['Color'])]:
+    for factor,layer in [(split.outputs['Blue'],belt.outputs['Result']),(split.outputs['Green'],cloth),(split.outputs['Red'],cuirass)]:
         mix = node('ShaderNodeMix',data_type='RGBA')
         links.new(factor,mix.inputs['Factor']); links.new(color,mix.inputs['A']); links.new(layer,mix.inputs['B'])
         color = mix.outputs['Result']
@@ -116,7 +119,7 @@ def bake_material(body, target):
     body.data.materials.clear(); body.data.materials.append(mat)
 
 
-def paint_hero():
+def paint_hero(armor='scales', name='hero_kit'):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=str(ROOT/'assets/models/character/warrior.glb'))
     rig = next(o for o in bpy.data.objects if o.type=='ARMATURE')
@@ -125,15 +128,15 @@ def paint_hero():
     rig.data.pose_position = 'REST'
     body = next(o for o in bpy.data.objects if o.type=='MESH' and 'SuperHero' in o.name)
     paint_regions(body)
-    target = bpy.data.images.new('hero_kit',SIZE,SIZE)
-    bake_material(body,target)
+    target = bpy.data.images.new(name,SIZE,SIZE)
+    bake_material(body,target,armor)
     scene = bpy.context.scene
     scene.render.engine = 'CYCLES'; scene.cycles.samples = 1; scene.cycles.device = 'CPU'
     bpy.ops.object.select_all(action='DESELECT')
     body.select_set(True); bpy.context.view_layer.objects.active = body
     bpy.ops.object.bake(type='EMIT',margin=16)
-    target.filepath_raw = str(OUT/'hero_kit.png'); target.file_format = 'PNG'; target.save()
-    print('HERO_KIT_READY')
+    target.filepath_raw = str(OUT/(name+'.png')); target.file_format = 'PNG'; target.save()
+    print('HERO_KIT_READY',name)
 
 
 def cut_wood():
@@ -151,3 +154,4 @@ def cut_wood():
 
 cut_wood()
 paint_hero()
+paint_hero('tunic','hero_kit_ranger')

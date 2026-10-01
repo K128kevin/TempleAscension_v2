@@ -13,8 +13,7 @@ const ENEMIES = {
 	"lion":{"title":"Lion Guardian","hp":28.0,"damage":4.5,"speed":7.12,"range":1.5,"interval":.5,"weapon":"","size":1.0,"color":Color(.79,.64,.42)},
 	"wizard":{"title":"Oracle","hp":33.0,"damage":22.5,"speed":4.75,"range":11.8,"interval":3.0,"weapon":"staff","size":1.06,"color":Color(.54,.57,.78)},
 	"centurion":{"title":"Centurion","hp":65.0,"damage":27.5,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"spear","shield":"tower","size":1.2,"color":Color(.64,.68,.76)},
-	"boss":{"title":"The Crowned Statue","hp":1250.0,"damage":67.5,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)},
-	"offering":{"title":"Crown's Offering","hp":60.0,"damage":0.0,"speed":3.56,"range":0.0,"interval":1.0,"weapon":"spear","size":1.1,"color":Color(.74,.53,.85)}}
+	"boss":{"title":"The Crowned Statue","hp":1250.0,"damage":67.5,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
 const CLASSES = ["warrior","ranger","wizard"]
 const WEAPONS = ["spear","sword","bow","axe","staff"]
@@ -75,7 +74,7 @@ static func gain_xp(run: Dictionary, amount: int) -> int:
 	return int(run.level)-before
 
 static func enemy_xp(run: Dictionary, kind: String) -> int:
-	var base: int = {"gladiator":65,"archer":55,"lion":60,"wizard":80,"centurion":120,"offering":80,"boss":1800}[kind]
+	var base: int = {"gladiator":65,"archer":55,"lion":60,"wizard":80,"centurion":120,"boss":1800}[kind]
 	var level: int = ENEMY_LEVELS[run.floor]
 	var penalty = maxf(.1,1.0-maxi(0,int(run.level)-level-3)*.12)
 	return maxi(1,roundi(base*(1.0+(level-1)*.2)*penalty))

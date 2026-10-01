@@ -246,7 +246,7 @@ func tick(dt: float) -> void:
 	difficulty.text = "%s mode" % Data.DIFFICULTIES[r.difficulty]
 	var remaining: int = game.remaining()
 	status.text = "%d statues remain" % remaining if remaining>0 else ("The crown awaits" if r.floor==5 else "The way up is open")
-	direction.text = "" if r.floor<5 else "Intercept the crown's offerings"
+	direction.text = "" if r.floor<5 else "Defeat the Crowned Statue"
 	point_to_nearest_enemy()
 	character_info.text = "%s · Lv %d · %d XP · %d attribute / %d skill points" % [r.class_id.capitalize(),r.level,r.xp,r.points,r.skill_points]
 	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<30 else 1
@@ -370,7 +370,7 @@ func point_to_nearest_enemy() -> void:
 	var nearest = null
 	var best = INF
 	for e in game.enemies:
-		if e.dead or e.kind=="offering": continue
+		if e.dead or e.dormant: continue
 		var d: float = e.position.distance_squared_to(game.player.position)
 		if d<best: best = d; nearest = e
 	if nearest == null: return

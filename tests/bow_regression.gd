@@ -70,42 +70,90 @@ func test():
 			deepest = maxf(deepest,draw*.36)
 			if actor.nocked_arrow.visible:
 				var nock: Vector3 = actor.weapon_item.global_transform*Vector3(.5+draw*1.44,.5+draw*.06/1.3,0)
-				if nock.distance_to(wrist)>nock_error:
-					nock_error = nock.distance_to(wrist)
+				# The draw hand's fingers hold the string.
+				var fingers: Vector3 = actor.draw_fingers()
+				if nock.distance_to(fingers)>nock_error:
+					nock_error = nock.distance_to(fingers)
 					worst_nock_phase = i/120.0
-		check(neck_gap>.12,"%s forearm clears neck/head (%.3fm)" % [clip,neck_gap])
+		# Drawn to the jaw, the forearm runs beside the face, clear of the
+		# neck and head's centre line by more than the jaw's half-width.
+		check(neck_gap>.085,"%s forearm clears neck/head (%.3fm)" % [clip,neck_gap])
 		check(torso_gap>.14,"%s forearm clears torso (%.3fm)" % [clip,torso_gap])
 		check(deepest>.34,"%s draws the string at least 34cm" % clip)
 		check(nock_error<.035,"%s string follows draw hand (%.3fm error)" % [clip,nock_error])
 		if nock_error>=.035: print("WORST_NOCK_PHASE ",clip," ",worst_nock_phase)
+	# The archer statue carries its bow low in the left hand while it moves.
+	var statue = Visual.new()
+	scene.add_child(statue)
+	statue.setup(true,Color.WHITE,"bow",1,"archer")
+	statue.animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	for clip in ["BowRun","BowCrouch"]:
-		check(actor.clips.has(clip),"Dedicated carry clip exists: "+clip)
+		var carrier = statue
+		check(carrier.clips.has(clip),"Dedicated carry clip exists: "+clip)
 		if not actor.clips.has(clip): continue
 		var grip_error = 0.0
 		var lowest_tip = INF
 		var side_gap = INF
 		var faces_forward = true
 		for direction in 8:
-			actor.rotation.y = direction*TAU/8
+			carrier.rotation.y = direction*TAU/8
 			for i in 31:
-				pose(actor,clip,i/30.0)
-				var grip: Vector3 = actor.weapon_item.global_transform*Visual.BOW_GRIP
-				var hand_pose: Transform3D = actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("hand_l"))
-				grip_error = maxf(grip_error,grip.distance_to(hand_pose*Visual.BOW_PALM))
-				lowest_tip = minf(lowest_tip,(actor.weapon_item.global_transform*Vector3(0,0,0)).y)
-				side_gap = minf(side_gap,(grip-bone(actor,"pelvis")).dot(actor.global_basis.x))
-				faces_forward = faces_forward and (-actor.weapon_item.global_basis.x.normalized()).dot(actor.global_basis.z)>.9
-		check(grip_error<.001,"Bow stays seated in moving palm in every direction: "+clip)
+				pose(carrier,clip,i/30.0)
+				var grip: Vector3 = carrier.weapon_item.global_transform*Visual.BOW_GRIP
+				grip_error = maxf(grip_error,grip.distance_to(carrier.bow_hold()[0]))
+				lowest_tip = minf(lowest_tip,(carrier.weapon_item.global_transform*Vector3(0,0,0)).y)
+				side_gap = minf(side_gap,(grip-bone(carrier,"pelvis")).dot(carrier.global_basis.x))
+				faces_forward = faces_forward and (-carrier.weapon_item.global_basis.x.normalized()).dot(carrier.global_basis.z)>.9
+		check(grip_error<.001,"Bow stays seated in the moving fist in every direction: "+clip)
 		check(lowest_tip>.05,"Bow lower tip clears ground: %s (%.3fm)" % [clip,lowest_tip])
 		check(side_gap>.22,"Bow is carried beside the torso: %s (%.3fm)" % [clip,side_gap])
 		check(faces_forward,"Carried bow keeps its curved front forward: "+clip)
+	statue.locomotion(true,false)
+	check(statue.state=="BowRun","A moving archer statue carries its bow")
+	statue.locomotion(true,false,true)
+	check(statue.state=="BowCrouch","A crouching archer statue carries its bow")
+	statue.locomotion(false,false)
+	check(statue.state=="BowIdle","An archer statue stops in its bow-ready stance")
+	# The ranger stands, runs and crouches as the warrior does, the bow in his
+	# right hand beside him; he holds it out in the left only to shoot.
 	actor.rotation.y = 0
-	actor.locomotion(true,false)
-	check(actor.state=="BowRun","Moving selects bow carry animation")
-	actor.locomotion(true,false,true)
-	check(actor.state=="BowCrouch","Crouching selects bow carry animation")
 	actor.locomotion(false,false)
-	check(actor.state=="BowIdle","Stopping returns to bow ready stance")
+	check(actor.state=="Idle","The ranger idles as the warrior does")
+	actor.locomotion(true,false)
+	check(actor.state in ["SwordRun","Run"],"The ranger runs as the warrior does")
+	actor.locomotion(true,false,true)
+	check(actor.state=="Crouch","The ranger crouches as the warrior does")
+	# Carried, the bow is fixed in the fist: the same angle to the hand in
+	# every frame, the stave square to the forearm, and clear of his body.
+	var carry_error = 0.0
+	var square = 0.0
+	var turn = 0.0
+	var clearance = INF
+	var held = null
+	for clip in ["Idle","SwordRun","Crouch"]:
+		for i in 31:
+			pose(actor,clip,i/30.0)
+			var grip: Vector3 = actor.weapon_item.global_transform*Visual.BOW_GRIP
+			carry_error = maxf(carry_error,grip.distance_to(actor.bow_hold("r")[0]))
+			var stave: Vector3 = actor.weapon_item.global_basis.y.normalized()
+			var forearm: Vector3 = (bone(actor,"hand_r")-bone(actor,"lowerarm_r")).normalized()
+			square = maxf(square,absf(stave.dot(forearm)))
+			var hand: Basis = (actor.skeleton.global_transform.basis*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("hand_r")).basis).orthonormalized()
+			var in_hand: Basis = hand.inverse()*actor.weapon_item.global_basis.orthonormalized()
+			if held == null: held = in_hand
+			turn = maxf(turn,in_hand.get_rotation_quaternion().angle_to(held.get_rotation_quaternion()))
+			var tips = [actor.weapon_item.global_transform*Vector3(0,0,0),actor.weapon_item.global_transform*Vector3(0,1,0)]
+			var string = [actor.weapon_item.global_transform*Vector3(.5,0,0),actor.weapon_item.global_transform*Vector3(.5,1,0)]
+			for limb in [["spine_01","neck_01",.16],["thigh_r","calf_r",.09],["calf_r","foot_r",.07]]:
+				for line in [tips,string]:
+					clearance = minf(clearance,gap(line[0],line[1],bone(actor,limb[0]),bone(actor,limb[1]))-limb[2])
+	# Rigid in the hand, the grip shifts only as the curled fingers flex (the
+	# run and crouch curl them a little tighter than the idle).
+	check(carry_error<.05,"The carried bow stays in the ranger's right fist (%.3fm)" % carry_error)
+	# Square to the hand; the wrist bends a few degrees from the forearm.
+	check(square<.1,"The carried bow stays square to the forearm (%.3f)" % square)
+	check(turn<.02,"The carried bow keeps one grip angle in the hand (%.3f rad)" % turn)
+	check(clearance>0,"The carried bow stays clear of the ranger's body (%.3fm)" % clearance)
 	if "--render-bow" in OS.get_cmdline_user_args():
 		for clip in ["BowShot","BowRapid","BowRun","BowCrouch"]:
 			for i in 4:

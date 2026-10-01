@@ -72,6 +72,74 @@ func test():
 	check(game.player.dead and game.player.visual.state=="Death","A hero can be killed too")
 	pg.toggle_death()
 	check(not game.player.dead,"And revived")
+	# Every hero class lands its basic attack, on a statue and on another hero.
+	for hero in pg.heroes:
+		pg.select(hero)
+		for victim in [game.enemies.filter(func(e): return e.kind=="centurion")[0], pg.heroes[(pg.heroes.find(hero)+1)%3]]:
+			var home: Vector3 = victim.position
+			victim.position = hero.position+Vector3(0,0,-1.5); victim.stagger_time = 0; victim.busy = 0; victim.windup = 0
+			var before: int = victim.hit_reactions
+			hero.face(victim.position); hero.cooldown = 0; hero.busy = 0
+			game.attack(false,victim.position)
+			step(1.2)
+			check(victim.hit_reactions>before,"%s's basic attack hits the %s" % [pg.unit_name(hero),pg.unit_name(victim)])
+			victim.position = home
+	# Every attacking statue lands its attack on another unit, hero or statue.
+	for enemy in game.enemies:
+		pg.select(enemy)
+		for victim in [pg.heroes[0], game.enemies.filter(func(e): return e != enemy and e.kind=="lion")[0] if enemy.kind!="lion" else game.enemies[0]]:
+			var home: Vector3 = victim.position
+			victim.position = enemy.position+Vector3(0,0,1.4); victim.stagger_time = 0; victim.busy = 0; victim.windup = 0
+			enemy.busy = 0; enemy.windup = 0; enemy.cooldown = 0
+			var before: int = victim.hit_reactions
+			enemy.start_attack(victim.position)
+			step(3.0)
+			check(victim.hit_reactions>before,"The %s's attack hits the %s" % [pg.unit_name(enemy),pg.unit_name(victim)])
+			victim.position = home
+	# Each hero class wears its own kit.
+	for hero in pg.heroes:
+		var cls: String = hero.uid.trim_prefix("hero:")
+		var shown = {}
+		for mesh in hero.visual.skin_meshes: shown[String(mesh.name)] = mesh.visible
+		var kit = {"warrior":["HeroHelmet","HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardHood","WizardBody"]}[cls]
+		var hidden = ["HeroHelmet","RangerCloak","RangerBody","WizardRobe","WizardHood","WizardBody","HeroArmor","SuperHero_Male"].filter(func(n): return not n in kit)
+		check(kit.all(func(n): return shown.get(n,false)) and hidden.all(func(n): return not shown.get(n,true)),"The %s wears its own kit" % cls)
+	# The ranger's cloak swings on a spring simulation that collides with his legs.
+	var cloak_sim = pg.heroes[1].visual.cloak
+	check(cloak_sim != null and cloak_sim.setting_count == 13 and cloak_sim.get_collision_count(0) == 2,"The ranger's cloak has physics chains and hip colliders")
+	# Its cloth is kept outside his legs by the cloak shader, given the legs as
+	# capsules every frame.
+	var cloth: ShaderMaterial = pg.heroes[1].visual.cloak_mesh.material_override
+	pg.heroes[1].visual.cloak_capsules()
+	check(cloth.shader.resource_path.ends_with("cloak.gdshader") and cloth.get_shader_parameter("capsule_count") == 6 and (cloth.get_shader_parameter("capsule_a") as PackedVector3Array).size() == 6,"The ranger's cloak folds over his legs (cloth shader with leg capsules)")
+	check(pg.heroes[0].visual.cloak == null and pg.heroes[2].visual.cloak == null,"Only the ranger wears a simulated cloak")
+	var helm = pg.heroes[0].visual.skin_meshes.filter(func(m): return m.name == "HeroHelmet")[0]
+	check(helm.material_override.albedo_color.r > helm.material_override.albedo_color.b*2,"The warrior's helm is bronze")
+	# Statue stone is laid out from the rest pose, so it stays fixed to the body
+	# as it animates; only the gladiator's scale armor is marked for scales.
+	for enemy in game.enemies:
+		for mesh in enemy.visual.skin_meshes:
+			if mesh.skin == null: continue
+			var arrays = mesh.mesh.surface_get_arrays(0)
+			check(arrays[Mesh.ARRAY_CUSTOM0] != null and arrays[Mesh.ARRAY_CUSTOM0].size() == arrays[Mesh.ARRAY_VERTEX].size()*4 and mesh.material_override.get_shader_parameter("rest_pose"),"The %s's stone follows its rest pose" % pg.unit_name(enemy))
+			var colors = arrays[Mesh.ARRAY_COLOR]
+			var scaled = colors != null and Array(colors).any(func(c): return c.r < .5)
+			check(scaled == (enemy.kind == "gladiator"),"Only the gladiator's armor carries scales (%s)" % pg.unit_name(enemy))
+	var zoom_in = InputEventMouseButton.new(); zoom_in.pressed = true; zoom_in.button_index = MOUSE_BUTTON_WHEEL_UP
+	for i in 30: game._unhandled_input(zoom_in)
+	check(game.world.zoom<=3.01,"The playground zooms in much closer")
+	var pan = InputEventPanGesture.new(); pan.delta = Vector2(0,4)
+	game._unhandled_input(pan)
+	check(game.world.zoom>4.9,"A trackpad scroll zooms out")
+	pan.delta = Vector2(0,-40)
+	game._unhandled_input(pan)
+	check(game.world.zoom<=3.01,"A trackpad scroll zooms in, down to the playground limit")
+	var pinch = InputEventMagnifyGesture.new(); pinch.factor = .5
+	game._unhandled_input(pinch)
+	check(game.world.zoom>4.4,"Pinching in zooms out")
+	pinch.factor = 1.5
+	for i in 10: game._unhandled_input(pinch)
+	check(game.world.zoom<=3.01,"Pinching out zooms in")
 	await key(KEY_P,true)
 	check(game.playground==null and game.run.floor==floor_before and game.world.level==floor_before,"Shift+P leaves, restoring the run")
 	FileAccess.open("res://test-results/playground.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))

@@ -26,7 +26,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
 | 1 / 2 | Cast the other two assigned active skills |
 | C / K / I | Character attributes / skills and assignments / equipment |
-| Mouse wheel | Zoom |
+| Mouse wheel, trackpad scroll or pinch | Zoom |
 | E | Ascend, claim the crown, or rest at a safe entrance |
 | Escape | Pause, continue saved game, choose new run/difficulty, sound, quit |
 | F11 | Fullscreen |
@@ -86,7 +86,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | R | Reset the run and turn off invulnerability |
 | F10 | Jump to this adaptation's crown ending and completion summary |
 | P | Hide/show the panel; shortcuts remain active |
-| Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Hits play their reactions but deal no damage and nothing dies; X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
+| Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click on the ground, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Any unit attacks by left clicking another unit (hero or statue) or with Shift + left click, and every attack can hit any other unit. The camera zooms in much closer here. Hits play their reactions but deal no damage and nothing dies; X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
 
 The panel also offers an instant summit jump without extra XP. Bare
 1 and 2 cast assigned skills. Floor jumps retain level and point budgets, refill health/energy, and reset enemies,
@@ -112,7 +112,7 @@ extra connections that form loops, and ascent stairs in the most distant room.
 Floors grow from 50×50 to 74×74 tiles. The third floor includes a large central
 court with two entrances; floors four and five add mirrored wraparound galleries.
 Statues line the walls facing inward, with a safe area around the entrance.
-The summit remains a single arena with four corner groups of offerings.
+The summit remains a single arena with four corner groups of dormant centurions.
 
 ## Classes and progression
 
@@ -130,8 +130,15 @@ of maximum per second. Above the base:
 | Willpower | +3 maximum energy and +0.1 energy per second |
 
 Warrior starts with a large sword, a round steel shield and Cleave, wearing a
-steel full helm, thick bronze scale armor, long brown trousers and brown leather boots; Ranger with bow and Power Shot;
-Wizard with staff and Firebolt. The first skill point is spent on that starter.
+bronze full helm, thick bronze scale armor, long brown trousers and brown leather
+boots; Ranger with bow and Power Shot, in a wool tunic under a dark green hooded
+cloak whose brim shades his face (the mid-calf cloak swings on a spring
+simulation and flows back as he moves; its shader folds the cloth over his
+legs wherever they press into it, so they never show through). He stands,
+runs and crouches as the warrior does, the bow held upright in his right hand;
+to shoot he turns side-on, locks the bow arm out at the target and draws the
+string to his jaw; Wizard with staff and Firebolt, in a deep, dark blue robe
+and hood. The first skill point is spent on that starter.
 Each class has the plan's eight active skills and four passives, unlocking at
 levels 1, 4, 8, 12 and 18. Active skills have five ranks; passives have three.
 Rank is limited to `1 + floor((level - unlock_level) / 3)`. K shows scaling,
@@ -170,7 +177,9 @@ projectiles, sweeps, traps, defensive buffs, crowd control and area effects usin
 the existing authored models and VFX assets.
 
 The summit statue has 1,250 base health, cleave and a warned sweeping gaze. At
-80%, 60%, 40%, and 20% health, five corner offerings awaken and try to heal it.
+80%, 60%, 40%, and 20% health, it summons a corner group of five centurions.
+They never attack and grant no experience: they run to it, and each one that
+reaches it heals it by 5%. Any still standing crumble when it falls.
 Claiming the crown triggers petrification and the elders' reveal, then a completion
 summary. Elapsed playtime and best-time records are neither tracked nor displayed.
 
@@ -196,18 +205,23 @@ separate from earlier games:
 Enemy click areas have a minimum radius of 64 logical pixels, with extra room
 for tall enemies at close zoom. Hovering shows a red ring at their feet and a
 small health bar above their head. Hover and attack selection use the same area;
-HUD controls, dead enemies and dormant offerings do not trigger this feedback.
+HUD controls, dead enemies and dormant centurions do not trigger this feedback.
 
 The local library supplies humanoid rigs, so the original lion enemy is represented
 by a crouching humanoid Lion Guardian with the original fast pursuit and attack
 cadence. All humanoid statues and the hero use the requested local model and
 animation library.
-Gladiators are murmillones with a crested, brimmed helmet, a studded belt, a
-plated sword arm and bare legs; they carry a sword and a tall scutum. Archers wear light armor,
-centurions are powerfully built legionaries in close-fitting heavy plate and helmets
-behind tall tower shields, and oracles wear long robes.
+Gladiators are murmillones with a crested, brimmed helmet, the warrior's armor
+in stone (a scale cuirass with shoulder guards and forearm bracers), an armored
+kilt of plates to mid-thigh and bare legs; they carry a sword and a tall scutum.
+Archers wear close-fitting light leathers and a hood, centurions are powerfully
+built legionaries in close-fitting heavy plate and helmets behind tall tower
+shields, and oracles wear long robes and a deep hood. The Crowned Statue is a
+Roman general: a cuirass with shoulder guards, the gladiator's armored kilt, a
+cape, a full beard and its crown.
 Enemy bodies and their equipment share a dark, rough stone-gray finish with
-grain, pits, weathering and cracks. The warrior's shield is centered against the left
+fine grain, weathering and a few thin cracks. On animated statues the stone is
+laid out from the rest pose, so it stays fixed to the body as it moves. The warrior's shield is centered against the left
 forearm, and the gladiator's scutum is held upright in front of it, throughout idle,
 movement and attacks.
 These outfits use authored meshes fitted to the existing

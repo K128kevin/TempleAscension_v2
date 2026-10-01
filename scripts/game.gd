@@ -169,10 +169,17 @@ func load_floor() -> void:
 			carriers["%d:%d" % [run.floor,carrier_ids[-1]]] = {"kind":"weapon","value":4,"id":"weapon:%d" % run.floor}
 	else:
 		boss = spawn_enemy("boss","boss",world.boss_point)
+		# Four groups of five centurions stand in reserve in the corners; the
+		# Crowned Statue summons a group at 80%, 60%, 40% and 20% health.
 		for group in 4:
 			for i in 5:
-				var corner: Vector3 = world.offering_points[group*5+i]
-				spawn_enemy("offering","offering:%d:%d" % [group,i],corner)
+				var corner: Vector3 = world.summon_points[group*5+i]
+				var centurion = spawn_enemy("centurion","summoned:%d:%d" % [group,i],corner)
+				centurion.dormant = true
+				centurion.face(world.boss_point)
+				if centurion.uid in run.dead or "boss" in run.dead:
+					centurion.dead = true
+					centurion.visible = false
 		toast("The Crowned Statue: ‘Turn back… I cannot stop it…’")
 		if "boss" in run.dead:
 			boss.dead = true
@@ -226,7 +233,7 @@ func _process(dt: float) -> void:
 		if not player.dead:
 			var combat_engaged = false
 			for enemy in enemies:
-				if enemy.awake and not enemy.dead and enemy.kind!="offering":
+				if enemy.awake and not enemy.dead:
 					combat_engaged = true
 					break
 			if combat_engaged: regen_recovery_time = 0.0
@@ -270,14 +277,29 @@ func _input(event: InputEvent) -> void:
 			else: ProgressionUI.equipment(self)
 			get_viewport().set_input_as_handled()
 
+# Moves the camera in (negative) or out, within its limits. The playground
+# zooms in much closer, for looking at models.
+func zoom_camera(amount: float) -> void:
+	world.zoom = clampf(world.zoom+amount,3.0 if playground != null else 15.0,36.0)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if mode!="playing": return
 	if playground != null and playground.unhandled(event):
 		get_viewport().set_input_as_handled()
 		return
+	# Trackpads (macOS in particular) scroll with pan gestures rather than wheel
+	# clicks, and zoom with a pinch.
+	if event is InputEventPanGesture:
+		zoom_camera(event.delta.y*.5)
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventMagnifyGesture:
+		zoom_camera((1.0-event.factor)*world.zoom)
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton and event.pressed:
-		if event.button_index==MOUSE_BUTTON_WHEEL_UP: world.zoom = maxf(15,world.zoom-1.5)
-		elif event.button_index==MOUSE_BUTTON_WHEEL_DOWN: world.zoom = minf(36,world.zoom+1.5)
+		if event.button_index==MOUSE_BUTTON_WHEEL_UP: zoom_camera(-(1.0 if playground != null and world.zoom<=12 else 1.5))
+		elif event.button_index==MOUSE_BUTTON_WHEEL_DOWN: zoom_camera(1.5)
 		elif event.button_index==MOUSE_BUTTON_LEFT:
 			left_held = true
 			issue_click(false)
@@ -294,15 +316,27 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_F11:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
+# Everyone an attack can land on. Normally the statues; in the playground every
+# unit, heroes included, except the one attacking.
+func targets(attacker = null) -> Array:
+	if attacker == null: attacker = player
+	var list: Array = enemies.duplicate()
+	if playground != null: list += playground.heroes
+	return list.filter(func(a): return a != attacker and is_instance_valid(a))
+
+# Attacks by a playground statue land on every unit, not only the hero.
+func puppet_attack(source) -> bool:
+	return playground != null and is_instance_valid(source) and source.puppet
+
 func clicked_enemy():
 	if get_viewport().gui_get_hovered_control()!=null: return null
 	return enemy_at_screen(get_viewport().get_mouse_position())
 
-func enemy_at_screen(mouse: Vector2):
+func enemy_at_screen(mouse: Vector2, exclude = null):
 	var nearest = null
 	var best = INF
-	for a in enemies:
-		if a.dead or not a.is_visible_in_tree() or (a.kind=="offering" and a.dormant_offering): continue
+	for a in targets(exclude if exclude != null else player):
+		if a.dead or not a.is_visible_in_tree() or a.dormant: continue
 		if world.camera.is_position_behind(a.position): continue
 		var screen: Vector2 = world.camera.unproject_position(a.position+Vector3.UP*a.config.size)
 		var feet: Vector2 = world.camera.unproject_position(a.position)
@@ -458,8 +492,8 @@ func tick_scheduled(dt: float) -> void:
 			"melee":
 				var hit_list: Array = []
 				var reach: float = 2.44 if job.special else 1.9
-				for enemy in enemies:
-					if enemy.dead or (enemy.kind=="offering" and enemy.dormant_offering): continue
+				for enemy in targets(player):
+					if enemy.dead or enemy.dormant: continue
 					var offset: Vector3 = enemy.position-player.position
 					if offset.length()<=reach+(.5 if enemy.kind=="boss" else .25) and job.direction.dot(offset.normalized()) >= (0 if job.special and job.weapon==1 else .707) and world.clear_line(player.position,enemy.position): hit_list.append(enemy)
 				hit_list.sort_custom(func(a,b): return player.position.distance_squared_to(a.position)<player.position.distance_squared_to(b.position))
@@ -522,11 +556,11 @@ func equip(index: int) -> void:
 	toast("%s equipped. Check skill requirements in K." % Data.WEAPONS[index].capitalize())
 
 func awaken(enemy) -> void:
-	if enemy.awake or enemy.dead or enemy.kind=="offering": return
+	if enemy.awake or enemy.dead or enemy.dormant: return
 	enemy.awake = true
 	enemy.visual.play(enemy.visual.idle_action())
 	for other in enemies:
-		if other.awake or other.dead or other.kind=="offering": continue
+		if other.awake or other.dead or other.dormant: continue
 		if other.position.distance_to(enemy.position)<6.56 and other.position.distance_to(player.position)<18 and world.clear_line(enemy.position,other.position): awaken(other)
 
 # `source` is the enemy whose attack this is; landing it resets its pushback.
@@ -570,7 +604,8 @@ func retry_floor() -> void:
 	save_run()
 
 func enemy_died(enemy) -> void:
-	if not enemy.uid in run.xp_claimed:
+	# The crown's summoned centurions grant no experience.
+	if not enemy.uid in run.xp_claimed and not enemy.summoned():
 		run.xp_claimed.append(enemy.uid)
 		var reward = Data.enemy_xp(run,enemy.kind)
 		var levels = Data.gain_xp(run,reward)
@@ -644,12 +679,13 @@ func tick_projectiles(dt: float) -> void:
 		var remove: bool = p.age>4 or not world.clear_line(Vector3(before.x,0,before.z),Vector3(after.x,0,after.z))
 		p.node.position = after
 		if not remove:
-			var candidates: Array = enemies if p.friendly else [player]
+			var friendly: bool = p.friendly or puppet_attack(p.source)
+			var candidates: Array = targets(p.source if puppet_attack(p.source) else player) if friendly else [player]
 			for a in candidates:
-				if a.dead or a.uid in p.hit or (a.kind=="offering" and a.dormant_offering): continue
+				if a.dead or a.uid in p.hit or a.dormant: continue
 				var closest = Geometry3D.get_closest_point_to_segment(a.position+Vector3.UP,before,after)
 				if closest.distance_to(a.position+Vector3.UP) < (1.1 if a.kind=="boss" else (.9 if p.type=="ice" else .55)):
-					if p.friendly:
+					if friendly:
 						a.hit(p.damage,"physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type))
 						p.hit.append(a.uid)
 					else:
@@ -667,7 +703,8 @@ func blast(at: Vector3, radius: float, damage: float, friendly: bool) -> void:
 	area_damage(at,radius,damage,friendly)
 
 func area_damage(at: Vector3, radius: float, damage: float, friendly: bool, source = null) -> void:
-	var candidates: Array = enemies if friendly else [player]
+	if puppet_attack(source): friendly = true
+	var candidates: Array = targets(source if puppet_attack(source) else player) if friendly else [player]
 	for a in candidates:
 		if a.dead or a.position.distance_to(at)>radius or not world.clear_line(at,a.position): continue
 		if friendly: a.hit(damage)
@@ -695,6 +732,9 @@ func frost_nova(center: Vector3, radius: float, damage: float, source = null) ->
 	world.add_child(nova)
 	nova.setup(self,center,radius)
 	novas.append(nova)
+	if puppet_attack(source):
+		area_damage(center,radius,damage,true,source)
+		return
 	if player.dead or player.position.distance_to(center)>radius or not world.clear_line(center,player.position): return
 	hurt_player(damage,"frost",source)
 	if player.invulnerable<=0: slowed = 5
@@ -730,13 +770,13 @@ func tick_effects(dt: float) -> void:
 			e.node.queue_free()
 			effects.remove_at(i)
 
-func wake_offerings(group: int) -> void:
+func summon_centurions(group: int) -> void:
 	for enemy in enemies:
-		if enemy.kind=="offering" and enemy.uid.begins_with("offering:%d:" % group):
-			enemy.dormant_offering = false
+		if enemy.uid.begins_with("summoned:%d:" % group) and not enemy.dead:
+			enemy.dormant = false
 			enemy.awake = true
-			enemy.visual.play("Run")
-	toast("The crown summons five offerings. Stop them before they reach it!")
+			enemy.visual.play(enemy.visual.idle_action())
+	toast("The crown summons five centurions to its defense!")
 
 func place_crown() -> void:
 	var crown = Art.model("crown",Vector3(.8,.4,.8),Art.material("gold"))
@@ -747,7 +787,7 @@ func place_crown() -> void:
 func remaining() -> int:
 	var count = 0
 	for e in enemies:
-		if not e.dead and e.kind!="offering": count += 1
+		if not e.dead and not e.dormant: count += 1
 	return count
 
 func interact() -> void:
@@ -805,7 +845,7 @@ func pause_game() -> void:
 	left_held = false
 	right_held = false
 	save_run()
-	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1 / 2 skills · Space evade · Q healing spell\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel zoom · E interact · F11 fullscreen")
+	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1 / 2 skills · Space evade · Q healing spell\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 fullscreen")
 	hud.button("Resume",resume_game)
 	hud.button("Continue saved ascent",continue_run)
 	hud.button("New ascent / Difficulty",new_run_menu)

@@ -3,9 +3,13 @@ from pathlib import Path
 import bpy
 root=Path(__file__).resolve().parents[1]
 bpy.ops.wm.read_factory_settings(use_empty=True)
+# The clips are baked at 30 fps (tools/import_combat.py); exporting at
+# Blender's default 24 would resample and shift them.
+bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(root/'assets/models/character/warrior.glb'))
 # The hero's boots are the hero's own; statues stay barefoot stone.
-for o in [o for o in bpy.data.objects if o.name.startswith(('HeroBoots','HeroHelmet','HeroArmor'))]:bpy.data.objects.remove(o,do_unlink=True)
+# So are the class kits' helm, hoods, robe and robed body.
+for o in [o for o in bpy.data.objects if o.name.startswith(('HeroBoots','HeroHelmet','HeroArmor','RangerHood','RangerCloak','RangerBody','WizardHood','WizardRobe','WizardBody'))]:bpy.data.objects.remove(o,do_unlink=True)
 meshes=[o for o in bpy.data.objects if o.type=='MESH']
 bpy.ops.object.select_all(action='DESELECT')
 for o in meshes:o.select_set(True)

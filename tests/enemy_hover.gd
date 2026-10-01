@@ -72,9 +72,10 @@ func verify():
 	enemy.dead=false; enemy.visible=false
 	check(game.enemy_at_screen(body(enemy))==null,"Hidden enemies cannot be hovered or selected")
 	enemy.visible=true
-	var offering=game.spawn_enemy("offering","hover:offering",at+Vector3(4,0,0))
-	check(game.enemy_at_screen(body(offering))!=offering,"Dormant offerings cannot be hovered or selected")
-	offering.dead=true; offering.visible=false
+	var reserve=game.spawn_enemy("centurion","hover:reserve",at+Vector3(4,0,0))
+	reserve.dormant=true
+	check(game.enemy_at_screen(body(reserve))!=reserve,"Dormant centurions cannot be hovered or selected")
+	reserve.dead=true; reserve.visible=false
 	var boss=game.spawn_enemy("boss","hover:boss",at+Vector3(4,0,0))
 	game.world.zoom=15; game.world.follow(boss.position,1)
 	check(game.enemy_at_screen(game.world.camera.unproject_position(boss.position))==boss,"Close-zoom large enemy can be selected at its feet")
@@ -118,7 +119,7 @@ func verify():
 	for e in game.enemies: e.dead=false
 	game.hud.tick(0)
 	check(game.remaining()>5 and not game.hud.enemy_arrow.visible and game.hud.direction.text=="","No arrow or statue text while many statues remain")
-	var alive: Array=game.enemies.filter(func(e): return e.kind!="offering")
+	var alive: Array=game.enemies.filter(func(e): return not e.dormant)
 	for i in alive.size():
 		if i>=3: alive[i].dead=true
 	var target=alive[0]

@@ -40,12 +40,13 @@ func verify():
 		actors.append(actor)
 		var mesh = actor.skin_meshes[0]
 		check(mesh.name=="Stone"+kind.capitalize(),"Correct imported outfit: "+kind)
-		check(mesh.material_override==Art.statue_material(),"Body and outfit share gray cracked stone: "+kind)
+		# Animated bodies use the stone laid out from their rest pose.
+		check(mesh.material_override==Art.statue_material(true),"Body and outfit share gray cracked stone: "+kind)
 		check(actor.skin_meshes.size()==1 and mesh.skin.get_bind_count()>50,"Outfit remains one skinned surface: "+kind)
 		for clip in ["Run","Death","SwordSwing","SpearStab","BowShot","Cast","Hit","HitHead","HitStagger","HitKnockdown"]:
 			check(actor.clips.has(clip),"Outfit retains animation "+clip+": "+kind)
 		for gear in actor.find_children("*","MeshInstance3D",true,false):
-			check(gear.material_override==Art.statue_material(),"Worn/held item uses statue stone: "+kind+"/"+gear.name)
+			check(gear.material_override==Art.statue_material(gear.skin != null),"Worn/held item uses statue stone: "+kind+"/"+gear.name)
 		var label = Label3D.new(); label.text=kind.capitalize(); label.position=Vector3(actor.position.x,-.2,0); label.font_size=40; label.pixel_size=.007; label.billboard=BaseMaterial3D.BILLBOARD_ENABLED; scene.add_child(label)
 	await snapshot("idle")
 	for actor in actors:
