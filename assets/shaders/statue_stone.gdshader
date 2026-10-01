@@ -1,5 +1,9 @@
 shader_type spatial;
-render_mode diffuse_burley, specular_schlick_ggx;
+render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+
+// Stone cloth (the Crowned Statue's cape, marked 0 in the vertex colour's
+// green channel) folds over the legs as a cloak does.
+#include "res://assets/shaders/cloth_fold.gdshaderinc"
 
 uniform sampler2D stone_texture : source_color, filter_linear_mipmap, repeat_enable;
 // The hero's painted kit, whose scale pattern is cut into a statue's scale armor.
@@ -55,6 +59,7 @@ float cell_border(vec3 p) {
 void vertex() {
 	// Preserve a consistent grain size on the body and differently scaled gear.
 	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
+	if (COLOR.g < 0.5) VERTEX = fold_cloth(VERTEX);
 	stone_position = (rest_pose ? CUSTOM0.xyz : VERTEX) * scale;
 	stone_normal = rest_pose ? CUSTOM1.xyz : NORMAL;
 	// Meshes without vertex colors read white: no scales.
@@ -62,6 +67,9 @@ void vertex() {
 }
 
 void fragment() {
+	// Drawn from both sides for single-layer cloth; the inside faces light as
+	// the inside.
+	if (!FRONT_FACING) NORMAL = -NORMAL;
 	vec3 weights = pow(abs(normalize(stone_normal)), vec3(4.0));
 	weights /= max(dot(weights, vec3(1.0)), 0.0001);
 	vec3 p = stone_position * 0.65;

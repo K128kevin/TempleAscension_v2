@@ -17,6 +17,12 @@ func snapshot(name: String):
 	await frames(3)
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("res://test-results/enemies-"+name+".png")
+# The statue stone, or a statue's own copy of it (statues with a cape carry
+# their legs' positions for the cape's cloth).
+func is_stone(material, skinned: bool) -> bool:
+	var stone = Art.statue_material(skinned)
+	return material == stone or (material is ShaderMaterial and material.shader == stone.shader and material.get_shader_parameter("rest_pose") == skinned)
+
 func verify():
 	render = "--render-enemies" in OS.get_cmdline_user_args()
 	var scene = Node3D.new(); root.add_child(scene)
@@ -41,12 +47,12 @@ func verify():
 		var mesh = actor.skin_meshes[0]
 		check(mesh.name=="Stone"+kind.capitalize(),"Correct imported outfit: "+kind)
 		# Animated bodies use the stone laid out from their rest pose.
-		check(mesh.material_override==Art.statue_material(true),"Body and outfit share gray cracked stone: "+kind)
+		check(is_stone(mesh.material_override,true),"Body and outfit share gray cracked stone: "+kind)
 		check(actor.skin_meshes.size()==1 and mesh.skin.get_bind_count()>50,"Outfit remains one skinned surface: "+kind)
 		for clip in ["Run","Death","SwordSwing","SpearStab","BowShot","Cast","Hit","HitHead","HitStagger","HitKnockdown"]:
 			check(actor.clips.has(clip),"Outfit retains animation "+clip+": "+kind)
 		for gear in actor.find_children("*","MeshInstance3D",true,false):
-			check(gear.material_override==Art.statue_material(gear.skin != null),"Worn/held item uses statue stone: "+kind+"/"+gear.name)
+			check(is_stone(gear.material_override,gear.skin != null),"Worn/held item uses statue stone: "+kind+"/"+gear.name)
 		var label = Label3D.new(); label.text=kind.capitalize(); label.position=Vector3(actor.position.x,-.2,0); label.font_size=40; label.pixel_size=.007; label.billboard=BaseMaterial3D.BILLBOARD_ENABLED; scene.add_child(label)
 	await snapshot("idle")
 	for actor in actors:

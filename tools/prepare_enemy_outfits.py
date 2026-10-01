@@ -452,6 +452,142 @@ def lengthen_kilt(kilt, body):
         for g in list(v.groups): kilt.vertex_groups[g.group].add([v.index],g.weight*(1-influence),'REPLACE')
         kilt.vertex_groups[leg].add([v.index],influence,'REPLACE')
 
+# Hanging cloth (the ranger's cloak, the Crowned Statue's cape): one layer,
+# an even grid, swung in the game by chains of bones on a spring simulation
+# and folded over the legs by its shader (scripts/visual.gd). Bearings are
+# measured round the body from straight behind.
+def cloth_bearing(co): return math.atan2(co.x,co.y-KILT_CENTER_Y)
+
+def cloth_sheet(cloth, ring, top, hem, flare, reach, columns=56, rows=22, offset=-.012):
+    # Adds a sheet to `cloth` hanging from `top` to `hem`, round the back
+    # from bearing -reach to reach, flaring by `flare` at the hem. Its top
+    # follows the girth of `ring` (vertices of any mesh, with their skin
+    # weights) plus `offset`, and takes the weights of the nearest of them.
+    import bmesh
+    from mathutils import kdtree
+    cy = KILT_CENTER_Y
+    points = [(ob.matrix_world @ v.co, [(ob.vertex_groups[g.group].name,g.weight) for g in v.groups]) for ob,v in ring]
+    def sampled(b):
+        near = [math.hypot(p.x,p.y-cy) for p,_ in points if abs(math.remainder(cloth_bearing(p)-b,2*math.pi))<.3]
+        return (max(near) if near else .2)+offset
+    # Smoothed round the body, so the cloth hangs in soft folds, not ridges.
+    girth = [sampled(-reach+2*reach*i/columns) for i in range(columns+1)]
+    for _ in range(8):
+        girth = [sum(girth[max(0,min(columns,i+d))] for d in (-2,-1,0,1,2))/5 for i in range(columns+1)]
+    tree = kdtree.KDTree(len(points))
+    for i,(p,_) in enumerate(points): tree.insert(p,i)
+    tree.balance()
+    mesh = bmesh.new(); mesh.from_mesh(cloth.data)
+    deform = mesh.verts.layers.deform.verify()
+    groups = {}
+    def group(name):
+        if name not in groups:
+            groups[name] = (cloth.vertex_groups.get(name) or cloth.vertex_groups.new(name=name)).index
+        return groups[name]
+    grid = []
+    for j in range(rows+1):
+        t = j/rows
+        z = top+(hem-top)*t
+        row = []
+        for i in range(columns+1):
+            b = -reach+2*reach*i/columns
+            r = girth[i]*(1+flare*t*t*(3-2*t))
+            v = mesh.verts.new(Vector((math.sin(b)*r,cy+math.cos(b)*r,z)))
+            # The top rows move with the body; the chains take over below.
+            _,k,_ = tree.find(v.co)
+            for name,weight in points[k][1]: v[deform][group(name)] = weight
+            row.append(v)
+        grid.append(row)
+    for j in range(rows):
+        for i in range(columns):
+            mesh.faces.new((grid[j][i],grid[j+1][i],grid[j+1][i+1],grid[j][i+1]))
+    mesh.to_mesh(cloth.data); mesh.free()
+    for face in cloth.data.polygons: face.use_smooth = True
+
+def cloth_chains(rig, cloth, root_bone, root, blend, chains=13, segments=8, prefix='cloak_'):
+    # Chains of bones from `root_bone` at height `root` down the inside of the
+    # cloth to its hem, spread across it, named cloak_<chain>_<segment>. The
+    # cloth below `blend` is skinned to the two nearest chains, blending into
+    # its own (body) weights between blend[0] and blend[1]. A second cloth on
+    # the same rig takes another `prefix`.
+    import bpy
+    cy = KILT_CENTER_Y
+    hanging = [v.co.copy() for v in cloth.data.vertices if v.co.z<root-.1]
+    bearings = sorted(cloth_bearing(co) for co in hanging)
+    low, high = bearings[int(len(bearings)*.02)], bearings[int(len(bearings)*.98)]
+    lines = []
+    for i in range(chains):
+        b = low+(high-low)*i/(chains-1)
+        # The cloth near this bearing; the window widens where the mesh is sparse.
+        for window in (.15,.25,.4,.6):
+            near = [co for co in (v.co for v in cloth.data.vertices) if abs(cloth_bearing(co)-b)<window and co.z<root+.05]
+            if len(near)>=6: break
+        hem = min(co.z for co in near)
+        def radius_at(z):
+            ring = [co for co in near if abs(co.z-z)<.06] or near
+            return sum(math.hypot(co.x,co.y-cy) for co in ring)/len(ring)-.015
+        points = []
+        for j in range(segments+1):
+            z = root+(hem+.02-root)*j/segments
+            r = radius_at(z)
+            points.append(Vector((math.sin(b)*r,cy+math.cos(b)*r,z)))
+        lines.append(points)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='EDIT')
+    bones = rig.data.edit_bones
+    to_rig = rig.matrix_world.inverted()
+    for i,points in enumerate(lines):
+        parent = bones[root_bone]
+        for j in range(segments):
+            bone = bones.new(prefix+'%d_%d' % (i,j))
+            bone.head = to_rig @ points[j]; bone.tail = to_rig @ points[j+1]
+            bone.parent = parent; bone.use_connect = j>0
+            parent = bone
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for i in range(chains):
+        for j in range(segments): cloth.vertex_groups.new(name=prefix+'%d_%d' % (i,j))
+    for v in cloth.data.vertices:
+        z = v.co.z
+        if z>=blend[1]: continue
+        body_share = max(0.0,min(1.0,(z-blend[0])/(blend[1]-blend[0])))
+        for g in list(v.groups):
+            cloth.vertex_groups[g.group].add([v.index],g.weight*body_share,'REPLACE')
+        b = max(low,min(high,cloth_bearing(v.co)))
+        span = (b-low)/(high-low)*(chains-1)
+        i = min(chains-2,int(span)); a = span-i
+        for chain,share in [(i,1-a),(i+1,a)]:
+            points = lines[chain]
+            t = max(0.0,min(.999,(root-z)/(root-points[-1].z)))
+            cloth.vertex_groups[prefix+'%d_%d' % (chain,int(t*segments))].add([v.index],(1-body_share)*share,'ADD')
+
+# A cape of cloth hanging from the shoulders, just outside `torso` (the fitted
+# cuirass or robe), round the back to `hem`, swung by chains from the upper
+# back. Returned unjoined, skinned to `rig`.
+CAPE_ROOT = 1.36
+CAPE_BLEND = (1.28, 1.4)
+def shoulder_cape(rig, torso, name, hem=.34, flare=.32, prefix='cloak_'):
+    import bpy
+    # The torso's shoulders only, not sleeves joined to it.
+    names={g.index:g.name for g in torso.vertex_groups}
+    def on_arm(v):
+        best=max(v.groups,key=lambda g:g.weight,default=None)
+        return best is not None and names[best.group].startswith(('upperarm','lowerarm','hand'))
+    shoulders=[(torso,v) for v in torso.data.vertices if 1.3<=(torso.matrix_world@v.co).z<1.45 and not on_arm(v)]
+    cape=bpy.data.objects.new(name,bpy.data.meshes.new(name))
+    bpy.context.scene.collection.objects.link(cape)
+    cloth_sheet(cape,shoulders,top=1.42,hem=hem,flare=flare,reach=math.radians(78),rows=26,offset=.018)
+    cloth_chains(rig,cape,'spine_03',CAPE_ROOT,CAPE_BLEND,prefix=prefix)
+    cape.parent=rig
+    cape.modifiers.new('Statue outfit skin','ARMATURE').object=rig
+    return cape
+
+def remove_bones(rig, prefix):
+    import bpy
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='EDIT')
+    for bone in [b for b in rig.data.edit_bones if b.name.startswith(prefix)]: rig.data.edit_bones.remove(bone)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
 def remove_faces(obj, predicate):
     import bmesh
     bm=bmesh.new(); bm.from_mesh(obj.data)
@@ -592,7 +728,8 @@ def build_outfits():
                         trim_above(kilt,KILT_TOP); open_kilt(kilt)
                         chosen.append((kilt,'plate'))
                         trim_below(obj,KILT_TOP-.01)
-                    if obj.name in (pack+'_Body',pack+'_Cape'): chosen.append((obj,'plate'))
+                    # The knight's cape is replaced by a hanging cloth cape (below).
+                    if obj.name==pack+'_Body': chosen.append((obj,'plate'))
                     elif obj.name in (pack+'_ArmLeft',pack+'_ArmRight'):
                         # Only the shoulder guards: bare forearms, as on the statue.
                         trim_outside_x(obj,GENERAL_SHOULDER)
@@ -607,7 +744,7 @@ def build_outfits():
                     continue
                 if obj.name.startswith(pack+'_') and any(token in obj.name for token in (['_Body','_Arm'] if style=='robes' else ['_Body','_Arm','_Leg'])):chosen.append((obj,'plate' if style in ['legion','royal'] else style))
                 if style in ['plate','legion'] and obj.name==pack+'_Helmet':chosen.append((obj,style))
-                if style=='robes' and obj.name==pack+'_Cape':chosen.append((obj,style))
+                # The mage's rigid cape is replaced by a hanging cloth cape (below).
             fitted+=[fit(obj,source,target,piece_style) for obj,piece_style in chosen]
         if style=='legion':
             # Reshape the body first, then close-fit the armor over the new build.
@@ -633,6 +770,16 @@ def build_outfits():
             scaled.append(scale_cuirass(body,target,'ScaleCuirass'))
             fitted+=scaled+[bracers(body,target,'Bracers')]
         if style in ['light','robes']: fitted.append(add_hood(target,deep=style=='robes'))
+        cloth=[]
+        if style in ['general','robes']:
+            # The Crowned Statue's and the Oracle's capes, as the ranger's
+            # cloak: one layer of cloth hanging from the shoulders, just
+            # outside the cuirass or robe, round the back (to mid-calf, or the
+            # robe's hem), swung by chains of bones from the upper back and
+            # folded over the legs in the game; in stone.
+            torso=next(p for p in fitted if p.name.startswith(('Knight_Body','Mage_Body')))
+            cape=shoulder_cape(target,torso,'StoneCape',hem=.34 if style=='general' else .2,flare=.32 if style=='general' else .22)
+            cloth.append(cape); fitted.append(cape)
         # The closed knight helm hides the head; the gladiator's visor shows the face.
         if style=='plate': remove_faces(body,lambda f: all(v.co.z>1.52 for v in f.verts))
         if style=='robes':
@@ -645,7 +792,9 @@ def build_outfits():
         for obj in [body]+fitted:
             if obj.type!='MESH': continue
             mask=obj.data.color_attributes.new('StoneMask','BYTE_COLOR','POINT')
-            shade=(0,0,0,1) if obj in scaled else (1,1,1,1)
+            # Hanging cloth is marked 0 in the green channel, for the shader
+            # that folds it over the legs.
+            shade=(0,0,0,1) if obj in scaled else ((1,0,1,1) if obj in cloth else (1,1,1,1))
             for item in mask.data: item.color=shade
         bpy.ops.object.select_all(action='DESELECT')
         for obj in [body]+fitted:obj.select_set(True)

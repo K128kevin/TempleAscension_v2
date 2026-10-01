@@ -41,14 +41,12 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 
 bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUTPUT/'warrior.glb'))
-for old in [o for o in bpy.data.objects if o.name.startswith(('HeroBoots','HeroHelmet','HeroArmor','RangerHood','RangerCloak','RangerBody','WizardHood','WizardRobe','WizardBody'))]:
+for old in [o for o in bpy.data.objects if o.name.startswith(('HeroBoots','HeroHelmet','HeroArmor','RangerHood','RangerCloak','RangerBody','WizardHood','WizardRobe','WizardCape','WizardBody'))]:
     bpy.data.objects.remove(old,do_unlink=True)
 rig = next(o for o in bpy.data.objects if o.type=='ARMATURE')
 # The ranger's cloak bones are rebuilt below.
-bpy.context.view_layer.objects.active = rig
-bpy.ops.object.mode_set(mode='EDIT')
-for bone in [b for b in rig.data.edit_bones if b.name.startswith('cloak_')]: rig.data.edit_bones.remove(bone)
-bpy.ops.object.mode_set(mode='OBJECT')
+outfits.remove_bones(rig,'cloak_')
+outfits.remove_bones(rig,'cape_')
 body = next(o for o in bpy.data.objects if o.type=='MESH' and 'SuperHero' in o.name)
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=str(outfits.SOURCE/'Rogue.glb'))
@@ -149,119 +147,22 @@ outfits.remove_faces(cloak,lambda f: (lambda c: c.z<CLOAK_OPENING and c.y<-.02)(
 # mid-calf hem. Its even grid suits the swing simulation and the cloth
 # shader that folds it over the legs (assets/shaders/cloak.gdshader).
 CLOAK_SEAM = 1.08
-CLOAK_TOP = 1.13
-CLOAK_HEM = .3
-CLOAK_FLARE = .38
-CLOAK_REACH = math.radians(108)
-SHEET_COLUMNS = 56
-SHEET_ROWS = 22
-def cloak_bearing(co): return math.atan2(co.x,co.y-outfits.KILT_CENTER_Y)
-def hanging_sheet(cloak):
-    from mathutils import kdtree
-    cy = outfits.KILT_CENTER_Y
-    outfits.remove_faces(cloak,lambda f: f.calc_center_median().z<CLOAK_SEAM)
-    mesh = bmesh.new(); mesh.from_mesh(cloak.data)
-    bmesh.ops.delete(mesh,geom=[v for v in mesh.verts if not v.link_faces],context='VERTS')
-    mesh.to_mesh(cloak.data); mesh.free()
-    # The waist the sheet hangs from: the robe's own girth just above the cut,
-    # by bearing, so its top sits just inside the mantle's lower edge.
-    ring = [v for v in cloak.data.vertices if CLOAK_SEAM<=v.co.z<CLOAK_SEAM+.12]
-    def sampled(b):
-        near = [math.hypot(v.co.x,v.co.y-cy) for v in ring if abs(math.remainder(cloak_bearing(v.co)-b,2*math.pi))<.3]
-        return (max(near) if near else .2)-.012
-    # Smoothed round the waist, so the cloth hangs in soft folds, not ridges.
-    columns = [sampled(-CLOAK_REACH+2*CLOAK_REACH*i/SHEET_COLUMNS) for i in range(SHEET_COLUMNS+1)]
-    for _ in range(8):
-        columns = [sum(columns[max(0,min(SHEET_COLUMNS,i+d))] for d in (-2,-1,0,1,2))/5 for i in range(SHEET_COLUMNS+1)]
-    def girth_at(i): return columns[i]
-    tree = kdtree.KDTree(len(ring))
-    for i,v in enumerate(ring): tree.insert(v.co,i)
-    tree.balance()
-    names = {g.index:g.name for g in cloak.vertex_groups}
-    mesh = bmesh.new(); mesh.from_mesh(cloak.data)
-    deform = mesh.verts.layers.deform.verify()
-    grid = []
-    for j in range(SHEET_ROWS+1):
-        t = j/SHEET_ROWS
-        z = CLOAK_TOP+(CLOAK_HEM-CLOAK_TOP)*t
-        row = []
-        for i in range(SHEET_COLUMNS+1):
-            b = -CLOAK_REACH+2*CLOAK_REACH*i/SHEET_COLUMNS
-            r = girth_at(i)*(1+CLOAK_FLARE*t*t*(3-2*t))
-            v = mesh.verts.new(Vector((math.sin(b)*r,cy+math.cos(b)*r,z)))
-            # The top rows move with the body, as the mantle does; the chains
-            # take over below (cloak_bones).
-            _,k,_ = tree.find(v.co)
-            for g in ring[k].groups: v[deform][g.group] = g.weight
-            row.append(v)
-        grid.append(row)
-    for j in range(SHEET_ROWS):
-        for i in range(SHEET_COLUMNS):
-            mesh.faces.new((grid[j][i],grid[j+1][i],grid[j+1][i+1],grid[j][i+1]))
-    mesh.to_mesh(cloak.data); mesh.free()
-    for face in cloak.data.polygons: face.use_smooth = True
-    print('CLOAK_SHEET',len(cloak.data.vertices))
-hanging_sheet(cloak)
-
-# The cloak below the waist hangs from chains of bones that the game swings
-# with a spring simulation (scripts/visual.gd): each chain runs from the
-# pelvis down the inside of the cloak to its hem, spread from one front edge
-# round the back to the other. The hanging cloth is skinned to the two
-# nearest chains, blending into the body's own weights at the waist.
-CLOAK_CHAINS = 13
-CLOAK_SEGMENTS = 8
 CLOAK_ROOT = 1.12
 CLOAK_BLEND = (1.06, 1.2)
-def cloak_bones(cloak):
-    hanging = [v.co.copy() for v in cloak.data.vertices if v.co.z<CLOAK_ROOT-.1]
-    bearings = sorted(cloak_bearing(co) for co in hanging)
-    low, high = bearings[int(len(bearings)*.02)], bearings[int(len(bearings)*.98)]
-    chains = []
-    for i in range(CLOAK_CHAINS):
-        b = low+(high-low)*i/(CLOAK_CHAINS-1)
-        # The cloth near this bearing; the window widens where the mesh is sparse.
-        for window in (.15,.25,.4,.6):
-            near = [co for co in (v.co for v in cloak.data.vertices) if abs(cloak_bearing(co)-b)<window and co.z<CLOAK_ROOT+.05]
-            if len(near)>=6: break
-        hem = min(co.z for co in near)
-        def radius_at(z):
-            ring = [co for co in near if abs(co.z-z)<.06] or near
-            return sum(math.hypot(co.x,co.y-outfits.KILT_CENTER_Y) for co in ring)/len(ring)-.015
-        points = []
-        for j in range(CLOAK_SEGMENTS+1):
-            z = CLOAK_ROOT+(hem+.02-CLOAK_ROOT)*j/CLOAK_SEGMENTS
-            r = radius_at(z)
-            points.append(Vector((math.sin(b)*r,outfits.KILT_CENTER_Y+math.cos(b)*r,z)))
-        chains.append((b,points))
-    bpy.context.view_layer.objects.active = rig
-    bpy.ops.object.mode_set(mode='EDIT')
-    bones = rig.data.edit_bones
-    to_rig = rig.matrix_world.inverted()
-    for i,(b,points) in enumerate(chains):
-        parent = bones['pelvis']
-        for j in range(CLOAK_SEGMENTS):
-            bone = bones.new('cloak_%d_%d' % (i,j))
-            bone.head = to_rig @ points[j]; bone.tail = to_rig @ points[j+1]
-            bone.parent = parent; bone.use_connect = j>0
-            parent = bone
-    bpy.ops.object.mode_set(mode='OBJECT')
-    for i in range(CLOAK_CHAINS):
-        for j in range(CLOAK_SEGMENTS): cloak.vertex_groups.new(name='cloak_%d_%d' % (i,j))
-    for v in cloak.data.vertices:
-        z = v.co.z
-        if z>=CLOAK_BLEND[1]: continue
-        body_share = max(0.0,min(1.0,(z-CLOAK_BLEND[0])/(CLOAK_BLEND[1]-CLOAK_BLEND[0])))
-        for g in list(v.groups):
-            cloak.vertex_groups[g.group].add([v.index],g.weight*body_share,'REPLACE')
-        b = max(low,min(high,cloak_bearing(v.co)))
-        span = (b-low)/(high-low)*(CLOAK_CHAINS-1)
-        i = min(CLOAK_CHAINS-2,int(span)); a = span-i
-        for chain,share in [(i,1-a),(i+1,a)]:
-            points = chains[chain][1]
-            t = max(0.0,min(.999,(CLOAK_ROOT-z)/(CLOAK_ROOT-points[-1].z)))
-            cloak.vertex_groups['cloak_%d_%d' % (chain,int(t*CLOAK_SEGMENTS))].add([v.index],(1-body_share)*share,'ADD')
-    return len(chains)
-cloak_bones(cloak)
+outfits.remove_faces(cloak,lambda f: f.calc_center_median().z<CLOAK_SEAM)
+mesh = bmesh.new(); mesh.from_mesh(cloak.data)
+bmesh.ops.delete(mesh,geom=[v for v in mesh.verts if not v.link_faces],context='VERTS')
+mesh.to_mesh(cloak.data); mesh.free()
+# The waist the sheet hangs from: the robe's own girth just above the cut, so
+# its top sits just inside the mantle's lower edge.
+waist = [(cloak,v) for v in cloak.data.vertices if CLOAK_SEAM<=v.co.z<CLOAK_SEAM+.12]
+outfits.cloth_sheet(cloak,waist,top=1.13,hem=.3,flare=.38,reach=math.radians(108))
+print('CLOAK_SHEET',len(cloak.data.vertices))
+
+# The cloak below the waist hangs from chains of bones from the pelvis that
+# the game swings with a spring simulation (scripts/visual.gd), spread from
+# one front edge round the back to the other.
+outfits.cloth_chains(rig,cloak,'pelvis',CLOAK_ROOT,CLOAK_BLEND)
 
 # The ranger wears a copy of the body without what the cloak's mantle and
 # shoulder caps always cover (they move with the body there), so no skin
@@ -296,8 +197,11 @@ wizard_hood = outfits.add_hood(rig,deep=True)
 wizard_hood.name = 'WizardHood'
 print('HERO_HOODS_READY',len(cloak.data.vertices),len(wizard_hood.data.vertices))
 
-# The wizard's robe, with its sleeves and cape.
-robe_object = mage_robe(('Mage_Body','Mage_ArmLeft','Mage_ArmRight','Mage_Cape'),'WizardRobe')
+# The wizard's robe, with its sleeves, and over it a cape of cloth from the
+# shoulders, swung on its own chains (cape_*) as the ranger's cloak is.
+robe_object = mage_robe(('Mage_Body','Mage_ArmLeft','Mage_ArmRight'),'WizardRobe')
+wizard_cape = outfits.shoulder_cape(rig,robe_object,'WizardCape',hem=.2,flare=.22,prefix='cape_')
+print('WIZARD_CAPE',len(wizard_cape.data.vertices))
 robed = body.copy(); robed.data = body.data.copy(); robed.name = 'WizardBody'
 bpy.context.scene.collection.objects.link(robed)
 groups = {g.index:g.name for g in robed.vertex_groups}

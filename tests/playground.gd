@@ -101,8 +101,8 @@ func test():
 		var cls: String = hero.uid.trim_prefix("hero:")
 		var shown = {}
 		for mesh in hero.visual.skin_meshes: shown[String(mesh.name)] = mesh.visible
-		var kit = {"warrior":["HeroHelmet","HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardHood","WizardBody"]}[cls]
-		var hidden = ["HeroHelmet","RangerCloak","RangerBody","WizardRobe","WizardHood","WizardBody","HeroArmor","SuperHero_Male"].filter(func(n): return not n in kit)
+		var kit = {"warrior":["HeroHelmet","HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardCape","WizardHood","WizardBody"]}[cls]
+		var hidden = ["HeroHelmet","RangerCloak","RangerBody","WizardRobe","WizardCape","WizardHood","WizardBody","HeroArmor","SuperHero_Male"].filter(func(n): return not n in kit)
 		check(kit.all(func(n): return shown.get(n,false)) and hidden.all(func(n): return not shown.get(n,true)),"The %s wears its own kit" % cls)
 	# The ranger's cloak swings on a spring simulation that collides with his legs.
 	var cloak_sim = pg.heroes[1].visual.cloak
@@ -112,7 +112,13 @@ func test():
 	var cloth: ShaderMaterial = pg.heroes[1].visual.cloak_mesh.material_override
 	pg.heroes[1].visual.cloak_capsules()
 	check(cloth.shader.resource_path.ends_with("cloak.gdshader") and cloth.get_shader_parameter("capsule_count") == 6 and (cloth.get_shader_parameter("capsule_a") as PackedVector3Array).size() == 6,"The ranger's cloak folds over his legs (cloth shader with leg capsules)")
-	check(pg.heroes[0].visual.cloak == null and pg.heroes[2].visual.cloak == null,"Only the ranger wears a simulated cloak")
+	check(pg.heroes[0].visual.cloak == null,"The warrior wears no simulated cloth")
+	# The wizard's cape, the Oracle's and the Crowned Statue's swing the same
+	# way, from the shoulders, as heavier cloth.
+	for unit in [pg.heroes[2]]+game.enemies.filter(func(e): return e.kind in ["wizard","boss"]):
+		var sim = unit.visual.cloak
+		var cape_mesh = unit.visual.cloak_mesh
+		check(sim != null and sim.setting_count == 13 and cape_mesh != null and unit.visual.cloth_feel == unit.visual.CLOTH_HEAVY,"The %s's cape swings and folds over the legs" % pg.unit_name(unit))
 	var helm = pg.heroes[0].visual.skin_meshes.filter(func(m): return m.name == "HeroHelmet")[0]
 	check(helm.material_override.albedo_color.r > helm.material_override.albedo_color.b*2,"The warrior's helm is bronze")
 	# Statue stone is laid out from the rest pose, so it stays fixed to the body
@@ -125,6 +131,19 @@ func test():
 			var colors = arrays[Mesh.ARRAY_COLOR]
 			var scaled = colors != null and Array(colors).any(func(c): return c.r < .5)
 			check(scaled == (enemy.kind == "gladiator"),"Only the gladiator's armor carries scales (%s)" % pg.unit_name(enemy))
+	# Arrows are real arrows (long along their flight, slim across it) and fly
+	# twice as fast as the casters' bolts.
+	var from: Vector3 = game.world.spawn
+	game.projectile(from,from+Vector3(10,0,0),0,true,"arrow")
+	var arrow = game.projectiles[-1]
+	var launched: Vector3 = arrow.node.position
+	game.tick_projectiles(.1)
+	var model: Node3D = arrow.node
+	var along: float = (model.global_basis*Vector3(0,0,1)).length()
+	var across: float = maxf((model.global_basis*Vector3(1,0,0)).length(),(model.global_basis*Vector3(0,1,0)).length())
+	check(is_equal_approx((arrow.node.position-launched).length(),2.06) and game.ARROW_SPEED == 2*game.BOLT_SPEED,"Arrows fly at twice the bolts' speed")
+	check(along > .6 and across < .06 and (model.global_basis*Vector3(0,0,-1)).normalized().dot(Vector3(1,0,0)) > .99,"An arrow is long and slim, its head leading")
+	game.tick_projectiles(5.0)
 	var zoom_in = InputEventMouseButton.new(); zoom_in.pressed = true; zoom_in.button_index = MOUSE_BUTTON_WHEEL_UP
 	for i in 30: game._unhandled_input(zoom_in)
 	check(game.world.zoom<=3.01,"The playground zooms in much closer")

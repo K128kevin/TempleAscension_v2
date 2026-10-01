@@ -99,7 +99,16 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			cloth.shader = load("res://assets/shaders/cloak.gdshader")
 			cloth.set_shader_parameter("cloth_color",Color(.1,.19,.1))
 			mesh.material_override = cloth
-			cloak_mesh = mesh
+			if hero_class == "ranger": cloak_mesh = mesh
+		elif "WizardCape" in mesh.name:
+			# The wizard's cape, swung and folded over his legs as the
+			# ranger's cloak is, in his robe's deep blue.
+			mesh.visible = hero_class == "wizard"
+			var cape = ShaderMaterial.new()
+			cape.shader = load("res://assets/shaders/cloak.gdshader")
+			cape.set_shader_parameter("cloth_color",Color(.035,.05,.16))
+			mesh.material_override = cape
+			if hero_class == "wizard": cloak_mesh = mesh
 		elif "WizardHood" in mesh.name or "WizardRobe" in mesh.name:
 			mesh.visible = hero_class == "wizard"
 			mesh.material_override = Art.cloth(Color(.035,.05,.16))
@@ -123,6 +132,16 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle"] else Animation.LOOP_NONE
 	skeleton.skeleton_updated.connect(align_weapon)
 	if not stone and hero_class == "ranger": setup_cloak()
+	elif not stone and hero_class == "wizard": setup_cloak("cape_")
+	elif stone and skeleton.find_bone("cloak_0_0") >= 0:
+		# A statue's stone cloth (the Crowned Statue's cape) swings and folds
+		# over the legs as the ranger's cloak does; its stone material is its
+		# own, to carry this statue's legs.
+		for mesh in skin_meshes:
+			if mesh.skin != null and mesh.material_override is ShaderMaterial:
+				mesh.material_override = mesh.material_override.duplicate()
+				cloak_mesh = mesh
+		setup_cloak()
 	equip(weapon)
 	play(idle_action())
 
@@ -167,7 +186,7 @@ func equip(weapon: String) -> void:
 			for mesh in item.find_children("*","MeshInstance3D",true,false):
 				for i in mesh.mesh.get_blend_shape_count():
 					if mesh.mesh.get_blend_shape_name(i)=="Draw": bow_strings.append({"mesh":mesh,"index":i})
-			nocked_arrow = Art.model("arrow",Vector3(.035,.85,.035),Art.statue_material() if is_stone else null)
+			nocked_arrow = Art.model("arrow",Art.ARROW_SIZE,Art.statue_material() if is_stone else null)
 			add_child(nocked_arrow)
 			nocked_arrow.top_level = true
 			nocked_arrow.visible = false
@@ -345,10 +364,11 @@ func align_weapon() -> void:
 		for string in bow_strings: string.mesh.set_blend_shape_value(string.index,draw)
 		if is_instance_valid(nocked_arrow):
 			nocked_arrow.visible = arrow_visible and not dead
-			nocked_arrow.global_basis = facing * Basis(Vector3.RIGHT,-PI/2) * Basis.from_scale(Vector3(.035,.85,.035)*rig.scale.x)
+			# Its head (local -Z) toward the target, its nock on the string.
+			nocked_arrow.global_basis = facing * Basis(Vector3.UP,PI) * Basis.from_scale(Art.ARROW_SIZE*rig.scale.x)
 			# Nocked on the string, wherever the pull has drawn it.
 			var string = weapon_item.global_transform * Vector3(.5+draw*1.44,.5+draw*.06/1.3,0)
-			nocked_arrow.global_position = string+facing.z*.85*rig.scale.x
+			nocked_arrow.global_position = string+facing.z*Art.ARROW_SIZE.z*.5*rig.scale.x
 
 # The carried bow's place in the right hand, taken from the idle stance.
 var carry_in_hand = null
@@ -488,6 +508,12 @@ const CLOAK_SETTLE_TIME = .25
 # Running, the cloth ripples: each chain's weight wavers out of step with its
 # neighbours, more the faster he goes.
 const CLOAK_FLUTTER = .35
+# How a garment's cloth moves: a light cloak at the hips (the ranger's), and
+# heavy long cloth hung from the shoulders (a cape, a robe), which swings less
+# and settles sooner.
+const CLOTH_LIGHT = {"stiffness":CLOAK_STIFFNESS,"drag":CLOAK_DRAG,"gravity":CLOAK_GRAVITY,"flow":CLOAK_FLOW,"momentum":CLOAK_MOMENTUM,"flutter":CLOAK_FLUTTER}
+const CLOTH_HEAVY = {"stiffness":1.6,"drag":.75,"gravity":2.0,"flow":.3,"momentum":.004,"flutter":.12}
+var cloth_feel: Dictionary = CLOTH_LIGHT
 const CLOAK_RUN_SPEED = 5.0
 var cloak: SpringBoneSimulator3D
 var cloak_mesh: MeshInstance3D
@@ -498,28 +524,32 @@ var cloak_last_position = null
 var cloak_clock = 0.0
 var cloak_velocity = Vector3.ZERO
 
-func setup_cloak() -> void:
-	if skeleton.find_bone("cloak_0_0") < 0: return
+# `prefix` names the chains: cloak_ (the ranger's cloak, a statue's cape) or
+# cape_ (the wizard's cape, on the same hero skeleton as the ranger's).
+func setup_cloak(prefix: String = "cloak_") -> void:
+	if skeleton.find_bone(prefix+"0_0") < 0: return
 	if cloak_mesh != null: skeleton.skeleton_updated.connect(cloak_capsules)
 	var chains = 0
-	while skeleton.find_bone("cloak_%d_0" % chains) >= 0: chains += 1
+	while skeleton.find_bone(prefix+"%d_0" % chains) >= 0: chains += 1
 	var segments = 0
-	while skeleton.find_bone("cloak_0_%d" % segments) >= 0: segments += 1
+	while skeleton.find_bone(prefix+"0_%d" % segments) >= 0: segments += 1
+	var hangs_from: int = skeleton.get_bone_parent(skeleton.find_bone(prefix+"0_0"))
+	if hangs_from != skeleton.find_bone("pelvis"): cloth_feel = CLOTH_HEAVY
 	cloak = SpringBoneSimulator3D.new()
 	cloak.name = "CloakPhysics"
 	skeleton.add_child(cloak)
 	cloak.setting_count = chains
 	for i in chains:
-		var last: String = "cloak_%d_%d" % [i,segments-1]
-		cloak.set_root_bone_name(i,"cloak_%d_0" % i)
+		var last: String = prefix+"%d_%d" % [i,segments-1]
+		cloak.set_root_bone_name(i,prefix+"%d_0" % i)
 		cloak.set_end_bone_name(i,last)
 		cloak.set_extend_end_bone(i,true)
 		cloak.set_end_bone_direction(i,SpringBoneSimulator3D.BONE_DIRECTION_FROM_PARENT)
 		cloak.set_end_bone_length(i,bone_length(last))
 		cloak.set_radius(i,.03)
-		cloak.set_stiffness(i,CLOAK_STIFFNESS)
-		cloak.set_drag(i,CLOAK_DRAG)
-		cloak.set_gravity(i,CLOAK_GRAVITY)
+		cloak.set_stiffness(i,cloth_feel.stiffness)
+		cloak.set_drag(i,cloth_feel.drag)
+		cloak.set_gravity(i,cloth_feel.gravity)
 		# Simulated in the character's frame, so the leg colliders keep hold of
 		# the cloth; the air and the character's motion act through the forces
 		# set in cloak_tick.
@@ -538,6 +568,14 @@ func setup_cloak() -> void:
 	between.height = 1.0
 	between.position_offset = Vector3(0,-.5,0)
 	cloak.add_child(between)
+	# Cloth hanging from the upper back (a cape) is kept off the back too.
+	if hangs_from == skeleton.find_bone("spine_03"):
+		var back = SpringBoneCollisionCapsule3D.new()
+		back.bone_name = "spine_02"
+		back.radius = .17
+		back.height = .6
+		back.position_offset = Vector3(0,.1,0)
+		cloak.add_child(back)
 	var colliders = cloak.get_children()
 	for i in chains:
 		cloak.set_enable_all_child_collisions(i,false)
@@ -553,7 +591,8 @@ func cloak_capsules() -> void:
 	for capsule in CLOAK_BODY_CAPSULES:
 		a.append(to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(capsule[0])).origin)
 		b.append(to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(capsule[1])).origin)
-		r.append(capsule[2]*rig.scale.x)
+		# The mesh's own space is the rig's, before the rig's scale.
+		r.append(capsule[2])
 	var m: ShaderMaterial = cloak_mesh.material_override
 	m.set_shader_parameter("capsule_a",a)
 	m.set_shader_parameter("capsule_b",b)
@@ -580,7 +619,9 @@ func cloak_tick(dt: float) -> void:
 	var previous: Vector3 = cloak_velocity
 	cloak_velocity = cloak_velocity.lerp(velocity.limit_length(8.0),1.0-exp(-dt/CLOAK_SETTLE_TIME))
 	var acceleration: Vector3 = (cloak_velocity-previous)/dt
-	var push: Vector3 = -cloak_velocity*CLOAK_FLOW-acceleration*CLOAK_MOMENTUM
+	# Speeds are measured in the world; the simulation runs in the rig's
+	# (scaled) units, so a larger statue's cloth gets the same lift.
+	var push: Vector3 = (-cloak_velocity*cloth_feel.flow-acceleration*cloth_feel.momentum)/rig.scale.x
 	cloak.external_force = global_basis.orthonormalized().inverse()*push
 	var pace = clampf(cloak_velocity.length()/CLOAK_RUN_SPEED,0.0,1.0)
 	# In the character's frame, which faces +Z.
@@ -590,7 +631,7 @@ func cloak_tick(dt: float) -> void:
 		var ripple = sin(cloak_clock*9.0+i*.9)*.7+sin(cloak_clock*5.3-i*1.7)*.3
 		# Billows only ever lift it back, never swing it forward into the legs.
 		var lift = sin(cloak_clock*6.1+i*1.3)*.5+.5
-		cloak.set_gravity_direction(i,(Vector3.DOWN+(side*ripple*.6+back*lift*.4)*CLOAK_FLUTTER*pace).normalized())
+		cloak.set_gravity_direction(i,(Vector3.DOWN+(side*ripple*.6+back*lift*.4)*cloth_feel.flutter*pace).normalized())
 
 func advance(dt: float) -> void:
 	cloak_tick(dt)

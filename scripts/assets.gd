@@ -131,6 +131,11 @@ static func metal() -> StandardMaterial3D:
 	materials.metal = m
 	return m
 
+# A .66m arrow from the KayKit model, slimmed from its chunky .118m width to
+# a real arrow's profile. The prepared model lies along its local Z, centred,
+# its head toward -Z and its nock and fletching toward +Z.
+const ARROW_SIZE = Vector3(.05,.045,.66)
+
 static func model(id: String, dimensions: Vector3, mat: Material = null) -> Node3D:
 	var path = "res://assets/models/props/%s.glb" % id
 	if not scenes.has(path): scenes[path] = load(path)

@@ -9,7 +9,13 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(root/'assets/models/character/warrior.glb'))
 # The hero's boots are the hero's own; statues stay barefoot stone.
 # So are the class kits' helm, hoods, robe and robed body.
-for o in [o for o in bpy.data.objects if o.name.startswith(('HeroBoots','HeroHelmet','HeroArmor','RangerHood','RangerCloak','RangerBody','WizardHood','WizardRobe','WizardBody'))]:bpy.data.objects.remove(o,do_unlink=True)
+for o in [o for o in bpy.data.objects if o.name.startswith(('HeroBoots','HeroHelmet','HeroArmor','RangerHood','RangerCloak','RangerBody','WizardHood','WizardRobe','WizardCape','WizardBody'))]:bpy.data.objects.remove(o,do_unlink=True)
+# The ranger's cloak and the wizard's cape bones are the hero's own too.
+rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
+bpy.context.view_layer.objects.active=rig
+bpy.ops.object.mode_set(mode='EDIT')
+for bone in [b for b in rig.data.edit_bones if b.name.startswith(('cloak_','cape_'))]:rig.data.edit_bones.remove(bone)
+bpy.ops.object.mode_set(mode='OBJECT')
 meshes=[o for o in bpy.data.objects if o.type=='MESH']
 bpy.ops.object.select_all(action='DESELECT')
 for o in meshes:o.select_set(True)

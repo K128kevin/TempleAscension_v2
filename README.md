@@ -137,8 +137,8 @@ simulation and flows back as he moves; its shader folds the cloth over his
 legs wherever they press into it, so they never show through). He stands,
 runs and crouches as the warrior does, the bow held upright in his right hand;
 to shoot he turns side-on, locks the bow arm out at the target and draws the
-string to his jaw; Wizard with staff and Firebolt, in a deep, dark blue robe
-and hood. The first skill point is spent on that starter.
+string to his jaw; Wizard with staff and Firebolt, in a deep, dark blue robe,
+hood and cape. The first skill point is spent on that starter.
 Each class has the plan's eight active skills and four passives, unlocking at
 levels 1, 4, 8, 12 and 18. Active skills have five ranks; passives have three.
 Rank is limited to `1 + floor((level - unlock_level) / 3)`. K shows scaling,
@@ -216,9 +216,12 @@ in stone (a scale cuirass with shoulder guards and forearm bracers), an armored
 kilt of plates to mid-thigh and bare legs; they carry a sword and a tall scutum.
 Archers wear close-fitting light leathers and a hood, centurions are powerfully
 built legionaries in close-fitting heavy plate and helmets behind tall tower
-shields, and oracles wear long robes and a deep hood. The Crowned Statue is a
-Roman general: a cuirass with shoulder guards, the gladiator's armored kilt, a
-cape, a full beard and its crown.
+shields, and oracles wear long robes, a cape and a deep hood. The Crowned
+Statue is a Roman general: a cuirass with shoulder guards, the gladiator's
+armored kilt, a cape, a full beard and its crown. The wizard's, the oracles'
+and the Crowned Statue's capes are hanging cloth, like the ranger's cloak:
+they swing as heavier cloth and fold over the legs rather than letting them
+through, the statues' in stone.
 Enemy bodies and their equipment share a dark, rough stone-gray finish with
 fine grain, weathering and a few thin cracks. On animated statues the stone is
 laid out from the rest pose, so it stays fixed to the body as it moves. The warrior's shield is centered against the left

@@ -659,14 +659,22 @@ func tick_pickups(dt: float) -> void:
 		pickups.remove_at(i)
 		save_run()
 
+# Metres per second: arrows, and the casters' bolts and ice.
+const ARROW_SPEED = 20.6
+const BOLT_SPEED = 10.3
+
 func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type: String, piercing: bool = false, source = null) -> void:
 	var direction = (at-from).normalized()
-	var finish: Material = Art.statue_material() if not friendly and type=="arrow" else Art.material("gold" if friendly else "marble",Color(.35,.7,1) if type=="ice" else (Color(.65,.35,1) if type=="arcane" else (Color(1,.3,.05) if type=="fire" else Color(.9,.67,.45))))
-	var node = Art.model("arrow" if type=="arrow" else "gem",Vector3(.09,.9,.09) if type=="arrow" else Vector3(1.5,.5,.6),finish)
+	# Arrows are real arrows: the hero's in their own wood, fletching and
+	# steel, a statue's in stone.
+	var finish: Material
+	if type=="arrow": finish = null if friendly else Art.statue_material()
+	else: finish = Art.material("gold" if friendly else "marble",Color(.35,.7,1) if type=="ice" else (Color(.65,.35,1) if type=="arcane" else (Color(1,.3,.05) if type=="fire" else Color(.9,.67,.45))))
+	var node = Art.model("arrow" if type=="arrow" else "gem",Art.ARROW_SIZE if type=="arrow" else Vector3(1.5,.5,.6),finish)
 	world.add_child(node)
 	node.position = from + Vector3.UP
-	# The imported arrow tip points down local Y; rotate it into flight.
-	node.rotation = Vector3(-PI/2 if type=="arrow" else 0,atan2(direction.x,direction.z),0)
+	# The arrow's head is toward its local -Z; turn that into the flight.
+	node.rotation = Vector3(0,atan2(direction.x,direction.z)+(PI if type=="arrow" else 0.0),0)
 	projectiles.append({"node":node,"direction":direction,"damage":damage,"friendly":friendly,"age":0.0,"type":type,"piercing":piercing,"hit":[],"source":source})
 
 func tick_projectiles(dt: float) -> void:
@@ -674,9 +682,10 @@ func tick_projectiles(dt: float) -> void:
 		var p: Dictionary = projectiles[i]
 		p.age += dt
 		var before: Vector3 = p.node.position
-		var after: Vector3 = before+p.direction*10.3*dt
+		var after: Vector3 = before+p.direction*(ARROW_SPEED if p.type=="arrow" else BOLT_SPEED)*dt
 		p.node.visible = world.can_see(after)
-		var remove: bool = p.age>4 or not world.clear_line(Vector3(before.x,0,before.z),Vector3(after.x,0,after.z))
+		# Arrows fly twice as fast, over the same range.
+		var remove: bool = p.age>(BOLT_SPEED*4.0/ARROW_SPEED if p.type=="arrow" else 4.0) or not world.clear_line(Vector3(before.x,0,before.z),Vector3(after.x,0,after.z))
 		p.node.position = after
 		if not remove:
 			var friendly: bool = p.friendly or puppet_attack(p.source)
