@@ -470,7 +470,7 @@ func attack(special: bool, point: Vector3) -> void:
 	player.cooldown = animation.duration
 	player.busy = animation.duration
 	player.face(point)
-	player.root_goal = point
+	player.begin_strike(point)
 	var damage = Data.damage(run,randf_range(10,15))
 	if skills.war_cry>0: damage *= 1.25
 	var weapon: int = run.weapon
@@ -516,6 +516,7 @@ func tick_scheduled(dt: float) -> void:
 				if not (job.special and job.weapon==1) and hit_list.size()>1: hit_list.resize(1)
 				for enemy in hit_list:
 					enemy.hit(job.damage)
+					player.landed_on(enemy)
 					if job.special and job.weapon==0 and not enemy.dead: enemy.position = world.move(enemy.position,job.direction*6.5)
 				if job.special: effect(player.position,4.5,Color(1,.78,.35,.65),.25)
 

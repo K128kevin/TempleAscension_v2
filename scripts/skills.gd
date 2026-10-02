@@ -50,8 +50,9 @@ func cast(id: String, at: Vector3) -> bool:
 	game.order_pending = false
 	game.route.clear()
 	game.player.face(at)
-	# Stepping into a strike, he stops short of where it is aimed.
-	game.player.root_goal = at
+	# Stepping into a strike, he stops short of the unit it is aimed at (or
+	# drives it back as the blow lands).
+	game.player.begin_strike(at)
 	game.combat_age = 0
 	var duration = .7
 	var contact = .35
@@ -109,6 +110,7 @@ func execute(job: Dictionary) -> void:
 				var forward: float = offset.dot(direction)
 				if forward<0 or (s.effect=="line" and offset.cross(direction).length()>1.2): continue
 				hit(enemy,damage*(2.0 if s.effect=="execution" and enemy.hp/enemy.max_hp<.35 else 1.0))
+				game.player.landed_on(enemy)
 				if s.effect=="bash": enemy.stagger(float(s.duration))
 				hits += 1
 				if s.effect in ["bash","execution"]: break

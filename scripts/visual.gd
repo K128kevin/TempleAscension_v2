@@ -43,6 +43,9 @@ const LOCOMOTION = ["Run","Crouch","SwordRun","ScutumRun","BowRun","BowCrouch","
 const TURN_RATE = 11.0
 const TURN_EASE = .06
 var shown_yaw = null
+# Set while the unit is carried over the ground by a blow (shoved back, or
+# following one in): the feet stay planted and step as it goes.
+var carried = false
 var last_position = null
 var ground_speed = 0.0
 # Clips that carry their unit forward as it steps (metres at life size, by
@@ -1243,7 +1246,7 @@ func advance(dt: float) -> void:
 	last_position = at
 	if animator.active:
 		# Feet stay planted unless the unit runs, dashes, leaps or falls.
-		planter.enabled = not dead and not state in LOCOMOTION and (ground_speed < .6*rig.scale.x or ROOT_ADVANCE.has(state)) and absf(position.y) < .01
+		planter.enabled = not dead and not state in LOCOMOTION and (ground_speed < .6*rig.scale.x or ROOT_ADVANCE.has(state) or carried) and absf(position.y) < .01
 		var parent = get_parent_node_3d()
 		planter.ground = parent.global_position.y if parent != null else global_position.y
 		skeleton.advance(dt)

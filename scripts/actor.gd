@@ -87,6 +87,17 @@ func tick(dt: float) -> void:
 	# Stepping into an attack carries the unit forward (Visual.ROOT_ADVANCE).
 	var travel: float = visual.take_travel()
 	if travel > 0.0 and not dead: step_forward(travel)
+	# Shoved back by a blow, or following one in.
+	if shove_left > 0.0:
+		var step = minf(shove_left,shove_speed*dt)
+		shove_left -= step
+		if not dead: position = game.world.move(position,shove_dir*step)
+	if follow_left > 0.0:
+		var step = minf(follow_left,follow_speed*dt)
+		follow_left -= step
+		if not dead: position = game.world.move(position,follow_dir*step)
+	# The feet stay planted, stepping as the body is carried over them.
+	visual.carried = shove_left > 0.0 or follow_left > 0.0
 	slow_time = maxf(0,slow_time-dt)
 	mark_time = maxf(0,mark_time-dt)
 	stagger_time = maxf(0,stagger_time-dt)
@@ -165,7 +176,7 @@ func tick(dt: float) -> void:
 func start_attack(point: Vector3) -> void:
 	face(point)
 	attack_point = point
-	root_goal = point
+	begin_strike(point)
 	windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else (ARCHER_DRAW if kind == "archer" else .42))
 	if kind == "wizard":
 		# Every ranged cast is the fireball; frost comes only as the nova.
@@ -283,7 +294,9 @@ func release_attack() -> void:
 		# A playground statue's swing lands on whoever stands in front of it.
 		for other in game.targets(self):
 			if other.dead or position.distance_to(other.position) > config.range+.6 or not game.world.clear_line(position,other.position): continue
-			if forward().dot((other.position-position).normalized()) > .2: other.hit(damage)
+			if forward().dot((other.position-position).normalized()) > .2:
+				other.hit(damage)
+				landed_on(other)
 	elif position.distance_to(game.player.position) <= config.range + .6 and game.world.clear_line(position,game.player.position):
 		var d: Vector3 = (game.player.position-position).normalized()
 		if forward().dot(d) > .2: game.hurt_player(damage,"physical",self)
@@ -332,14 +345,90 @@ func walk_to(destination: Vector3, dt: float) -> void:
 	if position.distance_to(before) > .005: face(position+direction)
 	visual.locomotion(position.distance_to(before)>.005,false,kind=="lion",1.0,pace)
 
-# Where the unit's current attack is aimed: stepping in, it stops short of it.
+# Where the unit's current attack is aimed, and the unit it is aimed at.
+# Stepping in, it stops short of that unit; the step it is denied is held
+# until its blow lands on the unit, which is then shoved back that far as
+# the attacker steps in after it (a unit backed against a wall cannot give
+# ground, and the attacker stays where it is). Once the blow has landed, any
+# further step in shoves the unit straight back with it.
 var root_goal = null
+var root_target = null
+var held_travel = 0.0
+var strike_landed = false
+# A shove back: its direction, how far is left to go, and how fast.
+var shove_dir = Vector3.ZERO
+var shove_left = 0.0
+var shove_speed = 0.0
+# Following a shoved unit in.
+var follow_dir = Vector3.ZERO
+var follow_left = 0.0
+var follow_speed = 0.0
+# How fast a blow drives a unit back (metres a second).
+const SHOVE_SPEED = 1.5
+
+# Begins an attack stepping in at `point` (Visual.ROOT_ADVANCE).
+func begin_strike(point: Vector3) -> void:
+	root_goal = point
+	held_travel = 0.0
+	strike_landed = false
+	root_target = null
+	var nearest = 1.3
+	for other in game.targets(self) if game.puppet_attack(self) or kind == "player" else [game.player]:
+		if not is_instance_valid(other) or other.dead or other == self: continue
+		var d = Vector2(other.position.x-point.x,other.position.z-point.z).length()
+		if d < nearest:
+			nearest = d
+			root_target = other
+
+# How close this unit steps to `other` (its reach, plus a big unit's bulk).
+func standoff(other) -> float:
+	# (Far enough that a lunging body, its shield and its blade stop short of
+	# the other's.)
+	var mine = 1.05 if kind == "player" else 1.0*config.size
+	if other == null or other.kind == "player": return mine
+	return mine+maxf(0.0,(other.config.size-1.0)*.5)
+
 func step_forward(distance: float) -> void:
-	if root_goal != null:
-		var gap = Vector2(root_goal.x-position.x,root_goal.z-position.z).length()
-		var reach = .9 if kind == "player" else .8*config.size
-		distance = minf(distance,maxf(0.0,gap-reach))
+	var target = root_target if is_instance_valid(root_target) and not root_target.dead else null
+	var goal = target.position if target != null else root_goal
+	if goal != null:
+		var gap = Vector2(goal.x-position.x,goal.z-position.z).length()
+		var allowed = maxf(0.0,gap-standoff(target))
+		if distance > allowed and target != null:
+			var denied = distance-allowed
+			if strike_landed: allowed += target.shove(forward(),denied,0.0)
+			else: held_travel += denied
+		distance = minf(distance,allowed)
 	if distance > 0.0: position = game.world.move(position,forward()*distance)
+
+# The blow lands on `victim`: if it is the unit this attack stepped in on and
+# the step was held short of it, it is driven back that far and the attacker
+# follows it in.
+func landed_on(victim) -> void:
+	if victim != root_target or not is_instance_valid(victim): return
+	strike_landed = true
+	if held_travel <= 0.0 or victim.dead: return
+	var room = victim.shove(forward(),held_travel,held_travel/SHOVE_SPEED)
+	held_travel = 0.0
+	if room > 0.0:
+		follow_dir = forward()
+		follow_left += room
+		follow_speed = SHOVE_SPEED
+
+# Drives this unit back along `direction` by up to `distance` over `time`
+# seconds (at once, if no time), as far as the walls allow; returns how far
+# it will go.
+func shove(direction: Vector3, distance: float, time: float) -> float:
+	var free: Vector3 = game.world.move(position,direction*distance)
+	var room = Vector2(free.x-position.x,free.z-position.z).length()
+	if room < .01: return 0.0
+	if time <= 0.0:
+		position = free
+		return room
+	shove_dir = direction
+	shove_left = room
+	shove_speed = room/time
+	return room
 
 func face(at: Vector3) -> void:
 	var d = at-position
@@ -427,6 +516,8 @@ func attack_cycle() -> float:
 # An attack of this enemy damaged the hero: its pushback starts over.
 func landed_attack() -> void:
 	pushback_step = 0
+	# (A statue's blow landing on the hero.)
+	landed_on(game.player)
 
 func die(reward: bool = true) -> void:
 	if dead or game.playground != null: return

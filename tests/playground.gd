@@ -91,6 +91,30 @@ func test():
 	for u in others: u.visible = true
 	game.left_held = false
 	step(1.5)
+	# Stepping into a unit too close to step towards, the attacker's blow
+	# drives it back as far as the step was cut short (here, the whole step),
+	# and the attacker steps in after it; a unit backed against a wall gives
+	# no ground.
+	var warrior = pg.heroes[0]
+	for against_wall in [false,true]:
+		var spot: Vector3 = game.world.spawn
+		if against_wall: spot = game.world.move(spot,Vector3(-60,0,0))
+		warrior.position = spot
+		gladiator.position = spot+Vector3(1.0,0,0)
+		gladiator.busy = 0; gladiator.windup = 0; gladiator.cooldown = 0; gladiator.hit_stun = 0; gladiator.stagger_time = 0
+		warrior.busy = 0; warrior.stagger_time = 0
+		pg.select(gladiator)
+		step(.5)
+		var victim_before: Vector3 = warrior.position
+		var attacker_before: Vector3 = gladiator.position
+		gladiator.start_attack(warrior.position)
+		step(2.0)
+		var pushed = victim_before.distance_to(warrior.position)
+		var advanced = attacker_before.distance_to(gladiator.position)
+		if against_wall:
+			check(pushed < .08 and advanced < .3,"Backed against a wall, a unit gives no ground and the attacker stops short (pushed %.2fm, stepped %.2fm)" % [pushed,advanced])
+		else:
+			check(pushed > .3 and absf(advanced-pushed) < .06 and absf(gladiator.position.distance_to(warrior.position)-gladiator.standoff(warrior)) < .1,"A blow landing as the attacker steps in drives the unit back, the attacker following (pushed %.2fm, stepped %.2fm)" % [pushed,advanced])
 	# Kill and revive.
 	await key(KEY_X)
 	check(gladiator.dead and gladiator.visual.state=="Crumble","X kills the selected unit and plays its death")
