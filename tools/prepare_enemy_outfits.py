@@ -459,7 +459,7 @@ def lengthen_kilt(kilt, body):
 # measured round the body from straight behind.
 def cloth_bearing(co): return math.atan2(co.x,co.y-KILT_CENTER_Y)
 
-def cloth_sheet(cloth, ring, top, hem, flare, reach, columns=56, rows=22, offset=-.012, top_ring=None, top_offset=.012, top_reach=None, corner_drop=0.0):
+def cloth_sheet(cloth, ring, top, hem, flare, reach, columns=56, rows=22, offset=-.012, top_ring=None, top_offset=.012, top_reach=None, corner_drop=0.0, window=.3, smoothing=8):
     # Adds a sheet to `cloth` hanging from `top` to `hem`, round the back
     # from bearing -reach to reach, flaring by `flare` at the hem. Its top
     # follows the girth of `ring` (vertices of any mesh, with their skin
@@ -477,11 +477,13 @@ def cloth_sheet(cloth, ring, top, hem, flare, reach, columns=56, rows=22, offset
     cy = KILT_CENTER_Y
     points = [(ob.matrix_world @ v.co, [(ob.vertex_groups[g.group].name,g.weight) for g in v.groups]) for ob,v in ring]
     def sampled(b):
-        near = [math.hypot(p.x,p.y-cy) for p,_ in points if abs(math.remainder(cloth_bearing(p)-b,2*math.pi))<.3]
+        near = [math.hypot(p.x,p.y-cy) for p,_ in points if abs(math.remainder(cloth_bearing(p)-b,2*math.pi))<window]
         return (max(near) if near else .2)+offset
-    # Smoothed round the body, so the cloth hangs in soft folds, not ridges.
+    # Smoothed round the body, so the cloth hangs in soft folds, not ridges
+    # (`window` is how wide an arc of the body each girth takes its widest
+    # from, `smoothing` how much it is then evened round).
     girth = [sampled(-reach+2*reach*i/columns) for i in range(columns+1)]
-    for _ in range(8):
+    for _ in range(smoothing):
         girth = [sum(girth[max(0,min(columns,i+d))] for d in (-2,-1,0,1,2))/5 for i in range(columns+1)]
     def table_at(table, span, b):
         u = (b+span)/(2*span)*columns

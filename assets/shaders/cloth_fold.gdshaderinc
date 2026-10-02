@@ -22,6 +22,11 @@ uniform int leg_capsules = 12;
 // the robe's skirt and sash.
 uniform float min_reach = 0.16;
 uniform float waist_reach = 0.0;
+// Height above the body's centre above which the cloth is not folded at all,
+// easing in fully FOLD_EASE below it: a kilt's waistband sits close on the
+// waist instead of being carried out over the tops of the thighs.
+uniform float fold_from = 10.0;
+const float FOLD_EASE = 0.1;
 // How far past a limb's surface the cloth starts to be carried out.
 const float MARGIN = 0.03;
 // How far beside a limb the cloth is still eased outward.
@@ -30,6 +35,9 @@ const float EASE = 0.12;
 const int SAMPLES = 6;
 
 vec3 fold_cloth(vec3 vertex) {
+	vec3 unfolded = vertex;
+	float strength = 1.0 - smoothstep(fold_from - FOLD_EASE, fold_from, vertex.y - body_center.y);
+	if (strength <= 0.0) return vertex;
 	vec2 across = vertex.xz - body_center.xz;
 	float reach = length(across);
 	vec2 out_dir = reach > 1e-4 ? across / reach : vec2(0.0, -1.0);
@@ -70,5 +78,5 @@ vec3 fold_cloth(vec3 vertex) {
 	if (vertex.y < body_center.y - 0.1) needed = max(needed, min_reach);
 	else if (vertex.y < body_center.y + 0.3) needed = max(needed, waist_reach);
 	vertex.xz = body_center.xz + out_dir * needed;
-	return vertex;
+	return mix(unfolded, vertex, strength);
 }

@@ -78,7 +78,8 @@ func _process_modification_with_delta(delta: float) -> void:
 				var heading_now: Vector3 = animated.basis.z; heading_now.y = 0
 				var heading_pin: Vector3 = f.pin.basis.z; heading_pin.y = 0
 				var turned = heading_now.angle_to(heading_pin) if heading_now.length() > .01 and heading_pin.length() > .01 else 0.0
-				if stray > STRAY or turned > TURN:
+				# One foot steps at a time: the other waits until it lands.
+				if (stray > STRAY or turned > TURN) and not feet.any(func(o): return o != f and o.step >= 0.0):
 					f.step = 0.0
 					f.step_from = f.pin
 			if f.pinned and f.step >= 0.0:

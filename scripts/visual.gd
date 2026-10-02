@@ -45,6 +45,15 @@ const TURN_EASE = .06
 var shown_yaw = null
 var last_position = null
 var ground_speed = 0.0
+# Clips that carry their unit forward as it steps (metres at life size, by
+# clip fraction; tools/import_combat.py ADVANCE bakes the same keys, keeping
+# the planted feet still in the world): the warrior's lunge and cleave, the
+# centurion's stepping thrust. Visual.advance() measures the travel; the unit moves it
+# (Actor.tick).
+const ROOT_ADVANCE = {"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]]}
+var travelled = 0.0
+var pending_travel = 0.0
+
 # Each locomotion clip's own ground speed at life size (metres a second, at
 # normal playback): how fast its planted foot sweeps back under the body
 # (measured by tools/anim_audit.gd --strides).
@@ -132,6 +141,9 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			if mesh.skin != null and mesh.mesh is ArrayMesh:
 				mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 				kilt.set_shader_parameter("rest_pose",true)
+			# Its waistband sits close on his waist; only below it does the
+			# cloth fold out over his thighs.
+			kilt.set_shader_parameter("fold_from",.03)
 			mesh.material_override = kilt
 			if hero_class == "warrior": cloak_mesh = mesh
 		elif mesh.name.begins_with("WizardSashEnd") or mesh.name == "WizardSash":
@@ -233,7 +245,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			elif "HeroArmor" in mesh.name: mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit(hero_class)
 	for clip in animator.get_animation_list():
-		for expected in ["Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
+		for expected in ["ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
@@ -509,16 +521,29 @@ var strap_hold = .5
 # the outside of the forearm, its middle over the middle of the forearm,
 # upright, and facing out from the body as nearly the way they face as the
 # forearm allows (out to the side when the forearm points ahead).
+# The chest's own frame in the world: its forward (+Z), up (+Y) and side (+X)
+# as the body faces at rest, turned with the upper spine.
+func chest_basis() -> Basis:
+	var bone = skeleton.find_bone("spine_03")
+	var rest: Basis = skeleton.get_bone_global_rest(bone).basis.orthonormalized()
+	var now: Basis = (skeleton.global_basis*skeleton.get_bone_global_pose(bone).basis).orthonormalized()
+	return (now*rest.inverse()).orthonormalized()
+
 func strap_scutum() -> void:
 	var k = rig.scale.x
 	var elbow = bone_position("lowerarm_l")
 	var wrist = bone_position("hand_l")
 	var forearm: Vector3 = (wrist-elbow).normalized()
-	var facing = global_basis.orthonormalized()
+	# It faces the way his chest turns (with his body as he twists), held
+	# upright, as nearly as the forearm it is strapped along allows.
+	var chest_front: Vector3 = chest_basis().z
+	chest_front.y = 0.0
+	var facing: Basis = global_basis.orthonormalized()
+	if chest_front.length() > .2: facing = Basis(Vector3.UP.cross(chest_front.normalized()),Vector3.UP,chest_front.normalized())
 	var out: Vector3 = facing.z-forearm*facing.z.dot(forearm)
 	if out.length() < .35: out = facing.x-forearm*facing.x.dot(forearm)
 	out = out.normalized()
-	var up: Vector3 = Vector3.UP-out*Vector3.UP.dot(out)
+	var up: Vector3 = facing.y-out*facing.y.dot(out)
 	if up.length() < .2: up = facing.y
 	var side: Vector3 = up.normalized().cross(out).normalized()
 	up = out.cross(side).normalized()
@@ -527,9 +552,9 @@ func strap_scutum() -> void:
 	var middle: Vector3 = elbow.lerp(wrist,.55)+out*(.045*k+size.z*.5)
 	shield_item.global_transform = Transform3D(Basis(side*size.x,up*size.y,out*size.z),middle-up*size.y*strap_hold)
 # What a shield is kept in front of, as capsules from bone to bone: the legs,
-# the body and head (leaning into a run or a swing), and the shield arm's own
-# forearm and fist behind the board.
-const SHIELD_LEG_CLEARANCE = [["thigh_l","calf_l",.09],["thigh_r","calf_r",.09],["calf_l","foot_l",.065],["calf_r","foot_r",.065],["pelvis","spine_03",.13],["spine_03","neck_01",.14],["neck_01","Head",.1],["lowerarm_l","hand_l",.045],["hand_l","middle_02_l",.04]]
+# the body and head (leaning into a run or a swing), the shield arm's own
+# forearm and fist behind the board, and the weapon arm crossing behind it.
+const SHIELD_LEG_CLEARANCE = [["thigh_l","calf_l",.1],["thigh_r","calf_r",.1],["calf_l","foot_l",.07],["calf_r","foot_r",.07],["pelvis","spine_03",.17],["spine_03","neck_01",.18],["neck_01","Head",.12],["clavicle_l","upperarm_l",.08],["upperarm_l","lowerarm_l",.06],["lowerarm_l","hand_l",.05],["hand_l","middle_02_l",.045],["upperarm_r","lowerarm_r",.065],["lowerarm_r","hand_r",.055]]
 
 # A knee raised in a lunge or a stride would pass through a big shield held
 # low, a head leaning into a run through its top, and a clenched fist through
@@ -633,9 +658,15 @@ func align_weapon() -> void:
 	var facing = global_basis.orthonormalized()
 	var hand_pose = skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone("hand_l" if weapon_kind=="bow" else "hand_r"))
 	if weapon_kind == "spear":
-		weapon_item.global_basis = facing * Basis(Vector3.RIGHT,PI/2) * Basis.from_scale(weapon_size*rig.scale.x)
+		# Held level at the hip; raised overhand above the shoulder, it tips
+		# down toward what it strikes.
+		var fist: Vector3 = bow_hold("r")[0]
+		var shoulder: Vector3 = bone_position("upperarm_r")
+		var overhand = clampf((fist.y-shoulder.y)/(.3*rig.scale.x)+.5,0.0,1.0)
+		weapon_item.global_basis = facing * Basis(Vector3.RIGHT,PI/2+SPEAR_DIP*overhand) * Basis.from_scale(weapon_size*rig.scale.x)
 		# Through the closed fist, not the wrist.
-		weapon_item.global_position = bow_hold("r")[0]-facing.z*.65*rig.scale.x
+		weapon_item.global_position = fist-weapon_item.global_basis.y.normalized()*.65*rig.scale.x
+		keep_spear_clear(fist)
 	else:
 		# The wooden grip sits in the closed fist, through locomotion and
 		# blends: the stave runs along the knuckles (pinky to index) and the
@@ -737,6 +768,68 @@ var carry_in_hand = null
 # How far the carried bow's back limb is angled out from his side (radians),
 # so it passes outside his cloak rather than through it.
 const BOW_CARRY_SPLAY = .32
+
+# How far a spear held overhand tips down (radians).
+const SPEAR_DIP = .2
+# The spear keeps clear of its bearer's shield and legs, turning about the
+# fist as needed; the turn is eased (SPEAR_DODGE_RATE radians a second).
+const SPEAR_DODGE_RATE = 5.0
+var spear_dodge = Quaternion.IDENTITY
+var spear_dodge_clock = 0.0
+func keep_spear_clear(fist: Vector3) -> void:
+	var free: Transform3D = weapon_item.global_transform
+	var best: Transform3D = free
+	var gap = spear_gap(free)
+	if gap < 0.0:
+		var facing = global_basis.orthonormalized()
+		var step = .12
+		for attempt in 20:
+			var found = best
+			var found_gap = gap
+			for axis in [facing.y,facing.x]:
+				for turn_by in [-step,step]:
+					var turn = Basis(axis.normalized(),turn_by)
+					var turned = Transform3D(turn*best.basis,fist+turn*(best.origin-fist))
+					# Still pointing ahead.
+					if turned.basis.y.normalized().dot(facing.z) < .6: continue
+					var g = spear_gap(turned)
+					if g > found_gap:
+						found = turned
+						found_gap = g
+			if found_gap <= gap: step *= .5
+			else:
+				best = found
+				gap = found_gap
+			if gap >= 0.0: break
+	var wanted: Quaternion = (best.basis.orthonormalized()*free.basis.orthonormalized().inverse()).get_rotation_quaternion()
+	spear_dodge = follow(spear_dodge,wanted,minf(anim_clock-spear_dodge_clock,.05),SPEAR_DODGE_RATE)
+	spear_dodge_clock = anim_clock
+	var shown = Basis(spear_dodge)
+	weapon_item.global_transform = Transform3D(shown*free.basis,fist+shown*(free.origin-fist))
+
+# How far the spear at `t` stands clear of its bearer's shield board and legs
+# (negative: into them), sampled along its shaft.
+func spear_gap(t: Transform3D) -> float:
+	var gap = INF
+	var k = rig.scale.x
+	var points = []
+	for i in 13: points.append(t*Vector3(0,i/12.0,0))
+	if is_instance_valid(shield_item) and strapped:
+		var board: Transform3D = shield_item.global_transform
+		var centre: Vector3 = board*Vector3(0,.5,0)
+		for p in points:
+			var depth = INF
+			for axis in 3:
+				var dir: Vector3 = board.basis[axis]
+				var half = dir.length()*(.5 if axis != 2 else .3)+.02*k
+				depth = minf(depth,half-absf((p-centre).dot(dir.normalized())))
+			if depth > 0.0: gap = minf(gap,-depth)
+	for limb in [["thigh_l","calf_l",.1],["thigh_r","calf_r",.1],["calf_l","foot_l",.07],["calf_r","foot_r",.07]]:
+		var a = bone_position(limb[0]); var b = bone_position(limb[1])
+		for i in 12:
+			var closest = Geometry3D.get_closest_points_between_segments(points[i],points[i+1],a,b)
+			gap = minf(gap,closest[0].distance_to(closest[1])-limb[2]*k)
+	return gap if gap != INF else 1.0
 
 # The legs a held bow keeps outside of, as capsules from bone to bone.
 const BOW_LEG_CLEARANCE = [["thigh_l","calf_l",.1],["thigh_r","calf_r",.1],["calf_l","foot_l",.075],["calf_r","foot_r",.075]]
@@ -875,6 +968,7 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 		blend = BOW_LOWER_TIME
 		bow_lowering = BOW_LOWER_TIME
 	var replay = animator.assigned_animation == clips[action]
+	travelled = 0.0
 	animator.play(clips[action], blend, speed)
 	# play() resumes an already assigned clip. Repeated attacks must each
 	# start a fresh wind-up, even when the last recovery is still playing. A
@@ -894,8 +988,11 @@ func play_from(action: String, duration: float, start: float) -> void:
 # replace a reaction through play(); locomotion resumes once it finishes.
 func react(action: String, duration: float) -> void:
 	if dead or not clips.has(action): return
-	# Shield bearers keep the forearm turned so the strapped shield stays put.
-	if is_instance_valid(shield_item) and clips.has("Shield"+action): action = "Shield"+action
+	# With a shield the arm keeps it in place: the hero's round shield turned
+	# outward as in his stance, a statue's strapped scutum held in its guard
+	# against the chest.
+	if strapped and clips.has("Scutum"+action): action = "Scutum"+action
+	elif is_instance_valid(shield_item) and clips.has("Shield"+action): action = "Shield"+action
 	play(action,duration)
 	reaction_time = duration
 
@@ -1033,7 +1130,8 @@ func setup_cloak(prefix: String = "cloak_") -> void:
 		cloak.set_center_node(i,cloak.get_path_to(self))
 	var hips = SpringBoneCollisionCapsule3D.new()
 	hips.bone_name = "pelvis"
-	hips.radius = .15
+	# (A kilt hangs close round the hips; a cloak stands off them.)
+	hips.radius = .1 if prefix == "kilt_" else .15
 	hips.height = .5
 	cloak.add_child(hips)
 	# Down the centre line between the legs, to the floor, so the cloak's
@@ -1133,16 +1231,36 @@ func advance(dt: float) -> void:
 		if animator.active:
 			animator.advance(pending_animation_time)
 			pending_animation_time = 0
+	# Travel the clip carries the unit through since the last tick.
+	if ROOT_ADVANCE.has(state) and animator.current_animation == clips.get(state,""):
+		var u = animator.current_animation_position/maxf(.001,animator.current_animation_length)
+		var now = sample_keys(ROOT_ADVANCE[state],u)*rig.scale.x
+		pending_travel += maxf(0.0,now-travelled)
+		travelled = now
 	# How fast the body is carried over the ground (by the game or a dash).
 	var at: Vector3 = global_position
 	if last_position != null and dt > 0: ground_speed = Vector2(at.x-last_position.x,at.z-last_position.z).length()/dt
 	last_position = at
 	if animator.active:
 		# Feet stay planted unless the unit runs, dashes, leaps or falls.
-		planter.enabled = not dead and not state in LOCOMOTION and ground_speed < .6*rig.scale.x and absf(position.y) < .01
+		planter.enabled = not dead and not state in LOCOMOTION and (ground_speed < .6*rig.scale.x or ROOT_ADVANCE.has(state)) and absf(position.y) < .01
 		var parent = get_parent_node_3d()
 		planter.ground = parent.global_position.y if parent != null else global_position.y
 		skeleton.advance(dt)
+
+# The forward travel to move the unit by since last asked (Actor.tick).
+func take_travel() -> float:
+	var d = pending_travel
+	pending_travel = 0.0
+	return d
+
+# A curve through [fraction, value] keys, eased between them.
+static func sample_keys(keys: Array, u: float) -> float:
+	for i in keys.size()-1:
+		if u <= keys[i+1][0]:
+			var w = clampf((u-keys[i][0])/maxf(1e-4,keys[i+1][0]-keys[i][0]),0.0,1.0)
+			return lerpf(keys[i][1],keys[i+1][1],w*w*(3.0-2.0*w))
+	return keys[-1][1]
 
 # The body turns toward the unit's facing (which the game sets at once):
 # quickly, but never in a single frame.

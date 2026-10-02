@@ -11,7 +11,7 @@ func start(owner_game):
 	game = owner_game
 	game.set_process(false)
 	check(game.run.floor==0 and game.player.position==Vector3(0,0,9),"New character starts at temple entrance")
-	check(game.player.visual.clips.size()==44,"All locomotion, weapon and hit reaction clips are present (with the ranger's and wizard's own idle, run and crouch)")
+	check(game.player.visual.clips.size()==49,"All locomotion, weapon and hit reaction clips are present (with the ranger's and wizard's own idle, run and crouch, and the shield bearers' guarded swing and reactions)")
 	check(game.run.class_id=="warrior" and game.run.skills.cleave==1,"Warrior starts with Cleave and sword")
 	game.player.hp=20; game.run.energy=60; game.heal()
 	check(game.player.hp==80 and game.run.energy==0 and game.heal_cd==20 and not game.run.has("flasks"),"Healing spell instantly restores 60 percent for 60 energy with a 20-second cooldown and no charges")

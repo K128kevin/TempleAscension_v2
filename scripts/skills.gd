@@ -50,6 +50,8 @@ func cast(id: String, at: Vector3) -> bool:
 	game.order_pending = false
 	game.route.clear()
 	game.player.face(at)
+	# Stepping into a strike, he stops short of where it is aimed.
+	game.player.root_goal = at
 	game.combat_age = 0
 	var duration = .7
 	var contact = .35

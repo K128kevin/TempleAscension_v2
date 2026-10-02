@@ -21,8 +21,8 @@ That is the ranger. The warrior: a steel scale cuirass with lion medallions,
 a baldric, a broad studded belt with a lion boss and a key-pattern band,
 leather pteruges at the shoulders, a cloth wrap on the upper arm, a steel
 manica on the sword arm and leather wraps on the other, a tattered red-grey
-underskirt, steel greaves and knee guards with lion bosses, and strapped
-sandals over the bare feet. The wizard: wrapped leather bracers, dark
+underskirt, and strapped
+sandals over the bare feet (his shins bare). The wizard: wrapped leather bracers, dark
 trousers, worn leather boots with ankle straps and buckles, and a creased
 leather sash knotted at the front.
 
@@ -452,25 +452,7 @@ def paint(maps, skin, recipe):
         uc = uc*(1-.5*np.clip((wear-.5)*2,0,1))[:,None]+np.array([.14,.13,.13])*np.clip((wear-.5)*2,0,1)[:,None]
         put(under, uc, uv, .9)
         albedo[under & (z<under_hem+.01)] *= .55
-        # --- greaves and knee guards
-        legs = (C==CALF)|(C==THIGH)
-        greave = legs & (z>.1)&(z<.56)
-        gfront = greave & (y<.01)
-        ridge = np.abs(x-np.sign(x)*.105)
-        put(greave, steel(.95), .0012, .4)
-        put(gfront & (ridge<.006), steel(1.25), .003, .35)
-        engr = gfront & (np.abs(ridge-.045)<.0025)
-        albedo[engr] *= .55; height[engr] -= .0006
-        medallion(gfront, ridge*np.sign(x-np.sign(x)*.105), z-.33, .034)
-        knee = legs & (z>.47)&(z<.56)&(y<.02)
-        kd = np.hypot(x-np.sign(x)*.105, (z-.515)*1.3)
-        put(knee, steel(1.1)*(.8+.4*np.clip(1-kd/.06,0,1))[:,None], .002+.002*np.clip(1-kd/.06,0,1), .35)
-        back = greave & (y>.02)
-        for zb in (.2,.4):
-            sb = back & (np.abs(z-zb)<.014)
-            put(sb, leather([.24,.12,.07],.9), leather_h+.003, .6)
-            put(sb & (np.abs(np.abs(x-np.sign(x)*.105)-.0)<.012), steel(1.2), .004, .35)
-        put(greave & (np.abs(z-.11)<.008), leather([.22,.11,.06],.9), leather_h+.002, .6)
+        # (Bare shins: no greaves.)
         # --- sandals: a thick sole and straps over the bare foot and ankle
         foot = (C==FOOT)|((C==CALF)&(z<.1))
         sole = foot & (z<.02)

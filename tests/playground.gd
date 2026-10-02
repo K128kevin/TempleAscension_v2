@@ -45,7 +45,7 @@ func test():
 	game.attack(false,target.position)
 	step(1.0)
 	check(target.hp==hp and not target.dead,"Hero attacks hit statues but deal no damage")
-	check(target.visual.state.trim_prefix("Shield") in ["Hit","HitHead","HitStagger","HitKnockdown"] or target.hit_reactions>0,"The struck statue reacts to the hit")
+	check(target.visual.state.trim_prefix("Shield").trim_prefix("Scutum") in ["Hit","HitHead","HitStagger","HitKnockdown"] or target.hit_reactions>0,"The struck statue reacts to the hit")
 	var skill_id: String = game.run.hotbar[0]
 	check(not skill_id.is_empty() and game.skills.cast(skill_id,target.position),"The hero can use a class ability")
 	step(1.0)
@@ -131,8 +131,8 @@ func test():
 		var cls: String = hero.uid.trim_prefix("hero:")
 		var shown = {}
 		for mesh in hero.visual.skin_meshes: shown[String(mesh.name)] = mesh.visible
-		var kit = {"warrior":["HeroHelmet","HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardCape","WizardHood","WizardBody"]}[cls]
-		var hidden = ["HeroHelmet","RangerCloak","RangerBody","WizardRobe","WizardCape","WizardHood","WizardBody","HeroArmor","SuperHero_Male"].filter(func(n): return not n in kit)
+		var kit = {"warrior":["HeroHelmet","HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardHood","WizardBody"]}[cls]
+		var hidden = ["HeroHelmet","RangerCloak","RangerBody","WizardRobe","WizardHood","WizardBody","HeroArmor","SuperHero_Male"].filter(func(n): return not n in kit)
 		check(kit.all(func(n): return shown.get(n,false)) and hidden.all(func(n): return not shown.get(n,true)),"The %s wears its own kit" % cls)
 	# The ranger's dagger hangs blade-down in a sheath strapped to his left
 	# thigh, moving with it (so a stride never drives it through the leg).
@@ -152,9 +152,12 @@ func test():
 	# The warrior's kilt swings on its own chains and folds over his legs.
 	var kilt_sim = pg.heroes[0].visual.cloak
 	check(kilt_sim != null and kilt_sim.setting_count == 16 and pg.heroes[0].visual.cloth_feel == pg.heroes[0].visual.CLOTH_KILT and pg.heroes[0].visual.cloak_mesh.name.begins_with("HeroKilt"),"The warrior's kilt is simulated cloth")
-	# The wizard's cape, the Oracle's and the Crowned Statue's swing the same
-	# way, from the shoulders, as heavier cloth.
-	for unit in [pg.heroes[2]]+game.enemies.filter(func(e): return e.kind in ["wizard","boss"]):
+	# The Oracle's cape and the Crowned Statue's swing the same way, from the
+	# shoulders, as heavier cloth. The wizard wears none.
+	var wizard_worn = {}
+	for mesh in pg.heroes[2].visual.skin_meshes: wizard_worn[String(mesh.name)] = mesh.visible
+	check(not wizard_worn.has("WizardCape") and pg.heroes[2].visual.cloak == null,"The wizard wears no cape")
+	for unit in game.enemies.filter(func(e): return e.kind in ["wizard","boss"]):
 		var sim = unit.visual.cloak
 		var cape_mesh = unit.visual.cloak_mesh
 		check(sim != null and sim.setting_count == 13 and cape_mesh != null and unit.visual.cloth_feel == unit.visual.CLOTH_HEAVY,"The %s's cape swings and folds over the legs" % pg.unit_name(unit))
@@ -167,7 +170,7 @@ func test():
 		var ranger = hero.uid == "hero:ranger"
 		check(kit.all(func(n): return worn.get(n,not ranger) == ranger) and not worn.get("HeroBoots",false),"Only the ranger wears the ranger's kit (%s)" % hero.uid)
 	# The warrior and wizard have their own detailed kits too.
-	var kits = {"hero:warrior":["HeroGreaves","HeroBracers","HeroBelt","HeroKilt","HeroArmor","HeroHelmet"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardCape","WizardHood"]}
+	var kits = {"hero:warrior":["HeroBracers","HeroBelt","HeroKilt","HeroArmor","HeroHelmet"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardHood"]}
 	for hero in pg.heroes:
 		var worn = {}
 		for mesh in hero.visual.skin_meshes: worn[String(mesh.name)] = mesh.visible

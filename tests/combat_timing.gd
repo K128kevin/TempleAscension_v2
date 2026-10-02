@@ -310,7 +310,7 @@ func test():
 			enemy.dead=true
 			continue
 		enemy.hit(0)
-		check(enemy.windup==0 and enemy.visual.state.trim_prefix("Shield") in ["Hit","HitHead"] and absf(enemy.cooldown-push)<.001 and absf(enemy.hit_stun-push)<.001,"Hit mid-wind-up interrupts the swing with a flinch: "+kind)
+		check(enemy.windup==0 and enemy.visual.state.trim_prefix("Shield").trim_prefix("Scutum") in ["Hit","HitHead"] and absf(enemy.cooldown-push)<.001 and absf(enemy.hit_stun-push)<.001,"Hit mid-wind-up interrupts the swing with a flinch: "+kind)
 		var restarted=false
 		for step in int((push+.2)*60):
 			enemy.tick(1.0/60)
@@ -320,9 +320,9 @@ func test():
 		check(restarted,"The enemy attacks again after the delay: "+kind)
 		enemy.windup=0; enemy.busy=0
 		enemy.hit(0)
-		check(enemy.visual.state.trim_prefix("Shield") in ["Hit","HitHead"] and enemy.visual.reaction_time>0,"Idle enemy flinches when hit: "+kind)
+		check(enemy.visual.state.trim_prefix("Shield").trim_prefix("Scutum") in ["Hit","HitHead"] and enemy.visual.reaction_time>0,"Idle enemy flinches when hit: "+kind)
 		for bash in (3 if kind=="boss" else 1): enemy.stagger(1.5)
-		check(enemy.visual.state.trim_prefix("Shield")==("HitStagger" if kind=="boss" else "HitKnockdown"),"Bashed enemy is knocked down, boss staggers: "+kind)
+		check(enemy.visual.state.trim_prefix("Shield").trim_prefix("Scutum")==("HitStagger" if kind=="boss" else "HitKnockdown"),"Bashed enemy is knocked down, boss staggers: "+kind)
 		enemy.dead=true
 	game.player.visual.play("SwordSwing",1.0)
 	game.player.visual.animator.active=false; game.player.visual.advance(.4)

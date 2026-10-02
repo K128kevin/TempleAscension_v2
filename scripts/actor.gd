@@ -84,6 +84,9 @@ func tick(dt: float) -> void:
 		visible = game.world.can_see(position)
 		visual.animator.active = visible
 	visual.advance(dt)
+	# Stepping into an attack carries the unit forward (Visual.ROOT_ADVANCE).
+	var travel: float = visual.take_travel()
+	if travel > 0.0 and not dead: step_forward(travel)
 	slow_time = maxf(0,slow_time-dt)
 	mark_time = maxf(0,mark_time-dt)
 	stagger_time = maxf(0,stagger_time-dt)
@@ -162,6 +165,7 @@ func tick(dt: float) -> void:
 func start_attack(point: Vector3) -> void:
 	face(point)
 	attack_point = point
+	root_goal = point
 	windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else (ARCHER_DRAW if kind == "archer" else .42))
 	if kind == "wizard":
 		# Every ranged cast is the fireball; frost comes only as the nova.
@@ -179,6 +183,8 @@ func start_attack(point: Vector3) -> void:
 	elif weapon_index>=0 and visual.clips.has(Motion.NORMAL[weapon_index].clip):
 		clip = Motion.NORMAL[weapon_index].clip
 		duration = windup/Motion.NORMAL[weapon_index].contacts[0]
+		# A shield bearer swings with his shield held in its guard.
+		if is_instance_valid(visual.shield_item) and visual.clips.has("Scutum"+clip): clip = "Scutum"+clip
 	attack_recovery = maxf(.25,duration-windup)
 	# The long cast plays its wind-up slowly; the follow-through is brief.
 	if kind == "wizard": attack_recovery = FIRE_RECOVERY
@@ -326,6 +332,15 @@ func walk_to(destination: Vector3, dt: float) -> void:
 	if position.distance_to(before) > .005: face(position+direction)
 	visual.locomotion(position.distance_to(before)>.005,false,kind=="lion",1.0,pace)
 
+# Where the unit's current attack is aimed: stepping in, it stops short of it.
+var root_goal = null
+func step_forward(distance: float) -> void:
+	if root_goal != null:
+		var gap = Vector2(root_goal.x-position.x,root_goal.z-position.z).length()
+		var reach = .9 if kind == "player" else .8*config.size
+		distance = minf(distance,maxf(0.0,gap-reach))
+	if distance > 0.0: position = game.world.move(position,forward()*distance)
+
 func face(at: Vector3) -> void:
 	var d = at-position
 	if d.length_squared() > .001:
@@ -353,7 +368,7 @@ func stagger(seconds: float) -> void:
 # attack recoveries, the boss's gaze and running reactions are not interrupted.
 func react_to_hit(heavy: bool = false) -> void:
 	if dead or windup>0 or busy>0 or laser_time>0: return
-	if visual.reaction_time>0 and not (heavy and visual.state.trim_prefix("Shield") in ["Hit","HitHead"]): return
+	if visual.reaction_time>0 and not (heavy and visual.state.trim_prefix("Shield").trim_prefix("Scutum") in ["Hit","HitHead"]): return
 	hit_reactions += 1
 	if heavy: visual.react("HitStagger",.6)
 	else: visual.react("HitHead" if hit_reactions%2==0 else "Hit",.34)

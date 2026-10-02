@@ -35,7 +35,7 @@ func unit_specs() -> Array:
 		acts += [["Cast",.7,"attack"],["Evade",.25,"attack"],["Hit",.34,"react"],["HitHead",.34,"react"],["HitStagger",.6,"react"],["HitKnockdown",1.5,"react"]]
 		specs.append({"name":"hero_"+kind,"stone":false,"weapon":kind,"size":1.0,"enemy":"","class":cls,"speed":5.94,"acts":acts})
 	var statue_acts = {
-		"gladiator":[["SwordSwing",.42/.52,"attack"]],
+		"gladiator":[["ScutumSwordSwing",.42/.52,"attack"]],
 		"centurion":[["ShieldStab",.42/.5,"attack"]],
 		"archer":[["ArcherShot",1.2/.78,"attack"]],
 		"wizard":[["OracleCast",2.0/.8,"attack"],["OracleCast",.5/.2,"nova"]],
@@ -144,6 +144,8 @@ func record(spec, plan: Array, speed: float = 0.0) -> Dictionary:
 		if moving: holder.position += holder.global_basis.z*speed*DT
 		v.locomotion(moving,busy>0,spec.enemy=="lion",1.0,speed if moving else 0.0)
 		v.advance(DT)
+		# As the game: the unit steps forward as the clip carries it.
+		holder.position += holder.global_basis.z*v.take_travel()
 		shown = {}
 		await process_frame
 		if shown.is_empty(): shown = {"p":points_of(v),"grip":maxf(grip_error(v),fist_error(v))}
@@ -155,7 +157,7 @@ func record(spec, plan: Array, speed: float = 0.0) -> Dictionary:
 
 func analyse(rec: Dictionary, window: Array, running: bool = false) -> Dictionary:
 	var frames: Array = rec.frames
-	var res = {"pop":0.0,"pop_at":"","kink":0.0,"kink_at":"","slide":0.0,"slide_at":"","grip":0.0,"grip_at":0.0}
+	var res = {"pop":0.0,"pop_at":"","kink":0.0,"kink_at":"","slide":0.0,"slide_at":"","grip":0.0,"grip_at":0.0,"hover":0.0,"hover_at":0.0}
 	var keys = frames[0].p.keys()
 	for k in keys:
 		var d = []
@@ -183,6 +185,15 @@ func analyse(rec: Dictionary, window: Array, running: bool = false) -> Dictionar
 			if a.y < low+.015 and b.y < low+.015 and absf(b.y-a.y) < .002:
 				skate += Vector2(b.x-a.x,b.z-a.z).length()
 		if skate > res.slide: res.slide = skate; res.slide_at = foot
+	# Hovering: both feet off the ground at once (the lower of the two balls,
+	# above the lowest either reaches in this record), outside a run.
+	if keys.has("ball_l") and keys.has("ball_r"):
+		var ground = INF
+		for f in frames: ground = minf(ground,minf(f.p.ball_l.y,f.p.ball_r.y))
+		for f in frames:
+			if f.t < window[0] or f.t > window[1]: continue
+			var lift = minf(f.p.ball_l.y,f.p.ball_r.y)-ground
+			if lift > res.hover: res.hover = lift; res.hover_at = f.t
 	for i in rec.grips.size():
 		var t = frames[i].t
 		if t < window[0] or t > window[1]: continue
@@ -190,7 +201,7 @@ func analyse(rec: Dictionary, window: Array, running: bool = false) -> Dictionar
 	return res
 
 func line(unit: String, what: String, r: Dictionary, extra: String = "") -> void:
-	var s = "AUDIT %-13s %-24s pop %.3f %-18s kink %5.2f %-18s slide %.3f %-6s grip %.3f@%.2f %s" % [unit,what,r.pop,r.pop_at,r.kink,r.kink_at,r.slide,r.slide_at,r.grip,r.grip_at,extra]
+	var s = "AUDIT %-13s %-24s pop %.3f %-18s kink %5.2f %-18s slide %.3f %-6s grip %.3f@%.2f hover %.3f@%.2f %s" % [unit,what,r.pop,r.pop_at,r.kink,r.kink_at,r.slide,r.slide_at,r.grip,r.grip_at,r.hover,r.hover_at,extra]
 	print(s)
 
 # Each locomotion clip's ground speed: how fast a planted foot sweeps back

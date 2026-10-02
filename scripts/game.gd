@@ -470,6 +470,7 @@ func attack(special: bool, point: Vector3) -> void:
 	player.cooldown = animation.duration
 	player.busy = animation.duration
 	player.face(point)
+	player.root_goal = point
 	var damage = Data.damage(run,randf_range(10,15))
 	if skills.war_cry>0: damage *= 1.25
 	var weapon: int = run.weapon

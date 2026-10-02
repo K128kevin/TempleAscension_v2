@@ -491,7 +491,6 @@ KILT_HEM = .64
 KILT_FLARE = .38
 def warrior_kit():
     shells = []
-    shells.append(outfits.body_shell(body,rig,'HeroGreaves',lambda bone,z: bone.startswith(('calf','thigh')) and .1<z<.57,.012,.01))
     shells.append(outfits.body_shell(body,rig,'HeroBracers',lambda bone,z: bone.startswith('lowerarm'),.011,.009))
     shells.append(outfits.body_shell(body,rig,'HeroBelt',lambda bone,z: bone.startswith(('spine_01','pelvis','root','spine_02')) and .953<z<1.047,.03,.012))
     # The kilt: a ring of hanging cloth from under the belt to mid-thigh,
@@ -502,7 +501,9 @@ def warrior_kit():
     waist = [(body,v) for v in body.data.vertices if KILT_TOP-.04<v.co.z<KILT_TOP+.01 and v.groups and not (outfits.region_of_bone(names[max(v.groups,key=lambda g:g.weight).group]) or '').startswith('arm')]
     kilt = bpy.data.objects.new('HeroKilt',bpy.data.meshes.new('HeroKilt'))
     bpy.context.scene.collection.objects.link(kilt)
-    outfits.cloth_sheet(kilt,waist,top=KILT_TOP,hem=KILT_HEM,flare=KILT_FLARE,reach=math.pi,columns=72,rows=16,offset=.024)
+    # Its top follows his own waist closely all round (just inside the
+    # belt), not the widest of the hips beside it.
+    outfits.cloth_sheet(kilt,waist,top=KILT_TOP,hem=KILT_HEM,flare=KILT_FLARE,reach=math.pi,columns=72,rows=16,offset=.016,window=.1,smoothing=2)
     outfits.cloth_chains(rig,kilt,'pelvis',KILT_TOP+.01,(KILT_TOP-.07,KILT_TOP),chains=16,segments=5,prefix='kilt_')
     kilt.parent = rig
     kilt.modifiers.new('Armature','ARMATURE').object = rig
@@ -597,8 +598,7 @@ wizard_hood = outfits.add_hood(rig,deep=True)
 wizard_hood.name = 'WizardHood'
 print('HERO_HOODS_READY',len(cloak.data.vertices),len(wizard_hood.data.vertices))
 
-# The wizard's robe, with its sleeves, and over it a cape of cloth from the
-# shoulders, swung on its own chains (cape_*) as the ranger's cloak is.
+# The wizard's robe, with its sleeves (he wears no cape).
 robe_object = mage_robe(('Mage_Body','Mage_ArmLeft','Mage_ArmRight'),'WizardRobe')
 # Wide sleeves, as in the concept: cut off halfway down the forearm and
 # flared open, hanging a little, so his bracers show below them instead of
@@ -622,19 +622,6 @@ def cut_sleeves(robe, flare=.045, droop=.02):
         v.co = robe.matrix_world.inverted() @ co
     print('WIZARD_SLEEVES_CUT',round(end,3))
 cut_sleeves(robe_object)
-# Its top follows his own shoulders, outside the robe's thickness: the
-# robe's boxy KayKit shoulders would spread it out like wings.
-# Its top lies close on the robe across his upper back, between the
-# shoulder blades, rather than out over the shoulders, which drop away from
-# it as his arms come down from the rest pose.
-robe_names = {g.index:g.name for g in robe_object.vertex_groups}
-def robe_on_arm(v):
-    best = max(v.groups,key=lambda g:g.weight,default=None)
-    return best is not None and (outfits.region_of_bone(robe_names[best.group]) or '').startswith('arm')
-robe_surface = [(robe_object,v) for v in robe_object.data.vertices if not robe_on_arm(v)]
-# (It hangs outside the robe's own flaring skirt, so flares little itself.)
-wizard_cape = outfits.shoulder_cape(rig,body,'WizardCape',hem=.2,flare=.08,prefix='cape_',offset=.05,top_ring=robe_surface,top_offset=.014,top_reach=math.radians(44),corner_drop=.09)
-print('WIZARD_CAPE',len(wizard_cape.data.vertices))
 robed = body.copy(); robed.data = body.data.copy(); robed.name = 'WizardBody'
 bpy.context.scene.collection.objects.link(robed)
 groups = {g.index:g.name for g in robed.vertex_groups}

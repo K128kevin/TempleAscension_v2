@@ -12,7 +12,7 @@ bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 original_objects=set(bpy.data.objects)
-outputs=['OracleCast','ShieldHit','ShieldHitHead','ShieldHitStagger','ShieldHitKnockdown','ArcherShot','ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle','RangerIdle','RangerRun','RangerCrouch','WizardIdle','WizardRun','WizardCrouch']
+outputs=['ScutumSwordSwing','ScutumHit','ScutumHitHead','ScutumHitStagger','ScutumHitKnockdown','OracleCast','ShieldHit','ShieldHitHead','ShieldHitStagger','ShieldHitKnockdown','ArcherShot','ScutumRun','ScutumSwordIdle','SwordRun','SpearShieldIdle','SpearLunge','ShieldStab','SwordIdle','HitKnockdown','HitStagger','SwordSwing','SwordSlash','AxeChop','AxeWhirl','SpearStab','SpearJab','BowShot','BowRapid','BowIdle','BowRun','BowCrouch','SpearIdle','RangerIdle','RangerRun','RangerCrouch','WizardIdle','WizardRun','WizardCrouch']
 for t in list(rig.animation_data.nla_tracks):
  if t.name in outputs: rig.animation_data.nla_tracks.remove(t)
 for a in list(bpy.data.actions):
@@ -238,6 +238,37 @@ def place_foot(side,target,pole):
   bpy.context.view_layer.update()
  foot.matrix=Matrix.Translation(foot.matrix.translation) @ keep.to_matrix().to_4x4()
  bpy.context.view_layer.update()
+# Forward travel (metres, at life size) a clip carries its unit through, as
+# the game moves it (scripts/visual.gd ROOT_ADVANCE keeps the same keys):
+# (clip fraction, travel). The clip itself stays in place under the moving
+# unit, so its planted feet keep still in the world.
+ADVANCE={'SwordSwing':[(0,0),(.10,0),(.42,.24),(.62,.24),(.90,.5),(1,.5)],
+ 'SwordSlash':[(0,0),(.12,0),(.40,.2),(.66,.2),(.90,.4),(1,.4)],
+ 'ScutumSwordSwing':[(0,0),(.10,0),(.42,.24),(.62,.24),(.90,.5),(1,.5)],
+ 'ShieldStab':[(0,0),(.26,0),(.48,.2),(.64,.2),(.90,.45),(1,.45)]}
+# Explicit footwork: per foot, its steps as (start, end, forward distance in
+# metres, lift); between steps the foot is planted flat on the ground. A clip
+# listed with no steps keeps both feet planted in the idle stance.
+FOOTWORK={
+ # The warrior's swing: the lead (left) foot steps in as he strikes, the
+ # rear foot follows to settle into his stance a pace further on.
+ 'SwordSwing':{'l':[(.12,.38,.5,.09)],'r':[(.64,.86,.5,.08)]},
+ # The cleave (the slash) steps in as the swing does; the chop is struck
+ # from a rooted stance.
+ 'SwordSlash':{'l':[(.14,.36,.4,.09)],'r':[(.70,.88,.4,.08)]},'AxeChop':{},
+ # A heavy hit rocks him on his planted feet.
+ 'HitStagger':{},
+ # The centurion steps in with his shield-side foot as he thrusts, then
+ # brings the rear foot up.
+ 'ShieldStab':{'l':[(.30,.48,.45,.1)],'r':[(.66,.88,.45,.08)]}}
+def foot_world(steps,t):
+ # Forward distance and lift of a foot at clip fraction t.
+ ahead=0.0;lift=0.0
+ for a0,a1,dist,height in steps:
+  if t>=a1: ahead+=dist
+  elif t>a0:
+   u=(t-a0)/(a1-a0);ahead+=dist*ease(u);lift=height*math.sin(math.pi*u)
+ return ahead,lift
 def tidy_clip(name,ease_in=0.0,ease_out=0.0,plant=True):
  act=bpy.data.actions[name]
  frames=sorted({int(round(k.co.x)) for fc in act.fcurves for k in fc.keyframe_points})
@@ -259,6 +290,37 @@ def tidy_clip(name,ease_in=0.0,ease_out=0.0,plant=True):
   bpy.context.view_layer.update()
  apply(base)
  rest={s:(rig.pose.bones['foot_'+s].head.z,rig.pose.bones['ball_'+s].head.z) for s in 'lr'}
+ if name in FOOTWORK:
+  # Feet planted flat in the idle stance's places (moved on by each step),
+  # held still in the world as the clip carries the unit forward.
+  stance={s:rig.pose.bones['foot_'+s].head.copy() for s in 'lr'}
+  flat={s:rig.pose.bones['foot_'+s].matrix.to_quaternion() for s in 'lr'}
+  # The knees bend out over the toes (the way the planted feet point), not
+  # the way the source bent them: a planted foot under a lunge the source took
+  # the other way would otherwise fold its knee backwards.
+  toes={}
+  for s_ in 'lr':
+   d=rig.pose.bones['ball_'+s_].head-rig.pose.bones['foot_'+s_].head;d.z=0
+   toes[s_]=d.normalized() if d.length>1e-4 else Vector((0,-1,0))
+  for i,f in enumerate(frames):
+   u=i/n;apply(poses[i])
+   carried=sample(ADVANCE[name],u) if name in ADVANCE else 0.0
+   for s in 'lr':
+    ahead,lift=foot_world(FOOTWORK[name].get(s,[]),u)
+    target=stance[s]+Vector((0,-(ahead-carried),lift))
+    hip=rig.pose.bones['thigh_'+s].head
+    pole=(hip+target)/2+toes[s]*.6
+    place_foot(s,target,pole)
+    # Flat on the ground while planted; the animated tilt only mid-step.
+    foot=rig.pose.bones['foot_'+s]
+    turned=foot.matrix.to_quaternion().slerp(flat[s],1.0-min(1.0,lift/.03) if lift>0 else 1.0)
+    foot.matrix=Matrix.Translation(foot.matrix.translation) @ turned.to_matrix().to_4x4()
+    bpy.context.view_layer.update()
+   rig.animation_data.action=act
+   keys(f)
+   rig.animation_data.action=None
+  print('TIDY_CLIP',name,n,'footwork')
+  return
  ankles={s:[] for s in 'lr'};balls={s:[] for s in 'lr'}
  for pose in poses:
   apply(pose)
@@ -450,9 +512,23 @@ finish('SwordIdle',a,length)
 tidy_clip('HitStagger',ease_in=.08)
 tidy_clip('HitKnockdown',ease_in=.06)
 
-# Hit reactions for shield bearers: the same reactions with the left forearm
-# kept turned 60° outward, as in the shield stances, so a hit does not flip the
-# strapped shield round and back.
+# A shield bearer's guard, held relative to his chest: the left forearm
+# level across the front of the body with the strapped shield (shield_arm,
+# below). In a reaction or a swing the shield arm keeps that guard as the
+# chest moves, so the shield moves with the body and never into it.
+reset_pose()
+arm('l',Vector((-.05,-.2,1.12)),Vector((.6,-.5,1.0)))
+chest=rig.pose.bones['spine_03'].matrix.copy()
+GUARD_HAND=chest.inverted() @ rig.pose.bones['hand_l'].head
+GUARD_POLE=chest.inverted() @ Vector((.6,-.5,1.0))
+def shield_guard():
+ chest=rig.pose.bones['spine_03'].matrix
+ arm('l',chest @ GUARD_HAND,chest @ GUARD_POLE)
+
+# Hit reactions with a shield. The hero's round shield (Shield*): the left
+# forearm kept turned 60° outward, as in his sword-and-shield stance, so a
+# hit does not flip the shield round and back. The statues' strapped scutum
+# (Scutum*): the shield arm held in its guard against the chest.
 for source_name in ['Hit','HitHead','HitStagger','HitKnockdown']:
  original=bpy.data.actions[source_name]
  length=original.frame_range.y/30
@@ -461,14 +537,18 @@ for source_name in ['Hit','HitHead','HitStagger','HitKnockdown']:
  for f in range(61):
   frame(length*f/60)
   poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
- a=action('Shield'+source_name)
- for f,pose in enumerate(poses):
-  for b in rig.pose.bones:b.matrix_basis=pose[b.name]
-  forearm=rig.pose.bones['lowerarm_l']
-  forearm.rotation_quaternion=forearm.rotation_quaternion @ twist
-  bpy.context.view_layer.update()
-  keys(length*30*f/60)
- finish('Shield'+source_name,a,length)
+ for prefix in ['Shield','Scutum']:
+  a=action(prefix+source_name)
+  for f,pose in enumerate(poses):
+   for b in rig.pose.bones:b.matrix_basis=pose[b.name]
+   bpy.context.view_layer.update()
+   if prefix=='Shield':
+    forearm=rig.pose.bones['lowerarm_l']
+    forearm.rotation_quaternion=forearm.rotation_quaternion @ twist
+    bpy.context.view_layer.update()
+   else: shield_guard()
+   keys(length*30*f/60)
+  finish(prefix+source_name,a,length)
 
 # Sword-and-shield run: the sprint's legs and body, with each arm eased most of
 # the way toward the SwordIdle carry, so the sword stays low and forward instead
@@ -616,36 +696,45 @@ for f in range(61):
  keys(f)
 finish('SpearLunge',a,2.0)
 
-# The centurion's driving thrust: a deep coil, then a long step with the left
-# foot as the hips drive forward and the whole upper body turns and leans into
-# the spear, the tower shield kept up in front. The right foot stays planted.
+# The centurion's thrust, after the legionary's overhand strike over the
+# shield's rim: from his guard (spear low at the hip, tower shield up) he
+# draws the spear up and back into an overhand grip above his shoulder,
+# coiling behind the shield; steps in hard with the shield-side foot as his
+# hips surge forward and drives the spear forward and down over the shield's
+# top, the right shoulder coming round and the whole body leaning in; holds
+# the extension; then draws the spear back up and lowers it to his guard as
+# the rear foot comes up (FOOTWORK), a pace further on (ADVANCE).
 a=action('ShieldStab')
-reset_pose()
-planted={side:rig.pose.bones['foot_'+side].matrix.translation.copy() for side in 'lr'}
+GUARD=Vector((-.30,-.06,1.0));COCKED=Vector((-.24,.24,1.66));STRUCK=Vector((-.2,-.76,1.56))
 for f in range(61):
  t=f/60;reset_pose()
- thrust=sample([(0,0),(.22,-.4),(.36,-.5),(.5,1),(.62,1),(.9,0),(1,0)],t)
- step=sample([(0,0),(.36,0),(.5,1),(.68,1),(.92,0),(1,0)],t)
- lift=0.0
- for a0,a1 in [(.36,.5),(.68,.92)]:
-  if a0<t<a1:u=(t-a0)/(a1-a0);lift=.1*4*u*(1-u)
- shift=Vector((0,-.34*step,-.1*step))
+ # Up from the hip into the overhand grip, and back down at the end.
+ raised=sample([(0,0),(.08,0),(.3,1),(.68,1),(.9,0),(1,0)],t)
+ # Coiled back (-1), driven home (+1).
+ thrust=sample([(0,0),(.18,0),(.32,-1),(.38,-1),(.5,1),(.62,1),(.82,0),(1,0)],t)
+ drive=max(0.0,thrust);coil=max(0.0,-thrust)
+ # The hips: dropping and surging ahead of the feet into the strike.
+ drop=sample([(0,0),(.3,.03),(.5,.1),(.62,.1),(.88,0),(1,0)],t)
+ surge=sample([(0,0),(.32,-.04),(.5,.07),(.62,.07),(.9,0),(1,0)],t)
+ shift=Vector((0,-surge,-drop))
  pelvis=rig.pose.bones['pelvis'];m=pelvis.matrix.copy()
  pelvis.matrix=Matrix.Translation(m.translation+shift) @ m.to_quaternion().to_matrix().to_4x4()
  bpy.context.view_layer.update()
- leg('l',planted['l']+Vector((0,-.62*step,lift)),planted['l']+Vector((0,-.9,.5)))
- leg('r',planted['r'],planted['r']+Vector((0,-.9,.5)))
- # The torso turns about the spine: coiling, the right side and spear rotate
- # back as the left shoulder and shield swing forward; striking, the right
- # side drives forward and the left side pulls back with the shield arm.
- # Positive turn brings the right shoulder forward.
- turn=.52*thrust if thrust>0 else 1.1*thrust
+ # The torso coils (right shoulder back) and unwinds through the strike
+ # (right shoulder forward), leaning into it.
+ turn=.6*drive-.5*coil
  for spine,share in [('spine_01',.35),('spine_02',.35),('spine_03',.3)]:
   rotate_body(spine,(0,0,1),turn*share)
- rotate_body('spine_01',(1,0,0),.2*max(0,thrust)-.05*max(0,-thrust))
- arm('r',(-.24,.14-thrust*.95+shift.y,1.04+max(0,thrust)*.14),(-.7,.2,.85))
- # The shield arm follows the turn, and draws back further on the strike.
- shield_arm(shift.y+.1*max(0,thrust),turn*.9)
+ rotate_body('spine_01',(1,0,0),.3*drive-.06*coil)
+ # The spear hand: guard at the hip, cocked above and behind the shoulder,
+ # driven forward and down over the shield.
+ high=(COCKED+Vector((0,.1*coil,.03*coil))).lerp(STRUCK,drive)
+ hand=GUARD.lerp(high,raised)+shift
+ pole=Vector((-.7,.2,.85)).lerp(Vector((-.8,.35,1.95)),raised)+shift
+ arm('r',hand,pole)
+ # The shield stays up in front, swinging a little with the torso and drawn
+ # back against the body on the strike.
+ shield_arm(shift.y+.08*drive,turn*.45)
  keys(f)
 finish('ShieldStab',a,2.0)
 
@@ -863,6 +952,21 @@ tidy_clip('SwordSwing',ease_in=.12,ease_out=.15)
 tidy_clip('SwordSlash',ease_in=.2,ease_out=.15)
 tidy_clip('AxeChop',ease_in=.22,ease_out=.15)
 tidy_clip('ArcherShot')
+tidy_clip('ShieldStab')
+# The gladiator's swing: the warrior's lunge, his scutum held in its guard.
+original=bpy.data.actions['SwordSwing']
+rig.animation_data.action=original
+poses=[]
+for f in range(61):
+ frame(original.frame_range.y/30*f/60)
+ poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+a=action('ScutumSwordSwing')
+for f,pose in enumerate(poses):
+ for b in rig.pose.bones:b.matrix_basis=pose[b.name]
+ bpy.context.view_layer.update()
+ shield_guard()
+ keys(f)
+finish('ScutumSwordSwing',a,2.0)
 rig.animation_data.action=None
 for t in rig.animation_data.nla_tracks:t.mute=False
 for o in source_objects:
