@@ -12,6 +12,16 @@ extends SkeletonModifier3D
 ## follow the animation untouched (the run cycle is played at the unit's own
 ## ground speed instead, scripts/visual.gd).
 ##
+## Driven over the ground by a blow (or following one in), the unit walks with
+## it: the feet take quick alternating steps in the direction the body is
+## carried, so a unit struck from the front backpedals, one struck from behind
+## stumbles forward and one struck from the side steps sideways (or anything
+## between). The foot furthest along the way it is carried steps first (a
+## braced step back, out or on), the other follows, and so on; each lands flat
+## a little ahead of the body, but only as far ahead as it has still to go, so
+## the stance comes out square where the body stops. A shoved unit's upper body
+## rocks the way it is driven.
+##
 ## Runs as the skeleton's first modifier (before the cloth simulation), each
 ## tick through Skeleton3D.advance (scripts/visual.gd).
 
@@ -19,6 +29,16 @@ extends SkeletonModifier3D
 var enabled = true
 # The ground's height, in the world.
 var ground = 0.0
+# How the body is moving over the ground (world, metres a second), whether it
+# is being carried by a blow (stepping with it), and whether shoved (rocking).
+var velocity = Vector3.ZERO
+var carried = false
+var shoved = false
+# Travel the body still has to make (world metres, along its way): driven back
+# or following in, or held short while stepping into an attack. A planted foot
+# that strays only because the body has yet to catch up with it is left where
+# it is.
+var owed = Vector3.ZERO
 
 # How far above its rest height (metres, at life size) a foot may be and still
 # count as set down.
@@ -34,6 +54,21 @@ const STEP_LIFT = .06
 # How quickly a foot is pinned and let go.
 const GRAB_TIME = .06
 const RELEASE_TIME = .1
+# Carried: a step starts once a foot trails this far behind where the body
+# wants it, takes this long, lifts this high, and lands this share of a
+# step's travel ahead (or less, if the body is nearly there).
+const GAIT_STRAY = .05
+const GAIT_STEP_TIME = .17
+const GAIT_LIFT = .07
+const GAIT_LEAD = .5
+# Shoved: the upper body rocks the way it is driven, by up to this much
+# (radians), easing in and out over LEAN_EASE seconds.
+const LEAN_MAX = .2
+const LEAN_EASE = .08
+var lean = 0.0
+var lean_axis = Vector3.RIGHT
+# The foot that stepped last while carried (the other steps next).
+var last_stepped = null
 
 var feet: Array = []
 
@@ -47,9 +82,10 @@ func setup(skeleton: Skeleton3D) -> void:
 			"thigh":skeleton.find_bone("thigh_"+side),"calf":skeleton.find_bone("calf_"+side),
 			"foot":foot,"ball":ball,
 			"ankle_rest":skeleton.get_bone_global_rest(foot).origin.y,
+			"rest_basis":skeleton.get_bone_global_rest(foot).basis,
 			"ball_rest":skeleton.get_bone_global_rest(ball).origin.y,
 			"pinned":false,"pin":Transform3D(),"weight":0.0,
-			"step":-1.0,"step_from":Transform3D()})
+			"step":-1.0,"step_from":Transform3D(),"gait":false,"way":Vector3.ZERO})
 
 static func smooth(u: float) -> float:
 	u = clampf(u,0.0,1.0)
@@ -61,6 +97,14 @@ func _process_modification_with_delta(delta: float) -> void:
 	var to_world: Transform3D = skeleton.global_transform
 	var size: float = to_world.basis.get_scale().x
 	var to_skeleton: Transform3D = to_world.affine_inverse()
+	var pace = Vector3(velocity.x,0,velocity.z)
+	var way: Vector3 = pace.normalized() if pace.length() > .05 else Vector3.ZERO
+	# Carried, which foot steps next: the other one from the last, or to begin
+	# with the one furthest along the way the body is going.
+	var next = null
+	if not carried or way == Vector3.ZERO: last_stepped = null
+	elif last_stepped != null: next = feet[1] if last_stepped == feet[0] else feet[0]
+	elif feet.size() == 2: next = feet[0] if feet[0].pin.origin.dot(way) > feet[1].pin.origin.dot(way) else feet[1]
 	for f in feet:
 		var animated: Transform3D = to_world*skeleton.get_bone_global_pose(f.foot)
 		var ball: Vector3 = to_world*skeleton.get_bone_global_pose(f.ball).origin
@@ -74,25 +118,39 @@ func _process_modification_with_delta(delta: float) -> void:
 				f.pinned = false
 				f.step = -1.0
 			elif f.step < 0.0:
-				var stray = Vector2(animated.origin.x-f.pin.origin.x,animated.origin.z-f.pin.origin.z).length()/size
+				var stray_now = Vector2(animated.origin.x-f.pin.origin.x,animated.origin.z-f.pin.origin.z).length()
+				var later: Vector3 = animated.origin+owed
+				var stray = minf(stray_now,Vector2(later.x-f.pin.origin.x,later.z-f.pin.origin.z).length())/size
 				var heading_now: Vector3 = animated.basis.z; heading_now.y = 0
 				var heading_pin: Vector3 = f.pin.basis.z; heading_pin.y = 0
 				var turned = heading_now.angle_to(heading_pin) if heading_now.length() > .01 and heading_pin.length() > .01 else 0.0
 				# One foot steps at a time: the other waits until it lands.
-				if (stray > STRAY or turned > TURN) and not feet.any(func(o): return o != f and o.step >= 0.0):
+				# Carried, steps come sooner, and the feet take turns (unless
+				# one is left far behind).
+				var other_stepping = feet.any(func(o): return o != f and o.step >= 0.0)
+				var gait = next != null
+				var due = stray > STRAY or turned > TURN
+				if gait: due = (f == next and stray > GAIT_STRAY) or stray > STRAY*1.5 or turned > TURN
+				if due and not other_stepping:
 					f.step = 0.0
 					f.step_from = f.pin
+					f.gait = gait
+					f.way = way
+					if gait: last_stepped = f
 			if f.pinned and f.step >= 0.0:
 				# Stepping over to where the animation wants the foot, lifted
-				# on an arc, landing in its new place.
-				f.step = minf(1.0,f.step+delta/STEP_TIME)
+				# on an arc, landing in its new place. Carried, it lands flat
+				# a little ahead of where the body will be, as far as it goes.
+				var landing: Transform3D = animated
+				if f.gait: landing = gait_landing(f,animated,pace,to_world)
+				f.step = minf(1.0,f.step+delta/(GAIT_STEP_TIME if f.gait else STEP_TIME))
 				var u = smooth(f.step)
-				var moved: Transform3D = f.step_from.interpolate_with(animated,u)
-				moved.origin.y += sin(f.step*PI)*STEP_LIFT*size
+				var moved: Transform3D = f.step_from.interpolate_with(landing,u)
+				moved.origin.y += sin(f.step*PI)*(GAIT_LIFT if f.gait else STEP_LIFT)*size
 				f.pin = moved
 				if f.step >= 1.0:
 					f.step = -1.0
-					f.pin = animated
+					f.pin = landing
 		elif down:
 			# Set down: pinned where it lands, which is where it is shown if
 			# it was still easing off its last spot (so it never jumps).
@@ -103,6 +161,38 @@ func _process_modification_with_delta(delta: float) -> void:
 		if f.weight <= 0.0: continue
 		var target: Transform3D = animated.interpolate_with(f.pin,f.weight)
 		reach(skeleton,f,to_skeleton*target)
+	rock(skeleton,to_skeleton,delta)
+
+# Where a carried step lands: where the animation has the foot, carried on
+# along the step's way as far as the body will go by the time it lands and a
+# little further (never past where the body stops); set down flat on the
+# ground (as the foot stands at rest), heading as the animation heads it.
+func gait_landing(f: Dictionary, animated: Transform3D, pace: Vector3, to_world: Transform3D) -> Transform3D:
+	var time_left = (1.0-maxf(f.step,0.0))*GAIT_STEP_TIME
+	var ahead = minf(owed.length(),pace.length()*(time_left+GAIT_STEP_TIME*GAIT_LEAD)) if carried else 0.0
+	var at: Vector3 = animated.origin+f.way*ahead
+	at.y = ground+f.ankle_rest*to_world.basis.get_scale().x
+	var flat: Basis = to_world.basis.orthonormalized()*f.rest_basis.orthonormalized()
+	var now: Vector3 = animated.basis.z; now.y = 0
+	var rest: Vector3 = flat.z; rest.y = 0
+	var turn = rest.signed_angle_to(now,Vector3.UP) if now.length() > .01 and rest.length() > .01 else 0.0
+	return Transform3D(Basis(Vector3.UP,turn)*flat,at)
+
+# A shoved body's upper half rocks the way it is driven (in the skeleton's
+# space, about the lower spine), easing in and out.
+func rock(skeleton: Skeleton3D, to_skeleton: Transform3D, delta: float) -> void:
+	var pace = Vector3(velocity.x,0,velocity.z)
+	var wanted = 0.0
+	if shoved and pace.length() > .05:
+		wanted = minf(LEAN_MAX,pace.length()*.12)
+		var local: Vector3 = (to_skeleton.basis*pace).normalized()
+		lean_axis = Vector3.UP.cross(local).normalized()
+	lean = move_toward(lean,wanted,delta*LEAN_MAX/LEAN_EASE)
+	if lean <= 0.0 or lean_axis.length() < .5: return
+	var spine = skeleton.find_bone("spine_01")
+	if spine < 0: return
+	var pose: Transform3D = skeleton.get_bone_global_pose(spine)
+	skeleton.set_bone_global_pose(spine,Transform3D(Basis(Quaternion(lean_axis,lean))*pose.basis,pose.origin))
 
 # Two-bone IK: bends the thigh and calf so the ankle reaches `target` (in the
 # skeleton's space), the knee kept in the plane the animation bent it in, and

@@ -18,6 +18,42 @@ func key(code: int, shift: bool = false):
 	if not game.debug.handle_key(e): game._unhandled_input(e)
 	await process_frame
 
+# Runs the game frame by frame (so the skeleton's modifiers apply).
+func frames(seconds: float):
+	var t = 0.0
+	while t < seconds:
+		game._process(1.0/60); t += 1.0/60
+		await process_frame
+
+# Follows a unit's feet (the balls of its feet) as they are shown: how far
+# they slide while down, and how many times one is lifted into a step.
+class FeetTally:
+	var unit
+	var start = []
+	var last = []
+	var skate = 0.0
+	var steps = 0
+	var lifted = [false,false]
+	func _init(u):
+		unit = u
+		last = [u.visual.bone_position("ball_l"),u.visual.bone_position("ball_r")]
+		start = last.duplicate()
+		u.visual.skeleton.skeleton_updated.connect(sample)
+	func sample():
+		var size: float = unit.visual.rig.scale.x
+		for i in 2:
+			var p: Vector3 = unit.visual.bone_position(["ball_l","ball_r"][i])
+			if p.y < .03*size and last[i].y < .03*size: skate += Vector2(p.x-last[i].x,p.z-last[i].z).length()
+			if p.y > .05*size and not lifted[i]: steps += 1
+			lifted[i] = p.y > .05*size
+			last[i] = p
+	func stop():
+		unit.visual.skeleton.skeleton_updated.disconnect(sample)
+	# Where the feet stand relative to the unit.
+	func stance() -> Array:
+		var to_unit: Transform3D = unit.global_transform.affine_inverse()
+		return [to_unit*last[0],to_unit*last[1]]
+
 func step(seconds: float):
 	var t = 0.0
 	while t < seconds:
@@ -94,27 +130,39 @@ func test():
 	# Stepping into a unit too close to step towards, the attacker's blow
 	# drives it back as far as the step was cut short (here, the whole step),
 	# and the attacker steps in after it; a unit backed against a wall gives
-	# no ground.
+	# no ground. Driven back, the unit steps with it (backpedalling when
+	# struck from the front, stepping forward when struck from behind and
+	# sideways when struck from the side): its feet walk, not slide, and come
+	# to rest flat and square.
 	var warrior = pg.heroes[0]
-	for against_wall in [false,true]:
+	for case in [["front",PI/2,false],["behind",-PI/2,false],["side",0.0,false],["wall",PI/2,true]]:
 		var spot: Vector3 = game.world.spawn
-		if against_wall: spot = game.world.move(spot,Vector3(-60,0,0))
+		if case[2]: spot = game.world.move(spot,Vector3(-60,0,0))
 		warrior.position = spot
+		warrior.rotation.y = case[1]; warrior.visual.snap_facing()
 		gladiator.position = spot+Vector3(1.0,0,0)
+		gladiator.rotation.y = -PI/2; gladiator.visual.snap_facing()
 		gladiator.busy = 0; gladiator.windup = 0; gladiator.cooldown = 0; gladiator.hit_stun = 0; gladiator.stagger_time = 0
 		warrior.busy = 0; warrior.stagger_time = 0
 		pg.select(gladiator)
-		step(.5)
+		await frames(.5)
 		var victim_before: Vector3 = warrior.position
 		var attacker_before: Vector3 = gladiator.position
+		var feet = FeetTally.new(warrior)
+		var stance_before = feet.stance()
 		gladiator.start_attack(warrior.position)
-		step(2.0)
+		await frames(1.6)
+		feet.stop()
 		var pushed = victim_before.distance_to(warrior.position)
 		var advanced = attacker_before.distance_to(gladiator.position)
-		if against_wall:
+		if case[2]:
 			check(pushed < .08 and advanced < .3,"Backed against a wall, a unit gives no ground and the attacker stops short (pushed %.2fm, stepped %.2fm)" % [pushed,advanced])
-		else:
-			check(pushed > .3 and absf(advanced-pushed) < .06 and absf(gladiator.position.distance_to(warrior.position)-gladiator.standoff(warrior)) < .1,"A blow landing as the attacker steps in drives the unit back, the attacker following (pushed %.2fm, stepped %.2fm)" % [pushed,advanced])
+			continue
+		check(pushed > .3 and absf(advanced-pushed) < .06 and absf(gladiator.position.distance_to(warrior.position)-gladiator.standoff(warrior)) < .1,"Struck from the %s as the attacker steps in, a unit is driven back, the attacker following (pushed %.2fm, stepped %.2fm)" % [case[0],pushed,advanced])
+		var carried = [feet.start[0].distance_to(feet.last[0]),feet.start[1].distance_to(feet.last[1])]
+		var square = feet.stance()
+		var off = maxf(Vector2(square[0].x-stance_before[0].x,square[0].z-stance_before[0].z).length(),Vector2(square[1].x-stance_before[1].x,square[1].z-stance_before[1].z).length())
+		check(feet.steps >= 2 and feet.skate < .03 and minf(carried[0],carried[1]) > .3 and maxf(feet.last[0].y,feet.last[1].y) < .025 and off < .12,"Driven back from the %s, the unit steps with it rather than sliding (%d steps, feet slid %.3fm, carried %.2f/%.2fm, end stance off by %.2fm)" % [case[0],feet.steps,feet.skate,carried[0],carried[1],off])
 	# Kill and revive.
 	await key(KEY_X)
 	check(gladiator.dead and gladiator.visual.state=="Crumble","X kills the selected unit and plays its death")

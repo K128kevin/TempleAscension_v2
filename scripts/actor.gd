@@ -87,6 +87,10 @@ func tick(dt: float) -> void:
 	# Stepping into an attack carries the unit forward (Visual.ROOT_ADVANCE).
 	var travel: float = visual.take_travel()
 	if travel > 0.0 and not dead: step_forward(travel)
+	# (Cut short, the clip's step can't make up the rest: follow in.)
+	if catch_up > 0.0 and visual.travel_to_come() <= 0.0:
+		follow(catch_up)
+		catch_up = 0.0
 	# Shoved back by a blow, or following one in.
 	if shove_left > 0.0:
 		var step = minf(shove_left,shove_speed*dt)
@@ -96,8 +100,12 @@ func tick(dt: float) -> void:
 		var step = minf(follow_left,follow_speed*dt)
 		follow_left -= step
 		if not dead: position = game.world.move(position,follow_dir*step)
-	# The feet stay planted, stepping as the body is carried over them.
+	# The feet step with the body as it is carried over the ground.
 	visual.carried = shove_left > 0.0 or follow_left > 0.0
+	visual.shoved = shove_left > 0.0
+	visual.owed = shove_dir*shove_left+follow_dir*follow_left
+	if held_travel > 0.0 and not strike_landed: visual.owed += forward()*held_travel
+	visual.owed += forward()*catch_up
 	slow_time = maxf(0,slow_time-dt)
 	mark_time = maxf(0,mark_time-dt)
 	stagger_time = maxf(0,stagger_time-dt)
@@ -347,15 +355,25 @@ func walk_to(destination: Vector3, dt: float) -> void:
 
 # Where the unit's current attack is aimed, and the unit it is aimed at.
 # Stepping in, it stops short of that unit; the step it is denied is held
-# until its blow lands on the unit, which is then shoved back that far as
-# the attacker steps in after it (a unit backed against a wall cannot give
-# ground, and the attacker stays where it is). Once the blow has landed, any
-# further step in shoves the unit straight back with it.
+# until its blow lands on the unit, which is then driven back as far as the
+# attacker's whole step would have taken it past (the held step and what is
+# left of the clip's), in one shove, the attacker stepping in after it as far
+# as the unit gives (a unit backed against a wall cannot give ground, and the
+# attacker stays where it is). The held step is made up through the rest of
+# the clip's own step in (its footwork stepping the longer way), or, if the
+# clip has no more step to take, by following the unit in.
 var root_goal = null
 var root_target = null
 var held_travel = 0.0
 var strike_landed = false
-# A shove back: its direction, how far is left to go, and how fast.
+# After the blow has landed: how much further the attacker may follow in, and
+# the held step still to make up through the clip's own (at this much per
+# metre of it).
+var follow_budget = 0.0
+var catch_up = 0.0
+var catch_rate = 0.0
+# A shove back: its direction, how far is left to go, and how fast (it moves
+# at a steady pace, stepping with it: scripts/foot_planter.gd).
 var shove_dir = Vector3.ZERO
 var shove_left = 0.0
 var shove_speed = 0.0
@@ -371,6 +389,8 @@ func begin_strike(point: Vector3) -> void:
 	root_goal = point
 	held_travel = 0.0
 	strike_landed = false
+	follow_budget = 0.0
+	catch_up = 0.0
 	root_target = null
 	var nearest = 1.3
 	for other in game.targets(self) if game.puppet_attack(self) or kind == "player" else [game.player]:
@@ -389,6 +409,10 @@ func standoff(other) -> float:
 	return mine+maxf(0.0,(other.config.size-1.0)*.5)
 
 func step_forward(distance: float) -> void:
+	if strike_landed and catch_up > 0.0:
+		var extra = minf(catch_up,distance*catch_rate)
+		catch_up -= extra
+		distance += extra
 	var target = root_target if is_instance_valid(root_target) and not root_target.dead else null
 	var goal = target.position if target != null else root_goal
 	if goal != null:
@@ -396,38 +420,50 @@ func step_forward(distance: float) -> void:
 		var allowed = maxf(0.0,gap-standoff(target))
 		if distance > allowed and target != null:
 			var denied = distance-allowed
-			if strike_landed: allowed += target.shove(forward(),denied,0.0)
+			# Once the blow has landed, the step follows the driven unit in,
+			# as far as it gives.
+			if strike_landed: follow(denied)
 			else: held_travel += denied
 		distance = minf(distance,allowed)
+		if strike_landed: follow_budget = maxf(0.0,follow_budget-distance)
 	if distance > 0.0: position = game.world.move(position,forward()*distance)
 
 # The blow lands on `victim`: if it is the unit this attack stepped in on and
 # the step was held short of it, it is driven back that far and the attacker
 # follows it in.
 func landed_on(victim) -> void:
-	if victim != root_target or not is_instance_valid(victim): return
+	if victim != root_target or not is_instance_valid(victim) or strike_landed: return
 	strike_landed = true
 	if held_travel <= 0.0 or victim.dead: return
-	var room = victim.shove(forward(),held_travel,held_travel/SHOVE_SPEED)
+	var to_come: float = visual.travel_to_come()
+	follow_budget = victim.shove(forward(),held_travel+to_come)
+	if to_come > .05:
+		catch_up = held_travel
+		catch_rate = held_travel/to_come
+	else: follow(held_travel)
 	held_travel = 0.0
-	if room > 0.0:
-		follow_dir = forward()
-		follow_left += room
-		follow_speed = SHOVE_SPEED
 
-# Drives this unit back along `direction` by up to `distance` over `time`
-# seconds (at once, if no time), as far as the walls allow; returns how far
-# it will go.
-func shove(direction: Vector3, distance: float, time: float) -> float:
-	var free: Vector3 = game.world.move(position,direction*distance)
-	var room = Vector2(free.x-position.x,free.z-position.z).length()
-	if room < .01: return 0.0
-	if time <= 0.0:
-		position = free
-		return room
+# Steps in after the driven unit by up to `distance`, at its pace, as far as
+# it gives.
+func follow(distance: float) -> void:
+	var add = minf(distance,follow_budget)
+	if add <= 0.0: return
+	follow_budget -= add
+	follow_dir = forward()
+	follow_left += add
+	follow_speed = SHOVE_SPEED
+
+# Drives this unit along `direction` by up to `distance` more, at
+# SHOVE_SPEED, as far as the walls allow (counting the drive still under way);
+# returns how far that adds.
+func shove(direction: Vector3, distance: float) -> float:
+	var start: Vector3 = position+shove_dir*shove_left
+	var free: Vector3 = game.world.move(start,direction*distance)
+	var room = Vector2(free.x-start.x,free.z-start.z).length()
+	if room < .005: return 0.0
 	shove_dir = direction
-	shove_left = room
-	shove_speed = room/time
+	shove_left += room
+	shove_speed = SHOVE_SPEED
 	return room
 
 func face(at: Vector3) -> void:

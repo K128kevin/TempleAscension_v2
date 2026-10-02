@@ -46,6 +46,12 @@ var shown_yaw = null
 # Set while the unit is carried over the ground by a blow (shoved back, or
 # following one in): the feet stay planted and step as it goes.
 var carried = false
+# Set while it is being driven back (shoved), not following one in; and the
+# travel it still has to make (FootPlanter.owed).
+var shoved = false
+var owed = Vector3.ZERO
+# The feet stay planted a moment after a carry ends (settling).
+var carry_hold = 0.0
 var last_position = null
 var ground_speed = 0.0
 # Clips that carry their unit forward as it steps (metres at life size, by
@@ -1242,16 +1248,32 @@ func advance(dt: float) -> void:
 		travelled = now
 	# How fast the body is carried over the ground (by the game or a dash).
 	var at: Vector3 = global_position
-	if last_position != null and dt > 0: ground_speed = Vector2(at.x-last_position.x,at.z-last_position.z).length()/dt
+	var moving = Vector3.ZERO
+	if last_position != null and dt > 0:
+		moving = Vector3(at.x-last_position.x,0,at.z-last_position.z)/dt
+		ground_speed = moving.length()
 	last_position = at
 	if animator.active:
 		# Feet stay planted unless the unit runs, dashes, leaps or falls.
-		planter.enabled = not dead and not state in LOCOMOTION and (ground_speed < .6*rig.scale.x or ROOT_ADVANCE.has(state) or carried) and absf(position.y) < .01
+		# (Knocked flat, it slides back along the ground instead.)
+		var floored = state.ends_with("HitKnockdown")
+		carry_hold = .25 if carried and not floored else maxf(0.0,carry_hold-dt)
+		planter.enabled = not dead and not state in LOCOMOTION and (ground_speed < .6*rig.scale.x or ROOT_ADVANCE.has(state) or carry_hold > 0.0) and absf(position.y) < .01
 		var parent = get_parent_node_3d()
 		planter.ground = parent.global_position.y if parent != null else global_position.y
+		planter.velocity = moving
+		planter.carried = carried and not floored
+		planter.owed = owed
+		planter.shoved = shoved and not floored
 		skeleton.advance(dt)
 
 # The forward travel to move the unit by since last asked (Actor.tick).
+# How much further the current clip will carry the unit (not yet taken).
+func travel_to_come() -> float:
+	if not ROOT_ADVANCE.has(state): return 0.0
+	var keys: Array = ROOT_ADVANCE[state]
+	return maxf(0.0,keys[keys.size()-1][1]*rig.scale.x-travelled)+pending_travel
+
 func take_travel() -> float:
 	var d = pending_travel
 	pending_travel = 0.0
