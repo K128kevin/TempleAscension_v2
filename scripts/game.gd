@@ -27,6 +27,9 @@ var target
 var hover_ring: Sprite3D
 const ENEMY_CLICK_RADIUS = 64.0
 const PLAYER_RUN_SPEED = 5.94 # Player movement speed before the walk-cycle change.
+# The hero's pace at a walk (R toggles between walking and running).
+const PLAYER_WALK_SPEED = 1.5
+var walking = false
 var route = PackedVector3Array()
 var left_held = false
 var right_held = false
@@ -244,7 +247,6 @@ func pass_door() -> bool:
 		arriving_by_door = true
 		load_floor()
 		save_run()
-		toast("%s · %s" % [Data.TEMPLE,Data.FLOORS[run.floor]])
 		return true
 	if not world.leaving_temple(player.position): return false
 	save_run()
@@ -254,7 +256,7 @@ func pass_door() -> bool:
 	load_floor()
 	player.rotation.y = -PI/2
 	save_run()
-	toast("%s lies west across %s." % [Data.TOWN,Data.DESERT])
+	toast("The town lies west, across the desert.")
 	return true
 
 func spawn_enemy(kind: String, id: String, at: Vector3):
@@ -382,10 +384,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_SPACE: dash()
 			KEY_Q: heal()
 			KEY_E: interact()
+			KEY_R: toggle_walk()
 			KEY_1: cast_key(1)
 			KEY_2: cast_key(2)
 			KEY_F11:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+func toggle_walk() -> void:
+	walking = not walking
+	toast("Walking." if walking else "Running.")
+
+# How fast the hero goes over the ground: walking or running, halved when slowed.
+func player_pace() -> float:
+	return (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)
 
 # Everyone an attack can land on. Normally the statues; in the playground every
 # unit, heroes included, except the one attacking.
@@ -517,14 +528,13 @@ func player_control(dt: float) -> void:
 				pursuit_timer = .15
 				route = world.path(player.position,target.position)
 	var moved = false
-	var pace = PLAYER_RUN_SPEED*(.5 if slowed>0 else 1.0)
+	var pace = player_pace()
 	if player.busy <= 0:
 		while not route.is_empty() and player.position.distance_to(route[0]) < .06:
 			route.remove_at(0)
 		if not route.is_empty():
 			var offset: Vector3 = route[0]-player.position
-			var speed_scale = .5 if slowed>0 else 1.0
-			var step: float = minf(offset.length(),PLAYER_RUN_SPEED*speed_scale*dt)
+			var step: float = minf(offset.length(),pace*dt)
 			var before: Vector3 = player.position
 			player.position = world.move(before,offset.normalized()*step)
 			var displacement: Vector3 = player.position-before
@@ -533,6 +543,7 @@ func player_control(dt: float) -> void:
 		elif not is_instance_valid(target):
 			var aim: Vector3 = world.pointer()
 			if player.position.distance_to(aim) > .6: player.face(aim)
+	player.visual.walking = walking
 	player.visual.locomotion(moved,player.busy>0,false,1.0,pace)
 
 func attack_range(special: bool, slot: int = 0) -> float:

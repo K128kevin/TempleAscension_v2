@@ -14,6 +14,7 @@ const Desert = preload("res://scripts/world_desert.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Palace = preload("res://scripts/world_palace.gd")
 const Front = preload("res://scripts/world_temple_front.gd")
+const GLOW_COLOUR = Front.GLOW
 # `level` of the outdoor world, where a temple floor has its index.
 const OUTDOORS = -2
 # The map's extent in metres.
@@ -89,6 +90,14 @@ var places: Array[Dictionary] = []
 # Things tall enough to hide the hero from the camera, as {box, parts:[{mesh,
 # whole, normal, faded, box}], hidden}; they turn see-through while they do.
 var screens: Array[Dictionary] = []
+# Buildings the hero can walk into (scripts/world_interiors.gd): the "area"
+# each stands on, and its "shell" (the roof and the walls on the camera's
+# side), which is lifted away while he is "inside".
+var rooms: Array[Dictionary] = []
+# Floors above the ground indoors: over its "area" a deck stands "low" high
+# at "start" and climbs to "high" the way "along" points (a level one has no
+# "along").
+var decks: Array[Dictionary] = []
 var screen_tick = 0.0
 # Ground the rim's rocks leave alone: the temple stands there.
 var keep_clear: Array[Rect2] = [Rect2(TEMPLE_DOOR.x-3.0,-39,74,78)]
@@ -139,11 +148,15 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 	follow(spawn,1)
 
 # The height of the ground at a point: zero everywhere but on the palace hill,
-# which rises smoothly over its slope to a level top.
+# which rises smoothly over its slope to a level top, and on a floor above
+# the ground indoors.
 func height_at(x: float, z: float) -> float:
 	var outside = Vector2(maxf(absf(x-HILL.x)-HILL_HALF.x,0.0),maxf(absf(z-HILL.z)-HILL_HALF.y,0.0)).length()
 	var t = clampf(1.0-outside/HILL_SLOPE,0.0,1.0)
-	return HILL_HEIGHT*t*t*(3.0-2.0*t)
+	var height = HILL_HEIGHT*t*t*(3.0-2.0*t)
+	for deck in decks:
+		if deck.area.has_point(Vector2(x,z)): return height+lerpf(deck.low,deck.high,clampf((Vector2(x,z)-deck.start).dot(deck.along),0.0,1.0))
+	return height
 
 func lift(at: Vector3) -> float:
 	return height_at(at.x,at.z)
@@ -351,8 +364,9 @@ func brazier(at: Vector3, width: float, pedestal: float = 0.0) -> Node3D:
 # A statue: one of the temple's figures (`kind`, as in Data.ENEMIES, with its
 # `weapon`) standing still, `stature` times life size, facing `yaw`. It is
 # the same carving at any size (the stone's grain grows with it), in the
-# temple's dark stone or, `marble`, in white.
-func statue(kind: String, weapon: String, at: Vector3, yaw: float, stature: float, marble: bool = false) -> Node3D:
+# temple's dark stone or, `marble`, in white. `pose` is a clip of the figure's
+# to hold in place of its stance (the lion's "Sit").
+func statue(kind: String, weapon: String, at: Vector3, yaw: float, stature: float, marble: bool = false, pose: String = "") -> Node3D:
 	# (A figure turns to face the way its parent does.)
 	var stand = Node3D.new()
 	stand.set_meta("statue",kind)
@@ -364,10 +378,14 @@ func statue(kind: String, weapon: String, at: Vector3, yaw: float, stature: floa
 	stand.add_child(figure)
 	figure.setup(true,Color.WHITE,weapon,stature,kind)
 	if kind=="boss": figure.crown()
-	figure.play(figure.idle_action())
+	figure.play(pose if figure.clips.has(pose) else figure.idle_action())
+	# (Straight into the pose: a statue does not ease into it from another.)
+	figure.animator.play(figure.clips[figure.state],0)
+	figure.animator.seek(0,true)
 	figure.advance(.4)
 	figure.animator.pause()
 	figure.set_process(false)
+	stand.set_meta("pose",figure.state)
 	for mesh in figure.find_children("*","MeshInstance3D",true,false):
 		var stone: Material = mesh.material_override
 		if not stone is ShaderMaterial: continue
@@ -555,6 +573,12 @@ func follow(pos: Vector3, delta: float) -> void:
 	camera.position = camera.position.lerp(pos+VIEW*BACK,minf(1,delta*8))
 	camera.look_at(camera.position-VIEW)
 	camera.size = lerpf(camera.size,zoom,minf(1,delta*8))
+	# A building the hero is in stands open to the view.
+	for room in rooms:
+		var inside: bool = room.area.has_point(Vector2(pos.x,pos.z))
+		if inside == room.inside: continue
+		room.inside = inside
+		for node in room.shell: node.visible = not inside
 	screen_tick -= delta
 	if screen_tick>0: return
 	screen_tick = .1
@@ -563,6 +587,7 @@ func follow(pos: Vector3, delta: float) -> void:
 		var hides = false
 		# Only what stands on the camera's side of someone, and near, can hide them.
 		for target in targets:
+			if group.has("room") and group.room.inside: break
 			var feet: Vector3 = target.position
 			feet.y = lift(feet)
 			var box: AABB = group.box

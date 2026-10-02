@@ -38,7 +38,14 @@ var planter
 # Keeps the hands that hold something closed on it (scripts/hand_grip.gd).
 var grip
 # Locomotion clips: the feet follow the animation, played at the ground speed.
-const LOCOMOTION = ["Run","Crouch","SwordRun","ScutumRun","BowRun","BowCrouch","RangerRun","RangerCrouch","WizardRun","WizardCrouch"]
+const LOCOMOTION = ["Run","Crouch","SwordRun","ScutumRun","BowRun","BowCrouch","RangerRun","RangerCrouch","WizardRun","WizardCrouch","Walk","SwordWalk","RangerWalk","WizardWalk"]
+# The hero walks rather than runs (the R key; scripts/game.gd).
+var walking = false
+# The walks that carry a weapon are made from the plain walk as the hero is
+# set up: its stride, with each arm held most of the way to where the matching
+# stance holds it (the share given here, left and right), so the sword stays
+# low, the shield in its guard, the bow at his side and the staff in his hand.
+const WALKS = {"SwordWalk":["SwordIdle",{"l":.85,"r":.7}],"RangerWalk":["RangerIdle",{"l":.85,"r":.4}],"WizardWalk":["WizardIdle",{"l":.35,"r":.85}]}
 # The body turns smoothly to the unit's facing (which the game sets at once),
 # at most TURN_RATE radians a second, easing in over TURN_EASE seconds.
 const TURN_RATE = 11.0
@@ -67,11 +74,11 @@ var pending_travel = 0.0
 # Each locomotion clip's own ground speed at life size (metres a second, at
 # normal playback): how fast its planted foot sweeps back under the body
 # (measured by tools/anim_audit.gd --strides).
-const STRIDE_SPEED = {"Run":6.35,"SwordRun":6.64,"ScutumRun":6.64,"BowRun":6.64,"RangerRun":6.64,"WizardRun":6.64}
+const STRIDE_SPEED = {"Run":6.35,"SwordRun":6.64,"ScutumRun":6.64,"BowRun":6.64,"RangerRun":6.64,"WizardRun":6.64,"Walk":1.0,"SwordWalk":1.0,"RangerWalk":1.0,"WizardWalk":1.0}
 # The Lion Guardian goes on four legs (tools/make_lion.py): its own rig and
 # clips, with none of a man's hands, feet or gear. Its gallop, played at its
 # own pace, covers this many metres a second.
-const LION_STRIDE_SPEED = 5.14
+const LION_STRIDE_SPEED = 4.52
 var quadruped = false
 var enemy_kind = ""
 # Remaining time of a hit reaction; locomotion waits for it to finish.
@@ -130,12 +137,12 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	# Modifiers (the foot planter, cloth) run on the unit's own clock, after
 	# each pose (advance()).
 	skeleton.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_MANUAL
-	if not quadruped:
-		planter = FootPlanter.new()
-		planter.name = "FootPlanter"
-		skeleton.add_child(planter)
-		skeleton.move_child(planter,0)
-		planter.setup(skeleton)
+	# (The lion's four paws are planted by its own planter.)
+	planter = preload("res://scripts/paw_planter.gd").new() if quadruped else FootPlanter.new()
+	planter.name = "FootPlanter"
+	skeleton.add_child(planter)
+	skeleton.move_child(planter,0)
+	planter.setup(skeleton)
 	for mesh in rig.find_children("*", "MeshInstance3D", true, false):
 		skin_meshes.append(mesh)
 		if stone:
@@ -263,13 +270,14 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			elif "HeroArmor" in mesh.name: mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit(hero_class)
 	for clip in animator.get_animation_list():
-		for expected in ["ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
+		for expected in ["Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
-				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
+				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
 	if quadruped:
 		play(idle_action())
 		return
+	derive_walks()
 	# The fists that close on a grip, from the stance clips that hold one: the
 	# sword hand's, and the hand the ranger carries his bow in.
 	grip = HandGrip.new()
@@ -311,6 +319,30 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			cloak_mesh.material_override.set_shader_parameter("waist_reach",.2)
 	equip(weapon)
 	play(idle_action())
+
+func derive_walks() -> void:
+	if not clips.has("Walk"): return
+	var prefix: String = clips.Walk.trim_suffix("Walk")
+	var library: AnimationLibrary = animator.get_animation_library(prefix.trim_suffix("/"))
+	var walk: Animation = animator.get_animation(clips.Walk)
+	walk.loop_mode = Animation.LOOP_LINEAR
+	for name in WALKS:
+		if not clips.has(WALKS[name][0]): continue
+		if not library.has_animation(name):
+			var stance: Animation = animator.get_animation(clips[WALKS[name][0]])
+			var made: Animation = walk.duplicate(true)
+			for track in made.get_track_count():
+				if made.track_get_type(track) != Animation.TYPE_ROTATION_3D: continue
+				var bone: String = String(made.track_get_path(track)).get_slice(":",1)
+				if not (bone.begins_with("clavicle") or bone.begins_with("upperarm") or bone.begins_with("lowerarm") or bone.begins_with("hand")): continue
+				var source = stance.find_track(made.track_get_path(track),Animation.TYPE_ROTATION_3D)
+				if source < 0: continue
+				var held: Quaternion = stance.rotation_track_interpolate(source,0.0)
+				var share: float = WALKS[name][1][bone.right(1)]
+				for key in made.track_get_key_count(track):
+					made.track_set_key_value(track,key,made.track_get_key_value(track,key).slerp(held,share))
+			library.add_animation(name,made)
+		clips[name] = prefix+name
 
 func equip(weapon: String) -> void:
 	carry_in_hand = null
@@ -1423,6 +1455,12 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 	if dead or busy or reaction_time>0: return
 	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
 	if quadruped and moving: wanted = "Run"
+	elif moving and walking and not crouch and clips.has("Walk") and (weapon_kind != "bow" or ranger_carry()):
+		wanted = "Walk"
+		if ranger_carry(): wanted = "RangerWalk"
+		elif weapon_kind == "staff" and not is_stone: wanted = "WizardWalk"
+		elif weapon_kind == "sword": wanted = "SwordWalk"
+		if not clips.has(wanted): wanted = "Walk"
 	elif moving and ranger_carry(): wanted = "RangerCrouch" if crouch else "RangerRun"
 	elif moving and weapon_kind=="staff" and not is_stone: wanted = "WizardCrouch" if crouch else "WizardRun"
 	elif moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"

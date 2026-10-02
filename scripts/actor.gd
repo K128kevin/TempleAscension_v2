@@ -217,7 +217,7 @@ func start_attack(point: Vector3) -> void:
 	var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
 	var duration = windup+.25
 	var weapon_index = Data.WEAPONS.find(config.weapon)
-	var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT,"wizard":Motion.ORACLE_CAST}.get(kind,{})
+	var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT,"wizard":Motion.ORACLE_CAST,"lion":Motion.LION_SWIPE}.get(kind,{})
 	if not signature.is_empty() and visual.clips.has(signature.clip):
 		clip = signature.clip
 		duration = windup/signature.contacts[0]

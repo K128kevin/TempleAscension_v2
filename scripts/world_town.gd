@@ -10,7 +10,7 @@ extends RefCounted
 ## have yet to arrive.
 const Kit = preload("res://scripts/world_art.gd")
 const Desert = preload("res://scripts/world_desert.gd")
-const NAME = "Halcyra"
+const Interiors = preload("res://scripts/world_interiors.gd")
 # One wall module of the kit is this wide and tall.
 const BAY = 4.0
 # What the town's walls are built and washed with.
@@ -48,16 +48,12 @@ const BOX_BAYS = [44,45,46]
 # Half the royal box's width, and the height of its floor.
 const BOX_HALF = 7.1
 const BOX_FLOOR = 6.6
+const THRONES = 5
 # The street that rings the arena: the buildings stand along its far side.
 const RING = 14.0
 const MARKET = Rect2(-205,38,21,24)
-# The alleys off the ring street, as [name, the lane's rectangle].
-const ALLEYS = [
-	["Potters' Row",Rect2(-214,-76,4,36)],
-	["Tanners' Lane",Rect2(-298,-76,4,36)],
-	["Beggars' Alley",Rect2(-298,40,4,36)],
-	["Dyers' Lane",Rect2(-228,46,4,30)],
-	["West Street",Rect2(-340,-2.5,28,5)]]
+# The alleys off the ring street: each lane's rectangle.
+const ALLEYS = [Rect2(-214,-76,4,36),Rect2(-298,-76,4,36),Rect2(-298,40,4,36),Rect2(-228,46,4,30),Rect2(-340,-2.5,28,5)]
 # The letters of a face: w wall, d door, s shuttered window, a arched recess,
 # o open arched window, p open portal, b a wall broken down.
 const MODULES = {"w":"wall","d":"wall_door","s":"wall_window","a":"wall_arched","o":"wall_archwindow","p":"arch","b":"wall_broken"}
@@ -119,6 +115,20 @@ static func hanging(world, id: String, at: Vector3, height: float, yaw: float, d
 	Kit.dye(node,dye)
 	return node
 
+# A length of wall built of the kit's modules, each near its own four metres
+# square so its carved stones keep their shape: centred on `middle` at the
+# wall's foot, `length` long and `height` high, facing as `yaw` turns it.
+static func wall_run(world, middle: Vector3, length: float, height: float, thickness: float, material: Material, yaw: float = 0.0) -> Array:
+	var columns = maxi(1,roundi(length/BAY))
+	var rows = maxi(1,roundi(height/3.6))
+	var along = Vector3(cos(yaw),0,-sin(yaw))
+	var nodes: Array = []
+	for row in rows:
+		for column in columns:
+			var at = middle+along*((column+.5)/columns-.5)*length+Vector3.UP*row*height/rows
+			nodes.append(world.place("wall",at,Vector3(length/columns,height/rows,thickness),material,yaw))
+	return nodes
+
 # Whether a point lies between the arena's wall and the buildings round it.
 static func on_ring(x: float, z: float) -> bool:
 	var offset = Vector2(x-ARENA.x,z-ARENA.z)
@@ -134,10 +144,10 @@ static func streets(world) -> void:
 	world.dab_rect(world.PAVING,MARKET)
 	world.dab_rect(world.PAVING,Rect2(-208,34,6,8),.8)
 	for alley in ALLEYS:
-		var lane: Rect2 = alley[1]
+		var lane: Rect2 = alley
 		world.dab_rect(world.TRACK,lane.grow(1.0),.85)
 		world.dab_rect(world.PAVING,lane,.42)
-		world.add_place(alley[0],"alley",Vector3(lane.get_center().x,0,lane.get_center().y),maxf(lane.size.x,lane.size.y)*.5)
+		world.add_place("alley","alley",Vector3(lane.get_center().x,0,lane.get_center().y),maxf(lane.size.x,lane.size.y)*.5)
 	# Outside the gate the paving gives way to the track.
 	for x in range(-176,-166):
 		for z in range(-4,5): world.dab(world.PAVING,x,z,.75-(x+176)*.07)
@@ -164,7 +174,7 @@ static func gate_wall(world) -> void:
 		hanging(world,"cloth_red",Vector3(x-1.85,2.6,side*6.2),4.4,-PI/2,Color(.44,.14,.10))
 	towers.append(world.place("wall",Vector3(x,6.2,0),Vector3(9.4,1.5,1.4),material,-PI/2))
 	world.screen(towers)
-	world.add_place("%s Gate" % NAME,"gate",Vector3(x,0,0),7.0)
+	world.add_place("town gate","gate",Vector3(x,0,0),7.0)
 
 # A point on the arena's oval at `angle`, `inset` metres inside its outer wall.
 static func oval(angle: float, inset: float = 0.0) -> Vector3:
@@ -234,7 +244,7 @@ static func arena(world) -> void:
 				if offset.dot(along)>0 and absf(offset.cross(along))<1.9: in_gate = true
 			if in_gate: world.dab(world.PAVING,x,z,.85)
 			else: world.block_cell(x,z)
-	world.add_place("The Arena","arena",ARENA,ARENA_FLOOR.y)
+	world.add_place("arena","arena",ARENA,ARENA_FLOOR.y)
 	# What the fighters train with stands round the edge of the sand.
 	for spot in [[-.9,"dummy",1.9],[.5,"weapon_stand",1.25],[2.3,"dummy",1.9],[2.75,"dummy",1.9],[3.6,"weapon_stand",1.25],[5.4,"weapon_stand",1.25]]:
 		var at = ARENA+Vector3(cos(spot[0])*(ARENA_FLOOR.x-1.8),0,sin(spot[0])*(ARENA_FLOOR.y-1.8))
@@ -249,8 +259,8 @@ static func arena(world) -> void:
 
 # The royal box, in the north stands over the gate the palace road comes in
 # by: a pavilion of white marble where the elders sit to watch the games,
-# with gilded thrones, columns and rails, a crimson canopy and hangings, and
-# marble lions.
+# with five gilded thrones, gilded columns and rails, and a crimson canopy
+# and hangings.
 static func royal_box(world) -> void:
 	var marble = Kit.marble()
 	var gold = Kit.gold()
@@ -265,24 +275,24 @@ static func royal_box(world) -> void:
 	for side in [-1.0,1.0]:
 		nodes.append(world.place("floor",Vector3(x+side*2.75,0,middle),Vector3(1.0,BOX_FLOOR-.4,depth),marble))
 		# The box's front, to either side of the tunnel's mouth, and its parapet.
-		nodes.append(world.place("wall",Vector3(x+side*(BOX_HALF+2.25)*.5,0,front),Vector3(BOX_HALF-2.25,BOX_FLOOR+1.0,.9),marble))
+		nodes += wall_run(world,Vector3(x+side*(BOX_HALF+2.25)*.5,0,front),BOX_HALF-2.25,BOX_FLOOR+1.0,.9,marble)
 		# Its side walls stand taller toward the back, with the stands.
-		nodes.append(world.place("wall",Vector3(x+side*(BOX_HALF-.45),0,middle),Vector3(depth,BOX_FLOOR+1.0,.9),marble,-side*PI/2))
-		nodes.append(world.place("wall",Vector3(x+side*(BOX_HALF-.45),BOX_FLOOR+1.0,back+2.8),Vector3(5.6,4.6,.9),marble,-side*PI/2))
+		nodes += wall_run(world,Vector3(x+side*(BOX_HALF-.45),0,middle),depth,BOX_FLOOR+1.0,.9,marble,-side*PI/2)
+		nodes += wall_run(world,Vector3(x+side*(BOX_HALF-.45),BOX_FLOOR+1.0,back+2.8),5.6,4.6,.9,marble,-side*PI/2)
 	nodes.append(world.place("wall",Vector3(x,4.6,front),Vector3(4.6,BOX_FLOOR-3.6,.9),marble))
 	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR+1.0,front),Vector3(BOX_HALF*2.0+.3,.14,1.05),gold))
 	var floor_slab = world.place("floor",Vector3(x,BOX_FLOOR-.4,middle),Vector3(BOX_HALF*2.0,.4,depth),marble)
 	floor_slab.name = "RoyalBox"
 	nodes.append(floor_slab)
-	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR,middle+1.2),Vector3(3.4,.05,depth-3.0),crimson))
+	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR,middle+1.2),Vector3(8.6,.05,depth-3.0),crimson))
 	# The back wall, hung with crimson, under a gilded cornice.
-	nodes.append(world.place("wall",Vector3(x,BOX_FLOOR,back+.5),Vector3(BOX_HALF*2.0,5.6,.9),marble))
+	nodes += wall_run(world,Vector3(x,BOX_FLOOR,back+.5),BOX_HALF*2.0,5.6,.9,marble)
 	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR+5.6,back+.5),Vector3(BOX_HALF*2.0+.4,.35,1.4),gold))
 	for offset in [-4.5,0.0,4.5]:
 		nodes.append(hanging(world,"cloth_red",Vector3(x+offset,BOX_FLOOR+1.1,back+1.02),4.1,0.0,CRIMSON))
 	# A canopy shades the back of the box, on gilded columns, leaving the
-	# thrones and the lions in view; two more columns stand free at the front,
-	# each carrying a fire.
+	# thrones in view; two more columns stand free at the front, each carrying
+	# a fire.
 	for side in [-1.0,1.0]:
 		for z in [back+1.6,back+5.0]:
 			nodes.append(world.place("column",Vector3(x+side*6.2,BOX_FLOOR,z),Vector3(.75,4.6,.75),gold))
@@ -292,25 +302,22 @@ static func royal_box(world) -> void:
 		nodes.append(bowl)
 	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR+4.6,back+2.8),Vector3(BOX_HALF*2.0-.6,.12,5.4),crimson))
 	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR+4.48,back+5.4),Vector3(BOX_HALF*2.0-.2,.34,.45),gold))
-	# The elders' thrones, facing the sand.
-	for side in [-1.0,1.0]:
-		var throne = world.place("chair",Vector3(x+side*1.35,BOX_FLOOR,front-4.2),Kit.sized("chair",2.4),gold,PI)
+	# The five elders' thrones, in a row facing the sand, the middle one the
+	# tallest.
+	for i in THRONES:
+		var offset = (i-(THRONES-1)*.5)*1.6
+		var throne = world.place("chair",Vector3(x+offset,BOX_FLOOR,front-4.2),Kit.sized("chair",2.8 if is_zero_approx(offset) else 2.4),gold,0.0)
 		throne.set_meta("throne",true)
 		nodes.append(throne)
-	# Marble lions: one at each front corner, and one to either side of the
-	# thrones, all looking out over the sand.
-	for side in [-1.0,1.0]:
-		nodes.append(world.statue("lion","",Vector3(x+side*5.1,BOX_FLOOR,front-2.3),0.0,.9,true))
-		nodes.append(world.statue("lion","",Vector3(x+side*3.5,BOX_FLOOR,front-5.6),0.0,.8,true))
 	world.screen(nodes)
-	world.add_place("The Elders' Box","royal_box",Vector3(x,0,front+3.0),5.0)
+	world.add_place("elders' box","royal_box",Vector3(x,0,front+3.0),5.0)
 
 # The market square, in the town's south-east corner: stalls, and the well.
 static func market(world) -> void:
 	var middle = Vector3(MARKET.get_center().x,0,MARKET.get_center().y)
 	var well = item(world,"well",middle,3.3,PI*.25,1.5)
 	world.screen([well])
-	world.add_place("The Well","well",middle,3.2)
+	world.add_place("well","well",middle,3.2)
 	for spot in [[Vector3(-3.4,0,1.2),.5],[Vector3(2.6,0,-2.4),.4]]:
 		item(world,"bucket",middle+spot[0],spot[1],1.0,0.0)
 	# Stalls along the square's east side, their counters to the square, under
@@ -328,46 +335,31 @@ static func market(world) -> void:
 	for side in [0.0,1.0]:
 		item(world,"bench",middle+Vector3(-5.0+side*8.0,0,5.5),.55,0.0,.9)
 
-# The inn stands on the ring street's north side, west of the palace road: a
-# long hall with an upper floor over its western end, shabby but in business.
+# The inn, north-west of the arena on the ring street. Its door stands open
+# (scripts/world_interiors.gd furnishes it).
 static func inn(world) -> void:
-	var corner = Vector3(-280,0,-71)
-	var bays = Vector2i(5,3)
-	var nodes = block(world,corner,bays,["sadas"],["wsw"],LIMEWASH,WOODS[0],0.0,.55)
-	nodes += block(world,corner,Vector2i(3,3),["sos"],["wsw"],LIMEWASH,WOODS[0],BAY,.55)
 	world.upkeep["inn"] = .55
-	var door = doorstep(corner,bays,"south",2)
-	nodes.append(hanging(world,"cloth_blue",door+Vector3(-2.0,3.0,-.85),2.4,0.0,Color(.36,.30,.20)))
-	nodes.append(hanging(world,"cloth_blue",door+Vector3(2.0,3.0,-.85),2.4,0.0,Color(.36,.30,.20)))
-	nodes.append(world.prop("lantern",door+Vector3(-1.2,2.0,-.9),.9,PI))
-	world.screen(nodes)
-	world.add_place("The Wayfarer's Rest","inn",door,4.0)
-	# Tables in the shade outside, and the cellar's barrels by the wall.
-	for side in [-1.0,1.0]:
-		var at = door+Vector3(side*6.0,0,1.6)
-		item(world,"table",at,.85,0.0,1.2)
-		for seat in [Vector3(-1.0,0,1.1),Vector3(.9,0,1.1),Vector3(0,0,-1.0)]: item(world,"stool",at+seat,.5,0.0,0.0)
-	item(world,"barrel_rack",door+Vector3(8.6,0,-.2),1.3,0.0,.9)
-	item(world,"barrel",door+Vector3(-8.8,0,-.2),.95)
-	item(world,"barrel",door+Vector3(-9.6,0,.5),.85)
-	item(world,"urn",door+Vector3(1.9,0,-.3),.9,0.0,.4)
+	var room: Dictionary = Interiors.inn(world,LIMEWASH,WOODS[0])
+	var door: Vector3 = room.door
+	# (What hangs on the front wall goes when the wall does.)
+	for side in [-3.0,3.0]: room.shell.append(hanging(world,"cloth_blue",door+Vector3(side,3.0,-.85),2.4,0.0,Color(.36,.30,.20)))
+	world.add_place("inn","inn",door,4.0)
+	# The cellar's barrels by the wall.
+	item(world,"barrel_rack",door+Vector3(8.2,0,-.5),1.3,0.0,.9)
+	item(world,"barrel",door+Vector3(-8.4,0,-.5),.95)
+	item(world,"urn",door+Vector3(2.4,0,-.5),.9,0.0,.4)
 
-# The armorer's, east of the palace road, with its yard of racks and a
-# practice dummy.
+# The smithy, east of the palace road, its door open too, with a practice
+# dummy and a rack outside.
 static func armorer(world) -> void:
-	var corner = Vector3(-246,0,-66)
-	var bays = Vector2i(3,2)
-	var nodes = block(world,corner,bays,["dsa"],["ws"],OCHRE,WOODS[1],0.0,.6)
 	world.upkeep["armorer"] = .6
-	var door = doorstep(corner,bays,"south",0)
-	nodes.append(hanging(world,"cloth_red",door+Vector3(2.2,2.9,-.85),2.4,0.0,Color(.40,.18,.12)))
-	world.screen(nodes)
-	world.add_place("The Bronze Anvil","shop",door,4.0)
-	item(world,"anvil",door+Vector3(4.4,0,.4),.62,.3,.6)
-	item(world,"weapon_stand",door+Vector3(7.6,0,-.1),1.25,0.0,.8)
-	item(world,"weapon_stand",door+Vector3(9.6,0,-.1),1.25,0.0,.8)
-	item(world,"dummy",door+Vector3(6.2,0,2.6),1.9,-.6,.5)
-	item(world,"barrel",door+Vector3(-2.2,0,-.3),.9)
+	var room: Dictionary = Interiors.smithy(world,OCHRE,WOODS[1])
+	var door: Vector3 = room.door
+	room.shell.append(hanging(world,"cloth_red",door+Vector3(3.2,2.9,-.85),2.4,0.0,Color(.40,.18,.12)))
+	world.add_place("blacksmith","shop",door,4.0)
+	item(world,"weapon_stand",door+Vector3(6.4,0,-.3),1.25,0.0,.8)
+	item(world,"dummy",door+Vector3(-4.6,0,1.2),1.9,.5,.5)
+	item(world,"barrel",door+Vector3(-2.6,0,-.5),.9)
 
 # The provisioner's, on the main street just inside the gate, its door to the
 # arena.
@@ -379,7 +371,7 @@ static func provisioner(world) -> void:
 	var door = doorstep(corner,bays,"west",1)
 	nodes.append(hanging(world,"cloth_red",door+Vector3(.85,2.9,-2.1),2.4,-PI/2,Color(.52,.42,.24)))
 	world.screen(nodes)
-	world.add_place("Caravan Provisions","shop",door,4.0)
+	world.add_place("provisioner","shop",door,4.0)
 	item(world,"crate",door+Vector3(.2,0,3.0),.9,.2)
 	item(world,"crate",door+Vector3(-.5,0,3.9),.75,1.0)
 	item(world,"bag",door+Vector3(.3,0,-2.9),.75,0.0,.4)
@@ -416,7 +408,7 @@ static func house(world, corner: Vector3, bays: Vector2i, door: String, storeys:
 	var step = doorstep(corner,bays,door,bay)
 	world.screen(nodes)
 	world.upkeep.houses.append(wear)
-	world.add_place("A fallen house" if ruin else ("A shuttered house" if wear<.6 else "A run-down house"),"house",step,2.6)
+	world.add_place("fallen house" if ruin else "house","house",step,2.6)
 	var beside = Vector3(2.0,0,-.4) if door=="south" else Vector3(.4,0,2.0)
 	# What gathers at a poor door: rubble from its own walls, a broken pot,
 	# sacking. A better one keeps a pot or a barrel there.
@@ -477,6 +469,8 @@ static func greenery(world) -> void:
 		var at = ARENA+Vector3(cos(angle)*reach.x,0,sin(angle)*reach.y)
 		# Not across the four streets that lead to the arena's gates.
 		if absf(at.x-ARENA.x)<7.0 or absf(at.z-ARENA.z)<7.0 or not world.fits(at,1.2): continue
+		# Nor before an open door.
+		if world.rooms.any(func(room): return room.door.distance_to(at)<7.0): continue
 		Desert.palm(world,at,rng.randf_range(7.0,9.0))
 	for spot in [Vector3(-186,0,-10),Vector3(-186,0,10),Vector3(MARKET.position.x+2.0,0,MARKET.position.y+2.0),Vector3(MARKET.position.x+9.0,0,MARKET.end.y-1.5)]:
 		if world.fits(spot,1.0): Desert.palm(world,spot,rng.randf_range(7.0,9.0))
@@ -490,6 +484,8 @@ static func greenery(world) -> void:
 		var c = world.to_cell(at)
 		var cell = world.index(c.x,c.y)
 		if world.cells[cell] != world.OPEN or world.paint[cell*4+world.PAVING]>120: continue
+		# Nothing grows or lies about indoors.
+		if world.rooms.any(func(room): return room.area.has_point(Vector2(at.x,at.z))): continue
 		# The arena's sand is raked clean.
 		if (Vector2(at.x-ARENA.x,at.z-ARENA.z)/ARENA_RADII).length()<1.0: continue
 		var lane = world.paint[cell*4+world.TRACK]>30 or world.paint[cell*4+world.PAVING]>30

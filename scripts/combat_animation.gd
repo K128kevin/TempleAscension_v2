@@ -20,6 +20,8 @@ const ARCHER_SHOT = {"clip":"ArcherShot","contacts":[.78]}
 const ORACLE_CAST = {"clip":"OracleCast","contacts":[.8]}
 # The centurion's stepping, full-body thrust past its tower shield.
 const SHIELD_STAB = {"clip":"ShieldStab","contacts":[.5]}
+# The Lion Guardian's swipe: it rears, a forepaw cocked wide, and rakes it across.
+const LION_SWIPE = {"clip":"Attack","contacts":[.5]}
 # `speed_floor` is the readability floor: the shortest share of the clip's
 # normal time that attack speed can bring it to. Melee swings pass 0 and are
 # held only to `minimum_duration`.

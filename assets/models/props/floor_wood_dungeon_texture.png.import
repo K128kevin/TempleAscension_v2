@@ -2,16 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dbfn2pa1shuro"
-path="res://.godot/imported/lion_head_normal.jpg-3b910f3b09f58885044bb6f224ef275f.ctex"
+uid="uid://ck5rsm6yh4co6"
+path="res://.godot/imported/floor_wood_dungeon_texture.png-0c35250b8d249b2ab1756850197c4119.ctex"
 metadata={
 "vram_texture": false
+}
+generator_parameters={
+"md5": "9a714bc33f4314ea4520009f20b048a8"
 }
 
 [deps]
 
-source_file="res://assets/textures/lion_head_normal.jpg"
-dest_files=["res://.godot/imported/lion_head_normal.jpg-3b910f3b09f58885044bb6f224ef275f.ctex"]
+source_file="res://assets/models/props/floor_wood_dungeon_texture.png"
+dest_files=["res://.godot/imported/floor_wood_dungeon_texture.png-0c35250b8d249b2ab1756850197c4119.ctex"]
 
 [params]
 
@@ -23,7 +26,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

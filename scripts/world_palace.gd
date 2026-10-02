@@ -1,14 +1,13 @@
 extends RefCounted
 ## The elders' palace, north of the town in the outdoor world
 ## (scripts/overworld.gd). A paved road runs north from the arena's north gate,
-## through a walled gate at the foot of the hill, and climbs between marble
-## lions and fires to the palace on its top: white stone kept spotless, gilded,
+## through a walled gate at the foot of the hill guarded by marble centurions,
+## and climbs between seated marble lions and fires to the palace on its top: white stone kept spotless, gilded,
 ## hung with crimson, with pools and palms before it. Everything the town
 ## below is not.
 const Kit = preload("res://scripts/world_art.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Desert = preload("res://scripts/world_desert.gd")
-const NAME = "The Elders' Palace"
 # (Brighter than white: it takes the yellow out of the limestone.)
 const STONE = Color(1.06,1.09,1.16)
 const WOOD = Color(.24,.15,.09)
@@ -31,13 +30,19 @@ static func build(world) -> void:
 static func stone(world) -> ShaderMaterial:
 	return Kit.masonry(STONE,WOOD,.4,Town.KEPT,world.HILL_HEIGHT)
 
-# A marble lion, `stature` times life size, on a marble plinth, facing south
-# down the road.
+# A marble lion, `stature` times life size, sitting on a marble plinth, facing
+# south down the road.
 static func lion(world, at: Vector3, stature: float = 1.2) -> Array:
-	var rise = .9*stature
-	var plinth = world.place("floor",at,Vector3(1.15*stature,rise,2.5*stature),Kit.marble())
-	world.block_rect(Rect2(at.x-.7*stature,at.z-1.4*stature,1.4*stature,2.8*stature))
-	return [plinth,world.statue("lion","",at+Vector3(0,rise,-.15*stature),0.0,stature,true)]
+	var rise = .8*stature
+	var plinth = world.place("floor",at,Vector3(1.3*stature,rise,2.0*stature),Kit.marble())
+	world.block_rect(Rect2(at.x-.75*stature,at.z-1.1*stature,1.5*stature,2.2*stature))
+	return [plinth,world.statue("lion","",at+Vector3(0,rise,.12*stature),0.0,stature,true,"Sit")]
+
+# A marble centurion on a marble plinth, facing south.
+static func sentry(world, at: Vector3, stature: float = 1.6) -> Array:
+	var plinth = world.place("floor",at,Vector3(2.0,1.3,2.0),Kit.marble())
+	world.block_rect(Rect2(at.x-1.1,at.z-1.1,2.2,2.2))
+	return [plinth,world.statue("centurion","spear",at+Vector3.UP*1.3,0.0,stature,true)]
 
 # A fire in a gilded bowl, on a marble pedestal.
 static func fire(world, at: Vector3, width: float = 1.2, pedestal: float = 1.3) -> Node3D:
@@ -52,7 +57,7 @@ static func road(world) -> void:
 	var x: float = world.HILL.x
 	var top: float = world.HILL.z+world.HILL_HALF.y
 	world.dab_rect(world.PAVING,Rect2(x-ROAD,top,ROAD*2.0,-52.0-top))
-	world.add_place("The Palace Road","road",Vector3(x,0,-66),8.0)
+	world.add_place("palace road","road",Vector3(x,0,-66),8.0)
 
 # A wall of clean white stone shuts the hill off from the town, with a
 # towered gate where the road goes through.
@@ -76,12 +81,12 @@ static func precinct(world) -> void:
 		world.block_rect(Rect2(tower.x-1.9,WALL_Z-1.8,3.8,3.6))
 		towers.append(fire(world,tower+Vector3.UP*10.0,1.4,0.0))
 		towers.append(Town.hanging(world,"cloth_red",Vector3(tower.x,3.2,WALL_Z+1.86),5.2,0.0,Town.CRIMSON))
-		# Marble lions stand outside, facing the town.
-		towers += lion(world,Vector3(x+side*11.5,0,WALL_Z+4.4),1.3)
+		# Marble centurions stand guard outside, facing the town.
+		towers += sentry(world,Vector3(x+side*11.5,0,WALL_Z+4.0))
 	towers.append(world.place("wall",Vector3(x,7.8,WALL_Z),Vector3(11.6,1.6,1.5),material))
 	towers.append(world.place("floor",Vector3(x,9.4,WALL_Z),Vector3(11.8,.25,1.8),gold))
 	world.screen(towers)
-	world.add_place("The Palace Gate","gate",Vector3(x,0,WALL_Z),7.0)
+	world.add_place("palace gate","gate",Vector3(x,0,WALL_Z),7.0)
 
 # Up the slope the road runs between marble lions and fires.
 static func approach(world) -> void:
@@ -161,7 +166,7 @@ static func palace(world) -> void:
 		rise += course.y
 	portico.append(world.place("floor",Vector3(x,rise,face+2.4),Vector3(8.0,.28,2.0),gold))
 	world.screen(portico)
-	world.add_place(NAME,"palace",Vector3(x,0,FRONT+7.6),6.0)
+	world.add_place("palace","palace",Vector3(x,0,FRONT+7.6),6.0)
 
 # Palms and olives round the hilltop, and green grass: there is water to
 # spare up here.

@@ -33,19 +33,27 @@ class FeetTally:
 	var last = []
 	var skate = 0.0
 	var steps = 0
-	var lifted = [false,false]
-	func _init(u):
+	var lifted = []
+	var bones = ["ball_l","ball_r"]
+	# How high the bone stands when its foot is on the ground.
+	var rest = 0.0
+	func _init(u, paws = null, standing = 0.0):
 		unit = u
-		last = [u.visual.bone_position("ball_l"),u.visual.bone_position("ball_r")]
+		if paws != null: bones = paws
+		rest = standing
+		for bone in bones:
+			last.append(u.visual.bone_position(bone))
+			lifted.append(false)
 		start = last.duplicate()
 		u.visual.skeleton.skeleton_updated.connect(sample)
 	func sample():
 		var size: float = unit.visual.rig.scale.x
-		for i in 2:
-			var p: Vector3 = unit.visual.bone_position(["ball_l","ball_r"][i])
-			if p.y < .03*size and last[i].y < .03*size: skate += Vector2(p.x-last[i].x,p.z-last[i].z).length()
-			if p.y > .05*size and not lifted[i]: steps += 1
-			lifted[i] = p.y > .05*size
+		for i in bones.size():
+			var p: Vector3 = unit.visual.bone_position(bones[i])
+			var floor_height = rest*size
+			if p.y-floor_height < .03*size and last[i].y-floor_height < .03*size: skate += Vector2(p.x-last[i].x,p.z-last[i].z).length()
+			if p.y-floor_height > .05*size and not lifted[i]: steps += 1
+			lifted[i] = p.y-floor_height > .05*size
 			last[i] = p
 	func stop():
 		unit.visual.skeleton.skeleton_updated.disconnect(sample)
@@ -163,6 +171,27 @@ func test():
 		var square = feet.stance()
 		var off = maxf(Vector2(square[0].x-stance_before[0].x,square[0].z-stance_before[0].z).length(),Vector2(square[1].x-stance_before[1].x,square[1].z-stance_before[1].z).length())
 		check(feet.steps >= 2 and feet.skate < .03 and minf(carried[0],carried[1]) > .3 and maxf(feet.last[0].y,feet.last[1].y) < .025 and off < .12,"Driven back from the %s, the unit steps with it rather than sliding (%d steps, feet slid %.3fm, carried %.2f/%.2fm, end stance off by %.2fm)" % [case[0],feet.steps,feet.skate,carried[0],carried[1],off])
+	# The lion steps away too, on four legs: its paws walk under it, the
+	# diagonal pairs in turn, and do not slide.
+	var pushed_lion = game.enemies.filter(func(e): return e.kind == "lion")[0]
+	for case in [["front",PI/2],["side",0.0]]:
+		pushed_lion.position = game.world.spawn
+		pushed_lion.rotation.y = case[1]; pushed_lion.visual.snap_facing()
+		pushed_lion.busy = 0; pushed_lion.windup = 0; pushed_lion.cooldown = 99; pushed_lion.hit_stun = 0; pushed_lion.stagger_time = 0
+		gladiator.position = game.world.spawn+Vector3(gladiator.standoff(pushed_lion)+.05,0,0)
+		gladiator.rotation.y = -PI/2; gladiator.visual.snap_facing()
+		gladiator.busy = 0; gladiator.windup = 0; gladiator.cooldown = 0; gladiator.hit_stun = 0; gladiator.stagger_time = 0
+		pg.select(gladiator)
+		await frames(.5)
+		var lion_before: Vector3 = pushed_lion.position
+		var paws = FeetTally.new(pushed_lion,["foretoes_l","foretoes_r","hindtoes_l","hindtoes_r"],.055)
+		gladiator.start_attack(pushed_lion.position)
+		await frames(1.6)
+		paws.stop()
+		var lion_pushed = lion_before.distance_to(pushed_lion.position)
+		var least = INF
+		for i in 4: least = minf(least,paws.start[i].distance_to(paws.last[i]))
+		check(lion_pushed > .3 and paws.steps >= 4 and paws.skate < .08 and least > .2,"Driven back from the %s, the lion steps with it on all four paws rather than sliding (pushed %.2fm, %d steps, paws slid %.3fm, each carried at least %.2fm)" % [case[0],lion_pushed,paws.steps,paws.skate,least])
 	# The centurion thrusts from as far as his long spear reaches: from about
 	# three metres its point, driven home with his step in, reaches the unit
 	# he aims at and the blow lands; much further off, it falls short.

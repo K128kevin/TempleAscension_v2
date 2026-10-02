@@ -63,18 +63,36 @@ func town_checks():
 	check(in_north_stands,"A raised box stands in the arena's north stands, above the sand")
 	var thrones = 0
 	var sculptures = 0
+	var facing_sand = true
 	for node in world.get_children():
 		if not node is Node3D: continue
 		var inside = absf(node.position.x-Town.ARENA.x)<Town.BOX_HALF and node.position.z<Town.ARENA.z-Town.ARENA_FLOOR.y and node.position.z>Town.ARENA.z-Town.ARENA_RADII.y and node.position.y>=Town.BOX_FLOOR-.5
 		if not inside: continue
-		if node.has_meta("throne"): thrones += 1
+		if node.has_meta("throne"):
+			thrones += 1
+			# A chair's seat is on its own +Z side: the sand is south of the box.
+			facing_sand = facing_sand and (node.global_transform.basis*Vector3.BACK).normalized().distance_to(Vector3.BACK)<.01
 		if node.has_meta("statue") and node.get_meta("statue")=="lion" and node.get_meta("marble"): sculptures += 1
-	check(thrones==2 and sculptures>=4 and box != null and box.find_children("*","MeshInstance3D",true,false)[0].material_override == marble,"The box is marble, with two thrones and marble lions (%d)" % sculptures)
+	check(facing_sand,"The thrones face the sand")
+	check(thrones==5 and sculptures==0 and box != null and box.find_children("*","MeshInstance3D",true,false)[0].material_override == marble,"The box is marble, with five thrones and no statues (%d)" % sculptures)
+	# Its walls are built of modules near the kit's own four metres square, and
+	# its marble is laid at one size in the world: nothing is stretched.
+	var stretched = 0
+	var pieces = 0
+	var wall_mesh = Overworld.Kit.mesh_of("wall")
+	for node in world.get_children():
+		if not node is Node3D or node is MultiMeshInstance3D: continue
+		if absf(node.position.x-Town.ARENA.x)>Town.BOX_HALF+1.0 or node.position.z>Town.ARENA.z-Town.ARENA_FLOOR.y+1.0 or node.position.z<Town.ARENA.z-Town.ARENA_RADII.y: continue
+		for mesh in node.find_children("*","MeshInstance3D",true,false):
+			if mesh.mesh != wall_mesh or mesh.material_override != marble: continue
+			pieces += 1
+			if node.scale.x>5.6 or node.scale.x/node.scale.y>2.2: stretched += 1
+	check(pieces>=12 and stretched==0 and marble.uv1_world_triplanar,"The box's marble walls are built of unstretched pieces (%d of %d stretched)" % [stretched,pieces])
 	check(gilded>=40 and marbled>=40,"Gold and marble are used on the box and the palace (%d gilded, %d marble)" % [gilded,marbled])
 	var box_place: Dictionary = world.places.filter(func(s): return s.kind=="royal_box")[0]
 	game.player.position = box_place.at
 	game.hud.tick(0)
-	check("Elders" in game.hud.prompt.text and world.fits(box_place.at),"Below the box, on the sand, the HUD names it")
+	check(game.hud.prompt.text=="" and world.fits(box_place.at),"Below the box, on the sand, the HUD names nothing")
 
 	# 3. A road runs north from the arena's north gate, up a hill, to the palace.
 	var palace: Dictionary = world.places.filter(func(s): return s.kind=="palace")[0]
@@ -116,21 +134,39 @@ func town_checks():
 	var others = 0
 	var carved = true
 	var on_road = 0
+	var sentries = 0
+	var sitting = true
 	for node in world.get_children():
 		if not node is Node3D or not node.has_meta("statue") or node.position.x>Overworld.TOWN_GATE.x: continue
+		var figure = node.get_child(0)
+		if node.get_meta("statue")=="centurion" and node.get_meta("marble"):
+			# The two marble centurions stand at the palace gate, facing the town.
+			if absf(node.position.z-Palace.WALL_Z)<6.0 and absf(node.position.x-Town.ARENA.x)<14.0 and is_zero_approx(node.rotation.y) and not figure.quadruped: sentries += 1
+			continue
 		if node.get_meta("statue")=="lion" and node.get_meta("marble"): lions += 1
 		else: others += 1
 		if node.position.z<Palace.WALL_Z+6.0: on_road += 1
-		var figure = node.get_child(0)
+		sitting = sitting and node.get_meta("pose")=="Sit"
 		carved = carved and is_zero_approx(figure.rotation.y) and figure.quadruped
 		for mesh in figure.skin_meshes:
 			var m: ShaderMaterial = mesh.material_override
-			carved = carved and m.shader==statue_shader and m.get_shader_parameter("pale")==1.0 and m.get_shader_parameter("body_normal").resource_path.ends_with("lion_head_normal.jpg")
-	check(lions>=10 and others==0 and on_road>=6,"Every statue in the box, on the palace road and at the palace is a marble lion (%d, %d of them north of the town)" % [lions,on_road])
+			carved = carved and m.shader==statue_shader and m.get_shader_parameter("pale")==1.0 and m.get_shader_parameter("body_normal").resource_path.ends_with("lion_normal.png")
+	check(lions==4 and others==0 and on_road==4,"Every other statue on the palace road and at the palace is a marble lion (%d, %d of them north of the town)" % [lions,on_road])
+	check(sentries==2,"Two marble centurions stand either side of the palace gate (%d)" % sentries)
+	# A sitting lion's haunches are on the ground: its hips are far lower
+	# than a standing one's.
+	var seated = true
+	for node in world.get_children():
+		if node is Node3D and node.has_meta("statue") and node.get_meta("statue")=="lion":
+			var figure = node.get_child(0)
+			var hips: Vector3 = figure.skeleton.get_bone_global_pose(figure.skeleton.find_bone("hips")).origin
+			var shoulder: Vector3 = figure.skeleton.get_bone_global_pose(figure.skeleton.find_bone("upperarm_l")).origin
+			seated = seated and hips.y<.4 and shoulder.y>.75
+	check(sitting and seated,"Every lion statue in the town sits on its haunches")
 	check(carved,"The marble lions are the temple lion's own carving, in white")
 	# The temple's guardians: the centurion's own carved stone, three times
 	# life size, both looking west, away from the temple, down the road.
-	var guards: Array = world.get_children().filter(func(n): return n is Node3D and n.has_meta("statue") and n.get_meta("statue")=="centurion")
+	var guards: Array = world.get_children().filter(func(n): return n is Node3D and n.has_meta("statue") and n.get_meta("statue")=="centurion" and not n.get_meta("marble"))
 	var same_way = guards.size()==2
 	var same_stone = guards.size()==2
 	var centurion_stone: ShaderMaterial = Overworld.Art.statue_material(true,"warrior")
@@ -155,7 +191,7 @@ func town_checks():
 	var screen: Vector2 = world.camera.unproject_position(aim+Vector3.UP*world.lift(aim))
 	check(world.ground_at(screen).distance_to(aim)<.2,"A click on the hill lands on the ground it points at")
 	game.hud.tick(0)
-	check("Palace" in game.hud.prompt.text,"Before the palace the HUD names it")
+	check(game.hud.prompt.text=="","Before the palace the HUD names nothing")
 	game.player.position = Overworld.START
 	game.set_process(true)
 	for i in 3: await process_frame
@@ -168,7 +204,7 @@ func town_checks():
 	var reached = 0
 	var ring: Vector2 = Town.ARENA_RADII+Vector2(Town.RING*.5,Town.RING*.5)
 	for alley in Town.ALLEYS:
-		var lane: Rect2 = alley[1]
+		var lane: Rect2 = alley
 		var along_z = lane.size.y>lane.size.x
 		var sides = {-1:0,1:0}
 		for spot in world.places:
@@ -193,7 +229,7 @@ func town_checks():
 	check(world.upkeep.arena<=.1 and world.upkeep.palace<=.1,"The arena and the palace are kept spotless")
 	check(wears.size()>=30 and rough>=wears.size()*.6 and kept>=4 and mean>=.6,"Most houses are run down, though not all (%d of %d rough, %d kept up)" % [rough,wears.size(),kept])
 	check(world.upkeep.inn>=.5 and world.upkeep.armorer>=.5 and mean-world.upkeep.palace>=.5,"The gap between the town and its rulers is wide")
-	var ruins = world.places.filter(func(s): return s.name=="A fallen house").size()
+	var ruins = world.places.filter(func(s): return s.name=="fallen house").size()
 	check(ruins>=2,"Some houses have fallen in (%d)" % ruins)
 
 func length_of(route: PackedVector3Array, from: Vector3) -> float:
@@ -371,14 +407,43 @@ func test():
 	world.follow(Overworld.START,1)
 	check(world.camera.position.x<Overworld.START.x and world.camera.position.z>Overworld.START.z,"The camera looks from the south-west, at the temple's front")
 	game.hud.tick(0)
-	check(game.hud.objective.text==Data.DESERT.to_upper() and "east" in game.hud.direction.text and game.hud.prompt.text=="","Outdoors the HUD names the desert and points to the temple and the town")
+	check(game.hud.objective.text=="" and game.hud.status.text=="" and "east" in game.hud.direction.text and game.hud.prompt.text=="","Outdoors the HUD names no place, and points to the temple and the town")
 	game.player.position = Vector3(Town.MARKET.get_center().x,0,Town.MARKET.get_center().y+5.0)
 	game.hud.tick(0)
-	check(game.hud.objective.text==Data.TOWN.to_upper(),"In the town the HUD names it")
+	check(game.hud.objective.text=="" and game.hud.status.text=="","Nor is the town named")
 	var inn: Dictionary = world.places.filter(func(s): return s.kind=="inn")[0]
 	game.player.position = inn.at
 	game.hud.tick(0)
-	check("Inn" in game.hud.prompt.text and inn.name in game.hud.status.text,"At the inn's door the HUD names it")
+	check(game.hud.prompt.text=="" and game.hud.status.text=="","Nor the inn at its door")
+
+	# The inn and the smithy stand open, and are furnished inside.
+	var Interiors = load("res://scripts/world_interiors.gd")
+	check(world.rooms.size()==2 and world.rooms.all(func(room): return world.fits(room.door) and room.area.grow(2.0).has_point(Vector2(room.door.x,room.door.z))),"The inn and the smithy each have an open doorway")
+	var common = Interiors.INN+Vector3(8.0,0,12.0)
+	var forge_floor = Interiors.SMITHY+Vector3(8.0,0,8.0)
+	check(world.fits(common) and not world.path(world.rooms[0].door,common).is_empty() and world.fits(forge_floor) and not world.path(world.rooms[1].door,forge_floor).is_empty(),"The hero can walk in through each door")
+	world.follow(common,1)
+	check(world.rooms[0].inside and world.rooms[0].shell.all(func(node): return not node.visible) and world.rooms[1].shell.all(func(node): return node.visible),"Inside the inn its roof and near walls are lifted away, and only its own")
+	world.follow(world.rooms[0].door+Vector3(0,0,3.0),1)
+	check(not world.rooms[0].inside and world.rooms[0].shell.all(func(node): return node.visible),"Outside again, it is whole")
+	var loft = Interiors.INN+Vector3(10.0,0,5.4)
+	var stair_foot = Interiors.INN+Vector3(18.0,0,12.9)
+	var stair_middle = Interiors.INN+Vector3(18.0,0,9.75)
+	check(world.fits(loft) and is_equal_approx(world.lift(loft),Interiors.LOFT) and is_zero_approx(world.lift(common)) and is_zero_approx(world.lift(stair_foot)),"The inn's loft stands a storey above its floor")
+	check(absf(world.lift(stair_middle)-Interiors.LOFT*.5)<.1 and not world.path(common,loft).is_empty(),"A stair climbs to it (%.2f m up half way)" % world.lift(stair_middle))
+	var furniture = {}
+	for node in world.get_children():
+		if node is Node3D and node.scene_file_path != "" and world.rooms.any(func(room): return room.area.has_point(Vector2(node.position.x,node.position.z))):
+			var id = node.scene_file_path.get_file().get_basename()
+			furniture[id] = furniture.get(id,0)+1
+	check(furniture.get("table",0)>=2 and furniture.get("table_long",0)>=2 and furniture.get("stool",0)>=8 and furniture.get("bed",0)>=3,"The inn has tables, a bar and beds (%s)" % str(furniture))
+	var beds_upstairs = world.get_children().filter(func(node): return node is Node3D and node.scene_file_path.get_file().get_basename()=="bed" and absf(node.position.y-Interiors.LOFT)<.05).size()
+	check(beds_upstairs>=3,"Its beds are upstairs (%d)" % beds_upstairs)
+	var arms = 0
+	for id in ["sword","sword_long","axe","hand_axe","axe_bronze","shield","shield_round","scutum","pickaxe"]: arms += furniture.get(id,0)
+	check(furniture.get("anvil_log",0)+furniture.get("anvil",0)>=3 and furniture.get("workbench",0)>=2 and furniture.get("whetstone",0)==1 and arms>=20,"The smithy has its anvils, benches, a grindstone and arms hung all about (%d)" % arms)
+	var fires = world.get_children().filter(func(node): return node.name.begins_with("AnimatedTorchFlame") and world.rooms[1].area.has_point(Vector2(node.position.x,node.position.z))).size()
+	check(fires==1,"A fire burns in its forge")
 
 	# The save keeps the hero's place in the world.
 	game.player.position = Vector3(-40,0,12)
@@ -395,6 +460,25 @@ func test():
 	game.player.position = door+Vector3(-3,0,0)
 	game.hud.tick(0)
 	check("Walk in" in game.hud.prompt.text,"Before the temple the HUD says to walk in")
+	# A dull amber light comes from the door, the colour of the fires and the
+	# desert, in place of a black floor.
+	var ember = world.get_node_or_null("TempleDoorGlow")
+	var lit_floor = world.get_node_or_null("TempleDoorGlowFloor")
+	var door_light = world.get_node_or_null("TempleDoorLight")
+	var amber = ember != null and lit_floor != null and door_light != null and world.get_node_or_null("TempleDoorGlowSpill") != null
+	if amber:
+		var colour: Color = ember.find_children("*","MeshInstance3D",true,false)[0].material_override.albedo_color
+		# Orange to yellow: red over green over blue, the green well up, and dull.
+		for c in [colour,world.GLOW_COLOUR]:
+			amber = amber and c.r>c.g and c.g>c.b*2.0 and c.g>c.r*.45 and c.g<c.r*.8 and c.r<.9
+		# Near the torches' own light (Color(1,.60,.28)).
+		amber = amber and door_light.light_color.is_equal_approx(Color(1,.60,.28))
+		amber = amber and lit_floor.position.x>door.x-3.0 and lit_floor.texture.gradient.colors[0].a==0.0 and lit_floor.texture.gradient.colors[-1].a>.9
+	var black = false
+	for mesh in world.find_children("*","MeshInstance3D",true,false):
+		var m = mesh.material_override
+		if m is StandardMaterial3D and m.shading_mode==BaseMaterial3D.SHADING_MODE_UNSHADED and m.albedo_color.get_luminance()<.03 and mesh.global_position.distance_to(door)<12.0: black = true
+	check(amber and not black and world.get_node_or_null("TempleDoorDark")==null,"A dull amber light, like the fires', glows from the temple's door, with no black floor")
 	check(not world.entering_temple(game.player.position) and world.walk_line(game.player.position,door+Vector3(2,0,0)),"The doorway is open to walk into")
 	game.route = PackedVector3Array([door+Vector3(4,0,0)])
 	var entered = play(func(): return not game.outdoors(),6.0)
@@ -466,7 +550,7 @@ func test():
 		game.load_floor()
 		game.set_process(true)
 		root.size = Vector2i(1440,900)
-		var views = [["world-start",Overworld.START,19.0],["world-desert",Vector3(4,0,-22),36.0],["world-oasis",Vector3(-84,0,36),26.0],["world-gate",Overworld.TOWN_GATE+Vector3(-10,0,2),26.0],["world-town",Vector3(Town.MARKET.get_center().x-8.0,0,Town.MARKET.get_center().y-6.0),30.0],["world-street",Town.ARENA+Vector3(-22,0,-Town.ARENA_RADII.y-9.0),26.0],["world-box",Town.ARENA+Vector3(9,0,-19),34.0],["world-alley",Vector3(-296,0,-58),24.0],["world-palace-road",Vector3(-254,0,-72),36.0],["world-palace",Vector3(-254,0,-97),36.0],["world-lion",Vector3(-262,0,-70),13.0],["world-arena",Town.ARENA,36.0],["world-arena-gate",Town.ARENA+Vector3(Town.ARENA_RADII.x+7.0,0,2),26.0],["world-rim",Vector3(-30,0,56),30.0],["world-temple",Overworld.TEMPLE_DOOR+Vector3(-9,0,0),32.0]]
+		var views = [["world-start",Overworld.START,19.0],["world-desert",Vector3(4,0,-22),36.0],["world-oasis",Vector3(-84,0,36),26.0],["world-gate",Overworld.TOWN_GATE+Vector3(-10,0,2),26.0],["world-town",Vector3(Town.MARKET.get_center().x-8.0,0,Town.MARKET.get_center().y-6.0),30.0],["world-street",Town.ARENA+Vector3(-22,0,-Town.ARENA_RADII.y-9.0),26.0],["world-box",Town.ARENA+Vector3(3,0,-24),17.0],["world-alley",Vector3(-296,0,-58),24.0],["world-palace-road",Vector3(-254,0,-72),36.0],["world-palace",Vector3(-254,0,-97),36.0],["world-lion",Vector3(-262,0,-70),13.0],["world-arena",Town.ARENA,36.0],["world-arena-gate",Town.ARENA+Vector3(Town.ARENA_RADII.x+7.0,0,2),26.0],["world-rim",Vector3(-30,0,56),30.0],["world-temple",Overworld.TEMPLE_DOOR+Vector3(-9,0,0),32.0]]
 		for view in views:
 			game.player.position = view[1]
 			game.route.clear()

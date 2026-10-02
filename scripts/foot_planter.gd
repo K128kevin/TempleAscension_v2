@@ -67,6 +67,8 @@ const LEAN_MAX = .2
 const LEAN_EASE = .08
 var lean = 0.0
 var lean_axis = Vector3.RIGHT
+# The bone a shoved body rocks about.
+var rock_bone = "spine_01"
 # The foot that stepped last while carried (the other steps next).
 var last_stepped = null
 
@@ -189,7 +191,7 @@ func rock(skeleton: Skeleton3D, to_skeleton: Transform3D, delta: float) -> void:
 		lean_axis = Vector3.UP.cross(local).normalized()
 	lean = move_toward(lean,wanted,delta*LEAN_MAX/LEAN_EASE)
 	if lean <= 0.0 or lean_axis.length() < .5: return
-	var spine = skeleton.find_bone("spine_01")
+	var spine = skeleton.find_bone(rock_bone)
 	if spine < 0: return
 	var pose: Transform3D = skeleton.get_bone_global_pose(spine)
 	skeleton.set_bone_global_pose(spine,Transform3D(Basis(Quaternion(lean_axis,lean))*pose.basis,pose.origin))

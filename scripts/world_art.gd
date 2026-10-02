@@ -26,7 +26,15 @@ const SIZE = {
 	"dry_grass":Vector3(1.54,1.67,1.59),"agave":Vector3(1.81,2.35,1.95),"pavers_a":Vector3(2.11,.113,2.13),
 	"pavers_c":Vector3(1.06,.113,1.48),"palm_a":Vector3(5.98,9.14,6.36),"palm_b":Vector3(6.28,10.49,6.88),
 	"palm_c":Vector3(6.13,8.23,6.04),"well":Vector3(.67,1.25,1.0),"column":Vector3(.7,3.8,.7),"rubble":Vector3(8.1,3.5,3.2),
-	"vase":Vector3(.7,.5,.7),"fire_bowl":Vector3(.5,.42,.48)}
+	"vase":Vector3(.7,.5,.7),"fire_bowl":Vector3(.5,.42,.48),
+	# The furniture of the inn and the smithy (scripts/world_interiors.gd).
+	"bed":Vector3(1.88,.81,2.41),"cabinet":Vector3(1.36,1.0,.36),"shelf":Vector3(1.18,.31,.29),"shelf_bottles":Vector3(1.14,.65,.28),
+	"shelf_arch":Vector3(1.25,1.59,.31),"mug":Vector3(.19,.18,.15),"bottle":Vector3(.11,.36,.11),"bottles":Vector3(.22,.15,.06),
+	"plate":Vector3(.33,.02,.34),"chandelier":Vector3(1.3,1.46,1.3),"candlestick":Vector3(.44,.46,.14),"chest":Vector3(1.9,2.0,2.0),
+	"workbench":Vector3(2.02,.89,1.02),"workbench_drawers":Vector3(.42,.24,.3),"whetstone":Vector3(1.14,1.17,.9),
+	"anvil_log":Vector3(.93,1.07,.82),"peg_rack":Vector3(1.18,.35,.1),"chain":Vector3(1.07,.09,.91),"bucket_metal":Vector3(.49,.37,.45),
+	"axe_bronze":Vector3(.29,.83,.05),"pickaxe":Vector3(.81,1.2,.14),"nightstand":Vector3(.69,1.22,.39),"crate_metal":Vector3(.86,.87,.87),
+	"pot":Vector3(.54,.22,.49)}
 
 # The model's dimensions at its own proportions, `height` metres tall.
 static func sized(id: String, height: float) -> Vector3:
@@ -96,14 +104,14 @@ static func shared(name: String) -> Material:
 			m = textured("res://assets/models/props/grass_Grass.png",Color(.86,.70,.42),.95)
 			m.cull_mode = BaseMaterial3D.CULL_DISABLED
 		"MI_Trim_Furniture": m = textured("res://assets/textures/trim_furniture.png",Color(.9,.84,.76),.85)
-		"MI_Trim_Metal":
+		"MI_Trim_Metal","MI_Trim_Metal_Vertex":
 			m = textured("res://assets/textures/trim_metal.png",Color(.8,.78,.74),.5)
 			m.metallic = .5
 		# The kit dyes its cloth and glazes its pots through a second texture
 		# layer; here they are plain woven cloth and fired clay.
 		"MI_Trim_Cloth": m = gritty(Color(.56,.47,.34),2.2,true)
 		"MI_Banner": m = gritty(Color(.46,.12,.09),2.2,true)
-		"MI_Trim_Props_Vertex": m = gritty(Color(.33,.25,.19),2.6)
+		"MI_Trim_Props_Vertex","MI_Trim_Props": m = gritty(Color(.33,.25,.19),2.6)
 		# The well (its model comes in flat colours): stone, timber, clay tiles.
 		"Stone_Dark": m = gritty(Color(.50,.45,.38),.9)
 		"Stone_Light": m = gritty(Color(.62,.56,.47),.9)
@@ -113,8 +121,38 @@ static func shared(name: String) -> Material:
 			m = Art.material("wood",Color(.62,.50,.38)).duplicate()
 			m.uv1_world_triplanar = true
 			m.uv1_scale = Vector3.ONE*.8
-	if m != null and name in ["MI_Trim_Furniture","MI_Trim_Metal"]: m.vertex_color_use_as_albedo = true
+	if m != null and name in ["MI_Trim_Furniture","MI_Trim_Metal","MI_Trim_Metal_Vertex"]: m.vertex_color_use_as_albedo = true
 	cache[name] = m
+	return m
+
+# Sawn timber, its grain at one size everywhere: floors, stairs, a bar.
+static func planks(tint: Color, scale: float = .8) -> StandardMaterial3D:
+	var key = "planks%s%f" % [tint.to_html(),scale]
+	if cache.has(key): return cache[key]
+	var m: StandardMaterial3D = Art.material("wood",tint).duplicate()
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE*scale
+	cache[key] = m
+	return m
+
+# Forged iron, dull and a little pitted.
+static func iron() -> StandardMaterial3D:
+	if cache.has("iron"): return cache["iron"]
+	var m: StandardMaterial3D = gritty(Color(.34,.33,.32),3.0).duplicate()
+	m.metallic = .7
+	m.roughness = .5
+	cache["iron"] = m
+	return m
+
+# A bed of coals: burnt stone that glows.
+static func embers() -> StandardMaterial3D:
+	if cache.has("embers"): return cache["embers"]
+	var m: StandardMaterial3D = gritty(Color(.20,.07,.03),3.0).duplicate()
+	m.emission_enabled = true
+	m.emission = Color(1.0,.30,.05)
+	m.emission_energy_multiplier = .75
+	m.emission_texture = m.albedo_texture
+	cache["embers"] = m
 	return m
 
 # Gives each surface of a kit model its shared material.
@@ -191,8 +229,11 @@ static func gold() -> StandardMaterial3D:
 static func marble() -> StandardMaterial3D:
 	if cache.has("white_marble"): return cache.white_marble
 	var m = textured("res://assets/textures/statue_marble.png",Color(.80,.79,.77),.42)
+	# Laid at one size in the world, so its veins keep their shape on blocks
+	# of any proportion.
 	m.uv1_triplanar = true
-	m.uv1_scale = Vector3.ONE*.5
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE*.27
 	m.metallic_specular = .5
 	cache.white_marble = m
 	return m

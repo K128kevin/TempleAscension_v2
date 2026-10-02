@@ -14,7 +14,9 @@ const HALF = 36.0
 const DEPTH = 66.0
 const DOOR_HALF = 3.6
 const DOOR_HEIGHT = 6.4
-const NAME = "Temple of the Crowned"
+# The glow of the fires inside the temple: a dull amber, the colour of the
+# torches' flame and of the desert.
+const GLOW = Color(.86,.50,.17)
 
 static func stone() -> ShaderMaterial:
 	return Kit.masonry(Color(.90,.84,.72),Color(.30,.19,.11),.16)
@@ -27,7 +29,7 @@ static func build(world) -> void:
 	doorway(world)
 	portico(world)
 	forecourt(world)
-	world.add_place(NAME,"temple",door+Vector3(-6,0,0),12.0)
+	world.add_place("temple","temple",door+Vector3(-6,0,0),12.0)
 
 # A wall of the building, `from` one end to `to` the other at the foot, with
 # its projecting top course and a column every few metres.
@@ -93,7 +95,9 @@ static func summit(world) -> void:
 	for side in [-1.0,1.0]: world.place("wall",Vector3(west+12.0,base+6.0,side*(half-1.0)),Vector3(22.0,.9,1.6),material)
 	world.brazier(Vector3(west+4.0,base,0),2.2)
 
-# The way in: a short passage into the dark, lit from within by torchlight.
+# The way in: a short passage, and a dull amber light from the fires that
+# burn within. It glows on the passage's end wall, lies along its floor and walls,
+# deepening inward, and spills out over the threshold.
 static func doorway(world) -> void:
 	var door: Vector3 = world.TEMPLE_DOOR
 	var material = stone()
@@ -103,22 +107,60 @@ static func doorway(world) -> void:
 	for side in [-1.0,1.0]:
 		world.place("wall",Vector3(door.x+depth*.5+.6,0,side*(DOOR_HALF+.5)),Vector3(depth,DOOR_HEIGHT,1.0),material)
 	world.place("floor",Vector3(door.x+depth*.5+.6,DOOR_HEIGHT,0),Vector3(depth,.4,DOOR_HALF*2.0+2.0),material)
-	# Past the passage there is only the dark of the first hall.
-	var dark = StandardMaterial3D.new()
-	dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	dark.albedo_color = Color(.012,.010,.008)
-	var end = world.place("floor",Vector3(door.x+depth+.4,0,0),Vector3(.4,DOOR_HEIGHT,DOOR_HALF*2.0+2.0),dark)
-	end.name = "TempleDoorDark"
-	# Seen from above, it is the floor that shows the dark within.
-	world.place("floor",Vector3(door.x+depth*.5+1.4,.02,0),Vector3(depth-1.4,.02,DOOR_HALF*2.0),dark)
-	var glow = OmniLight3D.new()
-	glow.name = "TempleDoorTorchlight"
-	glow.light_color = Color(1,.62,.3)
-	glow.light_energy = 2.2
-	glow.omni_range = 8.0
-	glow.omni_attenuation = 1.3
-	glow.position = Vector3(door.x+depth-1.2,2.6,0)
-	world.add_child(glow)
+	var ember = StandardMaterial3D.new()
+	ember.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ember.albedo_color = GLOW*.62
+	var end = world.place("floor",Vector3(door.x+depth+.4,0,0),Vector3(.4,DOOR_HEIGHT,DOOR_HALF*2.0+2.0),ember)
+	end.name = "TempleDoorGlow"
+	# The light on the passage's floor and walls: nothing at the threshold,
+	# full a few metres in.
+	var inward = GradientTexture2D.new()
+	inward.width = 128; inward.height = 8
+	inward.fill_from = Vector2(0,.5); inward.fill_to = Vector2(1,.5)
+	var deepening = Gradient.new()
+	deepening.offsets = PackedFloat32Array([0,.3,.7,1])
+	deepening.colors = PackedColorArray([Color(GLOW,0),Color(GLOW,.45),Color(GLOW*.8,.85),Color(GLOW*.6,.96)])
+	inward.gradient = deepening
+	var reach = depth+2.6
+	var middle = door.x-2.0+reach*.5
+	var lit_floor = glow_sheet(world,inward,Vector3(middle,.07,0),Vector2(reach,DOOR_HALF*2.0))
+	lit_floor.name = "TempleDoorGlowFloor"
+	lit_floor.rotation.x = -PI/2
+	for side in [-1.0,1.0]:
+		glow_sheet(world,inward,Vector3(middle,DOOR_HEIGHT*.5,side*(DOOR_HALF-.04)),Vector2(reach,DOOR_HEIGHT))
+	# What spills out onto the court, fading from the doorway.
+	var round = GradientTexture2D.new()
+	round.width = 128; round.height = 128
+	round.fill = GradientTexture2D.FILL_RADIAL
+	round.fill_from = Vector2(.5,.5); round.fill_to = Vector2(1,.5)
+	var fading = Gradient.new()
+	fading.offsets = PackedFloat32Array([0,.45,1])
+	fading.colors = PackedColorArray([Color(GLOW,.36),Color(GLOW,.14),Color(GLOW,0)])
+	round.gradient = fading
+	var spill = glow_sheet(world,round,Vector3(door.x-1.5,.06,0),Vector2(17,17))
+	spill.name = "TempleDoorGlowSpill"
+	spill.rotation.x = -PI/2
+	# And the light itself, on whoever stands at the door.
+	var light = OmniLight3D.new()
+	light.name = "TempleDoorLight"
+	light.light_color = Color(1,.60,.28)
+	light.light_energy = 3.0
+	light.omni_range = 13.0
+	light.omni_attenuation = 1.1
+	light.position = Vector3(door.x+depth-1.6,2.4,0)
+	world.add_child(light)
+
+# A flat sheet of light, `size` metres across, drawn over whatever it lies on.
+static func glow_sheet(world, texture: Texture2D, at: Vector3, size: Vector2) -> Sprite3D:
+	var sheet = Sprite3D.new()
+	sheet.texture = texture
+	sheet.pixel_size = 1.0
+	sheet.scale = Vector3(size.x/texture.get_width(),size.y/texture.get_height(),1)
+	sheet.shaded = false
+	sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	world.add_child(sheet)
+	sheet.position = at
+	return sheet
 
 # A porch of four great columns stands before the door, a stepped gable over
 # them, and a stone guardian either side.

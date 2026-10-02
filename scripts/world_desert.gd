@@ -99,7 +99,7 @@ static func outcrops(world) -> void:
 		var at = Vector3(rng.randf_range(world.TOWN_GATE.x+25.0,world.TEMPLE_DOOR.x-60.0),0,rng.randf_range(-60.0,60.0))
 		if not clear_site(world,at,7.0): continue
 		made += 1
-		world.add_place("Outcrop","outcrop",at,7.0)
+		world.add_place("outcrop","outcrop",at,7.0)
 		var big = rng.randf()<.35
 		for i in rng.randi_range(2,5):
 			var offset = Vector3(rng.randf_range(-4.5,4.5),0,rng.randf_range(-4.5,4.5))
@@ -109,7 +109,7 @@ static func outcrops(world) -> void:
 # Where a new character wakes: a caravan's cart and load, left by the track.
 static func caravan(world) -> void:
 	var at: Vector3 = world.spawn
-	world.add_place("The Lost Caravan","camp",at,9.0)
+	world.add_place("caravan","camp",at,9.0)
 	var cart = world.prop("cart",at+Vector3(3.6,0,-3.2),2.5,.5)
 	world.block_disc(at+Vector3(3.6,0,-3.2),1.5,world.LOW)
 	for item in [["crate",Vector3(1.2,0,-4.2),.85,.3],["crate",Vector3(2.0,0,-5.0),.75,1.1],["barrel",Vector3(5.6,0,-1.4),.9,0.0],["bag",Vector3(.6,0,-3.2),.6,2.0],["urn",Vector3(5.0,0,-4.6),.7,0.0]]:
@@ -121,7 +121,7 @@ static func caravan(world) -> void:
 static func oasis(world) -> void:
 	var rng: RandomNumberGenerator = world.rng
 	var at = Vector3(-84,0,30)
-	world.add_place("The Palm Well","oasis",at,15.0)
+	world.add_place("oasis","oasis",at,15.0)
 	for lobe in [[Vector3.ZERO,5.2],[Vector3(4.5,0,2.0),3.6],[Vector3(-3.6,0,-2.2),3.0]]:
 		world.dab_disc(world.WATER,at+lobe[0],lobe[1],2.6)
 	var c = world.to_cell(at)
@@ -179,7 +179,7 @@ static func ruin_stone() -> ShaderMaterial:
 static func ruins(world) -> void:
 	var rng: RandomNumberGenerator = world.rng
 	var at = Vector3(4,0,-30)
-	world.add_place("The Sunken Colonnade","ruin",at,16.0)
+	world.add_place("ruins","ruin",at,16.0)
 	var stone = ruin_stone()
 	world.dab_disc(world.PAVING,at,7.0,5.0,.8)
 	for row in 2:

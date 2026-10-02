@@ -20,7 +20,7 @@ static func statue_material(skinned: bool = false, kit: String = "") -> ShaderMa
 		# The lion's face is a sculpted mask (tools/make_lion.py): its own
 		# normal map carries the finest work, and it wears no kit.
 		m.set_shader_parameter("body_detail",1.0)
-		m.set_shader_parameter("body_normal",load("res://assets/textures/lion_head_normal.jpg"))
+		m.set_shader_parameter("body_normal",load("res://assets/textures/lion_normal.png"))
 		m.set_shader_parameter("kit_height",load("res://assets/textures/flat_height.png"))
 	elif kit != "":
 		m.set_shader_parameter("body_detail",1.0)

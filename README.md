@@ -1,7 +1,7 @@
 # Temple Ascension 3D
 
 Native Godot adaptation of `/Users/ktabb/Documents/workspace/TempleAscension`.
-Choose Warrior, Ranger or Wizard when creating a character. A new character wakes in the middle of the desert, between the town of Halcyra in the west and the temple in the east; walking in through the temple's door begins the ascent. Progression follows the class, attribute and skill rules in the v2 plan.
+Choose Warrior, Ranger or Wizard when creating a character. A new character wakes in the middle of the desert, between the town in the west and the temple in the east; walking in through the temple's door begins the ascent. Progression follows the class, attribute and skill rules in the v2 plan.
 
 ## Play
 
@@ -23,6 +23,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Right click | Cast active skill slot 1 |
 | Hold left mouse | Continuously repath toward the cursor |
 | Space | Dash: spend 10 energy |
+| R | Toggle between running and walking (a slower pace) |
 | Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
 | 1 / 2 | Cast the other two assigned active skills |
 | C / K / I | Attribute panel (left) / skill tree panel (right) / equipment |
@@ -70,31 +71,40 @@ where a dim cool moonlight also catches the paving and parapets.
 The temple stands in a larger world, one continuous outdoor map
 (`scripts/overworld.gd`) about 420 m from west to east:
 
-- **Halcyra**, the town, at the western end. A colosseum-style arena stands at
+- **The town**, at the western end. A colosseum-style arena stands at
   its centre: an oval of sand 60 m by 48 m, with two banks of stone seating
   raised on a three-metre wall above it (the top row ten metres up), inside a
   two-storey arcade ninety metres across. A gate pierces it at each compass
   point; the eastern one faces the town gate. In the north stands, over the
-  north gate, is the Elders' Box: a pavilion of white marble with two gilded
-  thrones before a crimson canopy on gilded columns, a gilded rail, crimson
-  hangings, fire in gilded bowls, and four marble lions.
-  A broad paved street rings the arena, lined with palms. The inn (The
-  Wayfarer's Rest) and a shop (The Bronze Anvil) stand on its north side, a
-  second shop (Caravan Provisions) by the main street in the east, and a
-  market square with stalls and the well in the south-east corner. Five
-  streets and alleys run off the ring (Tanners' Lane, Potters' Row, Beggars'
-  Alley, Dyers' Lane and West Street), each with houses down both sides:
-  thirty-five in all. A wall with a towered gateway closes the town off from
-  the desert. The town is empty for now: its doors are shut, and standing at
-  one names the building.
-- **The Elders' Palace.** From the arena's north gate a paved road runs north
+  north gate, is the elders' box: a pavilion of white marble with five gilded
+  thrones in a row facing the sand, a crimson canopy on gilded columns behind
+  them, a gilded rail, crimson hangings and fire in gilded bowls.
+  A broad paved street rings the arena, lined with palms. The inn and the
+  smithy stand on its north side, a provisioner's shop by the main street in
+  the east, and a market square with stalls and the well in the south-east
+  corner. Five streets and alleys run off the ring, each with houses down both
+  sides: thirty-five in all. A wall with a towered gateway closes the town off
+  from the desert. The town is empty of people for now.
+- **The inn and the smithy** stand open: the hero walks in through the
+  doorway, and while he is inside the roof and the two walls on the camera's
+  side are lifted away, so the room is seen from above. The inn is a
+  two-storey hall with a plank floor: a common room with two tables set with
+  plates and mugs, a long bar with stools before it and kegs, shelves and
+  bottles behind, the kitchen's wall and door at the back, and above the
+  kitchen a loft with four beds, reached by a stair along the east wall (the
+  hero climbs it as he climbs the palace hill). The smithy has a stone floor,
+  a forge against the north wall with a bed of glowing coals, a fire, a hood
+  and a chimney up through the roof, anvils on their logs before it, a
+  quenching barrel, two workbenches, a grindstone, racks, crates of iron, and
+  swords, axes and shields hung on pegs along its walls.
+- **The elders' palace.** From the arena's north gate a paved road runs north
   some fifty metres, through a towered gate in a white wall that shuts the
-  hill off from the town, and up a short five-metre hill between marble lions
-  and fires to the palace: a two-storey hall of white stone on a terrace, with
+  hill off from the town (a marble centurion stands either side of it), and
+  up a short five-metre hill between marble lions and fires to the palace: a two-storey hall of white stone on a terrace, with
   a tower, two wings, a portico of six marble columns under a stepped gable,
   gilded cornices, crimson hangings, two pools, palms and olives, and a great
-  marble lion either side of its steps. Every statue in the town (the box,
-  the road, the palace: ten in all) is a marble lion. The hill is the one place the ground rises:
+  marble lion either side of its steps. The town's four lion statues (two on
+  the road, two at the palace) sit on their haunches. The hill is the one place the ground rises:
   the hero, the camera and clicks all follow it.
 - **Rich and poor.** The arena and the palace are dressed stone kept
   spotless. The town is not: about three houses in four are stained,
@@ -104,17 +114,19 @@ The temple stands in a larger world, one continuous outdoor map
   in four is kept up, and the inn and shops are shabby but sound. The alleys
   are trodden dirt with what is left of their paving. Every door and shutter
   in the world is bare or oiled wood, in one brown or another.
-- **The Amber Waste**, the open desert between them: wind-rippled sand and low
+- **The desert** between them: wind-rippled sand and low
   dunes, crossed by a worn track from the town gate to the temple. Running it
   from gate to door (about 250 m) takes some forty seconds. On the way are an abandoned caravan
   (where a new character starts, in the middle), a palm-ringed pool, a ruined
   colonnade, boundary stones along the track, rock outcrops, dead trees and
   dry scrub.
-- **The Temple of the Crowned**, at the eastern end: the stepped building whose
+- **The temple**, at the eastern end: the stepped building whose
   floors the hero climbs inside, with a paved forecourt lined with pillars and
   fire bowls, two colossal stone centurions (the temple's own, three times life size, both
   looking out west down the road) and four great columns before its
-  door. Walking in through the door loads the first floor, with the hero
+  door, from which a dull amber light, the colour of the fires, glows and
+  spills over the threshold.
+  Walking in through the door loads the first floor, with the hero
   standing just inside. The first floor has the same door from within (a short
   passage through the wall of its entrance room, daylight beyond); walking out
   through it returns to the forecourt. The floor is not reset by leaving:
@@ -127,8 +139,9 @@ west lighting the temple's front; the camera looks from the south-west (inside
 the temple it still looks from the south-east), so west and south faces are
 the ones seen. Trees, buildings, the arena's wall and anything else tall turn
 see-through while they stand between the camera and the hero. No statue
-stands outside the temple. The top right of the screen names the town, the
-desert or the temple, and which way the others lie.
+stands outside the temple. No place in the game has a name: the temple's
+floors are numbered, and outdoors the top right of the screen only says which
+way the temple and the town lie.
 
 The temple's interior is a separate place, loaded on entering, as before.
 Outdoors the same controls apply.
@@ -164,7 +177,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | L | Return to floor 1 with stats and weapons intact |
 | O / U | Jump outside the temple: to the desert where a character starts / inside the town gate |
 | T | Restart the current floor with stats and weapons intact |
-| R | Reset the run and turn off invulnerability |
+| F8 | Reset the run and turn off invulnerability |
 | F10 | Jump to this adaptation's crown ending and completion summary |
 | P | Hide/show the panel; shortcuts remain active |
 | Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click on the ground, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Any unit attacks by left clicking another unit (hero or statue) or with Shift + left click, and every attack can hit any other unit. Hits play their reactions but deal no damage and nothing dies; X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
@@ -348,8 +361,19 @@ HUD controls, dead enemies and dormant centurions do not trigger this feedback.
 
 The Lion Guardian is a stone lion the size of a living one (1.15 m at the
 shoulder, about 2.1 m from nose to rump), with the original fast pursuit and
-attack cadence. It stands watch, gallops, and attacks by rearing up and raking
-its right forepaw forward and across; it flinches when struck. The local
+attack cadence. It is sculpted as a lion is built: a deep chest and tucked
+belly, heavy shoulders, the great thigh of the hind leg running down to the
+stifle, the shin back to a high hock and the long foot below it, thick
+forelegs, broad four-toed paws with claws, a hanging tail with its tuft, and a
+full mane of long locks swept back from the face over the neck, the shoulders
+and the breast, every lock combed into strands. It stands watch, breathing and
+looking about; it moves at a trot, each fore paw stepping with the opposite
+hind paw and the two pairs in turn; and it attacks by sinking back, rearing
+onto its haunches with the right forepaw drawn up and out wide, then throwing
+its whole body behind the paw as it rakes forward and across, and dropping
+back onto its forefeet. It flinches when struck, and when an attacker pushes
+into it its four paws step away under it (the diagonal pairs in turn) rather
+than slide, as the other units' feet do. The local
 library has no four-legged figure, so the lion is built for this game by
 `tools/make_lion.py` (see `docs/ASSETS.md`). All humanoid statues and the hero
 use the requested local model and animation library.

@@ -44,7 +44,19 @@ sources={
  # Quaternius's well, from Poly Pizza (CC0). (The rocks, stones and shrubs are
  # photo scans, prepared by tools/prepare_scans.py; the palms are built by
  # tools/make_palm.py.)
- 'well':ROOT/'source_art/poly_pizza/well_QlqncKYxXb.glb'
+ 'well':ROOT/'source_art/poly_pizza/well_QlqncKYxXb.glb',
+ # The furniture of the inn and the smithy (scripts/world_interiors.gd).
+ 'bed':props/'Bed_Twin1.gltf','cabinet':props/'Cabinet.gltf','shelf':props/'Shelf_Simple.gltf',
+ 'shelf_bottles':props/'Shelf_Small_Bottles.gltf','shelf_arch':props/'Shelf_Arch.gltf','mug':props/'Mug.gltf',
+ 'bottle':props/'Bottle_1.gltf','bottles':props/'SmallBottles_1.gltf','plate':props/'Table_Plate.gltf',
+ 'chandelier':props/'Chandelier.gltf','candlestick':props/'CandleStick_Triple.gltf','chest':props/'Chest_Wood.gltf',
+ 'workbench':props/'Workbench.gltf','workbench_drawers':props/'Workbench_Drawers.gltf','whetstone':props/'Whetstone.gltf',
+ 'anvil_log':props/'Anvil_Log.gltf','peg_rack':props/'Peg_Rack.gltf','chain':props/'Chain_Coil.gltf',
+ 'bucket_metal':props/'Bucket_Metal.gltf','axe_bronze':props/'Axe_Bronze.gltf','pickaxe':props/'Pickaxe_Bronze.gltf',
+ 'nightstand':props/'Nightstand_Shelf.gltf','crate_metal':props/'Crate_Metal.gltf','pot':props/'Pot_1.gltf',
+ 'stairs_wood':kay/'stairs_wood.gltf.glb','keg':kay/'keg.gltf.glb','barrier':kay/'barrier.gltf.glb',
+ 'table_long':kay/'table_long.gltf.glb','shelves':kay/'shelves.gltf.glb','floor_wood':kay/'floor_wood_large.gltf.glb',
+ 'sword_long':adv/'sword_2handed.gltf','shield_round':adv/'shield_round.gltf','hand_axe':adv/'axe_1handed.gltf'
 }
 # Exported without their images: the game gives these one shared material per
 # surface, by the surface material's name (Art.SHARED in scripts/assets.gd),

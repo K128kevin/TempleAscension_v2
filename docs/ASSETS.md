@@ -189,30 +189,75 @@ bushes; they were replaced.)
   stone's grain, wear and cracks with the figure, so a colossus is the same carving
   grown, and `pale` renders it as white marble rather than dark stone. The temple's
   two guardians are the centurion (its stone, armor relief and all) at three times
-  life size, both facing west. Every statue of the town is the lion below, in
-  marble: four in the Elders' Box, two at the palace gate, two on the road and two
-  great ones at the palace steps.
+  life size, both facing west. The town's statues are marble: four seated lions
+  (two on the palace road, two great ones at the palace steps) and two centurions
+  at the palace gate.
 - **The lion.** `tools/make_lion.py` builds `assets/models/character/lion.glb`, used
-  for the temple's Lion Guardian and the town's marble lions. Its body is
-  ["Lion" by Poly by Google](https://poly.pizza/m/3XAJojWxSWz) (**CC-BY 3.0**, via
-  Poly Pizza; attribution required, see `assets/licenses/PolyByGoogle-Lion-CC-BY.txt`),
-  a low-poly standing lion: sized to a real lion, smoothed, its stick legs filled
-  out, haunches and shoulders raised, its mane carved into locks and its paws into
-  toes. Its face is Poly Haven's sculpted [Lion Head](https://polyhaven.com/a/lion_head)
-  (CC0), a mask of a lion's face and the mane round it, set in place of the body's
-  own plain head; the mask's normal map (`assets/textures/lion_head_normal.jpg`)
-  carries the finest work, read by the statue shader through the mask's UVs
-  (vertex colour blue 0 marks the mask). The whole is about 16,000 triangles. The
-  model had no skeleton: the script builds one (24 bones: spine, neck, head, four
-  two-jointed legs with paws, a four-bone tail), skins the mesh to it, and keys six
-  clips frame by frame, the legs by two-bone IK: Idle (breathing, the head turning,
-  the tail swaying), Run (a rotary gallop), Attack (it rears and rakes its right
-  forepaw forward and across; the blow lands 63% of the way through), Hit, HitHead
-  and HitStagger. `scripts/visual.gd` treats it as a quadruped: no foot planter,
-  hand grips, shield arm or equipment.
+  for the temple's Lion Guardian and the town's marble lions. Its body is sculpted
+  by the script, volume by volume, as a lion is built: the trunk in sections from
+  breast to rump (a deep ribcage, the belly tucked up behind it, loins and croup),
+  shoulder blades and the muscle under them, thick forelegs with elbow, forearm and
+  wrist, the hind leg's great thigh, hamstring and flank fold, the stifle, the shin
+  running back to a high hock with its tendon, the long foot below, broad paws with
+  four toes and claws, a hanging tail and its tuft, and a mane of some 290 long
+  locks lying over the head, the neck, the shoulders and the breast, each a tapered
+  tongue following the surface and lying over the next. The clay is fused into one
+  surface twice. The fine one (about 330,000 faces at a 5.5 mm grain) has the detail
+  cut into it: every lock combed into strands, the ribs, and the lines between the
+  muscles of the shoulder, flank and thigh. The coarse one, cut to 17,000 triangles,
+  is the mesh the game draws; the bare body's masses are melted into one another
+  (the hair and the toes keep their edges), and the fine surface's relief is baked
+  onto it as a tangent-space normal map. Its face is Poly Haven's sculpted
+  [Lion Head](https://polyhaven.com/a/lion_head) (CC0), a mask of a lion's face and
+  the mane round it (7,000 triangles), with its own normal map; both maps share
+  `assets/textures/lion_normal.png` (the body's on the left half, the face's on the
+  right), read by the statue shader through the UVs (vertex colour blue 0). The
+  script builds the skeleton (30 bones: hips, spine, chest, neck, head, a five-bone
+  tail, and four legs of upper leg, lower leg, paw and toes), skins the mesh to it
+  by nearness to each bone (a leg holds only its own side; the mane goes with the
+  head, neck and chest), and keys seven clips frame by frame, the legs by two-bone
+  IK and the motion carried smoothly through its key poses: Idle (four seconds:
+  breathing, shifting its weight, the head turning, the tail swaying), Run (a trot:
+  each fore paw lands with the opposite hind paw, the two pairs half a stride apart,
+  the paws folding up behind and reaching out to land; `LION_STRIDE_SPEED` in
+  `scripts/visual.gd` is the ground it covers a second as authored), Attack (it sinks
+  back, rears onto its haunches with the right forepaw drawn up and out wide, then
+  uncoils behind the paw as it rakes forward and across and drops back onto its
+  forefeet; the blow lands half way through, `LION_SWIPE` in
+  `scripts/combat_animation.gd`), Hit, HitHead, HitStagger (driven back onto its
+  haunches, a forepaw thrown out to catch itself), and Sit (on its haunches,
+  forelegs straight, hind feet flat, tail curled round on the ground: the held pose
+  of the town's statues). `LION_QUICK=1` skips the fine sculpt and the bake, to try
+  a shape or a pose. `scripts/visual.gd` treats it as a quadruped: no hand grips,
+  shield arm or equipment, and its feet are planted by `scripts/paw_planter.gd`,
+  the foot planter for four legs: each paw the animation sets down is pinned and
+  its leg bent to it by IK, and when the lion is driven over the ground by a blow
+  the diagonal pairs of paws step in turn, landing ahead of the body the way it is
+  carried.
+- **Walk-in buildings.** `scripts/world_interiors.gd` builds the inn and the smithy
+  as halls of the town's wall modules on all four sides, with an open doorway.
+  `Overworld.rooms` holds each hall's footprint and its shell (the roof and the south
+  and west walls, the camera's side), hidden while the hero stands inside; its own
+  walls never fade over him there. `Overworld.decks` holds floors above the ground
+  (the inn's loft, and the ramp of its stair): `height_at` adds a deck's height, so
+  the hero, the camera, clicks and anything set down there stand on it, as on the
+  palace hill. Floors are the dungeon kit's wood and stone floor tiles; the stair,
+  the bar (two long tables), the loft's rail and the wall shelves are that kit's
+  shapes in sawn timber (`Kit.planks`, the plank texture at one size in the world).
+  Beds, tables, benches, stools, mugs, plates, bottles, candlesticks, cabinets,
+  chests, workbenches, the grindstone, anvils, pegs and the rest are the props kit's
+  models in its own trim materials. The forge is built of the town's masonry in
+  blackened stone (a hearth, an arched firebox, a hood and a chimney), with a bed
+  of coals (`Kit.embers`, burnt stone that glows), the torches' flame, and a warm
+  light that reaches the room. The arms on the smithy's walls are the game's own
+  weapon models; the adventurers kit's, which come painted in its heroes' colours,
+  are given bare iron (`Kit.iron`) or timber.
 - **Gold and marble.** Gold is the rock grain photograph tinted to gold with a little
   metal and its own faint glow (the outdoor scene has no sky to reflect); marble is
-  `statue_marble.png` at world scale (plinths, kerbs, columns). Thrones are the props kit's `chair`, gilded;
+  `statue_marble.png` laid at one size in the world (plinths, kerbs, columns, the
+  Elders' Box), so its veins keep their shape on blocks of any proportion; the box's
+  walls are built of wall modules near the kit's own four metres square rather than
+  one module stretched to the wall's length. Thrones are the props kit's `chair`, gilded;
   rails, cornices, column heads and feet are the paving mesh, gilded.
 - **The palace hill.** The world's ground is one flat slab; the hill is
   `assets/models/props/hill.glb`, a two-metre grid raised to the hill's height by
@@ -253,6 +298,11 @@ bushes; they were replaced.)
 - **The well.** A CC0 model by Quaternius from [Poly Pizza](https://poly.pizza/m/QlqncKYxXb)
   (`source_art/poly_pizza/`). It comes in flat colours; the game gives its stone, roof
   tiles and bag the rock grain photograph and its timber the existing plank texture.
+- **The temple door's glow.** A dull amber (close to the torches' own light), unshaded
+  end wall to the passage; sheets of the same amber (sprites with generated gradient
+  textures) on the passage's floor and walls, clear at the threshold and full a few
+  metres in; a soft round pool of it over the court before the door; and a light of
+  the torches' colour. No image asset.
 - **Fire.** Bowls outdoors reuse the `fire_bowl` mesh and the torches' particle flame;
   in daylight their light is kept off every surface.
 
@@ -295,6 +345,12 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   `tools/import_combat.py` authors and bakes BowIdle, BowShot, BowRapid, BowRun, BowCrouch,
   SpearIdle, SpearStab and SpearJab on the supplied skeleton. These animate
   existing bones and meshes; no replacement geometry is generated.
+- The hero's walk (the R key) is the animation library's `Walk_Loop`, retargeted as
+  the clip `Walk` by `tools/import_walk.py`. The walks that carry a weapon
+  (SwordWalk, RangerWalk, WizardWalk) are made from it when the figure is set up
+  (`Visual.derive_walks`): the walk's stride, with each arm held most of the way to
+  where the matching stance holds it, so the sword stays low, the bow at his side
+  and the staff in his hand.
 - Quaternius Stylized Nature MegaKit [Standard]: rocks, dead tree, grass, fern and
   pebble geometry. The pebble is reused with jewel materials for gem drops.
 
@@ -304,6 +360,7 @@ animation licenses sit beside it. Rebuild with Blender:
 ```sh
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_character.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_combat.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_walk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
 ```
 

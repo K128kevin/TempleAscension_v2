@@ -26,8 +26,12 @@ func test():
 	if not debug.enabled:
 		check(not is_instance_valid(debug.panel) and game.run.class_id=="ranger" and game.run.seed==93741,"Normal launch loads its character without debug UI")
 		var generation=game.run_generation
-		for code in [KEY_R,KEY_T,KEY_N,KEY_B,KEY_L,KEY_H,KEY_J,KEY_F9,KEY_G,KEY_F,KEY_F10]: key(code)
+		for code in [KEY_F8,KEY_T,KEY_N,KEY_B,KEY_L,KEY_H,KEY_J,KEY_F9,KEY_G,KEY_F,KEY_F10]: key(code)
 		check(game.run_generation==generation and game.remaining()==24,"Debug shortcuts are gated")
+		key(KEY_R)
+		check(game.walking and game.player_pace() < game.PLAYER_RUN_SPEED*.5,"R slows the hero to a walk")
+		key(KEY_R)
+		check(not game.walking and is_equal_approx(game.player_pace(),game.PLAYER_RUN_SPEED),"R again sets him running")
 		key(KEY_K)
 		check(game.mode=="character" and game.hud.panels.skills_open(),"K opens the skill panel")
 		key(KEY_K)
@@ -40,7 +44,7 @@ func test():
 		check(game.mode=="playing" and not game.hud.panels.any_open(),"Escape closes both and resumes")
 	else:
 		check(Save.directory==base.path_join("debug"),"Debug uses an isolated save")
-		key(KEY_R)
+		key(KEY_F8)
 		check(game.run.stats==[5,5,5,5,5] and game.run.level==1,"Debug reset restores new progression baseline")
 		key(KEY_G); game.hurt_player(10000)
 		check(not game.player.dead and game.player.hp==100,"God mode protects player")

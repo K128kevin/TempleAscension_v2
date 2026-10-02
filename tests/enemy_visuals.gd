@@ -2,6 +2,7 @@ extends SceneTree
 const Visual = preload("res://scripts/visual.gd")
 const Data = preload("res://scripts/data.gd")
 const Art = preload("res://scripts/assets.gd")
+const Motion = preload("res://scripts/combat_animation.gd")
 var passed = 0
 var failures: Array = []
 var actors: Array = []
@@ -10,6 +11,8 @@ func _initialize(): call_deferred("verify")
 func check(ok: bool, message: String):
 	if ok: passed += 1
 	else: failures.append(message); push_error(message)
+func paw_bone(lion, name: String) -> int:
+	return lion.skeleton.find_bone(name)
 func frames(n: int):
 	for i in n: await process_frame
 func snapshot(name: String):
@@ -81,9 +84,24 @@ func verify():
 	var lion = Visual.new(); scene.add_child(lion)
 	lion.setup(true,Data.ENEMIES.lion.color,Data.ENEMIES.lion.weapon,Data.ENEMIES.lion.size,"lion")
 	check(lion.quadruped and lion.skeleton.find_bone("forepaw_r")>=0 and lion.skeleton.find_bone("hand_r")<0,"The lion stands on four legs, on a skeleton of its own")
-	check(lion.skin_meshes[0].material_override.shader==Art.statue_material().shader and lion.skin_meshes[0].material_override.get_shader_parameter("body_normal").resource_path.ends_with("lion_head_normal.jpg"),"It is carved in the statues' stone, its face in fine relief")
+	check(lion.skin_meshes[0].material_override.shader==Art.statue_material().shader and lion.skin_meshes[0].material_override.get_shader_parameter("body_normal").resource_path.ends_with("lion_normal.png"),"It is carved in the statues' stone, its sculpted detail in relief")
 	var lion_clips = ["Idle","Run","Attack","Hit","HitHead","HitStagger"]
-	check(lion_clips.all(func(c): return lion.clips.has(c)),"It has its own stance, gallop, swipe and flinches")
+	check(lion_clips.all(func(c): return lion.clips.has(c)),"It has its own stance, trot, swipe and flinches")
+	# A trot: the diagonal pairs of paws step in turn.
+	var trot: Animation = lion.animator.get_animation(lion.clips.Run)
+	var pairs_alternate = true
+	for half in 2:
+		lion.animator.play(lion.clips.Run)
+		lion.animator.seek(trot.length*(.2+.5*half),true)
+		lion.skeleton.force_update_all_bone_transforms()
+		var up = {}
+		for paw in ["foretoes_l","hindtoes_r","foretoes_r","hindtoes_l"]: up[paw] = lion.skeleton.get_bone_global_pose(paw_bone(lion,paw)).origin.y-lion.skeleton.get_bone_global_rest(paw_bone(lion,paw)).origin.y
+		var down = ["foretoes_l","hindtoes_r"] if half==0 else ["foretoes_r","hindtoes_l"]
+		var raised = ["foretoes_r","hindtoes_l"] if half==0 else ["foretoes_l","hindtoes_r"]
+		if not (down.all(func(paw): return up[paw]<.03) and raised.all(func(paw): return up[paw]>.08)): pairs_alternate = false
+	check(pairs_alternate,"It trots: each fore paw steps with the opposite hind paw, the two pairs in turn")
+	check(lion.planter != null and lion.planter.feet.size()==4 and lion.planter.feet.all(func(f): return f.thigh>=0 and f.calf>=0 and f.foot>=0),"Its four paws are planted on the ground, to step when it is pushed")
+	check(Motion.LION_SWIPE.clip=="Attack" and lion.animator.get_animation(lion.clips.Attack).length>.8,"Its swipe is a full blow: rearing, then raking a forepaw across")
 	var lion_box = AABB()
 	for mesh in lion.skin_meshes: lion_box = lion_box.merge(mesh.get_aabb()) if lion_box.has_volume() else mesh.get_aabb()
 	check(lion_box.size.y>1.2 and lion_box.size.y<1.6 and lion_box.size.z>2.6 and lion_box.size.z<3.3,"It is the size of a living lion (%.2f m tall, %.2f m nose to tail)" % [lion_box.size.y,lion_box.size.z])

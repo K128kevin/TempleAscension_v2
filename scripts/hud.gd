@@ -158,8 +158,8 @@ func setup(owner_game) -> void:
 	abilities = label("",16,gold,root)
 	anchor(abilities,Vector2(.5,1),Vector2(-330,-61),Vector2(660,23))
 	abilities.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var controls = label("LMB Move / Attack · RMB + 1 / 2 Skills · SPACE Evade · Q Heal · C Attributes · K Skills · I Equipment",13,Color(.7,.68,.60),root)
-	anchor(controls,Vector2(.5,1),Vector2(-350,-30),Vector2(700,22))
+	var controls = label("LMB Move / Attack · RMB + 1 / 2 Skills · SPACE Evade · Q Heal · R Walk / Run · C Attributes · K Skills · I Equipment",13,Color(.7,.68,.60),root)
+	anchor(controls,Vector2(.5,1),Vector2(-400,-30),Vector2(800,22))
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = label("",19,gold,root)
 	anchor(prompt,Vector2(.5,1),Vector2(-400,-177),Vector2(800,28))
@@ -242,7 +242,7 @@ func tick(dt: float) -> void:
 	hp_text.text = "%d / %d" % [maxf(0,game.player.hp),maximum_health]
 	en_text.text = "%d / %d" % [r.energy,maximum_energy]
 	var outdoors: bool = game.outdoors() and game.playground == null
-	objective.text = "PLAYGROUND · Shift+P leaves" if game.playground != null else "%s · %s" % ["SUMMIT" if r.floor==5 else "FLOOR %d" % (r.floor+1),Data.FLOORS[r.floor].to_upper()]
+	objective.text = "PLAYGROUND · Shift+P leaves" if game.playground != null else ("SUMMIT" if r.floor==5 else "FLOOR %d" % (r.floor+1))
 	difficulty.text = "%s mode" % Data.DIFFICULTIES[r.difficulty]
 	var remaining: int = game.remaining()
 	status.text = "%d statues remain" % remaining if remaining>0 else ("The crown awaits" if r.floor==5 else "The way up is open")
@@ -281,7 +281,7 @@ func tick(dt: float) -> void:
 		if outdoors: prompt.text = outdoor_prompt()
 		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
 		elif remaining==0 and r.floor<5: prompt.text = "The stairway is open. %s" % ("Press E to ascend" if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
-		elif game.world.leaving_soon(game.player.position): prompt.text = "The door leads out to %s" % Data.DESERT
+		elif game.world.leaving_soon(game.player.position): prompt.text = "The door leads out to the desert"
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest · C attributes · K skills"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
 	boss_name.visible = boss_bar.visible
@@ -291,27 +291,18 @@ func tick(dt: float) -> void:
 	notice_time -= dt
 	notice.visible = notice_time > 0
 
-# Outside the temple the corner of the screen names where the hero is, and
-# which way the town and the temple lie.
+# Outside the temple the corner of the screen says which way the town and the
+# temple lie. (No place is named.)
 func show_outdoors() -> void:
-	var at: Vector3 = game.player.position
-	var region: String = game.world.region(at)
-	objective.text = {"town":Data.TOWN,"desert":Data.DESERT,"temple":Data.TEMPLE}[region].to_upper()
-	var spot: Dictionary = game.world.place_at(at)
-	status.text = spot.name if not spot.is_empty() and spot.kind!="outcrop" else ""
-	direction.text = {"town":"The temple lies east, across the desert","desert":"Temple: east · %s: west" % Data.TOWN,"temple":"%s lies west, across the desert" % Data.TOWN}[region]
+	var region: String = game.world.region(game.player.position)
+	objective.text = ""
+	status.text = ""
+	direction.text = {"town":"The temple lies east, across the desert","desert":"Temple: east · Town: west","temple":"The town lies west, across the desert"}[region]
 
 # What the hero is standing in front of, outdoors.
 func outdoor_prompt() -> String:
 	var spot: Dictionary = game.world.place_at(game.player.position)
-	if spot.is_empty(): return ""
-	match spot.kind:
-		"temple": return "%s · Walk in to begin the ascent" % spot.name
-		"inn": return "%s · Inn · No one is here yet" % spot.name
-		"shop": return "%s · Shop · No one is here yet" % spot.name
-		"house": return spot.name
-		"palace": return "%s · Its doors are shut to the town" % spot.name
-		"royal_box": return "%s · Where the elders watch the games" % spot.name
+	if not spot.is_empty() and spot.kind == "temple": return "Walk in to begin the ascent"
 	return ""
 
 func toast(value: String) -> void:

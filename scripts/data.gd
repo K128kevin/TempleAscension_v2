@@ -1,6 +1,7 @@
 extends RefCounted
 ## Balance translated from the original game's src/config/balance.ts.
-const FLOORS = ["The Threshold", "Hall of Beasts", "The Ember Archive", "Court of the Immortals", "The Last Vigil", "The Crowned Summit"]
+# The temple's floors: five and the summit. (No place in the game has a name.)
+const FLOORS = 6
 const COUNTS = [
 	{"gladiator":14,"archer":10},
 	{"gladiator":12,"archer":10,"lion":10},
@@ -49,9 +50,6 @@ static func new_run(class_id: String = "warrior") -> Dictionary:
 # Where a run can be: on a floor of the temple, or in the world outside it
 # (the town, the desert and the temple's front; scripts/overworld.gd).
 const PLACES = ["temple","world"]
-const TOWN = "Halcyra"
-const DESERT = "The Amber Waste"
-const TEMPLE = "Temple of the Crowned"
 
 # A new character wakes in the middle of the desert, between the town and the
 # temple. (new_run alone starts at the temple's first floor.)

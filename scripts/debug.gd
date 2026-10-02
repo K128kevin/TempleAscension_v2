@@ -19,7 +19,7 @@ const ACTIONS = [
 	[KEY_O,"desert","O · Desert (start)"],
 	[KEY_U,"town","U · Town"],
 	[KEY_T,"restart","T · Restart floor"],
-	[KEY_R,"reset","R · Reset run"],
+	[KEY_F8,"reset","F8 · Reset run"],
 	[KEY_F10,"ending","F10 · Jump to ending"]]
 
 func configure(args: PackedStringArray) -> void:
@@ -122,11 +122,11 @@ func prepare_floor(index: int) -> void:
 	game.run.energy = Data.max_energy(game.run)
 
 func jump(index: int) -> void:
-	if index<0 or index>=Data.FLOORS.size(): return
+	if index<0 or index>=Data.FLOORS: return
 	prepare_floor(index)
 	game.load_floor()
 	game.save_run()
-	game.toast("[Debug] %s" % Data.FLOORS[index])
+	game.toast("[Debug] %s" % ("Summit" if index==5 else "Floor %d" % (index+1)))
 
 func execute(action: String, floor_index: int = 0) -> void:
 	if not available(action): return
@@ -162,7 +162,7 @@ func execute(action: String, floor_index: int = 0) -> void:
 			game.run.phase = "playing"
 			game.run.position = [-52,-15] if action=="desert" else [-186,0]
 			game.load_floor()
-			game.toast("[Debug] %s" % (Data.DESERT if action=="desert" else Data.TOWN))
+			game.toast("[Debug] %s" % ("Desert" if action=="desert" else "Town"))
 		"floor": jump(floor_index)
 		"restart": jump(int(game.run.floor))
 		"reset":
