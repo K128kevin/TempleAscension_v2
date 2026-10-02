@@ -182,6 +182,9 @@ func test():
 	for pair in [[actor,"ArcherShot"],[actor,"BowShot"],[actor,"BowRapid"],[archer,"ArcherShot"],[archer,"Hit"]]:
 		var who = pair[0]
 		var k = who.rig.scale.x
+		# Posed as stills, without the unit's clock (in play the turn that
+		# clears the legs is eased in over time).
+		who.anim_clock = 0.0
 		for i in 41:
 			pose(who,pair[1],i/40.0)
 			var t: Transform3D = who.weapon_item.global_transform

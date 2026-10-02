@@ -89,9 +89,26 @@ timing={
  'AxeChop':[(0,0),(.28,.10/.75),(.55,.14/.75),(.72,.20/.75),(1,1)],
  'AxeWhirl':[(0,0),(.30,.24),(.40,.30),(.62,.35),(.74,.42),(1,1)],
  'HitKnockdown':[(0,0),(1,1)]}
+def lerp_pose(m1,m2,w):
+ l1,r1,s1=m1.decompose();l2,r2,s2=m2.decompose()
+ return Matrix.LocRotScale(l1.lerp(l2,w),r1.slerp(r2,w),s1.lerp(s2,w))
+def ease(u):
+ u=max(0.0,min(1.0,u));return u*u*(3-2*u)
 def retimed(points,t):
- for (a,v),(b,w) in zip(points,points[1:]):
-  if t<=b:return v+(w-v)*(t-a)/(b-a)
+ # A monotone cubic through the timing points (Fritsch-Carlson): the source
+ # speeds up into the cut and slows out of it smoothly. Joined by straight
+ # lines, its speed jumped at every point and the motion lurched there.
+ xs=[p[0] for p in points];ys=[p[1] for p in points];n=len(points)
+ d=[(ys[i+1]-ys[i])/(xs[i+1]-xs[i]) for i in range(n-1)]
+ m=[d[0]]+[0 if d[i-1]*d[i]<=0 else (d[i-1]+d[i])/2 for i in range(1,n-1)]+[d[-1]]
+ for i in range(n-1):
+  if d[i]==0: m[i]=m[i+1]=0; continue
+  a=m[i]/d[i];b=m[i+1]/d[i];h=a*a+b*b
+  if h>9: k=3/math.sqrt(h);m[i]=k*a*d[i];m[i+1]=k*b*d[i]
+ for i in range(n-1):
+  if t<=xs[i+1]:
+   h=xs[i+1]-xs[i];u=(t-xs[i])/h
+   return (2*u**3-3*u*u+1)*ys[i]+(u**3-2*u*u+u)*h*m[i]+(-2*u**3+3*u*u)*ys[i+1]+(u**3-u*u)*h*m[i+1]
  return 1
 for name,parts in sequences.items():
  a=action(name);segments=[];length=0
@@ -100,11 +117,29 @@ for name,parts in sequences.items():
   span=duration*(end-start)
   segments.append((length,length+span,src,duration*start))
   length+=span
+ # Where one source clip hands over to the next, their poses need not
+ # match (a wrist turned another way, a hip shifted): the first clip's last
+ # pose is blended into the second over its opening SEAM seconds, so nothing
+ # jumps at the join.
+ SEAM=.25
+ ends=[]
+ for seg in segments[:-1]:
+  source.animation_data.action=seg[2]
+  frame(seg[3]+seg[1]-seg[0]);retarget()
+  ends.append({b.name:rig.pose.bones[b.name].matrix_basis.copy() for b in bones})
  for f in range(61):
   time=retimed(timing[name],f/60)*length
-  seg=next((v for v in segments if time<=v[1]+1e-6),segments[-1])
+  index=next((i for i,v in enumerate(segments) if time<=v[1]+1e-6),len(segments)-1)
+  seg=segments[index]
   source.animation_data.action=seg[2]
-  frame(seg[3]+time-seg[0]);retarget();keys(f)
+  frame(seg[3]+time-seg[0]);retarget()
+  into=time-seg[0]
+  if index>0 and into<SEAM:
+   w=ease(into/SEAM)
+   for b in bones:
+    p=rig.pose.bones[b.name];p.matrix_basis=lerp_pose(ends[index-1][b.name],p.matrix_basis,w)
+   bpy.context.view_layer.update()
+  keys(f)
  finish(name,a,2.0)
 
 # Analytic two-bone IK, baked into ordinary skeleton keyframes. The pole sets
@@ -179,6 +214,113 @@ def bow_grip():
  roll=math.atan2(axis.dot(knuckles.cross(up)),knuckles.dot(up))
  hand.matrix=Matrix.Translation(origin) @ (Quaternion(axis,roll) @ turn).to_matrix().to_4x4()
  bpy.context.view_layer.update()
+
+# Clean footwork for a baked clip. Optionally it eases out of the idle pose
+# (`ease_in` of the clip) and back into it (`ease_out`), so the clip starts
+# and ends in the idle's own stance and nothing jumps as the game blends in
+# and out of it. Then each foot keeps still wherever it rests on the ground: a
+# foot that slid along the ground in the source instead stays put and takes
+# one quick lifted step to where it slid to; between rests the swinging foot
+# is eased onto the new rest positions. Two-bone leg IK places the feet, the
+# hips and upper body moving as authored.
+def place_foot(side,target,pole):
+ thigh=rig.pose.bones['thigh_'+side];calf=rig.pose.bones['calf_'+side];foot=rig.pose.bones['foot_'+side]
+ keep=foot.matrix.to_quaternion()
+ s=thigh.matrix.translation.copy()
+ l1=(calf.matrix.translation-s).length;l2=(foot.matrix.translation-calf.matrix.translation).length
+ d=target-s;length=min(d.length,l1+l2-.001);direction=d.normalized();target=s+direction*length
+ bend=pole-s;bend=(bend-direction*bend.dot(direction)).normalized()
+ along=(l1*l1-l2*l2+length*length)/(2*length)
+ knee=s+direction*along+bend*math.sqrt(max(0,l1*l1-along*along))
+ for bone,head,end in [(thigh,s,knee),(calf,knee,target)]:
+  q=bone.matrix.to_quaternion();y=q @ Vector((0,1,0))
+  bone.matrix=Matrix.Translation(head) @ (y.rotation_difference((end-head).normalized()) @ q).to_matrix().to_4x4()
+  bpy.context.view_layer.update()
+ foot.matrix=Matrix.Translation(foot.matrix.translation) @ keep.to_matrix().to_4x4()
+ bpy.context.view_layer.update()
+def tidy_clip(name,ease_in=0.0,ease_out=0.0,plant=True):
+ act=bpy.data.actions[name]
+ frames=sorted({int(round(k.co.x)) for fc in act.fcurves for k in fc.keyframe_points})
+ rig.animation_data.action=act
+ poses=[]
+ for f in frames:
+  bpy.context.scene.frame_set(f);bpy.context.view_layer.update()
+  poses.append({b.name:b.matrix_basis.copy() for b in rig.pose.bones})
+ n=len(frames)-1
+ for i,pose in enumerate(poses):
+  u=i/n;w=1.0
+  if ease_in>0 and u<ease_in: w=min(w,ease(u/ease_in))
+  if ease_out>0 and u>1-ease_out: w=min(w,ease((1-u)/ease_out))
+  if w<1:
+   for k in pose: pose[k]=lerp_pose(base[k],pose[k],w)
+ rig.animation_data.action=None
+ def apply(pose):
+  for b in rig.pose.bones:b.matrix_basis=pose[b.name]
+  bpy.context.view_layer.update()
+ apply(base)
+ rest={s:(rig.pose.bones['foot_'+s].head.z,rig.pose.bones['ball_'+s].head.z) for s in 'lr'}
+ ankles={s:[] for s in 'lr'};balls={s:[] for s in 'lr'}
+ for pose in poses:
+  apply(pose)
+  for s in 'lr':
+   ankles[s].append(rig.pose.bones['foot_'+s].head.copy());balls[s].append(rig.pose.bones['ball_'+s].head.copy())
+ targets={}
+ for s in 'lr':
+  P=ankles[s];B=balls[s]
+  low=[B[i].z<rest[s][1]+.035 and P[i].z<rest[s][0]+.045 for i in range(n+1)]
+  segments=[];i=0
+  while i<=n:
+   if low[i]:
+    j=i
+    while j<n and low[j+1]:j+=1
+    segments.append((i,j));i=j+1
+   else:i+=1
+  if not segments: targets[s]=None;continue
+  T=[None]*(n+1)
+  shortest=max(6,round(n*.09))
+  def flat(v):return Vector((v.x,v.y,0))
+  for a,b in segments:
+   travel=[0.0]
+   for k in range(a+1,b+1):travel.append(travel[-1]+(flat(P[k])-flat(P[k-1])).length)
+   if travel[-1]<.05 or b-a<shortest:
+    # A rest: held where it begins (or, at the clip's end, where it ends).
+    at=P[n] if b==n and a>0 else P[a]
+    for k in range(a,b+1):T[k]=Vector((at.x,at.y,P[k].z))
+    continue
+   s1=a+next(i for i,c in enumerate(travel) if c>=travel[-1]*.15)
+   s2=a+next(i for i,c in enumerate(travel) if c>=travel[-1]*.85)
+   if s2-s1<shortest:
+    mid=(s1+s2)//2;s1=max(a,mid-shortest//2);s2=min(b,s1+shortest)
+   start=P[a];end=P[b]
+   for k in range(a,s1+1):T[k]=Vector((start.x,start.y,P[k].z))
+   for k in range(s2,b+1):T[k]=Vector((end.x,end.y,P[k].z))
+   reach=(flat(end)-flat(start)).length;lift=min(.1,.35*reach)+.015
+   for k in range(s1+1,s2):
+    u=(k-s1)/(s2-s1);h=flat(start).lerp(flat(end),ease(u))
+    T[k]=Vector((h.x,h.y,P[k].z+lift*math.sin(math.pi*u)))
+  # Lifted frames: the animated swing, eased onto the rests either side.
+  known=[k for k in range(n+1) if T[k] is not None]
+  for k in range(n+1):
+   if T[k] is not None:continue
+   before=max((q for q in known if q<k),default=None);after=min((q for q in known if q>k),default=None)
+   if before is None:T[k]=P[k]+(T[after]-P[after]);continue
+   if after is None:T[k]=P[k]+(T[before]-P[before]);continue
+   u=ease((k-before)/(after-before))
+   T[k]=P[k]+(T[before]-P[before])*(1-u)+(T[after]-P[after])*u
+  targets[s]=T
+ for i,f in enumerate(frames):
+  apply(poses[i])
+  if plant:
+   for s in 'lr':
+    if targets[s] is None:continue
+    hip=rig.pose.bones['thigh_'+s].head;knee=rig.pose.bones['calf_'+s].head;ankle=rig.pose.bones['foot_'+s].head
+    bend=knee-(hip+ankle)/2
+    pole=knee+(bend.normalized()*.4 if bend.length>1e-3 else Vector((0,-.4,0)))
+    place_foot(s,targets[s][i],pole)
+  rig.animation_data.action=act
+  keys(f)
+  rig.animation_data.action=None
+ print('TIDY_CLIP',name,n)
 
 # The knockback's opening crumple, held briefly and blended back to the idle
 # stance, gives heavy hits a stagger that stays on its feet.
@@ -303,6 +445,10 @@ for f,pose in enumerate(poses):
  bpy.context.view_layer.update()
  keys(length*30*f/60)
 finish('SwordIdle',a,length)
+
+# The reactions' feet stay planted, stepping where they slid.
+tidy_clip('HitStagger',ease_in=.08)
+tidy_clip('HitKnockdown',ease_in=.06)
 
 # Hit reactions for shield bearers: the same reactions with the left forearm
 # kept turned 60° outward, as in the shield stances, so a hit does not flip the
@@ -708,6 +854,15 @@ for f in range(SHOT_SAMPLES+1):
   bpy.context.view_layer.update()
  keys(f)
 finish('ArcherShot',a,SHOT_SAMPLES/30,exact=True)
+# The library swings start and end in their own stances (the slash and the
+# chop mid-step, one foot in the air): each eases out of the idle and back
+# into it, and every foot keeps still on the ground, stepping where the
+# source slid it. The archer's shot, which already starts and ends in the
+# idle, has its feet planted the same way.
+tidy_clip('SwordSwing',ease_in=.12,ease_out=.15)
+tidy_clip('SwordSlash',ease_in=.2,ease_out=.15)
+tidy_clip('AxeChop',ease_in=.22,ease_out=.15)
+tidy_clip('ArcherShot')
 rig.animation_data.action=None
 for t in rig.animation_data.nla_tracks:t.mute=False
 for o in source_objects:

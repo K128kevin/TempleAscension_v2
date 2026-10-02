@@ -2,6 +2,8 @@ extends Node3D
 const Art = preload("res://scripts/assets.gd")
 const Motion = preload("res://scripts/combat_animation.gd")
 const Vfx = preload("res://scripts/vfx.gd")
+const FootPlanter = preload("res://scripts/foot_planter.gd")
+const HandGrip = preload("res://scripts/hand_grip.gd")
 # A slain statue crumbles, as in the original game: the body collapses into a
 # rubble pile while stone chips burst out and fall around it.
 const CRUMBLE_TIME = .7
@@ -30,6 +32,23 @@ var is_stone = false
 var animation_delay = 0.0
 var pending_animation_time = 0.0
 var locomotion_rate = 1.0
+# Keeps the feet planted while the unit isn't travelling (scripts/foot_planter.gd).
+var planter
+# Keeps the hands that hold something closed on it (scripts/hand_grip.gd).
+var grip
+# Locomotion clips: the feet follow the animation, played at the ground speed.
+const LOCOMOTION = ["Run","Crouch","SwordRun","ScutumRun","BowRun","BowCrouch","RangerRun","RangerCrouch","WizardRun","WizardCrouch"]
+# The body turns smoothly to the unit's facing (which the game sets at once),
+# at most TURN_RATE radians a second, easing in over TURN_EASE seconds.
+const TURN_RATE = 11.0
+const TURN_EASE = .06
+var shown_yaw = null
+var last_position = null
+var ground_speed = 0.0
+# Each locomotion clip's own ground speed at life size (metres a second, at
+# normal playback): how fast its planted foot sweeps back under the body
+# (measured by tools/anim_audit.gd --strides).
+const STRIDE_SPEED = {"Run":6.35,"SwordRun":6.64,"ScutumRun":6.64,"BowRun":6.64,"RangerRun":6.64,"WizardRun":6.64}
 var enemy_kind = ""
 # Remaining time of a hit reaction; locomotion waits for it to finish.
 var reaction_time = 0.0
@@ -82,6 +101,14 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	# Actor.tick advances poses on the same clock as wind-up and recovery.
 	animator.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	skeleton = rig.find_children("*", "Skeleton3D", true, false)[0]
+	# Modifiers (the foot planter, cloth) run on the unit's own clock, after
+	# each pose (advance()).
+	skeleton.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_MANUAL
+	planter = FootPlanter.new()
+	planter.name = "FootPlanter"
+	skeleton.add_child(planter)
+	skeleton.move_child(planter,0)
+	planter.setup(skeleton)
 	for mesh in rig.find_children("*", "MeshInstance3D", true, false):
 		skin_meshes.append(mesh)
 		if stone:
@@ -210,6 +237,18 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
+	# The fists that close on a grip, from the stance clips that hold one: the
+	# sword hand's, and the hand the ranger carries his bow in.
+	grip = HandGrip.new()
+	grip.name = "HandGrip"
+	skeleton.add_child(grip)
+	skeleton.move_child(grip,1)
+	for pair in [["r","SwordIdle"],["l","RangerIdle"]]:
+		if not clips.has(pair[1]): continue
+		animator.play(clips[pair[1]],0)
+		animator.seek(0,true)
+		animator.advance(0)
+		grip.capture(skeleton,pair[0])
 	skeleton.skeleton_updated.connect(align_weapon)
 	if not stone and hero_class == "ranger": setup_cloak()
 	elif not stone and hero_class == "wizard": setup_cloak("cape_")
@@ -314,6 +353,12 @@ func equip(weapon: String) -> void:
 		# stays below the chin.
 		strap_hold = .6+(TOWER_DROP if tower else 0.0)
 		shield.top_level = scutum
+	# The weapon hand (the bow hand for an archer) and a shield hand stay
+	# closed on their grips.
+	if grip != null:
+		grip.hands = []
+		if weapon in ["sword","axe","spear","staff"]: grip.hands.append("r")
+		if weapon == "bow" or is_instance_valid(shield_item): grip.hands.append("l")
 	if state in ["Idle","SwordIdle","ScutumSwordIdle","SpearShieldIdle","BowIdle","SpearIdle"]: play(idle_action())
 
 # Clips in which an archer holds the bow out in the left hand, ready or
@@ -321,9 +366,14 @@ func equip(weapon: String) -> void:
 # through his own idle, run and crouch (the warrior's, with the left hand
 # closed on the bow), so it never changes hands.
 const BOW_READY_STATES = ["BowIdle","BowShot","BowRapid","ArcherShot"]
-# How long the ranger takes to lower his bow arm after a shot.
+# How long the ranger takes to lower his bow arm after a shot, and to raise
+# it from the carry when he shoots.
 const BOW_LOWER_TIME = .45
 var bow_lowering = 0.0
+const BOW_RAISE_TIME = .16
+var bow_raising = 0.0
+# The bow's place in the left hand as the raise began.
+var raise_from = null
 
 func carries_bow() -> bool:
 	return ranger_carry() and not state in BOW_READY_STATES
@@ -395,14 +445,26 @@ func oracle_staff_direction(phase: float) -> Vector2:
 			return Vector2(lerpf(a[1],b[1],u),lerpf(a[2],b[2],u))
 	return Vector2(keys[-1][1],keys[-1][2])
 
+const STAFF_EASE = .05
+var staff_lean = null
+var staff_clock = 0.0
 func align_oracle_staff() -> void:
 	var facing = global_basis.orthonormalized()
-	var hand = (skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone("hand_r"))).origin
+	# Through the closed fist, not the wrist.
+	var hand: Vector3 = bow_hold("r")[0]
 	# The assigned clip, so a held (paused) pose keeps its staff angle and flame.
 	var phase = 0.0
 	if not animator.assigned_animation.is_empty():
 		phase = animator.current_animation_position/maxf(.001,animator.get_animation(animator.assigned_animation).length)
-	var lean = oracle_staff_direction(phase)
+	# The staff's lean follows the clip's, eased (STAFF_EASE seconds) so it
+	# never leaps when the clip does (the nova starts at its swing).
+	var wanted_lean = oracle_staff_direction(phase)
+	var elapsed = anim_clock-staff_clock
+	staff_clock = anim_clock
+	if staff_lean == null or anim_clock <= 0.0: staff_lean = wanted_lean
+	elif elapsed <= 0.0: pass
+	else: staff_lean = staff_lean.lerp(wanted_lean,1.0-exp(-elapsed/STAFF_EASE))
+	var lean: Vector2 = staff_lean
 	var up = (Vector3.UP*lean.x+facing.z*lean.y).normalized()
 	var side = facing.x.cross(up).normalized()
 	var across = up.cross(side).normalized()
@@ -519,18 +581,30 @@ var weapon_rest = Transform3D()
 # A sword carried low beside a strapped scutum would swing its blade through
 # the board as the bearer runs: it turns about the fist, out to the bearer's
 # right, just far enough to pass beside the board instead.
+#
+# The turn is followed smoothly (BLADE_DODGE_RATE radians a second at most),
+# so the blade never leaps aside or back.
+const BLADE_DODGE_RATE = 6.0
+var blade_dodge = Quaternion.IDENTITY
+var blade_dodge_clock = 0.0
 func keep_blade_off_shield() -> void:
 	if not strapped or weapon_kind != "sword" or not is_instance_valid(weapon_item) or not is_instance_valid(shield_item): return
 	weapon_item.transform = weapon_rest
 	if not weapon_item.is_inside_tree(): return
 	var grip: Vector3 = weapon_item.get_parent().global_position
 	var right: Vector3 = -global_basis.x.normalized()
+	var free: Transform3D = weapon_item.global_transform
 	for step in 8:
-		if not blade_in_board(): return
+		if not blade_in_board(): break
 		var t: Transform3D = weapon_item.global_transform
 		var tip: Vector3 = t*Vector3(0,1,0)-grip
 		var turn = Basis(Vector3.UP,signf(Vector3.UP.dot(tip.cross(right)))*.12)
 		weapon_item.global_transform = Transform3D(turn*t.basis,grip+turn*(t.origin-grip))
+	var wanted: Quaternion = (weapon_item.global_basis.orthonormalized()*free.basis.orthonormalized().inverse()).get_rotation_quaternion()
+	blade_dodge = follow(blade_dodge,wanted,minf(anim_clock-blade_dodge_clock,.05),BLADE_DODGE_RATE)
+	blade_dodge_clock = anim_clock
+	var shown_turn = Basis(blade_dodge)
+	weapon_item.global_transform = Transform3D(shown_turn*free.basis,grip+shown_turn*(free.origin-grip))
 
 # Whether the blade (past the hilt) passes through the scutum's board.
 func blade_in_board() -> bool:
@@ -560,7 +634,8 @@ func align_weapon() -> void:
 	var hand_pose = skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone("hand_l" if weapon_kind=="bow" else "hand_r"))
 	if weapon_kind == "spear":
 		weapon_item.global_basis = facing * Basis(Vector3.RIGHT,PI/2) * Basis.from_scale(weapon_size*rig.scale.x)
-		weapon_item.global_position = hand_pose.origin-facing.z*.65*rig.scale.x
+		# Through the closed fist, not the wrist.
+		weapon_item.global_position = bow_hold("r")[0]-facing.z*.65*rig.scale.x
 	else:
 		# The wooden grip sits in the closed fist, through locomotion and
 		# blends: the stave runs along the knuckles (pinky to index) and the
@@ -579,13 +654,17 @@ func align_weapon() -> void:
 				var up: Vector3 = hold[1]
 				var front: Vector3 = (facing.z-up*facing.z.dot(up)).normalized()
 				var held_basis = Basis(-front,up,(-front).cross(up)).orthonormalized()
-				var held_position: Vector3 = hold[0]-(held_basis*Basis.from_scale(weapon_size*rig.scale.x))*BOW_GRIP
+				# Turned about the grip, so it stays in the fist throughout.
 				var carried_basis: Basis = weapon_item.global_basis.orthonormalized()
-				var turned = Basis(held_basis.get_rotation_quaternion().slerp(carried_basis.get_rotation_quaternion(),w))
-				weapon_item.global_basis = turned*Basis.from_scale(weapon_size*rig.scale.x)
-				weapon_item.global_position = held_position.lerp(weapon_item.global_position,w)
+				var carried_grip: Vector3 = weapon_item.global_transform*BOW_GRIP
+				var turned = Basis(held_basis.get_rotation_quaternion().slerp(carried_basis.get_rotation_quaternion(),w))*Basis.from_scale(weapon_size*rig.scale.x)
+				weapon_item.global_basis = turned
+				weapon_item.global_position = hold[0].lerp(carried_grip,w)-turned*BOW_GRIP
 			for string in bow_strings: string.mesh.set_blend_shape_value(string.index,0.0)
 			if is_instance_valid(nocked_arrow): nocked_arrow.visible = false
+			# Carried, it needs no turn to clear the legs; raised again, any
+			# turn eases in from none.
+			bow_dodge = Quaternion.IDENTITY
 			return
 		var hold = bow_hold("l")
 		var up: Vector3 = hold[1]
@@ -605,7 +684,20 @@ func align_weapon() -> void:
 			front = (facing.z-up*facing.z.dot(up)).normalized()
 		weapon_item.global_basis = Basis(-front,up,(-front).cross(up)) * Basis.from_scale(weapon_size*rig.scale.x)
 		weapon_item.global_position = hold[0]-weapon_item.global_basis*BOW_GRIP
-		if not carried: keep_bow_off_legs()
+		if not carried:
+			keep_bow_off_legs()
+			# Raising it from the carry: it turns from the carried angle to the
+			# held one over the raise, rather than switching at once.
+			if bow_raising > 0 and raise_from != null:
+				var w = 1.0-bow_raising/BOW_RAISE_TIME
+				w = w*w*(3-2*w)
+				var held_now: Transform3D = weapon_item.global_transform
+				var from: Transform3D = hand_l*raise_from
+				var scale_now: Vector3 = held_now.basis.get_scale()
+				var turned = Basis(from.basis.orthonormalized().get_rotation_quaternion().slerp(held_now.basis.orthonormalized().get_rotation_quaternion(),w)).scaled_local(scale_now)
+				# Turned about the grip, so it stays in the fist throughout.
+				var grip_at: Vector3 = (from*BOW_GRIP).lerp(held_now*BOW_GRIP,w)
+				weapon_item.global_transform = Transform3D(turned,grip_at-turned*BOW_GRIP)
 		# The grip is taken once, in the idle stance, and kept from then on.
 		if carried and state == "RangerIdle": carry_in_hand = hand_l.affine_inverse()*weapon_item.global_transform
 		var phase = 1.0
@@ -655,12 +747,38 @@ const BOW_LEG_CLEARANCE = [["thigh_l","calf_l",.1],["thigh_r","calf_r",.1],["cal
 # each way, keeping whichever clears the legs best, until they are clear. Its
 # curved front stays within 10 degrees of where it faced while the archer
 # stands or moves (53 as he staggers or raises it).
+#
+# The turn found is followed smoothly (BOW_DODGE_RATE radians a second at
+# most), so the bow never leaps from one way of clearing the legs to another.
+const BOW_DODGE_RATE = 7.0
+var bow_dodge = Quaternion.IDENTITY
+var bow_dodge_clock = 0.0
 func keep_bow_off_legs() -> void:
+	var free: Transform3D = weapon_item.global_transform
+	var grip_free: Vector3 = free*BOW_GRIP
+	var cleared: Transform3D = cleared_bow(free)
+	var wanted: Quaternion = (cleared.basis.orthonormalized()*free.basis.orthonormalized().inverse()).get_rotation_quaternion()
+	bow_dodge = follow(bow_dodge,wanted,minf(anim_clock-bow_dodge_clock,.05),BOW_DODGE_RATE)
+	bow_dodge_clock = anim_clock
+	var turn = Basis(bow_dodge)
+	weapon_item.global_transform = Transform3D(turn*free.basis,grip_free+turn*(free.origin-grip_free))
+
+# Turns `current` toward `wanted` by at most `rate` radians a second over
+# `elapsed` seconds (none, if no time has passed since the last call). A unit
+# posed without its clock running (a still picture) shows `wanted` at once.
+func follow(current: Quaternion, wanted: Quaternion, elapsed: float, rate: float) -> Quaternion:
+	if anim_clock <= 0.0: return wanted
+	if elapsed <= 0.0: return current
+	var angle = current.angle_to(wanted)
+	if angle <= rate*elapsed: return wanted
+	return current.slerp(wanted,rate*elapsed/angle)
+
+# The held bow `t`, turned about its grip as needed to clear the legs.
+func cleared_bow(t: Transform3D) -> Transform3D:
 	var legs = []
 	for limb in BOW_LEG_CLEARANCE: legs.append([bone_position(limb[0]),bone_position(limb[1]),limb[2]*rig.scale.x])
-	var t: Transform3D = weapon_item.global_transform
 	var gap = bow_leg_gap(t,legs)
-	if gap >= 0: return
+	if gap >= 0: return t
 	var grip: Vector3 = t*BOW_GRIP
 	var facing = global_basis.orthonormalized()
 	var front: Vector3 = -t.basis.x.normalized()
@@ -683,7 +801,7 @@ func keep_bow_off_legs() -> void:
 			t = best
 			gap = best_gap
 		if gap >= 0: break
-	weapon_item.global_transform = t
+	return t
 
 # How far a bow placed at `t` stands clear of the legs (negative: into them),
 # along its limbs (from just past the fist toward each tip) and its string.
@@ -740,8 +858,18 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	animation_delay = 0
 	pending_animation_time = 0
 	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
-	if action in ["BowRun","SwordRun","ScutumRun","RangerRun","WizardRun"]: locomotion_rate = speed_scale
-	var blend = minf(.08,duration*.1) if duration>0 else .08
+	if action in LOCOMOTION: locomotion_rate = speed_scale
+	# Long enough that no part leaps into the new clip, short enough to stay
+	# responsive; the feet stay planted through it (scripts/foot_planter.gd).
+	var blend = clampf(duration*.15,.06,.14) if duration>0 else .14
+	# Raising the carried bow to shoot: it turns from the carry to the hold.
+	if ranger_carry() and not previous in BOW_READY_STATES and action in BOW_READY_STATES:
+		bow_raising = BOW_RAISE_TIME
+		blend = maxf(blend,BOW_RAISE_TIME)
+		# From wherever it is in the hand now.
+		if is_instance_valid(weapon_item) and weapon_item.is_inside_tree():
+			var hand_now: Transform3D = skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone("hand_l"))
+			raise_from = hand_now.affine_inverse()*weapon_item.global_transform
 	# After a shot the ranger lowers his bow arm gradually, back to his side.
 	if ranger_carry() and previous in BOW_READY_STATES and not action in BOW_READY_STATES:
 		blend = BOW_LOWER_TIME
@@ -755,6 +883,12 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	if replay: animator.seek(0,true)
 	animator.advance(0)
 	if action == "Death": dead = true
+
+# Plays `action` from `start` (a fraction of it) on, crossfading into that
+# moment of it rather than jumping there.
+func play_from(action: String, duration: float, start: float) -> void:
+	play(action,duration)
+	if state == action: animator.seek(animator.current_animation_length*start,false)
 
 # Flinch without interrupting anything: attacks, skills, evades and death
 # replace a reaction through play(); locomotion resumes once it finishes.
@@ -978,23 +1112,66 @@ func cloak_tick(dt: float) -> void:
 		var lift = sin(cloak_clock*6.1+i*1.3)*.5+.5
 		cloak.set_gravity_direction(i,(Vector3.DOWN+(side*ripple*.6+back*lift*.4)*cloth_feel.flutter*pace).normalized())
 
+# The unit's own clock, for things smoothed over time between poses.
+var anim_clock = 0.0
+
 func advance(dt: float) -> void:
+	anim_clock += dt
+	turn_toward_facing(dt)
 	cloak_tick(dt)
 	bow_lowering = maxf(0.0,bow_lowering-dt)
+	bow_raising = maxf(0.0,bow_raising-dt)
 	if crumbling >= 0.0:
 		if crumbling < CRUMBLE_TIME+1.5: crumble_step(dt)
 		return
 	reaction_time = maxf(0,reaction_time-dt)
 	var held = minf(dt,animation_delay)
 	animation_delay -= held
-	if not animator.is_playing(): return
-	pending_animation_time += dt-held
-	# Keep the clock while culled; update the pose when visible again.
+	if animator.is_playing():
+		pending_animation_time += dt-held
+		# Keep the clock while culled; update the pose when visible again.
+		if animator.active:
+			animator.advance(pending_animation_time)
+			pending_animation_time = 0
+	# How fast the body is carried over the ground (by the game or a dash).
+	var at: Vector3 = global_position
+	if last_position != null and dt > 0: ground_speed = Vector2(at.x-last_position.x,at.z-last_position.z).length()/dt
+	last_position = at
 	if animator.active:
-		animator.advance(pending_animation_time)
-		pending_animation_time = 0
+		# Feet stay planted unless the unit runs, dashes, leaps or falls.
+		planter.enabled = not dead and not state in LOCOMOTION and ground_speed < .6*rig.scale.x and absf(position.y) < .01
+		var parent = get_parent_node_3d()
+		planter.ground = parent.global_position.y if parent != null else global_position.y
+		skeleton.advance(dt)
 
-func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: float = 1.0) -> void:
+# The body turns toward the unit's facing (which the game sets at once):
+# quickly, but never in a single frame.
+func turn_toward_facing(dt: float) -> void:
+	var parent = get_parent_node_3d()
+	if parent == null: return
+	var facing: float = parent.global_rotation.y
+	if shown_yaw == null: shown_yaw = facing
+	var gap = wrapf(facing-shown_yaw,-PI,PI)
+	var step = clampf(gap*(1.0-exp(-dt/TURN_EASE)),-TURN_RATE*dt,TURN_RATE*dt)
+	shown_yaw = wrapf(shown_yaw+step,-PI,PI)
+	rotation.y = wrapf(shown_yaw-facing,-PI,PI)
+
+# Called as the game turns the unit: the body keeps the way it faced until it
+# turns there itself (turn_toward_facing).
+func keep_facing() -> void:
+	var parent = get_parent_node_3d()
+	if parent == null or shown_yaw == null: return
+	rotation.y = wrapf(shown_yaw-parent.global_rotation.y,-PI,PI)
+
+# Faces the unit's facing at once (placed, revived, or set up for a picture).
+func snap_facing() -> void:
+	shown_yaw = null
+	rotation.y = 0
+
+# `travel_speed`, when given, is how fast the unit moves over the ground
+# (metres a second): the stride is played at that pace, so the planted foot
+# keeps still on the ground rather than skating.
+func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: float = 1.0, travel_speed: float = 0.0) -> void:
 	if dead or busy or reaction_time>0: return
 	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
 	if moving and ranger_carry(): wanted = "RangerCrouch" if crouch else "RangerRun"
@@ -1005,5 +1182,13 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 	elif moving and not crouch and enemy_kind in SHIELD_BEARERS and clips.has("ScutumRun"): wanted = "ScutumRun"
 	elif moving and not crouch and weapon_kind=="sword" and clips.has("SwordRun"): wanted = "SwordRun"
 	var rate = clampf(speed_scale, .1, 4.0)
-	if wanted != state or (wanted in ["BowRun","SwordRun","ScutumRun","RangerRun","WizardRun"] and not is_equal_approx(rate,locomotion_rate)):
+	# (A negative speed walks backward: the stride plays in reverse.)
+	if moving and travel_speed != 0.0 and STRIDE_SPEED.has(wanted):
+		var pace = travel_speed/(STRIDE_SPEED[wanted]*rig.scale.x)
+		rate = signf(pace)*clampf(absf(pace),.3,2.5)
+	if wanted != state:
 		play(wanted,0.0,rate)
+	elif wanted in LOCOMOTION and not is_equal_approx(rate,locomotion_rate):
+		# Same stride at a new pace: the cycle carries on, faster or slower.
+		animator.play(clips[wanted],-1,rate)
+		locomotion_rate = rate

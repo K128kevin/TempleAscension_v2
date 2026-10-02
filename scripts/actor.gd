@@ -151,9 +151,11 @@ func tick(dt: float) -> void:
 	elif kind == "wizard" and distance < 5:
 		var direction: Vector3 = (position-player.position).normalized()
 		var before = position
-		position = game.world.move(position,direction*config.speed*(.4 if slow_time>0 else 1.0)*dt)
+		var pace = config.speed*(.4 if slow_time>0 else 1.0)
+		position = game.world.move(position,direction*pace*dt)
 		face(player.position)
-		visual.locomotion(position.distance_to(before)>.005,false)
+		# Backing away while facing the hero: the stride runs backward.
+		visual.locomotion(position.distance_to(before)>.005,false,false,1.0,-pace)
 	else: visual.locomotion(false,false)
 
 # Begin this statue's attack at `point`: face it, wind up and play the clip.
@@ -290,8 +292,8 @@ func cast_nova() -> void:
 	var clip = "OracleCast" if visual.clips.has("OracleCast") else "Cast"
 	var contact: float = Motion.ORACLE_CAST.contacts[0] if clip=="OracleCast" else Motion.NORMAL[Data.WEAPONS.find("staff")].contacts[0]
 	var duration = NOVA_RECOVERY/(1.0-contact)
-	visual.play(clip,duration)
-	visual.advance(duration*contact)
+	# Into the swing's release, crossfading rather than jumping there.
+	visual.play_from(clip,duration,contact)
 	busy = NOVA_RECOVERY
 
 # One of the centurions the Crowned Statue summons on the summit.
@@ -319,14 +321,17 @@ func walk_to(destination: Vector3, dt: float) -> void:
 		if difference.length_squared() < .85 and difference.length_squared() > .001: separation += difference.normalized()*.6
 	direction = (direction + separation).normalized()
 	var before = position
-	position = game.world.move(position,direction*config.speed*(.4 if slow_time>0 else 1.0)*dt)
+	var pace = config.speed*(.4 if slow_time>0 else 1.0)
+	position = game.world.move(position,direction*pace*dt)
 	if position.distance_to(before) > .005: face(position+direction)
-	visual.locomotion(position.distance_to(before)>.005,false,kind=="lion")
+	visual.locomotion(position.distance_to(before)>.005,false,kind=="lion",1.0,pace)
 
 func face(at: Vector3) -> void:
 	var d = at-position
 	if d.length_squared() > .001:
 		rotation.y = atan2(d.x,d.z)
+		# The body turns there itself, smoothly (Visual.turn_toward_facing).
+		visual.keep_facing()
 		visual.align_weapon()
 
 func forward() -> Vector3:

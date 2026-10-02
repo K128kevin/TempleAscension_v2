@@ -437,6 +437,7 @@ func player_control(dt: float) -> void:
 				pursuit_timer = .15
 				route = world.path(player.position,target.position)
 	var moved = false
+	var pace = PLAYER_RUN_SPEED*(.5 if slowed>0 else 1.0)
 	if player.busy <= 0:
 		while not route.is_empty() and player.position.distance_to(route[0]) < .06:
 			route.remove_at(0)
@@ -452,7 +453,7 @@ func player_control(dt: float) -> void:
 		elif not is_instance_valid(target):
 			var aim: Vector3 = world.pointer()
 			if player.position.distance_to(aim) > .6: player.face(aim)
-	player.visual.locomotion(moved,player.busy>0)
+	player.visual.locomotion(moved,player.busy>0,false,1.0,pace)
 
 func attack_range(special: bool) -> float:
 	if special: return 13.0

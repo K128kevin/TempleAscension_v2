@@ -25,6 +25,7 @@ run "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file 
 run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-normal.log"
 run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-regression.log" -- --debug-mode --floor=3 --bow --axe
 run "$godot_bin" --headless --path . --script tests/playground.gd --log-file "$PWD/test-results/playground.log" -- --debug-mode
+run "$godot_bin" --headless --path . --script tests/animation_regression.gd --log-file "$PWD/test-results/animation-regression.log"
 if [ "${RENDER_TEST:-0}" = "1" ]; then
   run "$godot_bin" --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover-native.log" -- --render-hover
   run "$godot_bin" --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing-native.log" -- --live-attacks
