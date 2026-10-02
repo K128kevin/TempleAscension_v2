@@ -4,6 +4,7 @@ const Motion = preload("res://scripts/combat_animation.gd")
 const Vfx = preload("res://scripts/vfx.gd")
 const FootPlanter = preload("res://scripts/foot_planter.gd")
 const HandGrip = preload("res://scripts/hand_grip.gd")
+const ShieldArm = preload("res://scripts/shield_arm.gd")
 # A slain statue crumbles, as in the original game: the body collapses into a
 # rubble pile while stone chips burst out and fall around it.
 const CRUMBLE_TIME = .7
@@ -67,6 +68,11 @@ var pending_travel = 0.0
 # normal playback): how fast its planted foot sweeps back under the body
 # (measured by tools/anim_audit.gd --strides).
 const STRIDE_SPEED = {"Run":6.35,"SwordRun":6.64,"ScutumRun":6.64,"BowRun":6.64,"RangerRun":6.64,"WizardRun":6.64}
+# The Lion Guardian goes on four legs (tools/make_lion.py): its own rig and
+# clips, with none of a man's hands, feet or gear. Its gallop, played at its
+# own pace, covers this many metres a second.
+const LION_STRIDE_SPEED = 5.14
+var quadruped = false
 var enemy_kind = ""
 # Remaining time of a hit reaction; locomotion waits for it to finish.
 var reaction_time = 0.0
@@ -103,13 +109,15 @@ const BOW_FULL_DRAW = 1.2
 # `hero_class` picks the hero's kit: the warrior's scale armor and bronze
 # helm, the ranger's leather jerkin and hood, or the wizard's robe and hood.
 # Each statue is carved in the likeness of a hero of its class, with his kit
-# (tools/paint_kits.py) cut into the stone; the lion stays plain.
-const STATUE_KITS = {"gladiator":"warrior","centurion":"warrior","boss":"warrior","archer":"ranger","wizard":"wizard"}
+# (tools/paint_kits.py) cut into the stone; the lion has its own carved face.
+const STATUE_KITS = {"gladiator":"warrior","centurion":"warrior","boss":"warrior","archer":"ranger","wizard":"wizard","lion":"lion"}
 
 func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enemy_kind: String = "", hero_class: String = "warrior") -> void:
 	is_stone = stone
 	self.enemy_kind = enemy_kind
+	quadruped = stone and enemy_kind == "lion"
 	var character = "guardian_%s" % enemy_kind if stone and enemy_kind in ["gladiator","archer","centurion","wizard","boss"] else ("guardian" if stone else "warrior")
+	if quadruped: character = "lion"
 	rig = load("res://assets/models/character/%s.glb" % character).instantiate()
 	# The supplied Godot rig faces +Z, matching Actor.forward().
 	rig.rotation.y = 0
@@ -122,11 +130,12 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	# Modifiers (the foot planter, cloth) run on the unit's own clock, after
 	# each pose (advance()).
 	skeleton.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_MANUAL
-	planter = FootPlanter.new()
-	planter.name = "FootPlanter"
-	skeleton.add_child(planter)
-	skeleton.move_child(planter,0)
-	planter.setup(skeleton)
+	if not quadruped:
+		planter = FootPlanter.new()
+		planter.name = "FootPlanter"
+		skeleton.add_child(planter)
+		skeleton.move_child(planter,0)
+		planter.setup(skeleton)
 	for mesh in rig.find_children("*", "MeshInstance3D", true, false):
 		skin_meshes.append(mesh)
 		if stone:
@@ -258,19 +267,27 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
+	if quadruped:
+		play(idle_action())
+		return
 	# The fists that close on a grip, from the stance clips that hold one: the
 	# sword hand's, and the hand the ranger carries his bow in.
 	grip = HandGrip.new()
 	grip.name = "HandGrip"
 	skeleton.add_child(grip)
 	skeleton.move_child(grip,1)
+	shield_arm = ShieldArm.new()
+	shield_arm.name = "ShieldArm"
+	skeleton.add_child(shield_arm)
+	skeleton.move_child(shield_arm,2)
+	shield_arm.setup(skeleton)
 	for pair in [["r","SwordIdle"],["l","RangerIdle"]]:
 		if not clips.has(pair[1]): continue
 		animator.play(clips[pair[1]],0)
 		animator.seek(0,true)
 		animator.advance(0)
 		grip.capture(skeleton,pair[0])
-	skeleton.skeleton_updated.connect(align_weapon)
+	skeleton.skeleton_updated.connect(shown_pose_updated)
 	if not stone and hero_class == "ranger": setup_cloak()
 	elif not stone and hero_class == "wizard": setup_cloak("cape_")
 	elif not stone and hero_class == "warrior": setup_cloak("kilt_")
@@ -529,7 +546,15 @@ var strap_hold = .5
 # they carry level across the front of the body: the board's back against
 # the outside of the forearm, its middle over the middle of the forearm,
 # upright, and facing out from the body as nearly the way they face as the
-# forearm allows (out to the side when the forearm points ahead).
+# forearm allows (out to the side when the forearm points ahead). Running,
+# it tips forward with the body as it leans into the run (part of the way):
+# held bolt upright, its top stood under the leaning chest and was pushed out
+# far before the forearm.
+const SHIELD_RUN_LEAN = .55
+# How fast it takes up and gives up that lean (a share of it a second).
+const SHIELD_LEAN_RATE = 4.0
+var shield_lean = 0.0
+var shield_lean_clock = 0.0
 # The chest's own frame in the world: its forward (+Z), up (+Y) and side (+X)
 # as the body faces at rest, turned with the upper spine.
 func chest_basis() -> Basis:
@@ -549,6 +574,17 @@ func strap_scutum() -> void:
 	chest_front.y = 0.0
 	var facing: Basis = global_basis.orthonormalized()
 	if chest_front.length() > .2: facing = Basis(Vector3.UP.cross(chest_front.normalized()),Vector3.UP,chest_front.normalized())
+	var lean_wanted = 1.0 if state in LOCOMOTION else 0.0
+	if anim_clock <= 0.0: shield_lean = lean_wanted
+	else: shield_lean = move_toward(shield_lean,lean_wanted,clampf(anim_clock-shield_lean_clock,0.0,.05)*SHIELD_LEAN_RATE)
+	shield_lean_clock = anim_clock
+	if shield_lean > 0.0:
+		# The chest's lean forward (about the side axis).
+		var chest_up: Vector3 = chest_basis().y
+		chest_up -= facing.x*chest_up.dot(facing.x)
+		if chest_up.length() > .2:
+			var pitch = facing.y.signed_angle_to(chest_up.normalized(),facing.x)
+			facing = Basis(facing.x,pitch*SHIELD_RUN_LEAN*smoothstep(0.0,1.0,shield_lean))*facing
 	var out: Vector3 = facing.z-forearm*facing.z.dot(forearm)
 	if out.length() < .35: out = facing.x-forearm*facing.x.dot(forearm)
 	out = out.normalized()
@@ -569,7 +605,36 @@ const SHIELD_LEG_CLEARANCE = [["thigh_l","calf_l",.1],["thigh_r","calf_r",.1],["
 # low, a head leaning into a run through its top, and a clenched fist through
 # its middle; the shield stands off the forearm just far enough to keep them
 # behind its board.
+# Running, a strapped shield is carried out before the body by its arm
+# (ShieldArm), clear of the rising knees: how far out the arm holds it now
+# (metres), and the most it will. (Standing, striking or struck, the stance
+# clips hold the shield in its guard, the board standing off the arm where
+# the body comes into it.)
+var shield_arm = null
+var arm_out = 0.0
+var arm_out_clock = 0.0
+const ARM_OUT_MAX = .32
+# How quickly the arm reaches out when the body comes into the board, and
+# how quickly it eases back in when there is room (a share of the gap a
+# second).
+const ARM_OUT_REACH = 16.0
+const ARM_OUT_EASE = 3.0
+# And never faster than this (metres a second), so it cannot snap.
+const ARM_OUT_SPEED = 4.0
+# Where the body still comes into the board (the arm holding its guard, or
+# at full reach), the board itself stands off the forearm: eased in and out
+# the same way, so a fist or knee touching it for a moment nudges it rather
+# than knocking it away and back.
+var board_off = 0.0
+var board_off_clock = 0.0
+# (Out quickly, so the body never sinks into it; back slowly.)
+const BOARD_OFF_REACH = 60.0
+const BOARD_OFF_SPEED = 3.0
+# The shield arm's own parts (which move with the board).
+const SHIELD_ARM_BONES = ["clavicle_l","upperarm_l","lowerarm_l","hand_l"]
+
 func keep_shield_off_legs() -> void:
+	if shield_arm != null and not strapped: shield_arm.reach = Vector3.ZERO
 	if not is_instance_valid(shield_item) or not shield_item.is_inside_tree(): return
 	if strapped: strap_scutum()
 	else: shield_item.position = shield_rest
@@ -593,9 +658,14 @@ func keep_shield_off_legs() -> void:
 	var half_thick = shield_box.size[thin]*t.basis[thin].length()*.5
 	var k = rig.scale.x
 	var push = 0.0
+	# The same for the body alone (not the shield arm, which moves with the
+	# board), and how much room it leaves behind the board.
+	var body_push = 0.0
+	var room = INF
 	for limb in SHIELD_LEG_CLEARANCE:
 		var a = bone_position(limb[0]); var b = bone_position(limb[1])
 		var r = limb[2]*k
+		var own = limb[0] in SHIELD_ARM_BONES
 		for i in 7:
 			var p: Vector3 = a.lerp(b,i/6.0)
 			var inside = true
@@ -606,8 +676,32 @@ func keep_shield_off_legs() -> void:
 			if not inside: continue
 			var depth = (p-centre).dot(normal)
 			# A leg behind the board but reaching into it, or through it.
-			if depth > -r-half_thick and depth < r: push = maxf(push,depth+r+half_thick)
-	if push > 0: shield_item.global_position += normal*minf(push,.3*k)
+			if depth > -r-half_thick and depth < r:
+				push = maxf(push,depth+r+half_thick)
+				if not own: body_push = maxf(body_push,depth+r+half_thick)
+			elif depth <= -r-half_thick and not own: room = minf(room,-(depth+r+half_thick))
+	# A strapped shield's arm carries it out as far as the body needs (and
+	# back in as it leaves room), so the board stays on the forearm: judged
+	# once a frame, from the body as shown with the arm's reach in it.
+	if strapped and shield_arm != null and in_shown_pose:
+		var wanted = clampf(arm_out+body_push if body_push > 0.0 else arm_out-room,0.0,ARM_OUT_MAX*k)
+		if not state in LOCOMOTION: wanted = 0.0
+		if anim_clock <= 0.0: arm_out = wanted
+		else:
+			var elapsed = clampf(anim_clock-arm_out_clock,0.0,.05)
+			var step = (wanted-arm_out)*(1.0-exp(-elapsed*(ARM_OUT_REACH if wanted > arm_out else ARM_OUT_EASE)))
+			arm_out += clampf(step,-ARM_OUT_SPEED*k*elapsed,ARM_OUT_SPEED*k*elapsed)
+		arm_out_clock = anim_clock
+		shield_arm.reach = normal*arm_out if not dead else Vector3.ZERO
+	var off = minf(push,.3*k)
+	if in_shown_pose:
+		if anim_clock <= 0.0: board_off = off
+		else:
+			var elapsed = clampf(anim_clock-board_off_clock,0.0,.05)
+			var step = (off-board_off)*(1.0-exp(-elapsed*(BOARD_OFF_REACH if off > board_off else ARM_OUT_EASE*2.0)))
+			board_off += clampf(step,-BOARD_OFF_SPEED*k*elapsed,BOARD_OFF_SPEED*k*elapsed)
+		board_off_clock = anim_clock
+	if board_off > 0.0: shield_item.global_position += normal*board_off
 
 # The sword's place in the hand, as equipped.
 var weapon_rest = Transform3D()
@@ -652,6 +746,16 @@ func blade_in_board() -> bool:
 			if absf(offset.dot(board.basis[axis].normalized())) > board.basis[axis].length()*.5: inside = false
 		if inside: return true
 	return false
+
+# The skeleton has just posed the body as it is shown (its modifiers applied):
+# the weapon and shield follow it, and the shield arm's reach is judged from
+# it. (Called elsewhere, between updates, the bones read back as the bare
+# animation, without the shield arm's reach.)
+var in_shown_pose = false
+func shown_pose_updated() -> void:
+	in_shown_pose = true
+	align_weapon()
+	in_shown_pose = false
 
 func align_weapon() -> void:
 	keep_shield_off_legs()
@@ -1258,13 +1362,14 @@ func advance(dt: float) -> void:
 		# (Knocked flat, it slides back along the ground instead.)
 		var floored = state.ends_with("HitKnockdown")
 		carry_hold = .25 if carried and not floored else maxf(0.0,carry_hold-dt)
-		planter.enabled = not dead and not state in LOCOMOTION and (ground_speed < .6*rig.scale.x or ROOT_ADVANCE.has(state) or carry_hold > 0.0) and absf(position.y) < .01
-		var parent = get_parent_node_3d()
-		planter.ground = parent.global_position.y if parent != null else global_position.y
-		planter.velocity = moving
-		planter.carried = carried and not floored
-		planter.owed = owed
-		planter.shoved = shoved and not floored
+		if planter != null:
+			planter.enabled = not dead and not state in LOCOMOTION and (ground_speed < .6*rig.scale.x or ROOT_ADVANCE.has(state) or carry_hold > 0.0) and absf(position.y) < .01
+			var parent = get_parent_node_3d()
+			planter.ground = parent.global_position.y if parent != null else global_position.y
+			planter.velocity = moving
+			planter.carried = carried and not floored
+			planter.owed = owed
+			planter.shoved = shoved and not floored
 		skeleton.advance(dt)
 
 # The forward travel to move the unit by since last asked (Actor.tick).
@@ -1317,7 +1422,8 @@ func snap_facing() -> void:
 func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: float = 1.0, travel_speed: float = 0.0) -> void:
 	if dead or busy or reaction_time>0: return
 	var wanted = ("Crouch" if crouch else "Run") if moving else idle_action()
-	if moving and ranger_carry(): wanted = "RangerCrouch" if crouch else "RangerRun"
+	if quadruped and moving: wanted = "Run"
+	elif moving and ranger_carry(): wanted = "RangerCrouch" if crouch else "RangerRun"
 	elif moving and weapon_kind=="staff" and not is_stone: wanted = "WizardCrouch" if crouch else "WizardRun"
 	elif moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
 	# Carry the sword low while running so the blade never swings through the head.
@@ -1327,7 +1433,7 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 	var rate = clampf(speed_scale, .1, 4.0)
 	# (A negative speed walks backward: the stride plays in reverse.)
 	if moving and travel_speed != 0.0 and STRIDE_SPEED.has(wanted):
-		var pace = travel_speed/(STRIDE_SPEED[wanted]*rig.scale.x)
+		var pace = travel_speed/((LION_STRIDE_SPEED if quadruped else STRIDE_SPEED[wanted])*rig.scale.x)
 		rate = signf(pace)*clampf(absf(pace),.3,2.5)
 	if wanted != state:
 		play(wanted,0.0,rate)

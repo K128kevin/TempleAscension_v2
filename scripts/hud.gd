@@ -1,6 +1,10 @@
 extends CanvasLayer
 const Data = preload("res://scripts/data.gd")
+const Panels = preload("res://scripts/panels.gd")
+const SkillIcon = preload("res://scripts/skill_icon.gd")
 var game
+# The attribute and skill panels and their + buttons.
+var panels
 var root: Control
 var objective: Label
 var health: ColorRect
@@ -30,6 +34,9 @@ var modal_body: VBoxContainer
 var weapon_slots: Array[Button] = []
 var weapon_icons: Array[TextureRect] = []
 var weapon_names: Array[Label] = []
+# The three skill slots' icons and recharge countdowns.
+var slot_glyphs: Array = []
+var slot_cooldowns: Array[Label] = []
 var notice_time = 0.0
 var gold = Color(.91,.75,.45)
 var cream = Color(.93,.91,.82)
@@ -97,27 +104,8 @@ func setup(owner_game) -> void:
 	character_info = label("",15,gold,root)
 	anchor(character_info,Vector2.ZERO,Vector2(24,24),Vector2(370,24))
 	experience = bar(Color(.36,.58,.9),root)
-	anchor(experience,Vector2.ZERO,Vector2(24,51),Vector2(300,8))
-	for i in 3:
-		var b = Button.new()
-		b.text = ["C · Character","K · Skills","I · Equipment"][i]
-		root.add_child(b)
-		anchor(b,Vector2.ZERO,Vector2(24+i*80,66),Vector2(76,20))
-		b.add_theme_font_size_override("font_size",9)
-		b.focus_mode = Control.FOCUS_NONE
-		# The HUD's button style has generous padding; keep these compact.
-		for state in ["normal","hover","pressed","focus","disabled"]:
-			var style = b.get_theme_stylebox(state)
-			if style == null: continue
-			style = style.duplicate()
-			style.content_margin_left = 6; style.content_margin_right = 6
-			style.content_margin_top = 2; style.content_margin_bottom = 2
-			b.add_theme_stylebox_override(state,style)
-		b.pressed.connect(func():
-			if game.mode!="playing": return
-			if i==0: game.ProgressionUI.character(game)
-			elif i==1: game.ProgressionUI.skills(game)
-			else: game.ProgressionUI.equipment(game))
+	experience.custom_minimum_size = Vector2(200,5)
+	anchor(experience,Vector2.ZERO,Vector2(24,51),Vector2(200,5))
 	var row = Control.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(row)
@@ -133,7 +121,7 @@ func setup(owner_game) -> void:
 		slot.position = Vector2(i*60,0)
 		slot.size = Vector2(56,56)
 		slot.focus_mode = Control.FOCUS_NONE
-		slot.tooltip_text = "Assign skills in K"
+		slot.tooltip_text = "Assign skills in the skill panel (K)"
 		slot.add_theme_stylebox_override("disabled",idle_style)
 		slot.pressed.connect(func():
 			if game.mode!="playing": return
@@ -149,6 +137,15 @@ func setup(owner_game) -> void:
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(icon)
 		weapon_icons.append(icon)
+		if i>0:
+			var glyph = SkillIcon.new()
+			glyph.position = Vector2(15,13); glyph.size = Vector2(26,26)
+			slot.add_child(glyph)
+			slot_glyphs.append(glyph)
+			var recharge = label("",20,cream,slot)
+			recharge.position = Vector2(0,12); recharge.size = Vector2(56,28)
+			recharge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			slot_cooldowns.append(recharge)
 		var hotkey = label(["LMB","RMB","1","2"][i],12,gold,slot)
 		hotkey.position = Vector2(5,2)
 		var name_label = label("",10,cream,slot)
@@ -161,7 +158,7 @@ func setup(owner_game) -> void:
 	abilities = label("",16,gold,root)
 	anchor(abilities,Vector2(.5,1),Vector2(-330,-61),Vector2(660,23))
 	abilities.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var controls = label("LMB Move / Attack · RMB + 1 / 2 Skills · SPACE Evade · Q Flask",13,Color(.7,.68,.60),root)
+	var controls = label("LMB Move / Attack · RMB + 1 / 2 Skills · SPACE Evade · Q Heal · C Attributes · K Skills · I Equipment",13,Color(.7,.68,.60),root)
 	anchor(controls,Vector2(.5,1),Vector2(-350,-30),Vector2(700,22))
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = label("",19,gold,root)
@@ -177,6 +174,8 @@ func setup(owner_game) -> void:
 	boss_bar = bar(Color(.71,.36,.18),root)
 	anchor(boss_bar,Vector2(.5,0),Vector2(-200,55),Vector2(400,10))
 	boss_bar.visible = false; boss_name.visible = false
+	panels = Panels.new()
+	panels.setup(self)
 
 func make_orb(is_energy: bool) -> Dictionary:
 	var holder = Control.new()
@@ -242,15 +241,17 @@ func tick(dt: float) -> void:
 	energy.material.set_shader_parameter("fill",clampf(r.energy/maximum_energy,0,1))
 	hp_text.text = "%d / %d" % [maxf(0,game.player.hp),maximum_health]
 	en_text.text = "%d / %d" % [r.energy,maximum_energy]
+	var outdoors: bool = game.outdoors() and game.playground == null
 	objective.text = "PLAYGROUND · Shift+P leaves" if game.playground != null else "%s · %s" % ["SUMMIT" if r.floor==5 else "FLOOR %d" % (r.floor+1),Data.FLOORS[r.floor].to_upper()]
 	difficulty.text = "%s mode" % Data.DIFFICULTIES[r.difficulty]
 	var remaining: int = game.remaining()
 	status.text = "%d statues remain" % remaining if remaining>0 else ("The crown awaits" if r.floor==5 else "The way up is open")
 	direction.text = "" if r.floor<5 else "Defeat the Crowned Statue"
+	if outdoors: show_outdoors()
 	point_to_nearest_enemy()
-	character_info.text = "%s · Lv %d · %d XP · %d attribute / %d skill points" % [r.class_id.capitalize(),r.level,r.xp,r.points,r.skill_points]
-	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<30 else 1
-	experience.value = r.xp-Data.xp_at_level(r.level) if r.level<30 else 1
+	character_info.text = "%s · Level %d" % [r.class_id.capitalize(),r.level]
+	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<Data.MAX_LEVEL else 1
+	experience.value = r.xp-Data.xp_at_level(r.level) if r.level<Data.MAX_LEVEL else 1
 	weapon_slots[0].disabled = game.player.dead
 	weapon_slots[0].tooltip_text = "LMB · %s basic attack · no energy cost" % Data.WEAPONS[r.weapon].capitalize()
 	weapon_slots[0].add_theme_stylebox_override("normal",idle_style)
@@ -265,13 +266,22 @@ func tick(dt: float) -> void:
 		weapon_slots[i].tooltip_text = problem if not problem.is_empty() else "%s · %.0f energy" % [game.Book.all()[id].title,game.skills.cost(id)]
 		weapon_slots[i].add_theme_stylebox_override("normal",selected_style if i==1 else idle_style)
 		weapon_icons[i].modulate = Color(.5,.65,1,.25) if r.class_id=="wizard" else Color(1,.8,.4,.2)
+		# An empty slot keeps the faint seal; a skill shows its icon, and its
+		# seconds left while it recharges.
+		weapon_icons[i].visible = id.is_empty()
+		var recharge: float = game.skills.cooldowns.get(id,0.0)
+		slot_cooldowns[i-1].text = str(ceili(recharge)) if recharge>0 else ""
+		slot_glyphs[i-1].show_skill(id,Color(.45,.44,.4) if recharge>0 else (gold if problem.is_empty() else Color(.6,.58,.5)))
 		weapon_names[i].text = "Empty" if id.is_empty() else game.Book.all()[id].title
-	abilities.text = "%s · K: learn / assign skills · I: equipment" % Data.WEAPONS[r.weapon].capitalize()
+	abilities.text = game.skills.status()
+	panels.tick(dt)
 	recovery.text = "Q · Heal 60%% · 60 energy%s" % [" · %ds" % ceili(game.heal_cd) if game.heal_cd>0 else ""]
 	prompt.text = ""
 	if game.mode == "playing":
-		if game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
+		if outdoors: prompt.text = outdoor_prompt()
+		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
 		elif remaining==0 and r.floor<5: prompt.text = "The stairway is open. %s" % ("Press E to ascend" if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
+		elif game.world.leaving_soon(game.player.position): prompt.text = "The door leads out to %s" % Data.DESERT
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest · C attributes · K skills"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
 	boss_name.visible = boss_bar.visible
@@ -280,6 +290,29 @@ func tick(dt: float) -> void:
 		boss_bar.value = game.boss.hp
 	notice_time -= dt
 	notice.visible = notice_time > 0
+
+# Outside the temple the corner of the screen names where the hero is, and
+# which way the town and the temple lie.
+func show_outdoors() -> void:
+	var at: Vector3 = game.player.position
+	var region: String = game.world.region(at)
+	objective.text = {"town":Data.TOWN,"desert":Data.DESERT,"temple":Data.TEMPLE}[region].to_upper()
+	var spot: Dictionary = game.world.place_at(at)
+	status.text = spot.name if not spot.is_empty() and spot.kind!="outcrop" else ""
+	direction.text = {"town":"The temple lies east, across the desert","desert":"Temple: east · %s: west" % Data.TOWN,"temple":"%s lies west, across the desert" % Data.TOWN}[region]
+
+# What the hero is standing in front of, outdoors.
+func outdoor_prompt() -> String:
+	var spot: Dictionary = game.world.place_at(game.player.position)
+	if spot.is_empty(): return ""
+	match spot.kind:
+		"temple": return "%s · Walk in to begin the ascent" % spot.name
+		"inn": return "%s · Inn · No one is here yet" % spot.name
+		"shop": return "%s · Shop · No one is here yet" % spot.name
+		"house": return spot.name
+		"palace": return "%s · Its doors are shut to the town" % spot.name
+		"royal_box": return "%s · Where the elders watch the games" % spot.name
+	return ""
 
 func toast(value: String) -> void:
 	notice.text = value
@@ -319,11 +352,16 @@ func show_enemy_hover(enemy) -> void:
 	if not hover_health.visible: return
 	hover_health.max_value = enemy.max_hp
 	hover_health.value = clampf(enemy.hp,0,enemy.max_hp)
-	var head: Vector3 = enemy.position+Vector3.UP*enemy.config.size*2.25
+	var head: Vector3 = enemy.position+Vector3.UP*enemy.config.get("height",enemy.config.size*2.25)
 	var screen: Vector2 = game.world.camera.unproject_position(head)
 	hover_health.position = screen-Vector2(hover_health.size.x*.5,12)
 
+# Closes the centre dialog and the side panels.
 func close_modal() -> void:
+	close_dialog()
+	panels.close()
+
+func close_dialog() -> void:
 	if is_instance_valid(modal):
 		root.remove_child(modal)
 		modal.queue_free()

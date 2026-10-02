@@ -1,0 +1,10 @@
+"Lion" by Poly by Google
+https://poly.pizza/m/3XAJojWxSWz
+
+Licensed under Creative Commons Attribution 3.0 (CC-BY 3.0):
+https://creativecommons.org/licenses/by/3.0/
+
+Changes made for Temple Ascension 3D (tools/make_lion.py): resized, smoothed and
+resculpted (legs, haunches, shoulders, mane, toes); its head replaced by Poly
+Haven's "Lion Head" (CC0); its colours removed; a skeleton, skinning and
+animations added.

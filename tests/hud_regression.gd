@@ -54,8 +54,31 @@ func test():
 		else: await capture("hud-%dx%d" % [size.x,size.y])
 	game.player.hp=100; game.run.energy=100; hud.tick(0)
 	check(not hud.weapon_slots[0].disabled and hud.weapon_slots[2].disabled and hud.weapon_slots[3].disabled,"Basic attack remains available and unassigned skill slots are disabled")
+	check(game.hud.root.get_children().filter(func(n): return n is Button and n.visible).is_empty() and not hud.panels.stat_plus.visible and not hud.panels.skill_plus.visible,"No character, skills or equipment buttons at top left, and no + buttons without points")
 	Data.gain_xp(game.run,Data.xp_at_level(8))
-	var ids = ["cleave","guard","shield_bash"]
+	hud.tick(0)
+	var stat_plus: Rect2 = hud.panels.stat_plus.get_global_rect()
+	var skill_plus: Rect2 = hud.panels.skill_plus.get_global_rect()
+	check(hud.panels.stat_plus.visible and hud.panels.skill_plus.visible and stat_plus.end.x<200 and skill_plus.position.x>root.get_visible_rect().size.x-200 and stat_plus.end.y<=hud.health.get_global_rect().position.y and stat_plus.size.x<=30,"Leveling shows a small + above each orb: attributes left, skills right")
+	await capture("hud-plus-buttons")
+	await click(hud.panels.stat_plus)
+	check(game.mode=="character" and hud.panels.stats_open() and hud.panels.stats.get_global_rect().end.x<root.get_visible_rect().size.x*.4,"The left + opens the attribute panel on the left")
+	hud.tick(0); await frames(2)
+	await click(hud.panels.stat_buttons[3])
+	check(game.run.stats[3]==6 and game.run.points==34 and Data.max_health(game.run)==110,"A + in the panel spends an attribute point")
+	await click(hud.panels.skill_plus)
+	hud.tick(0); await frames(2)
+	check(hud.panels.skills_open() and hud.panels.tree.get_global_rect().position.x>root.get_visible_rect().size.x*.6 and hud.panels.tree.size.x<440,"The right + opens the compact skill tree on the right")
+	await click(hud.panels.nodes.powerful_strike.button)
+	check(game.run.skills.get("powerful_strike",0)==1 and game.run.hotbar[1]=="powerful_strike","Clicking a skill learns it and fills the next slot")
+	hud.tick(0); await frames(2)
+	check(hud.panels.tip.visible and "Powerful Strike" in hud.panels.tip_lines.title.text,"Hovering a skill shows its details")
+	await capture("hud-panels")
+	game.run.points=0; game.run.stats[0]+=34; hud.tick(0)
+	check(not hud.panels.stat_plus.visible and hud.panels.skill_plus.visible==false,"A + stays only while its points are unspent (or its panel is closed)")
+	game.resume_game(); hud.tick(0)
+	check(not hud.panels.stat_plus.visible and hud.panels.skill_plus.visible,"The skill + persists until the skill points are spent")
+	var ids = ["cleave","powerful_strike","shield_bash"]
 	for id in ids:
 		if not game.run.skills.has(id): Data.Skills.learn(game.run,id)
 	game.run.hotbar = ids
@@ -70,7 +93,7 @@ func test():
 		game.run.energy=Data.max_energy(game.run); hud.tick(0)
 		var before_energy: float=game.run.energy
 		await click(hud.weapon_slots[i+1]); hud.tick(0)
-		check(game.run.energy<before_energy and not game.run.has("skill_cooldowns"),"Clicking hotbar spends energy without a cooldown: "+ids[i])
+		check(game.run.energy<before_energy and not game.run.has("skill_cooldowns"),"Clicking hotbar spends energy: "+ids[i])
 		check(not game.left_held and game.route.is_empty(),"Skill panel consumes movement input: "+ids[i])
 	game.skills.pending.clear()
 	game.creating_character=true

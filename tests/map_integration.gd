@@ -30,7 +30,7 @@ func test():
 		var positions: Array = []
 		for enemy in game.enemies: positions.append(enemy.position)
 		Data.gain_xp(game.run,maxi(0,Data.xp_at_level(3)-int(game.run.xp)))
-		game.run.stats = [7,6,5,6,5]; game.run.points = (int(game.run.level)-1)*3-4
+		game.run.stats = [7,6,5,6,5]; game.run.points = (int(game.run.level)-1)*Data.STAT_POINTS-4
 		game.retry_floor()
 		var same = game.world.layout.cells==cells
 		for i in game.enemies.size(): same = same and game.enemies[i].position==positions[i]
@@ -61,13 +61,13 @@ func test():
 	old.drops=[{"kind":"gem","value":1,"id":"old-loot","position":[-17,-54]}]
 	Save.write(old)
 	var loaded = Save.load_run()
-	check(not loaded.is_empty() and loaded.version==3,"Legacy saves migrate on load")
+	check(not loaded.is_empty() and loaded.version==Data.new_run().version,"Legacy saves migrate on load")
 	game.run = loaded; game.load_floor()
-	check(game.run.version==3 and game.player.position==game.world.spawn,"Legacy run migrates safely to the generated entrance")
+	check(game.run.version==Data.new_run().version and game.player.position==game.world.spawn,"Legacy run migrates safely to the generated entrance")
 	check(game.run.stats==[5,5,5,5,5] and game.run.points>0 and game.run.owned[2] and "0:0" in game.run.dead,"Migration preserves weapons and kills while refunding old stat bonuses")
 	check(game.pickups.is_empty(),"Legacy permanent gem drops are retired")
 	game.save_run(); game.continue_run()
-	check(game.run.version==3 and game.world.fits(game.player.position),"Migrated save round-trips normally")
+	check(game.run.version==Data.new_run().version and game.world.fits(game.player.position),"Migrated save round-trips normally")
 	FileAccess.open("res://test-results/map-integration.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
 	print("MAP_INTEGRATION ",passed.size()," passed; ",failed)
 	game.queue_free()

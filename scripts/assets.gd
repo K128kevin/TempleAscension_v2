@@ -16,7 +16,13 @@ static func statue_material(skinned: bool = false, kit: String = "") -> ShaderMa
 	m.set_shader_parameter("stone_texture",load("res://assets/textures/statue_marble.png"))
 	m.set_shader_parameter("scale_texture",load("res://assets/textures/hero_kit.png"))
 	m.set_shader_parameter("rest_pose",skinned)
-	if kit != "":
+	if kit == "lion":
+		# The lion's face is a sculpted mask (tools/make_lion.py): its own
+		# normal map carries the finest work, and it wears no kit.
+		m.set_shader_parameter("body_detail",1.0)
+		m.set_shader_parameter("body_normal",load("res://assets/textures/lion_head_normal.jpg"))
+		m.set_shader_parameter("kit_height",load("res://assets/textures/flat_height.png"))
+	elif kit != "":
 		m.set_shader_parameter("body_detail",1.0)
 		m.set_shader_parameter("body_normal",load("res://assets/models/character/warrior_T_Superhero_Male_Normal.png"))
 		m.set_shader_parameter("kit_height",load("res://assets/textures/hero_kit_%s_height.png" % kit))
@@ -60,7 +66,7 @@ static func quartz_material(tint: Color = Color(.70,.70,.72)) -> ShaderMaterial:
 	materials[key] = m
 	return m
 
-# Grey cleft-slate pavers in an ashlar pattern, for the open-air terraces.
+# Grey split-face sandstone in the French Versailles pattern, for the open-air terraces.
 static func slate_material() -> ShaderMaterial:
 	if materials.has("slate"): return materials.slate
 	var m = ShaderMaterial.new()

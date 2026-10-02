@@ -32,8 +32,20 @@ var thresholds = 0
 var invulnerable = 0.0
 var slow_time = 0.0
 var mark_time = 0.0
+# Rooted and unable to act (Shield Bash's stun).
 var stagger_time = 0.0
-var stagger_meter = 0.0
+# A stun ends at the first damage. Stunned again within STUN_MEMORY seconds of
+# the last one, a unit is stunned for half as long each time.
+const STUN_MEMORY = 30.0
+var stunned = false
+var stun_memory = 0.0
+var stun_count = 0
+var stun_mark: Sprite3D
+# Damage over time: Cursed Blade's stacks and Shadow Strike's lingering damage.
+# Each is {"kind", "rate" (damage a second), "left", "seconds"}.
+var dots: Array = []
+var dot_shown = 0.0
+var dot_clock = 0.0
 var hit_reactions = 0
 # Driven by the debug playground instead of the AI.
 var puppet = false
@@ -85,8 +97,9 @@ func tick(dt: float) -> void:
 		visual.animator.active = visible
 	visual.advance(dt)
 	# Stepping into an attack carries the unit forward (Visual.ROOT_ADVANCE).
+	# (Not in the air: a leap carries the hero itself.)
 	var travel: float = visual.take_travel()
-	if travel > 0.0 and not dead: step_forward(travel)
+	if travel > 0.0 and not dead and not (kind == "player" and game.leap_left > 0): step_forward(travel)
 	# (Cut short, the clip's step can't make up the rest: follow in.)
 	if catch_up > 0.0 and visual.travel_to_come() <= 0.0:
 		follow(catch_up)
@@ -109,6 +122,9 @@ func tick(dt: float) -> void:
 	slow_time = maxf(0,slow_time-dt)
 	mark_time = maxf(0,mark_time-dt)
 	stagger_time = maxf(0,stagger_time-dt)
+	stun_memory = maxf(0,stun_memory-dt)
+	if stunned and stagger_time<=0: end_stun()
+	if is_instance_valid(stun_mark): stun_mark.rotation.y += dt*4.0
 	hit_stun = maxf(0,hit_stun-dt)
 	invulnerable = maxf(0,invulnerable-dt)
 	busy = maxf(0,busy-dt)
@@ -118,7 +134,13 @@ func tick(dt: float) -> void:
 		death_age += dt
 		if death_age > 8 and kind != "player": visible = false
 		return
-	if kind == "player" or stagger_time>0: return
+	if kind == "player": return
+	tick_dots(dt)
+	if dead: return
+	if stagger_time>0:
+		# Stunned, it stands dazed once its flinch is over.
+		visual.locomotion(false,false)
+		return
 	# Rooted by a hit: no moving, while the pushed-back attack timer runs.
 	if hit_stun>0 and windup<=0 and laser_time<=0:
 		visual.locomotion(false,false)
@@ -270,7 +292,7 @@ func playground_revive(weapon: String = "") -> void:
 	death_age = 0
 	hp = max_hp
 	visible = true
-	stagger_time = 0; hit_stun = 0; pushback_step = 0
+	end_stun(); dots.clear(); hit_stun = 0; pushback_step = 0
 	visual.queue_free()
 	visual = Visual.new()
 	add_child(visual)
@@ -301,13 +323,21 @@ func release_attack() -> void:
 	elif game.puppet_attack(self):
 		# A playground statue's swing lands on whoever stands in front of it.
 		for other in game.targets(self):
-			if other.dead or position.distance_to(other.position) > config.range+.6 or not game.world.clear_line(position,other.position): continue
+			if other.dead or position.distance_to(other.position) > strike_reach(other) or not game.world.clear_line(position,other.position): continue
 			if forward().dot((other.position-position).normalized()) > .2:
 				other.hit(damage)
 				landed_on(other)
-	elif position.distance_to(game.player.position) <= config.range + .6 and game.world.clear_line(position,game.player.position):
+	elif position.distance_to(game.player.position) <= strike_reach(game.player) and game.world.clear_line(position,game.player.position):
 		var d: Vector3 = (game.player.position-position).normalized()
 		if forward().dot(d) > .2: game.hurt_player(damage,"physical",self)
+
+# How far (centre to centre) this statue's blow reaches `other` as it lands:
+# a little beyond where it attacks from, or as far as its weapon's point
+# reaches ("strike"), and further into a bulkier statue.
+func strike_reach(other) -> float:
+	if not config.has("strike"): return config.range+.6
+	var bulk = maxf(0.0,other.config.size-1.0)*.3 if other.kind != "player" else 0.0
+	return config.strike+bulk
 
 # Instant: the blast goes off at once, the Oracle snapping into the release of
 # its casting pose and recovering briefly.
@@ -345,7 +375,9 @@ func walk_to(destination: Vector3, dt: float) -> void:
 	for other in game.enemies:
 		if other == self or other.dead or not other.awake: continue
 		var difference: Vector3 = position-other.position
-		if difference.length_squared() < .85 and difference.length_squared() > .001: separation += difference.normalized()*.6
+		# (A lion is two metres long: it keeps a body's length from the others.)
+		var room = 2.6 if kind == "lion" or other.kind == "lion" else .85
+		if difference.length_squared() < room and difference.length_squared() > .001: separation += difference.normalized()*.6
 	direction = (direction + separation).normalized()
 	var before = position
 	var pace = config.speed*(.4 if slow_time>0 else 1.0)
@@ -477,17 +509,77 @@ func face(at: Vector3) -> void:
 func forward() -> Vector3:
 	return Vector3(sin(rotation.y),0,cos(rotation.y))
 
-func stagger(seconds: float) -> void:
-	if kind=="boss":
-		stagger_meter += 1
-		if stagger_meter<3: return
-		stagger_meter = 0
-		seconds = minf(seconds,.6)
-	stagger_time = maxf(stagger_time,seconds)
+# Shield Bash: stunned for `seconds` (less when stunned again soon after), its
+# attack broken off, until the time runs out or it takes damage. The crown's
+# gaze, once it burns, cannot be stopped.
+func stun(seconds: float) -> void:
+	if dead or dormant or laser_time>0: return
+	stun_count = stun_count+1 if stun_memory>0 else 0
+	stun_memory = STUN_MEMORY
+	seconds *= pow(.5,stun_count)
+	stunned = true
+	stagger_time = seconds
+	if kind == "boss" and cast_count == -1:
+		# An interrupted gaze is tried again afterward, not lost to its cooldown.
+		cast_count = 0
+		laser_cooldown = seconds
 	windup = 0
 	cast_total = 0
-	# Long staggers knock the statue down and let it rise as the stagger ends.
-	if not dead and laser_time<=0: visual.react("HitKnockdown" if seconds>=1.2 else "HitStagger",seconds if seconds>=1.2 else .6)
+	busy = 0
+	visual.react("HitStagger",.6)
+	if not is_instance_valid(stun_mark):
+		# A gold halo turning over its head.
+		stun_mark = Art.seal(.8*config.get("size",1.0),Color(1,.88,.35,.95))
+		stun_mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(stun_mark)
+		stun_mark.position = Vector3.UP*config.get("size",1.0)*2.2
+	game.float_text(position+Vector3.UP*1.9,"Stunned",Color(1,.88,.35))
+
+func end_stun() -> void:
+	stunned = false
+	stagger_time = 0
+	if is_instance_valid(stun_mark): stun_mark.queue_free()
+	stun_mark = null
+
+# Adds `total` damage over `seconds`. At most `cap` of a kind run at once: the
+# oldest gives way.
+func add_dot(dot_kind: String, total: float, seconds: float, cap: int) -> void:
+	if dead or dormant or total<=0 or seconds<=0: return
+	var same: Array = dots.filter(func(d): return d.kind==dot_kind)
+	if same.size()>=cap: dots.erase(same[0])
+	dots.append({"kind":dot_kind,"rate":total/seconds,"left":seconds,"seconds":seconds})
+
+# Starts every running effect of a kind over from its full time.
+func refresh_dots(dot_kind: String) -> void:
+	for d in dots:
+		if d.kind==dot_kind: d.left = d.seconds
+
+func tick_dots(dt: float) -> void:
+	if dots.is_empty(): return
+	var total = 0.0
+	for i in range(dots.size()-1,-1,-1):
+		var d: Dictionary = dots[i]
+		var step = minf(dt,d.left)
+		total += d.rate*step
+		d.left -= dt
+		if d.left<=0: dots.remove_at(i)
+	if dead or game.playground != null:
+		dots.clear()
+		return
+	var dealt: float = Data.mitigate(total,armor(),0.0,int(game.run.level),"physical")
+	hp -= dealt
+	if dealt>0: end_stun()
+	# Shown as one number every half second rather than one a frame.
+	dot_shown += dealt
+	dot_clock += dt
+	if dot_clock>=.5 or hp<=0 or dots.is_empty():
+		if dot_shown>=.5: game.float_text(position+Vector3.UP*1.2,str(roundi(dot_shown)),Color(.72,.45,1))
+		dot_shown = 0.0
+		dot_clock = 0.0
+	if hp<=0: die()
+
+func armor() -> float:
+	return 35.0 if kind=="boss" else (20.0 if kind=="centurion" else 0.0)
 
 # Light hits alternate chest and head flinches; heavy hits stagger. Wind-ups,
 # attack recoveries, the boss's gaze and running reactions are not interrupted.
@@ -498,7 +590,8 @@ func react_to_hit(heavy: bool = false) -> void:
 	if heavy: visual.react("HitStagger",.6)
 	else: visual.react("HitHead" if hit_reactions%2==0 else "Hit",.34)
 
-func hit(damage: float, type: String = "physical") -> void:
+# `bonus` is damage added after armor.
+func hit(damage: float, type: String = "physical", bonus: float = 0.0) -> void:
 	if dead or dormant: return
 	if game.playground != null:
 		# The playground shows every hit, but nothing takes damage.
@@ -506,9 +599,10 @@ func hit(damage: float, type: String = "physical") -> void:
 		react_to_hit()
 		if kind != "player": push_back()
 		return
-	damage = Data.mitigate(damage,35.0 if kind=="boss" else (20.0 if kind=="centurion" else 0.0),0.0,int(game.run.level),type)
+	damage = Data.mitigate(damage,armor(),0.0,int(game.run.level),type)+bonus
 	if mark_time>0: damage *= 1.2+Data.passive(game.run,"predator")*.01
 	hp -= damage
+	if damage>0: end_stun()
 	game.sound.play("weapon-impact",-15)
 	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),Color(1,.83,.46))
 	if hp <= 0: die()
@@ -560,6 +654,8 @@ func die(reward: bool = true) -> void:
 	dead = true
 	hp = 0
 	cast_total = 0
+	dots.clear()
+	end_stun()
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	# Statues crumble into a rubble pile, with the original game's crumble sound.
 	visual.crumble()

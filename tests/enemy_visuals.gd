@@ -77,10 +77,16 @@ func verify():
 	check(boss.skin_meshes.size()==1 and boss.skin_meshes[0].name=="StoneBoss" and boss.skin_meshes[0].skin.get_bind_count()>50,"The boss wears its plate as one skinned surface")
 	check(boss.weapon_kind=="sword" and boss.shield_item==null,"The boss wields a great sword and no shield")
 	boss.queue_free()
-	# The lion stays plain stone.
+	# The lion is a lion: its own four-legged figure, with its carved face.
 	var lion = Visual.new(); scene.add_child(lion)
 	lion.setup(true,Data.ENEMIES.lion.color,Data.ENEMIES.lion.weapon,Data.ENEMIES.lion.size,"lion")
-	check(lion.skin_meshes[0].material_override.get_shader_parameter("body_detail") in [null,0.0],"The lion is left uncarved")
+	check(lion.quadruped and lion.skeleton.find_bone("forepaw_r")>=0 and lion.skeleton.find_bone("hand_r")<0,"The lion stands on four legs, on a skeleton of its own")
+	check(lion.skin_meshes[0].material_override.shader==Art.statue_material().shader and lion.skin_meshes[0].material_override.get_shader_parameter("body_normal").resource_path.ends_with("lion_head_normal.jpg"),"It is carved in the statues' stone, its face in fine relief")
+	var lion_clips = ["Idle","Run","Attack","Hit","HitHead","HitStagger"]
+	check(lion_clips.all(func(c): return lion.clips.has(c)),"It has its own stance, gallop, swipe and flinches")
+	var lion_box = AABB()
+	for mesh in lion.skin_meshes: lion_box = lion_box.merge(mesh.get_aabb()) if lion_box.has_volume() else mesh.get_aabb()
+	check(lion_box.size.y>1.2 and lion_box.size.y<1.6 and lion_box.size.z>2.6 and lion_box.size.z<3.3,"It is the size of a living lion (%.2f m tall, %.2f m nose to tail)" % [lion_box.size.y,lion_box.size.z])
 	lion.queue_free()
 	print("ENEMY_VISUALS ",passed," passed; ",failures)
 	scene.queue_free(); await process_frame

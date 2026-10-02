@@ -10,7 +10,7 @@ func check(ok: bool, message: String):
 func start(owner_game):
 	game = owner_game
 	game.set_process(false)
-	check(game.run.floor==0 and game.player.position==Vector3(0,0,9),"New character starts at temple entrance")
+	check(game.run.floor==0 and game.player.position==Vector3(0,0,9),"A run inside the temple starts at its entrance")
 	check(game.player.visual.clips.size()==49,"All locomotion, weapon and hit reaction clips are present (with the ranger's and wizard's own idle, run and crouch, and the shield bearers' guarded swing and reactions)")
 	check(game.run.class_id=="warrior" and game.run.skills.cleave==1,"Warrior starts with Cleave and sword")
 	game.player.hp=20; game.run.energy=60; game.heal()
@@ -74,7 +74,7 @@ func start(owner_game):
 		check(game.run.floor==floor_index+1 and game.mode=="playing","Stairs advance immediately without allocation gate")
 		check(game.run.points==points and game.run.xp==xp,"Stairs grant neither XP nor attribute points")
 		await get_tree().process_frame
-	check(total==247 and game.run.level>=18,"All temple enemies grant enough XP to unlock level 18 skills")
+	check(total==247 and game.run.level>=18 and game.run.level<=Data.MAX_LEVEL,"All temple enemies grant enough XP to near the level cap of 20")
 	check(game.enemies.size()==21 and game.boss.max_hp==1125,"Summit holds the boss and its reserve")
 	var reserve: Array=game.enemies.filter(func(e): return e.uid.begins_with("summoned:"))
 	check(reserve.size()==20 and reserve.all(func(e): return e.kind=="centurion" and e.dormant),"The boss's reserve is twenty dormant centurions")
@@ -112,7 +112,8 @@ func start(owner_game):
 	game.boss.tick(1.1)
 	check(game.boss.laser_time==5,"Boss gaze lasts five seconds")
 	game.boss.hit(10000)
-	check(game.crown_available and game.run.xp>xp,"Boss death grants XP and releases crown")
+	# (By the summit the character is at the level cap, where XP no longer grows.)
+	check(game.crown_available and "boss" in game.run.xp_claimed and (game.run.xp>xp or game.run.level==Data.MAX_LEVEL),"Boss death grants XP and releases crown")
 	for enemy in reserve: enemy.tick(.016)
 	check(reserve.all(func(e): return e.dead),"Summoned centurions fall with the boss")
 	game.player.position=game.crown_position

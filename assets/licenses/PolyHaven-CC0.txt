@@ -1,0 +1,10 @@
+Photo scans and photographed textures from Poly Haven (https://polyhaven.com):
+
+Models:   namaqualand_boulder_03, namaqualand_boulder_04, namaqualand_boulder_05,
+          namaqualand_boulder_06, namaqualand_cliff_02, namaqualand_stones_01,
+          shrub_02, wild_rooibos_bush, lion_head
+Textures: dense_sand, gravelly_sand, rock_face_03, palm_bark
+
+All Poly Haven assets are licensed CC0 1.0 Universal (public domain dedication):
+https://polyhaven.com/license
+https://creativecommons.org/publicdomain/zero/1.0/

@@ -163,6 +163,36 @@ func test():
 		var square = feet.stance()
 		var off = maxf(Vector2(square[0].x-stance_before[0].x,square[0].z-stance_before[0].z).length(),Vector2(square[1].x-stance_before[1].x,square[1].z-stance_before[1].z).length())
 		check(feet.steps >= 2 and feet.skate < .03 and minf(carried[0],carried[1]) > .3 and maxf(feet.last[0].y,feet.last[1].y) < .025 and off < .12,"Driven back from the %s, the unit steps with it rather than sliding (%d steps, feet slid %.3fm, carried %.2f/%.2fm, end stance off by %.2fm)" % [case[0],feet.steps,feet.skate,carried[0],carried[1],off])
+	# The centurion thrusts from as far as his long spear reaches: from about
+	# three metres its point, driven home with his step in, reaches the unit
+	# he aims at and the blow lands; much further off, it falls short.
+	var centurion = game.enemies.filter(func(e): return e.kind == "centurion")[0]
+	for gap in [2.9,3.7]:
+		var spot: Vector3 = game.world.spawn
+		warrior.position = spot
+		warrior.rotation.y = PI/2; warrior.visual.snap_facing()
+		warrior.busy = 0; warrior.stagger_time = 0
+		centurion.position = spot+Vector3(gap,0,0)
+		centurion.rotation.y = -PI/2; centurion.visual.snap_facing()
+		centurion.busy = 0; centurion.windup = 0; centurion.cooldown = 0; centurion.hit_stun = 0; centurion.stagger_time = 0
+		pg.select(centurion)
+		await frames(.4)
+		var reactions: int = warrior.hit_reactions
+		var point_reach = [-INF]
+		var track = func():
+			for m in centurion.visual.weapon_item.find_children("*","MeshInstance3D",true,false):
+				for c in 8:
+					var p: Vector3 = m.global_transform*m.get_aabb().get_endpoint(c)
+					point_reach[0] = maxf(point_reach[0],(p-spot).dot(Vector3.RIGHT)*-1.0+gap)
+		centurion.visual.skeleton.skeleton_updated.connect(track)
+		centurion.start_attack(warrior.position)
+		await frames(1.0)
+		centurion.visual.skeleton.skeleton_updated.disconnect(track)
+		# (How far past the warrior's centre the spear's point went.)
+		var past: float = point_reach[0]-gap
+		if gap < 3.0: check(warrior.hit_reactions > reactions and past > -.3 and past < .45,"A centurion's spear thrust from %.1fm lands, its point reaching the unit (%.2fm past its centre)" % [gap,past])
+		else: check(warrior.hit_reactions == reactions,"From %.1fm a centurion's spear falls short (its point %.2fm short of the unit's centre)" % [gap,-past])
+	pg.select(gladiator)
 	# Kill and revive.
 	await key(KEY_X)
 	check(gladiator.dead and gladiator.visual.state=="Crumble","X kills the selected unit and plays its death")

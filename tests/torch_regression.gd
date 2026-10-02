@@ -41,6 +41,9 @@ func test():
 		for mesh in holder.find_children("*","MeshInstance3D",true,false):
 			if mesh.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF: shadowless = false
 	check(shadowless,"Torch holders cast no shadow on the walls beside them")
+	# The banner that hung in room corners (often beside a corner torch)
+	# rendered as a black bracket-shaped mark on the wall: there is none.
+	check(world.get_children().filter(func(n): return n is Node3D and n.scene_file_path.ends_with("banner.glb")).is_empty(),"No black banner marks hang on the walls")
 	var first = fires[0]
 	var second = fires[1]
 	var different = false
