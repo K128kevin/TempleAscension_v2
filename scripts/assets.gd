@@ -29,6 +29,18 @@ static func statue_material(skinned: bool = false, kit: String = "") -> ShaderMa
 	materials[key] = m
 	return m
 
+# The ranger's dagger: the sword's finish, on a blade with a short grip and a
+# heavy guard.
+static func dagger_material() -> ShaderMaterial:
+	if materials.has("dagger"): return materials.dagger
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/sword.gdshader")
+	m.set_shader_parameter("POMMEL_TOP",.1)
+	m.set_shader_parameter("GRIP_TOP",.3)
+	m.set_shader_parameter("GUARD_TOP",.42)
+	materials.dagger = m
+	return m
+
 static var rest_meshes: Dictionary = {}
 
 # A copy of a skinned mesh carrying its rest-pose positions in CUSTOM0 and

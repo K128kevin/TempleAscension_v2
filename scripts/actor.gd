@@ -32,6 +32,7 @@ var attack_point = Vector3.ZERO
 var route = PackedVector3Array()
 var repath = 0.0
 var death_age = 0.0
+var death_age_clock = 0.0
 var cast_count = 0
 var laser_cooldown = 7.0
 var laser_time = 0.0
@@ -41,6 +42,8 @@ var laser_model: Node3D
 var thresholds = 0
 var invulnerable = 0.0
 var slow_time = 0.0
+# The share of its pace a slowed unit keeps (Slow Shot sets its own).
+var slow_factor = .4
 var mark_time = 0.0
 # War Cry: takes this much more damage (percent) for this long.
 var rally_bonus = 0.0
@@ -53,14 +56,28 @@ const STUN_MEMORY = 30.0
 var stunned = false
 var stun_memory = 0.0
 var stun_count = 0
-var stun_mark: Sprite3D
+var stun_mark: Node3D
+# What holds a stunned unit: "stun" (Shield Bash), "sleep" (Tranquilizer) and
+# "confuse" (Throw Sand: it wanders, unable to attack) all end when it is
+# hurt; "ambush" (Surprise Attack) does not, and it takes `daze_bonus` percent
+# more damage until the stun runs out.
+var daze = ""
+var daze_bonus = 0.0
+var wander_way = Vector3.ZERO
+var wander_time = 0.0
+# Weakening Strike: each stack makes critical strikes on it deal `weak_bonus`
+# percent more, for WEAK_SECONDS from the last.
+const WEAK_SECONDS = 6.0
+var weak_stacks = 0
+var weak_bonus = 0.0
+var weak_time = 0.0
 # Damage over time: Cursed Blade's stacks and Shadow Strike's lingering damage.
 # Each is {"kind", "rate" (damage a second), "left", "seconds"}.
 var dots: Array = []
 # Damage over time is shown by kind: Cursed Blade's in purple, Shadow
 # Strike's (a skill's) in yellow.
 const HIT_COLORS = {"normal":Color(1,1,1),"skill":Color(1,.88,.3),"crit":Color(1,.5,.08)}
-const DOT_COLORS = {"curse":Color(.72,.45,1),"shadow":Color(1,.88,.3)}
+const DOT_COLORS = {"curse":Color(.72,.45,1),"shadow":Color(1,.88,.3),"poison":Color(.45,.95,.3)}
 var dot_shown: Dictionary = {}
 var dot_clock = 0.0
 var hit_reactions = 0
@@ -160,12 +177,17 @@ func tick(dt: float) -> void:
 	visual.owed += forward()*catch_up
 	slow_time = maxf(0,slow_time-dt)
 	mark_time = maxf(0,mark_time-dt)
+	weak_time = maxf(0,weak_time-dt)
+	if weak_time<=0: weak_stacks = 0
 	rally_time = maxf(0,rally_time-dt)
 	if rally_time<=0: rally_bonus = 0.0
 	stagger_time = maxf(0,stagger_time-dt)
 	stun_memory = maxf(0,stun_memory-dt)
 	if stunned and stagger_time<=0: end_stun()
-	if is_instance_valid(stun_mark): stun_mark.rotation.y += dt*4.0
+	if is_instance_valid(stun_mark):
+		if daze in ["stun","ambush"]: stun_mark.rotation.y += dt*4.0
+		else: stun_mark.position.y = config.get("size",1.0)*2.2+sin(death_age_clock*3.0)*.08
+	death_age_clock += dt
 	hit_stun = maxf(0,hit_stun-dt)
 	invulnerable = maxf(0,invulnerable-dt)
 	busy = maxf(0,busy-dt)
@@ -179,6 +201,19 @@ func tick(dt: float) -> void:
 	tick_dots(dt)
 	if dead: return
 	if stagger_time>0:
+		if daze=="confuse" and not puppet:
+			# Sand in its eyes: it blunders one way and another.
+			wander_time -= dt
+			if wander_time<=0:
+				wander_time = randf_range(.5,1.1)
+				wander_way = Vector3.FORWARD.rotated(Vector3.UP,randf()*TAU)
+			var from = position
+			var blunder = config.speed*.55*(slow_factor if slow_time>0 else 1.0)
+			position = game.world.move(position,wander_way*blunder*dt)
+			if position.distance_to(from) > .005: face(position+wander_way)
+			else: wander_time = 0.0
+			visual.locomotion(position.distance_to(from)>.005,false,kind=="lion",1.0,blunder)
+			return
 		# Stunned, it stands dazed once its flinch is over.
 		visual.locomotion(false,false)
 		return
@@ -204,7 +239,8 @@ func tick(dt: float) -> void:
 		else: walk_to(game.boss.position,dt)
 		return
 	if not awake:
-		if distance < 10 and game.world.clear_line(position,player.position): game.awaken(self)
+		# (A hero hidden in the shadows is not seen.)
+		if distance < 10 and not game.skills.hidden and game.world.clear_line(position,player.position): game.awaken(self)
 		else: return
 	if kind == "boss":
 		for i in range(thresholds,4):
@@ -237,7 +273,7 @@ func tick(dt: float) -> void:
 	elif kind == "wizard" and distance < 5:
 		var direction: Vector3 = (position-player.position).normalized()
 		var before = position
-		var pace = config.speed*(.4 if slow_time>0 else 1.0)
+		var pace = config.speed*(slow_factor if slow_time>0 else 1.0)
 		position = game.world.move(position,direction*pace*dt)
 		face(player.position)
 		# Backing away while facing the hero: the stride runs backward.
@@ -424,7 +460,7 @@ func walk_to(destination: Vector3, dt: float) -> void:
 		if difference.length_squared() < room and difference.length_squared() > .001: separation += difference.normalized()*.6
 	direction = (direction + separation).normalized()
 	var before = position
-	var pace = config.speed*(.4 if slow_time>0 else 1.0)
+	var pace = config.speed*(slow_factor if slow_time>0 else 1.0)
 	position = game.world.move(position,direction*pace*dt)
 	if position.distance_to(before) > .005: face(position+direction)
 	visual.locomotion(position.distance_to(before)>.005,false,kind=="lion",1.0,pace)
@@ -567,7 +603,42 @@ func stun(seconds: float) -> void:
 	stun_count = stun_count+1 if stun_memory>0 else 0
 	stun_memory = STUN_MEMORY
 	seconds *= pow(.5,stun_count)
+	held("stun",seconds)
+	visual.react("HitStagger",.6)
+	game.float_text(position+Vector3.UP*1.9,"Stunned",Color(1,.88,.35))
+
+# Tranquilizer: asleep on its feet for `seconds`, or until it is hurt.
+func sleep(seconds: float) -> void:
+	if dead or dormant or laser_time>0: return
+	held("sleep",seconds)
+	visual.locomotion(false,false)
+	game.float_text(position+Vector3.UP*1.9,"Asleep",Color(.6,.8,1))
+
+# Throw Sand: blinded, it wanders at random and cannot attack for `seconds`,
+# or until it is hurt.
+func confuse(seconds: float) -> void:
+	if dead or dormant or laser_time>0: return
+	held("confuse",seconds)
+	wander_time = 0.0
+	visual.react("HitHead",.34)
+	game.float_text(position+Vector3.UP*1.9,"Blinded",Color(.95,.82,.55))
+
+# Surprise Attack: stunned for `seconds` whatever is done to it, and taking
+# `percent` more damage until then.
+func ambush(seconds: float, percent: float) -> void:
+	if dead or dormant or laser_time>0: return
+	held("ambush",seconds)
+	daze_bonus = percent
+	visual.react("HitStagger",.6)
+	game.float_text(position+Vector3.UP*1.9,"Stunned",Color(1,.45,.3))
+
+# Held for `seconds` by a daze of `how`: its attack broken off, its mark
+# over its head.
+const DAZE_MARKS = {"stun":Color(1,.88,.35,.95),"ambush":Color(1,.3,.2,.95),"sleep":Color(.6,.8,1),"confuse":Color(.95,.82,.55)}
+func held(how: String, seconds: float) -> void:
 	stunned = true
+	daze = how
+	daze_bonus = 0.0
 	stagger_time = seconds
 	if kind == "boss" and cast_count == -1:
 		# An interrupted gaze is tried again afterward, not lost to its cooldown.
@@ -576,17 +647,30 @@ func stun(seconds: float) -> void:
 	windup = 0
 	cast_total = 0
 	busy = 0
-	visual.react("HitStagger",.6)
-	if not is_instance_valid(stun_mark):
-		# A gold halo turning over its head.
-		stun_mark = Art.seal(.8*config.get("size",1.0),Color(1,.88,.35,.95))
+	if is_instance_valid(stun_mark): stun_mark.queue_free()
+	var size: float = config.get("size",1.0)
+	if how in ["stun","ambush"]:
+		# A halo turning over its head: gold, or red for an ambush.
+		stun_mark = Art.seal(.8*size,DAZE_MARKS[how])
 		stun_mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(stun_mark)
-		stun_mark.position = Vector3.UP*config.get("size",1.0)*2.2
-	game.float_text(position+Vector3.UP*1.9,"Stunned",Color(1,.88,.35))
+	else:
+		# Sleep's drifting Zs, or the question of one who cannot see.
+		var words = Label3D.new()
+		words.text = "z Z z" if how=="sleep" else "? ? ?"
+		words.font_size = 56
+		words.pixel_size = .009*size
+		words.outline_size = 6
+		words.modulate = DAZE_MARKS[how]
+		words.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		words.no_depth_test = true
+		stun_mark = words
+	add_child(stun_mark)
+	stun_mark.position = Vector3.UP*size*2.2
 
 func end_stun() -> void:
 	stunned = false
+	daze = ""
+	daze_bonus = 0.0
 	stagger_time = 0
 	if is_instance_valid(stun_mark): stun_mark.queue_free()
 	stun_mark = null
@@ -598,6 +682,31 @@ func add_dot(dot_kind: String, total: float, seconds: float, cap: int) -> void:
 	var same: Array = dots.filter(func(d): return d.kind==dot_kind)
 	if same.size()>=cap: dots.erase(same[0])
 	dots.append({"kind":dot_kind,"rate":total/seconds,"left":seconds,"seconds":seconds})
+
+# Weakening Strike: another stack (up to `cap`), each making critical strikes
+# on it deal `percent` more.
+func weaken(percent: float, cap: int) -> void:
+	if dead or dormant: return
+	weak_stacks = mini(cap,weak_stacks+1)
+	weak_bonus = percent
+	weak_time = WEAK_SECONDS
+
+# Slow Shot: it moves `percent` slower for `seconds`.
+func slow(percent: float, seconds: float) -> void:
+	if dead or dormant: return
+	slow_factor = clampf(1.0-percent*.01,.05,1.0)
+	slow_time = maxf(slow_time,seconds)
+
+# The hero is lost to it (he hides in the shadows): it stands down where it
+# is, until it sees him again.
+func lose_sight() -> void:
+	if dead or dormant or not awake or kind == "player": return
+	awake = false
+	if laser_time>0: return
+	windup = 0
+	cast_total = 0
+	route = PackedVector3Array()
+	visual.locomotion(false,false)
 
 # Starts every running effect of a kind over from its full time.
 func refresh_dots(dot_kind: String) -> void:
@@ -620,7 +729,7 @@ func tick_dots(dt: float) -> void:
 		return
 	var dealt: float = Data.mitigate(total,armor(),0.0,int(game.run.level),"physical")
 	hp -= dealt
-	if dealt>0: end_stun()
+	if dealt>0 and daze != "ambush": end_stun()
 	# Shown as one number a kind every half second rather than one a frame.
 	for k in by_kind:
 		if total>0: dot_shown[k] = dot_shown.get(k,0.0)+dealt*by_kind[k]/total
@@ -659,10 +768,12 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 		if kind != "player": push_back()
 		return
 	damage = Data.mitigate(damage,armor(),0.0,int(game.run.level),type)+bonus
-	if mark_time>0: damage *= 1.2+Data.passive(game.run,"predator")*.01
+	if mark_time>0: damage *= 1.2
 	if rally_time>0: damage *= 1.0+rally_bonus*.01
+	# Stunned by an ambush, it takes more, and the stun holds.
+	if daze=="ambush": damage *= 1.0+daze_bonus*.01
 	hp -= damage
-	if damage>0: end_stun()
+	if damage>0 and daze != "ambush": end_stun()
 	game.sound.play("weapon-impact",-15)
 	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),HIT_COLORS[look],look=="crit")
 	if hp <= 0:

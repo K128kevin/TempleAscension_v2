@@ -7,7 +7,13 @@ const NORMAL = [
 	# The ranger shoots with the archers' notch-and-shoot, at the same attack time.
 	{"clip":"ArcherShot","seconds":.78,"contacts":[.78]},
 	{"clip":"AxeChop","seconds":.94,"contacts":[.55]},
-	{"clip":"Cast","seconds":.8,"contacts":[.5]}]
+	{"clip":"Cast","seconds":.8,"contacts":[.5]},
+	# The ranger's dagger: quick, a stab and a slash by turns (DAGGER_ATTACKS).
+	{"clip":"DaggerStab","seconds":.5,"contacts":[.45]}]
+const DAGGER_ATTACKS = ["DaggerStab","DaggerSlash"]
+# The parts of each dagger clip (shares of it) through which the blade leaves
+# a wake of air behind it, as the sword's cuts do.
+const DAGGER_WAKES = {"DaggerSlash":[[.3,.62]],"SkillTripleSlash":[[.14,.3],[.42,.58],[.7,.86]]}
 # The warrior's normal attack with the sword is not one swing repeated but
 # three that run on into one another for as long as he keeps attacking: a cut
 # down from the upper right to the lower left, a backhand cut down from the
@@ -34,12 +40,25 @@ const SWORD_FOLLOW = .12
 const SWORD_WAKE = [.43,.66]
 static func sword_cuts(clip: String) -> bool:
 	return clip == SWORD_OPENER or clip.begins_with("SwordCut")
+# Flurry's stabs, one after another (tools/import_ranger.py keys the same
+# times): the clip's length for `count` of them, and when each lands (shares
+# of it).
+const FLURRY_LEAD = .18
+const FLURRY_STAB = .22
+const FLURRY_END = .3
+static func flurry_seconds(count: int) -> float:
+	return FLURRY_LEAD+FLURRY_STAB*(count-1)+FLURRY_END
+static func flurry_contacts(count: int) -> Array:
+	var out: Array = []
+	for i in count: out.append((FLURRY_LEAD+FLURRY_STAB*i)/flurry_seconds(count))
+	return out
 const SPECIAL = [
 	{"clip":"SpearJab","seconds":.82,"contacts":[.52]},
 	{"clip":"SwordSlash","seconds":.96,"contacts":[.52]},
 	{"clip":"BowRapid","seconds":1.16,"contacts":[.30,.54,.78]},
 	{"clip":"AxeWhirl","seconds":1.02,"contacts":[.62]},
-	{"clip":"Cast","seconds":.8,"contacts":[.5]}]
+	{"clip":"Cast","seconds":.8,"contacts":[.5]},
+	{"clip":"DaggerStab","seconds":.5,"contacts":[.45]}]
 # The statue archer's notch-and-shoot, released at full draw.
 const ARCHER_SHOT = {"clip":"ArcherShot","contacts":[.78]}
 # The Oracle's fireball cast: weave, draw the staff back, swing and release.

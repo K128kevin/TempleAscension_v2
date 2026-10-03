@@ -26,11 +26,12 @@ const ENEMIES = {
 	"boss":{"title":"The Crowned Statue","hp":1250.0,"damage":67.5,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
 const CLASSES = ["warrior","ranger","wizard"]
-const WEAPONS = ["spear","sword","bow","axe","staff"]
-const SPECIALS = ["Jab","Slash","Rapid Fire","Whirl","Arcane Bolt"]
-const COSTS = [15.0,20.0,18.0,35.0,12.0]
+# (The dagger is the ranger's second weapon, carried with his bow.)
+const WEAPONS = ["spear","sword","bow","axe","staff","dagger"]
+const SPECIALS = ["Jab","Slash","Rapid Fire","Whirl","Arcane Bolt","Stab"]
+const COSTS = [15.0,20.0,18.0,35.0,12.0,15.0]
 const STATS = ["Strength","Dexterity","Intelligence","Vitality","Willpower"]
-const STAT_HELP = ["+2% melee damage","+2% ranged damage; +1% melee attack speed","+2% spell damage","+10 maximum health","+3 maximum energy; +0.1 energy/sec"]
+const STAT_HELP = ["+2% melee damage","+2% bow and dagger damage; +1% melee attack speed","+2% spell damage","+10 maximum health","+3 maximum energy; +0.1 energy/sec"]
 const GEM_COLORS = [Color(1,.20,.24),Color(.2,1,.63),Color(.2,.58,1),Color(.8,.9,1)]
 const DIFFICULTIES = ["Easy","Moderate","Hard"]
 const HEALTH_SCALE = [.9,1.1,1.4]
@@ -47,7 +48,7 @@ const MELEE_MINIMUM = .2
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	var starter: String = {"warrior":"cleave","ranger":"power_shot","wizard":"firebolt"}.get(class_id,"cleave")
 	var ranks = {}; ranks[starter] = 1
-	return {"version":7,"place":"temple","class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	return {"version":8,"place":"temple","class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 
 # Where a run can be: on a floor of the temple, or in the world outside it
 # (the town, the desert and the temple's front; scripts/overworld.gd).
@@ -74,12 +75,13 @@ static func max_energy(run: Dictionary) -> float:
 static func energy_regen(run: Dictionary) -> float:
 	return (max_energy(run)*.1+(run.stats[4]-5)*.1+passive(run,"attunement"))*(1.0+passive(run,"endurance")*.01)
 
+# (The dagger is a weapon of finesse: Dexterity serves it as it does the bow.)
 static func scaling_tag(weapon: int) -> String:
-	return "ranged" if weapon==2 else ("spell" if weapon==4 else "melee")
+	return "ranged" if weapon in [2,5] else ("spell" if weapon==4 else "melee")
 
 static func damage_tag(run: Dictionary, tag: String, base: float) -> float:
 	var index: int = {"melee":0,"ranged":1,"spell":2}[tag]
-	var bonus = 0.0 if tag=="melee" else passive(run,{"ranged":"steady_aim","spell":"elemental_mastery"}[tag])*.01
+	var bonus = passive(run,"elemental_mastery")*.01 if tag=="spell" else 0.0
 	return base*(1.0+(run.stats[index]-5)*.02)*(1.0+bonus)
 
 static func damage(run: Dictionary, roll: float = 12.5) -> float:
@@ -98,6 +100,14 @@ const CRIT_PER_DEXTERITY = .2
 const CRIT_MULTIPLIER = 2.0
 static func crit_chance(run: Dictionary) -> float:
 	return CRIT_BASE+(run.stats[1]-5)*CRIT_PER_DEXTERITY
+
+# The ranger's mastery of the weapon a hit is made with (Bow and Dagger
+# Specialization): its x percent more chance to crit, and y percent more
+# damage when it does.
+static func specialization(run: Dictionary, weapon: int) -> Dictionary:
+	var id: String = {2:"bow_specialization",5:"dagger_specialization"}.get(weapon,"")
+	if id.is_empty(): return {"x":0.0,"y":0.0,"z":0.0}
+	return Skills.values(id,int(run.skills.get(id,0)))
 
 # Percent faster the normal melee attack is: Dexterity and Quick Strikes.
 static func melee_attack_speed(run: Dictionary) -> float:

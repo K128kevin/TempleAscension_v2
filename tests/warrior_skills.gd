@@ -551,7 +551,7 @@ func test():
 	check(game.run.hotbar==["cleave","","powerful_strike"],"Unlearned and passive skills cannot be assigned")
 	game.combat_age = 0
 	panels.assign("powerful_strike",0)
-	check(game.run.hotbar==["cleave","","powerful_strike"],"Slots are not swapped in combat")
+	check(game.run.hotbar==["powerful_strike","",""],"Slots can be changed in combat too")
 	game.combat_age = 10
 	game.resume_game(); game.hud.tick(0)
 	check(game.mode=="playing" and not panels.any_open() and panels.stat_plus.visible and not panels.skill_plus.visible,"Closed, the attribute + stays until its points are spent; the skill + is gone with its points")

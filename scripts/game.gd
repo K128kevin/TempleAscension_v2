@@ -9,6 +9,7 @@ const Hud = preload("res://scripts/hud.gd")
 const ProgressionUI = preload("res://scripts/progression_ui.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const Save = preload("res://scripts/save.gd")
+const RangerFx = preload("res://scripts/ranger_fx.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 var run: Dictionary
 var world
@@ -411,6 +412,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_Q: heal()
 			KEY_E: interact()
 			KEY_R: toggle_walk()
+			KEY_X: swap_weapon()
 			KEY_1: cast_key(1)
 			KEY_2: cast_key(2)
 			KEY_F11:
@@ -422,7 +424,9 @@ func toggle_walk() -> void:
 
 # How fast the hero goes over the ground: walking or running, halved when slowed.
 func player_pace() -> float:
-	return (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)
+	# (Swift Footed quickens the ranger; hidden in the shadows he creeps.)
+	var pace = (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)*(1.0+Data.passive(run,"swift_footed")*.01)
+	return pace*(1.0-skills.hide_slow*.01) if skills.hidden else pace
 
 # Everyone an attack can land on. Normally the statues; in the playground every
 # unit, heroes included, except the one attacking.
@@ -574,8 +578,10 @@ func player_control(dt: float) -> void:
 			var aim: Vector3 = world.pointer()
 			if player.position.distance_to(aim) > .6: player.face(aim)
 	player.visual.walking = walking
+	# Hidden in the shadows, the ranger goes crouched.
+	player.visual.sneaking = skills.hidden
 	# (Standing after a sword swing, its recovery to the stance plays out.)
-	player.visual.locomotion(moved,player.busy>0 or (not moved and player.visual.swing_phase() >= 0.0),false,1.0,pace)
+	player.visual.locomotion(moved,player.busy>0 or (not moved and player.visual.swing_phase() >= 0.0),skills.hidden,1.0,pace)
 
 func attack_range(special: bool, slot: int = 0) -> float:
 	if special: return skills.reach(run.hotbar[slot])
@@ -586,13 +592,16 @@ func attack_range(special: bool, slot: int = 0) -> float:
 # melee swing (down to Data.MELEE_MINIMUM); Quick Draw, the bow.
 func attack_profile() -> Dictionary:
 	var weapon: int = run.weapon
-	if weapon in [2,4]: return CombatAnimation.profile(weapon,false,Data.passive(run,"quick_draw") if weapon==2 else 0,Data.cooldown(run))
-	return CombatAnimation.profile(weapon,false,Data.melee_attack_speed(run),Data.MELEE_MINIMUM,0.0)
+	# (Frenzy quickens the ranger's bow and dagger alike.)
+	var frenzy: float = (skills.haste()-1.0)*100.0
+	if weapon in [2,4]: return CombatAnimation.profile(weapon,false,frenzy if weapon==2 else 0,Data.cooldown(run)*.5,.35)
+	return CombatAnimation.profile(weapon,false,(1.0+Data.melee_attack_speed(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.MELEE_MINIMUM,0.0)
 
 # Which swing of the sword's chain (CombatAnimation.SWORD_CHAIN) was last begun.
 var sword_swing = 0
 # How many swings the chain has run to: each steps with the other foot.
 var sword_steps = 0
+var dagger_attacks = 0
 func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	if player.cooldown>0 or player.busy>0 or player.dead or mode!="playing": return
 	if special:
@@ -601,6 +610,8 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 		if not skills.cast_slot(slot,point): order_pending = false
 		return
 	order_pending = false
+	# Attacking brings the ranger out of the shadows.
+	skills.leave_shadows()
 	var animation = attack_profile()
 	player.cooldown = animation.duration
 	player.busy = animation.duration
@@ -625,6 +636,10 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 			sword_swing = 0
 			sword_steps = 0
 			player.visual.play(CombatAnimation.SWORD_OPENER,animation.duration/share)
+	elif weapon == 5 and player.visual.clips.has(CombatAnimation.DAGGER_ATTACKS[1]):
+		# The dagger: a stab and a slash by turns.
+		dagger_attacks += 1
+		player.visual.play(CombatAnimation.DAGGER_ATTACKS[dagger_attacks%2],animation.duration)
 	else: player.visual.play(animation.clip,animation.duration)
 	combat_age = 0
 	if weapon in [2,4]:
@@ -654,7 +669,7 @@ func tick_scheduled(dt: float) -> void:
 			"arrow","arcane":
 				# (The wizard's bolt is silent; only the bow sounds.)
 				if job.type=="arrow": sound.play("archer-arrow")
-				projectile(player.position,job.at,job.damage,true,job.type,false,null,job.special)
+				projectile(player.position,job.at,job.damage,true,job.type,job.type=="arrow" and Data.passive(run,"penetrating_arrows")>0,null,job.special)
 			"blast": blast(player.position if job.get("follow_player",false) else job.at,2.88,job.damage,true,true)
 			"melee":
 				var hit_list: Array = []
@@ -666,7 +681,7 @@ func tick_scheduled(dt: float) -> void:
 				hit_list.sort_custom(func(a,b): return player.position.distance_squared_to(a.position)<player.position.distance_squared_to(b.position))
 				if not (job.special and job.weapon==1) and hit_list.size()>1: hit_list.resize(1)
 				for enemy in hit_list:
-					skills.strike(enemy,job.damage,"physical",0.0,Vector3.ZERO,job.special)
+					skills.strike(enemy,job.damage,"physical",0.0,Vector3.ZERO,job.special,job.weapon)
 					player.landed_on(enemy)
 					if job.special and job.weapon==0 and not enemy.dead: enemy.position = world.move(enemy.position,job.direction*6.5)
 				if job.special: effect(player.position,4.5,Color(1,.78,.35,.65),.25)
@@ -701,6 +716,7 @@ func dash() -> void:
 		return
 	run.energy -= price
 	dash_attack = attacks
+	skills.leave_shadows()
 	dash_struck.clear()
 	scheduled.clear() # Evading cancels an unfinished wind-up or remaining volley.
 	sound.play("dash-whoosh")
@@ -737,8 +753,22 @@ func out_of_combat() -> bool:
 func safe_checkpoint() -> bool:
 	return not outdoors() and player.position.distance_to(world.spawn)<3 and out_of_combat()
 
+# The ranger carries his bow and his dagger both: he takes up either at any
+# time (X changes between them; a skill made with the other takes it up).
+func take_up(index: int) -> void:
+	if index<0 or index>=Data.WEAPONS.size() or not run.owned[index] or int(run.weapon)==index: return
+	run.weapon = index
+	player.visual.equip(Data.WEAPONS[index])
+
+func swap_weapon() -> void:
+	if mode!="playing" or player.dead or player.busy>0 or run.class_id!="ranger": return
+	var other: int = 5 if int(run.weapon)==2 else 2
+	if not run.owned[other]: return
+	take_up(other)
+	toast("%s in hand." % Data.WEAPONS[other].capitalize())
+
 func equip(index: int) -> void:
-	if index<0 or index>=5 or not run.owned[index]: toast("You do not own that weapon."); return
+	if index<0 or index>=Data.WEAPONS.size() or not run.owned[index]: toast("You do not own that weapon."); return
 	if not out_of_combat(): toast("Change equipment out of combat."); return
 	run.weapon = index
 	player.visual.equip(Data.WEAPONS[index])
@@ -763,6 +793,8 @@ func hurt_player(damage: float, type: String = "physical", source = null) -> voi
 	if player.dead or player.invulnerable>0 or invincible_test or (debug.enabled and debug.invulnerable): return
 	damage = Data.mitigate(damage,10.0,0.0,Data.ENEMY_LEVELS[run.floor],type)
 	damage = skills.defend(damage,source)
+	# Struck, the ranger is hidden no longer.
+	skills.leave_shadows()
 	player.hp -= damage
 	combat_age = 0
 	if is_instance_valid(source): source.landed_attack()
@@ -852,7 +884,9 @@ const ARROW_SPEED = 20.6
 const BOLT_SPEED = 10.3
 
 # `skill`: a skill's shot rather than the normal attack's.
-func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type: String, piercing: bool = false, source = null, skill: bool = true) -> void:
+# `extra`: what one of the ranger's arrows carries besides its damage
+# (Skills.arrow_hit applies it; scripts/ranger_fx.gd shows it in flight).
+func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type: String, piercing: bool = false, source = null, skill: bool = true, extra: Dictionary = {}) -> void:
 	var direction = (at-from).normalized()
 	# Arrows are real arrows: the hero's in their own wood, fletching and
 	# steel, a statue's in stone.
@@ -864,7 +898,8 @@ func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type:
 	node.position = from + Vector3.UP
 	# The arrow's head is toward its local -Z; turn that into the flight.
 	node.rotation = Vector3(0,atan2(direction.x,direction.z)+(PI if type=="arrow" else 0.0),0)
-	projectiles.append({"node":node,"direction":direction,"damage":damage,"friendly":friendly,"age":0.0,"type":type,"piercing":piercing,"hit":[],"source":source,"skill":skill})
+	if not extra.is_empty(): RangerFx.arrow(node,extra.get("kind",""))
+	projectiles.append({"node":node,"direction":direction,"damage":damage,"friendly":friendly,"age":0.0,"type":type,"piercing":piercing,"hit":[],"source":source,"skill":skill,"extra":extra})
 
 func tick_projectiles(dt: float) -> void:
 	for i in range(projectiles.size()-1,-1,-1):
@@ -887,7 +922,8 @@ func tick_projectiles(dt: float) -> void:
 						var kind: String = "physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type)
 						# The hero's own shots count as his hits.
 						var impact = StoneFragment.impact(p.direction)
-						if p.friendly: skills.strike(a,p.damage,kind,0.0,impact,p.skill)
+						if p.friendly and p.type=="arrow": skills.arrow_hit(a,p)
+						elif p.friendly: skills.strike(a,p.damage,kind,0.0,impact,p.skill)
 						else: a.hit(p.damage,kind,0.0,impact)
 						p.hit.append(a.uid)
 					else:

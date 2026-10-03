@@ -9,6 +9,7 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 // between them, frayed at the hem. Laid on the kilt's rest pose (CUSTOM0), so the
 // pattern stays on the cloth as it moves.
 #include "res://assets/shaders/cloth_fold.gdshaderinc"
+uniform float shadowed = 0.0;
 uniform bool rest_pose = false;
 uniform float top = 0.995;
 uniform float hem = 0.64;
@@ -108,7 +109,8 @@ void fragment() {
 	}
 	// The hem frays.
 	if (t > 0.93 && noise2(vec2(around * 300.0, p.y * 60.0)) * 0.08 > 1.0 - t) discard;
-	ALBEDO = color;
+	// (Hidden in the shadows: scripts/visual.gd set_shadowed.)
+	ALBEDO = mix(color, vec3(0.02, 0.02, 0.04), shadowed * 0.92);
 	METALLIC = metal * 0.45;
 	ROUGHNESS = mix(0.82, 0.38, metal);
 	vec3 sx = dFdx(VERTEX);

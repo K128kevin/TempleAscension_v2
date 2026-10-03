@@ -406,6 +406,14 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   keep clear of the body, the shield arm and the shield (`SWING_CHECK` in its
   output), and holds the wrist's bend within reach. The library's SwordSwing remains
   the Crowned Statue's swing.
+- The ranger's own clips (DaggerStab, DaggerSlash, SkillFlurry2/3/4,
+  SkillTripleSlash, SkillAmbush, SkillSandR/L, SkillHide, SneakIdle, SkillVolley)
+  are authored by `tools/import_ranger.py`, run after `tools/import_skills.py`:
+  the dagger's motions keyed frame by frame as the warrior's swings are, the
+  crouch taken from the ranger's crouched run, and Volley made from the archer's
+  shot with the chest tipped back. His dagger is the adventurers pack's
+  `dagger.gltf` (`assets/models/props/dagger.glb`), finished by the sword's shader
+  cut to its own pommel, grip and guard.
 - The warrior's skill swings (SkillCleave, SkillStrike, SkillStab, SkillBash,
   SkillExecute, SkillSlam, SkillShockwave, SkillCry, SkillCharge, SkillLeap) are
   authored by `tools/import_skills.py` from the sword-and-shield stance, frame by
@@ -437,6 +445,7 @@ animation licenses sit beside it. Rebuild with Blender:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_combat.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_walk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_skills.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_ranger.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
 ```

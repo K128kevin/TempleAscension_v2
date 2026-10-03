@@ -4,6 +4,8 @@ const Book = preload("res://scripts/skill_data.gd")
 const Shockwave = preload("res://scripts/shockwave.gd")
 const Art = preload("res://scripts/assets.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
+const RangerFx = preload("res://scripts/ranger_fx.gd")
+const Motion = preload("res://scripts/combat_animation.gd")
 var game
 var pending: Array = []
 var zones: Array = []
@@ -22,6 +24,43 @@ var offense_stacks = 0
 var offense_time = 0.0
 var defense_stacks = 0
 var defense_time = 0.0
+# The ranger. Hidden in the shadows (no enemy sees him; he moves `hide_slow`
+# percent slower); Element of Surprise's damage after he leaves them; Frenzy's
+# faster attacks; and the things in the air: Volley's arrows, and effects
+# that are drawn for a moment ([node, seconds left]).
+var hidden = false
+var hide_slow = 0.0
+var surprise_bonus = 0.0
+var surprise_time = 0.0
+var frenzy_bonus = 0.0
+var frenzy_time = 0.0
+var frenzy_aura: Node3D
+var charge_glow: Node3D
+var falls: Array = []
+var passing: Array = []
+# How far the ranger's blade reaches, how far he throws sand, how wide a
+# Volley falls and how near its arrows must land to hit, how far lightning
+# leaps, and how long the cooldowns the document gives are.
+const SAND_REACH = 3.0
+const VOLLEY_RADIUS = 3.0
+const VOLLEY_HIT = 1.1
+const VOLLEY_FALL = .45
+const LIGHTNING_LEAP = 10.0
+const POISON_SECONDS = 5.0
+const FRENZY_COOLDOWN = 30.0
+const SAND_COOLDOWN = 45.0
+const TRANQ_COOLDOWN = 45.0
+const TRIPLE_BESIDE = 2.4
+# The ranger's blows made at arm's length, aimed by facing as the warrior's.
+const RANGER_BLOWS = ["flurry","triple","sand","ambush"]
+# Each of the ranger's skills has its own motion (tools/import_ranger.py):
+# its clip, how long it plays, and how far through it each blow lands or
+# arrow leaves.
+const RANGER_CLIPS = {"triple":["SkillTripleSlash",1.0,[.22,.5,.78]],"ambush":["SkillAmbush",.6,[.5]],"hide":["SkillHide",.45,[.9]],
+	"volley":["SkillVolley",.9,[.78]],"lightning":["ArcherShot",.7,[.78]],"slowshot":["ArcherShot",.7,[.78]],"tranq":["ArcherShot",.7,[.78]]}
+# Power Shot: the ArcherShot's draw, held at full draw while he aims.
+const POWER_DRAW = .78
+const POWER_HOLD = .76
 # How far (centre to centre) the warrior's blows reach, and how far he leaps.
 const MELEE_REACH = 1.9
 const CLEAVE_REACH = 2.6
@@ -58,6 +97,16 @@ func reset() -> void:
 	waves.clear()
 	barrier = 0; barrier_time = 0
 	offense_stacks = 0; offense_time = 0; defense_stacks = 0; defense_time = 0
+	if hidden and is_instance_valid(game.player): game.player.visual.set_shadowed(false)
+	hidden = false; hide_slow = 0
+	surprise_bonus = 0; surprise_time = 0; frenzy_bonus = 0; frenzy_time = 0
+	for f in falls: f.node.queue_free()
+	falls.clear()
+	for f in passing:
+		if is_instance_valid(f[0]): f[0].queue_free()
+	passing.clear()
+	if is_instance_valid(frenzy_aura): frenzy_aura.queue_free()
+	if is_instance_valid(charge_glow): charge_glow.queue_free()
 
 func rank(id: String) -> int:
 	return int(game.run.skills.get(id,0))
@@ -67,20 +116,32 @@ func reason(id: String) -> String:
 	if not Book.all().has(id) or not game.run.skills.has(id): return "Learn this skill first."
 	var s: Dictionary = Book.all()[id]
 	if s.effect=="passive": return "Passive skills apply automatically."
-	if not Book.compatible(id,int(game.run.weapon)): return "Requires %s." % ("sword and shield" if s.requirement=="shield" else s.requirement)
+	# (The ranger carries his bow and his dagger both, and takes up whichever
+	# the skill is made with.)
+	var needed: int = Book.weapon_for(id,int(game.run.weapon))
+	if not Book.compatible(id,int(game.run.weapon)) and (needed<0 or not game.run.owned[needed]): return "Requires %s." % {"shield":"sword and shield","bow_dagger":"bow or dagger"}.get(s.requirement,s.requirement)
 	if cooldowns.get(id,0.0)>0: return "Recharging: %d seconds." % ceili(cooldowns[id])
 	if game.run.energy<cost(id): return "Not enough energy."
+	if s.effect=="hide":
+		if hidden: return "Already hidden."
+		if not game.out_of_combat(): return "Hide in Shadows needs you out of combat."
+	if s.effect=="vanish" and hidden: return "Already hidden."
+	if s.effect=="ambush" and not hidden: return "Surprise Attack needs you hidden in shadows."
 	return ""
 
 func cost(id: String) -> float:
 	var s: Dictionary = Book.all()[id]
-	return float(s.cost)*(1.0-Data.passive(game.run,"efficient_casting")*.01 if s.requirement=="staff" else 1.0)
+	return Book.cost(id,rank(id))*(1.0-Data.passive(game.run,"efficient_casting")*.01 if s.requirement=="staff" else 1.0)
 
 # How close the hero comes to a unit he is ordered to use the skill on.
 func reach(id: String) -> float:
 	if not Book.all().has(id): return 13.0
 	match Book.all()[id].effect:
-		"cleave","strike","bash","vampiric","shadow","execute": return MELEE_REACH
+		"cleave","strike","bash","vampiric","shadow","execute","flurry","triple","ambush": return MELEE_REACH
+		# (With the dagger in hand; with the bow it is a shot.)
+		"weaken": return MELEE_REACH if int(game.run.weapon)==5 else 13.0
+		"sand": return SAND_REACH-.4
+		"frenzy","hide","vanish": return 1000.0
 		"leap": return LEAP_RANGE
 		"slam": return maxf(MELEE_REACH,Book.values(id,maxi(1,rank(id))).z-1.0)
 		"charge": return Book.values(id,maxi(1,rank(id))).x-1.0
@@ -105,11 +166,31 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 			return false
 	var s: Dictionary = Book.all()[id]
 	var level = maxi(1,rank(id))
+	# What needs no motion happens at once, and does not interrupt him.
+	if s.effect in ["frenzy","vanish"]:
+		game.run.energy -= cost(id)
+		game.order_pending = false
+		if s.effect=="frenzy":
+			var f: Dictionary = Book.values(id,level)
+			frenzy_bonus = f.x
+			frenzy_time = f.y
+			cooldowns[id] = FRENZY_COOLDOWN
+			game.float_text(game.player.position+Vector3.UP*2.3,"Frenzy!",Color(1,.45,.2))
+			passing.append([RangerFx.burst(game.world,game.player.position+Vector3.UP,Color(1,.4,.15,.8),1.4,24),1.2])
+		else:
+			cooldowns[id] = Book.values(id,level).x
+			# Gone in a puff of smoke: every wind-up and order of his is dropped.
+			pending.clear()
+			game.scheduled.clear()
+			enter_shadows(true)
+		return true
+	var needed: int = Book.weapon_for(id,int(game.run.weapon))
+	if needed>=0 and not free: game.take_up(needed)
 	var direction: Vector3 = at-game.player.position
 	direction.y = 0
 	if direction.length()<.01: direction = game.player.forward()
 	at = game.player.position+direction.normalized()*minf(direction.length(),LEAP_RANGE if s.effect=="leap" else 14.0)
-	if not game.world.clear_line(game.player.position,at) and s.effect not in ["blink","retreat"]+SWINGS:
+	if not game.world.clear_line(game.player.position,at) and s.effect not in ["blink","retreat","hide"]+SWINGS+RANGER_BLOWS:
 		game.toast("The target is behind a wall.")
 		return false
 	if s.effect=="execute":
@@ -120,6 +201,10 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 			return false
 	if not free: game.run.energy -= cost(id)
 	if s.effect in ["bash","shockwave"]: cooldowns[id] = Book.values(id,level).z
+	if s.effect=="sand": cooldowns[id] = SAND_COOLDOWN
+	if s.effect=="tranq": cooldowns[id] = TRANQ_COOLDOWN
+	# Any attack brings him out of the shadows (the ambush, as it lands).
+	if s.effect not in ["hide","ambush"]: leave_shadows()
 	game.order_pending = false
 	game.route.clear()
 	game.player.face(at)
@@ -130,10 +215,44 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	var duration = .7
 	var contact = .35
 	var clip = "Cast"
-	if s.requirement=="bow":
-		clip = "BowShot"
-		duration = .78*maxf(.65,1.0/(1.0+Data.passive(game.run,"quick_draw")*.01))
-		contact = duration*.62
+	# Each blow or arrow of the motion, as shares of its time.
+	var contacts: Array = []
+	if s.class_id=="ranger":
+		var quick: float = haste()
+		var v: Dictionary = Book.values(id,level)
+		var with_dagger: bool = int(game.run.weapon)==5
+		if RANGER_CLIPS.has(s.effect):
+			var own: Array = RANGER_CLIPS[s.effect]
+			clip = own[0] if game.player.visual.clips.has(own[0]) else "ArcherShot"
+			duration = own[1]/(1.0 if s.effect=="hide" else quick)
+			contacts = own[2]
+		match s.effect:
+			"rapid":
+				# Shot after shot, each a quick draw of its own.
+				clip = "BowShot"
+				duration = .26*v.y/quick
+				for i in int(v.y): contacts.append((i+.62)/v.y)
+			"power":
+				# The draw, held while he aims, and the release at the time's end.
+				clip = "ArcherShot"
+				var aim: float = maxf(POWER_DRAW,v.y)
+				duration = aim+.17
+				contacts = [aim/duration]
+			"flurry":
+				clip = "SkillFlurry%d" % int(v.x)
+				duration = Motion.flurry_seconds(int(v.x))/quick
+				contacts = Motion.flurry_contacts(int(v.x))
+			"weaken":
+				clip = "DaggerSlash" if with_dagger else "ArcherShot"
+				duration = (.5 if with_dagger else .7)/quick
+				contacts = [.45 if with_dagger else .78]
+			"sand":
+				# Thrown with the hand that holds no weapon.
+				clip = "SkillSandL" if with_dagger else "SkillSandR"
+				duration = .7
+				contacts = [.55]
+		if not game.player.visual.clips.has(clip): clip = "Cast"
+		contact = duration*contacts[0]
 	elif s.requirement in ["melee","shield"]:
 		clip = "SwordSlash" if game.run.weapon==1 else ("SpearJab" if game.run.weapon==0 else "AxeChop")
 		# Dexterity quickens every melee swing.
@@ -160,11 +279,95 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		duration = maxf(duration,run_time+.35)
 		contact = duration*.95
 		game.player.invulnerable = run_time
-	game.player.visual.play(clip,duration)
+	if s.effect=="rapid":
+		game.player.visual.play(clip,duration/contacts.size())
+	elif s.effect=="power":
+		game.player.visual.play(clip,POWER_DRAW)
+		game.player.visual.hold_at(POWER_HOLD,maxf(0.0,contact-POWER_DRAW*.78))
+		if is_instance_valid(charge_glow): charge_glow.queue_free()
+		charge_glow = RangerFx.charge(game.player.visual,contact)
+	else: game.player.visual.play(clip,duration)
 	game.player.busy = duration
 	game.player.cooldown = duration
-	pending.append({"time":contact,"id":id,"rank":level,"at":at,"direction":direction.normalized()})
+	if contacts.size()>1:
+		for i in contacts.size(): pending.append({"time":duration*contacts[i],"id":id,"rank":level,"at":at,"direction":direction.normalized(),"blow":i,"blows":contacts.size(),"span":duration/contacts.size()})
+	else: pending.append({"time":contact,"id":id,"rank":level,"at":at,"direction":direction.normalized()})
 	return true
+
+# How much faster the ranger attacks: Frenzy, while it lasts.
+func haste() -> float:
+	return 1.0+(frenzy_bonus*.01 if frenzy_time>0 else 0.0)
+
+# Into the shadows: no enemy sees him (those after him lose him), and he
+# moves slower, as Hide in Shadows' rank has it. `smoke`: Vanish's puff.
+func enter_shadows(smoke: bool = false) -> void:
+	hidden = true
+	hide_slow = Book.values("hide_in_shadows",maxi(1,rank("hide_in_shadows"))).x
+	for enemy in game.enemies: enemy.lose_sight()
+	game.target = null
+	game.route.clear()
+	game.player.visual.set_shadowed(true)
+	passing.append([RangerFx.burst(game.world,game.player.position+Vector3.UP*.9,Color(.12,.1,.16,.85),2.2 if smoke else 1.3,36 if smoke else 16),1.4])
+	game.float_text(game.player.position+Vector3.UP*2.3,"Vanished" if smoke else "Hidden",Color(.7,.68,.85))
+
+# Out of them (he attacked, was struck, or dashed): Element of Surprise
+# raises his damage for a while.
+func leave_shadows() -> void:
+	if not hidden: return
+	hidden = false
+	game.player.visual.set_shadowed(false)
+	var surprise: Dictionary = Book.values("element_of_surprise",rank("element_of_surprise"))
+	if surprise.x>0:
+		surprise_bonus = surprise.x
+		surprise_time = surprise.y
+
+# One of the hero's arrows, loosed along `direction` for `percent` of a
+# normal attack; `extra` is what else it carries (RangerFx.arrow dresses it).
+func loose(direction: Vector3, percent: float, extra: Dictionary = {}) -> void:
+	game.sound.play("archer-arrow")
+	game.projectile(game.player.position,game.player.position+direction*13.0,attack_damage(percent,"ranged"),true,"arrow",Data.passive(game.run,"penetrating_arrows")>0,null,true,extra)
+
+# One of the hero's arrows striking `enemy`: its damage, and whatever it
+# carries.
+func arrow_hit(enemy, p: Dictionary) -> void:
+	var extra: Dictionary = p.get("extra",{})
+	var impact = StoneFragment.impact(p.direction)
+	match extra.get("kind",""):
+		"tranq":
+			# No wound: only sleep.
+			enemy.sleep(extra.seconds)
+			return
+		"power":
+			strike(enemy,p.damage,"physical",0.0,StoneFragment.impact(p.direction,true),true,2)
+			passing.append([RangerFx.burst(game.world,enemy.position+Vector3.UP,Color(1,.9,.6,.8),1.2,18),.8])
+			game.shake(.1)
+		"slow":
+			strike(enemy,p.damage,"physical",0.0,impact,true,2)
+			enemy.slow(extra.percent,extra.seconds)
+			if not enemy.dead: game.float_text(enemy.position+Vector3.UP*1.9,"Slowed",Color(.55,.85,1))
+		"weaken":
+			strike(enemy,p.damage,"physical",0.0,impact,true,2)
+			weaken(enemy,extra.percent,extra.cap)
+		"lightning":
+			strike(enemy,p.damage,"lightning",0.0,impact,true,2)
+			# It leaps on from one to the next, never to the same twice.
+			var struck: Array = [enemy]
+			var from = enemy
+			for leap in int(extra.leaps):
+				var choices = targets(from.position,LIGHTNING_LEAP).filter(func(e): return not e in struck)
+				if choices.is_empty(): break
+				choices.sort_custom(func(a,b): return a.position.distance_squared_to(from.position)<b.position.distance_squared_to(from.position))
+				var next = choices[0]
+				passing.append([RangerFx.bolt(game.world,from.position+Vector3.UP*1.1,next.position+Vector3.UP*1.1),.22])
+				strike(next,attack_damage(extra.percent,"ranged"),"lightning",0.0,Vector3.ZERO,true,2)
+				struck.append(next)
+				from = next
+		_: strike(enemy,p.damage,"physical",0.0,impact,p.skill,2)
+
+func weaken(enemy, percent: float, cap: float) -> void:
+	if enemy.dead: return
+	enemy.weaken(percent,int(cap))
+	game.float_text(enemy.position+Vector3.UP*1.9,"Weakened ×%d" % enemy.weak_stacks,Color(.8,.5,1))
 
 func targets(at: Vector3, radius: float) -> Array:
 	return game.targets(game.player).filter(func(e): return not e.dead and not e.dormant and e.position.distance_to(at)<=radius and game.world.clear_line(at,e.position))
@@ -191,9 +394,10 @@ func single_target(at: Vector3, direction: Vector3):
 	hits.sort_custom(func(a,b): return a.position.distance_squared_to(at)<b.position.distance_squared_to(at))
 	return null if hits.is_empty() else hits[0]
 
-# `percent` of a normal attack's damage.
-func attack_damage(percent: float) -> float:
-	return Data.damage_tag(game.run,"melee",randf_range(10,15))*percent*.01
+# `percent` of a normal attack's damage (the warrior's by Strength; the
+# ranger's, bow and dagger both, by Dexterity).
+func attack_damage(percent: float, tag: String = "melee") -> float:
+	return Data.damage_tag(game.run,tag,randf_range(10,15))*percent*.01
 
 # How much Offensive Rhythm's stacks multiply the hero's damage by.
 func rhythm_boost() -> float:
@@ -204,18 +408,28 @@ func rhythm_boost() -> float:
 # leaves its extra damage on the target. `bonus` is added after armor
 # (Vampiric Strike's drain). `skill` is false for the normal attack, whose
 # numbers show white rather than a skill's yellow.
-func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO, skill: bool = true) -> void:
+# `weapon` is the weapon the hit is made with (the one in hand, unless given:
+# an arrow in flight is the bow's whatever he holds by then). The ranger's
+# specialization in it adds to the chance of a critical strike and to its
+# damage; Weakening Strike's stacks on the target add to that damage again;
+# Element of Surprise raises the whole; and Poisons leave their own.
+func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO, skill: bool = true, weapon: int = -1) -> void:
 	if not is_instance_valid(enemy) or enemy.dead or enemy.dormant: return
+	if weapon<0: weapon = int(game.run.weapon)
 	var rhythm: Dictionary = Book.values("offensive_rhythm",rank("offensive_rhythm"))
 	amount *= rhythm_boost()
-	var crit: bool = randf()*100.0<Data.crit_chance(game.run) if crit_override<0 else crit_override==1
-	if crit: amount *= Data.CRIT_MULTIPLIER
+	if surprise_time>0: amount *= 1.0+surprise_bonus*.01
+	var mastery: Dictionary = Data.specialization(game.run,weapon)
+	var crit: bool = randf()*100.0<Data.crit_chance(game.run)+mastery.x if crit_override<0 else crit_override==1
+	if crit: amount *= Data.CRIT_MULTIPLIER*(1.0+mastery.y*.01)*(1.0+enemy.weak_stacks*enemy.weak_bonus*.01)
+	var poison: Dictionary = Book.values("poisons",rank("poisons"))
 	enemy.hit(amount,type,bonus,death_impact,"crit" if crit else ("skill" if skill else "normal"))
 	if rhythm.y>0:
 		offense_stacks = mini(int(rhythm.y),offense_stacks+1)
 		offense_time = rhythm.z
 	var curse: Dictionary = Book.values("cursed_blade",rank("cursed_blade"))
 	if curse.y>0 and not enemy.dead: enemy.add_dot("curse",amount*curse.x*.01,CURSE_SECONDS,int(curse.y))
+	if poison.y>0 and weapon in [2,5] and not enemy.dead: enemy.add_dot("poison",amount*poison.x*.01,POISON_SECONDS,int(poison.y))
 
 # An attack reaching the hero, after armor: Shield Expertise may block part of
 # it (Spiked Shield answering the attacker), Defensive Rhythm lowers it and
@@ -246,12 +460,15 @@ func status() -> String:
 	if offense_stacks>0: parts.append("Offensive Rhythm ×%d" % offense_stacks)
 	if defense_stacks>0: parts.append("Defensive Rhythm ×%d" % defense_stacks)
 	if barrier>0: parts.append("Barrier %d" % ceili(barrier))
+	if hidden: parts.append("Hidden in shadows")
+	if frenzy_time>0: parts.append("Frenzy %d" % ceili(frenzy_time))
+	if surprise_time>0: parts.append("Element of Surprise %d" % ceili(surprise_time))
 	return " · ".join(parts)
 
 func pulse(at: Vector3, radius: float, damage: float, type: String, slow: float = 0) -> void:
 	for enemy in targets(at,radius):
 		strike(enemy,damage,type)
-		if slow>0: enemy.slow_time = maxf(enemy.slow_time,slow)
+		if slow>0: enemy.slow(60.0,slow)
 
 # A blow on the ground: a shockwave of dust and smoke racing out across the
 # area it hits (scripts/shockwave.gd), the screen shaken and the impact heard.
@@ -341,13 +558,61 @@ func execute(job: Dictionary) -> void:
 				landing = origin+direction*reach
 			var staff: Vector3 = game.player.visual.staff_tip() if game.player.visual.weapon_kind=="staff" else origin+Vector3.UP*1.5
 			game.fireball(staff,landing,FIREBALL_RADIUS,damage,clampf(reach/14.0,.4,.8),null,true)
-		"shot","multishot","retreat","pierce","lance":
-			var spell: bool = s.tag=="spell"
-			var angles = [-.18,0.0,.18] if s.effect=="multishot" else [0.0]
-			for angle in angles:
-				var aim = direction.rotated(Vector3.UP,angle)
-				game.projectile(origin,origin+aim*13,damage,true,"arcane" if spell else "arrow",s.effect in ["pierce","lance"])
-			if s.effect=="retreat": game.player.position = game.world.move(origin,-direction*3)
+		"lance":
+			game.projectile(origin,origin+direction*13,damage,true,"arcane",true)
+		"rapid":
+			loose(direction,100.0)
+			# The next arrow's draw.
+			if job.blow<job.blows-1: game.player.visual.play("BowShot",job.span)
+		"power":
+			if is_instance_valid(charge_glow): charge_glow.queue_free()
+			loose(direction,v.x,{"kind":"power"})
+		"slowshot": loose(direction,100.0,{"kind":"slow","percent":v.x,"seconds":v.y})
+		"tranq": loose(direction,0.0,{"kind":"tranq","seconds":v.x})
+		"lightning": loose(direction,v.x,{"kind":"lightning","percent":v.x,"leaps":v.y})
+		"weaken":
+			if int(game.run.weapon)==5:
+				var marked = single_target(at,direction)
+				if marked == null: return
+				strike(marked,attack_damage(100.0,"ranged"))
+				weaken(marked,v.x,v.y)
+				game.player.landed_on(marked)
+			else: loose(direction,100.0,{"kind":"weaken","percent":v.x,"cap":v.y})
+		"volley":
+			# Up they go from the bow, and down they come over the place aimed
+			# at, each where chance puts it.
+			game.sound.play("archer-arrow")
+			game.effect(at,VOLLEY_RADIUS*2.0,Color(1,.85,.5,.5),VOLLEY_FALL+.05*v.x+.3)
+			for i in int(v.x):
+				var spot: Vector3 = at+Vector3.FORWARD.rotated(Vector3.UP,randf()*TAU)*sqrt(randf())*VOLLEY_RADIUS
+				passing.append([RangerFx.rising(game.world,origin+Vector3.UP*1.5+direction*.5,direction,i),.3])
+				falls.append({"node":RangerFx.falling(game.world),"to":spot,"way":direction,"wait":.25+.05*i,"left":VOLLEY_FALL,"damage":attack_damage(v.y,"ranged")})
+		"flurry":
+			var stabbed = single_target(at,direction)
+			if stabbed == null: return
+			strike(stabbed,attack_damage(v.y,"ranged"))
+			game.player.landed_on(stabbed)
+		"triple":
+			var main = single_target(at,direction)
+			if main == null: return
+			# Those beside the one he cuts at, nearest it first.
+			var beside: Array = arc_targets(origin,direction,170.0,CLEAVE_REACH).filter(func(e): return e != main and e.position.distance_to(main.position)<=TRIPLE_BESIDE)
+			beside.sort_custom(func(a,b): return a.position.distance_squared_to(main.position)<b.position.distance_squared_to(main.position))
+			for enemy in [main]+beside.slice(0,int(v.y)): strike(enemy,attack_damage(v.x,"ranged"))
+			game.player.landed_on(main)
+		"sand":
+			passing.append([RangerFx.sand(game.world,origin+Vector3.UP*1.2,direction),1.0])
+			var blinded: Array = arc_targets(origin,direction,120.0,SAND_REACH)
+			blinded.sort_custom(func(a,b): return a.position.distance_squared_to(at)<b.position.distance_squared_to(at))
+			if not blinded.is_empty(): blinded[0].confuse(v.x)
+		"ambush":
+			var caught = single_target(at,direction)
+			leave_shadows()
+			if caught == null: return
+			caught.ambush(v.x,v.y)
+			passing.append([RangerFx.burst(game.world,caught.position+Vector3.UP*1.3,Color(1,.35,.2,.8),1.0,14),.7])
+			game.player.landed_on(caught)
+		"hide": enter_shadows()
 		"nova": pulse(origin,s.radius,damage,"frost",s.duration)
 		"chain":
 			var current = origin
@@ -361,14 +626,8 @@ func execute(job: Dictionary) -> void:
 				used.append(enemy)
 				strike(enemy,damage,"arcane")
 				current = enemy.position
-		"mark":
-			var victims = targets(origin,float(s.radius))
-			victims.sort_custom(func(a,b): return a.position.distance_squared_to(at)<b.position.distance_squared_to(at))
-			if not victims.is_empty(): victims[0].mark_time = value
-		"snare","trap","rain","blizzard","meteor":
-			var duration: float = s.duration
-			if s.effect in ["snare","trap"]: duration = 15.0*(1+Data.passive(game.run,"trapcraft")*.01)
-			zones.append({"effect":s.effect,"at":at,"radius":float(s.radius),"damage":damage,"value":value,"life":duration,"tick":float(s.duration) if s.effect=="meteor" else (1.0 if s.effect=="trap" else 0.0),"pulses":4 if s.effect=="rain" else (5 if s.effect=="blizzard" else 3)})
+		"blizzard","meteor":
+			zones.append({"effect":s.effect,"at":at,"radius":float(s.radius),"damage":damage,"value":value,"life":float(s.duration),"tick":float(s.duration) if s.effect=="meteor" else 0.0,"pulses":5 if s.effect=="blizzard" else 3})
 
 # Shield Charge's blow on one unit: damage, thrown aside, the first stunned.
 func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
@@ -419,6 +678,38 @@ func tick(dt: float) -> void:
 	if offense_time<=0: offense_stacks = 0
 	defense_time = maxf(0,defense_time-dt)
 	if defense_time<=0: defense_stacks = 0
+	surprise_time = maxf(0,surprise_time-dt)
+	frenzy_time = maxf(0,frenzy_time-dt)
+	# Frenzy shows on him while it lasts.
+	if frenzy_time>0 and not is_instance_valid(frenzy_aura): frenzy_aura = RangerFx.aura(game.player.visual)
+	elif frenzy_time<=0 and is_instance_valid(frenzy_aura):
+		frenzy_aura.queue_free()
+		frenzy_aura = null
+	for i in range(passing.size()-1,-1,-1):
+		passing[i][1] -= dt
+		if passing[i][1]<=0:
+			if is_instance_valid(passing[i][0]): passing[i][0].queue_free()
+			passing.remove_at(i)
+	# Volley's arrows coming down: each hits the enemy nearest where it lands.
+	for i in range(falls.size()-1,-1,-1):
+		var f: Dictionary = falls[i]
+		if f.wait>0:
+			f.wait -= dt
+			f.node.visible = false
+			continue
+		f.left -= dt
+		var u: float = clampf(1.0-f.left/VOLLEY_FALL,0.0,1.0)
+		var from: Vector3 = f.to-f.way*2.2+Vector3.UP*9.0
+		f.node.visible = game.world.can_see(f.to)
+		f.node.position = from.lerp(f.to+Vector3.UP*.25,u)
+		f.node.look_at(f.node.position-(f.to-from),Vector3.FORWARD)
+		if f.left<=0:
+			var under: Array = targets(f.to,VOLLEY_HIT+.25)
+			under.sort_custom(func(a,b): return a.position.distance_squared_to(f.to)<b.position.distance_squared_to(f.to))
+			if not under.is_empty() and under[0].position.distance_to(f.to)<=VOLLEY_HIT+bulk(under[0]): strike(under[0],f.damage,"physical",0.0,StoneFragment.impact(f.way),true,2)
+			passing.append([RangerFx.burst(game.world,f.to+Vector3.UP*.15,Color(.75,.68,.55,.6),.5,6),.6])
+			f.node.queue_free()
+			falls.remove_at(i)
 	for i in range(pending.size()-1,-1,-1):
 		pending[i].time -= dt
 		if pending[i].time<=0:
@@ -429,15 +720,8 @@ func tick(dt: float) -> void:
 		z.life -= dt; z.tick -= dt
 		if z.tick<=0:
 			var victims = targets(z.at,z.radius)
-			if z.effect=="snare":
-				if not victims.is_empty():
-					for e in victims: e.slow_time = z.value*(1+Data.passive(game.run,"trapcraft")*.01)
-					z.life = 0
-			elif z.effect=="trap":
-				if not victims.is_empty(): pulse(z.at,z.radius,z.damage,"physical"); z.life = 0
-			else:
-				pulse(z.at,z.radius,z.damage,"frost" if z.effect=="blizzard" else ("fire" if z.effect=="meteor" else "physical"),1.5 if z.effect=="blizzard" else 0)
-				z.tick += 1.0
-				z.pulses -= 1
-				if z.effect=="meteor" or z.pulses<=0: z.life = 0
+			pulse(z.at,z.radius,z.damage,"frost" if z.effect=="blizzard" else "fire",1.5 if z.effect=="blizzard" else 0)
+			z.tick += 1.0
+			z.pulses -= 1
+			if z.effect=="meteor" or z.pulses<=0: z.life = 0
 		if z.life<=0: zones.remove_at(i)

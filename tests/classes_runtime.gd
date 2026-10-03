@@ -46,6 +46,9 @@ func test():
 			if Book.all()[id].class_id==class_id and Book.all()[id].effect!="passive": game.run.skills[id] = 1
 		for id in game.run.skills:
 			var s: Dictionary = Book.all()[id]
+			# (The ranger's, each with its own conditions, are played through in
+			# tests/ranger_skills.gd.)
+			if class_id=="ranger": continue
 			game.skills.reset(); game.scheduled.clear()
 			game.player.position = origin; game.leap_left = 0
 			game.player.busy = 0; game.player.cooldown = 0
@@ -77,7 +80,8 @@ func test():
 		var owned_id = "cleave" if class_id=="warrior" else ("power_shot" if class_id=="ranger" else "firebolt")
 		game.run.hotbar=[owned_id,"",""]
 		game.run.weapon = 4 if class_id!="wizard" else 1
-		check(game.skills.reason(owned_id).begins_with("Requires"),"Wrong weapon disables skill with explanation: "+class_id)
+		# (The ranger carries his bow as well, and takes it up for the skill.)
+		check(game.skills.reason(owned_id).begins_with("Requires") or (class_id=="ranger" and game.skills.reason(owned_id).is_empty()),"Wrong weapon disables skill with explanation: "+class_id)
 		game.run.weapon = 1 if class_id=="warrior" else (2 if class_id=="ranger" else 4)
 		game.player.visual.equip(Data.WEAPONS[game.run.weapon])
 		game.world.zoom=15; game.world.follow(origin,1)

@@ -4,9 +4,11 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // The hero's sword, colored by part along the imported mesh's normalized
 // length: brass pommel and cross guard, a dark brown leather grip, and a
 // silver blade with a fuller (groove) down the middle of both flat faces.
-const float POMMEL_TOP = 0.045;
-const float GRIP_TOP = 0.215;
-const float GUARD_TOP = 0.33;
+// (Uniforms, so that the ranger's dagger, cut differently along its length,
+// is finished the same way: Art.dagger_material.)
+uniform float POMMEL_TOP = 0.045;
+uniform float GRIP_TOP = 0.215;
+uniform float GUARD_TOP = 0.33;
 const float FULLER_END = 0.86;
 const float FULLER_HALF_WIDTH = 0.04;
 

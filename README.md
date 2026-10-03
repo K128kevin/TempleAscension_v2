@@ -281,8 +281,7 @@ Every class's skills sit in three trees, shown side by side in the skill panel
 (K): Area of Effect, Single Target and Passive. Click a skill to spend a point
 on it; hovering shows what it does at its current and next rank. A learned
 active skill takes the first empty slot; right-click it, or press 1 or 2 while
-pointing at it, to put it on RMB, 1 or 2 (swapping a slot's skill waits until
-out of combat). Passives work automatically. Bow skills need a bow, spells a
+pointing at it, to put it on RMB, 1 or 2, in or out of combat. Passives work automatically. Bow skills need a bow, spells a
 staff, and Shield Bash needs sword/shield. All classes can equip every owned family.
 
 The warrior's skills follow the leveling and skills design document. Each has
@@ -343,10 +342,54 @@ normal attack. No swing is faster than a fifth of a second. A right click (or
 1 / 2) on an enemy walks into reach before a melee skill, leaps from Leap's
 range, and slams from within Ground Slam's.
 
-The ranger and wizard keep the earlier roster for now, arranged in the same
-three trees: eight active skills and four passives, unlocking at levels 1, 4,
-8, 12 and 18. Their active skills have five ranks and passives three, with rank
-limited to `1 + floor((level - unlock_level) / 3)`.
+### The ranger
+
+The ranger carries a bow and a dagger, and fights with either: **X** changes
+between them at any time (in combat too), and a skill made with the other takes it
+up. Both do their damage by Dexterity. The dagger's normal attack is quick (half a
+second), a stab and a slash by turns. His skills sit in three trees (Attacks,
+Utility, Passive), each skill opening once enough points are spent in its own tree,
+as the warrior's do.
+
+| Tree | Points | Skill | Energy | Ranks 1 → 5 |
+|---|---|---|---|---|
+| Attacks | 0 | Rapid Fire (bow) | 35 → 20 | 2 → 4 arrows in a row |
+| | 0 | Power Shot (bow) | 30 | 200% → 400%, after 3 → 1 seconds of aiming |
+| | 0 | Flurry (dagger) | 25 | 2 → 4 stabs of 100% → 275% |
+| | 5 | Volley (bow) | 40 | 5 → 10 arrows falling at random in the area aimed at, 80% → 150% each |
+| | 5 | Lightning Shot (bow) | 35 | 100% → 250%, leaping to 1 → 5 more enemies within 10 m of the last |
+| | 10 | Frenzy | 0 | Attacks 40% → 150% faster for 6 → 15 seconds; 30-second cooldown |
+| | 10 | Triple Slash (dagger) | 25 | Three cuts of 130% → 250% on the target and 2 → 4 enemies beside it |
+| Utility | 0 | Slow Shot (bow) | 20 | The target moves 30% → 75% slower for 3 → 6 seconds |
+| | 0 | Weakening Strike (bow or dagger) | 15 | Critical strikes on the target deal 50% → 150% more for 6 seconds, in 2 → 5 stacks |
+| | 5 | Hide in Shadows | 20 | Unseen by enemies, moving 50% → 15% slower; out of combat only; ended by attacking, being struck or dashing |
+| | 5 | Throw Sand | 40 | An enemy within 3 m wanders blind, unable to attack, for 3 → 12 seconds, or until hurt; 45-second cooldown |
+| | 5 | Tranquilizer (bow) | 40 | The target sleeps for 3 → 12 seconds, or until hurt; the arrow does no damage; 45-second cooldown |
+| | 10 | Vanish (1 rank) | 40 | Hidden at once, in combat: every enemy loses him; 60-second cooldown |
+| | 10 | Surprise Attack | 50 | Only while hidden: the target is stunned for 3 → 5 seconds (damage does not break it) and takes 20% → 60% more |
+| Passive | 0 | Swift Footed | | 5% → 40% faster on his feet |
+| | 0 | Bow Specialization | | +4% → 30% chance of a critical strike with the bow, which deals 25% → 150% extra |
+| | 0 | Dagger Specialization | | The same, with the dagger |
+| | 5 | Element of Surprise | | 40% → 100% more damage for 4 → 10 seconds after leaving the shadows |
+| | 5 | Poisons | | Arrow and dagger hits deal 10% → 65% more over 5 seconds, in 1 → 8 stacks |
+| | 10 | Penetrating Arrows (1 rank) | | Arrows carry on through their targets |
+
+Each has its own motion (`tools/import_ranger.py`) and effect
+(`scripts/ranger_fx.gd`): the dagger's stab and slash, Flurry's stabs high and low,
+Triple Slash's three cuts (the blade trailing a wake, as the sword does), a blow
+brought down from on high for Surprise Attack, a stoop and a fling for Throw Sand
+(with whichever hand is free), Power Shot's bow held at full draw while motes
+gather at the arrow, Volley loosed high (arrows going up, then raining down on the
+marked ground), Rapid Fire's quick draws, lightning leaping from enemy to enemy,
+arrows trailing the colour of what they carry, embers about him in a Frenzy, and
+a crouch into shadow: hidden, he is drawn as a dark shape, creeps crouched, and
+goes in and out of sight in a puff of smoke. Sleeping enemies show drifting Zs,
+blinded ones question marks, ambushed ones a red halo.
+
+The wizard keeps the earlier roster for now, arranged in three trees: eight
+active skills and four passives, unlocking at levels 1, 4, 8, 12 and 18. Its
+active skills have five ranks and passives three, with rank limited to
+`1 + floor((level - unlock_level) / 3)`.
 
 Enemy kills award XP, with diminishing rewards from enemies well below the
 character's level. Each level after 1 grants five attribute points, to spend on
@@ -357,15 +400,15 @@ current 247-enemy temple route reaches level 20 before the summit; this
 balance is for the existing climb, not the plan's future pre-temple regions.
 
 Floor travel grants no points or XP. Permanent attribute gems have been removed.
-Each class starts with only its own weapon: sword for Warrior, bow for Ranger,
-and staff for Wizard. Bow and axe drops are disabled for now; the staff drop on
+Each class starts with only its own weapon: sword for Warrior, bow and dagger for
+Ranger, and staff for Wizard. Bow and axe drops are disabled for now; the staff drop on
 floor three remains.
 Repeated death callbacks, reloads and retrying an already-rewarded enemy cannot
 award its XP again. XP and skill investment survive death and travel.
 
 Free respec is available in the attribute panel (C) at a safe floor entrance, out of combat; it
-refunds earned attribute/skill points and clears the hotbar. Equipment and active
-assignments can change out of combat. Maximum resource increases do not heal;
+refunds earned attribute/skill points and clears the hotbar. Equipment can change
+out of combat; skill assignments at any time. Maximum resource increases do not heal;
 refunds clamp current resources. The Q healing spell has no charges; it spends 60
 energy, heals 60% of maximum health instantly and recharges after 20 seconds. E
 at a safe entrance opens the attribute panel; ascending restores health and energy.
@@ -396,7 +439,9 @@ Writes use a temporary file and a backup. A damaged current save falls back to i
 backup. Saves from before the level cap of 20 and the skill trees (version 5
 and earlier) keep their class, campaign progress, weapons and defeated enemies;
 a level above 20 comes down to 20, and every attribute and skill point is
-refunded to spend again under the new rules. Version 1/2 saves migrate to a Warrior (or Ranger if a bow was equipped).
+refunded to spend again under the new rules. Saves from before the ranger's new
+skills (version 7) gain the dagger slot; a ranger's skill points are refunded and
+he is given his dagger. Version 1/2 saves migrate to a Warrior (or Ranger if a bow was equipped).
 Old stat/gem bonuses are
 refunded into a level-based point budget; use the + buttons (or C and K) to rebuild. Legacy gem
 drops are retired. Fixed-layout saves move safely to the generated entrance.

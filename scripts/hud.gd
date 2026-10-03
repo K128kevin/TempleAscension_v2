@@ -170,7 +170,7 @@ func setup(owner_game) -> void:
 	abilities = label("",16,gold,root)
 	anchor(abilities,Vector2(.5,1),Vector2(-330,-61),Vector2(660,23))
 	abilities.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var controls = label("LMB Move / Attack · RMB + 1 / 2 Skills · SPACE Evade · Q Heal · R Walk / Run · C Attributes · K Skills · I Equipment",13,Color(.7,.68,.60),root)
+	var controls = label("LMB Move / Attack · RMB + 1 / 2 Skills · SPACE Evade · Q Heal · R Walk / Run · X Bow / Dagger · C Attributes · K Skills · I Equipment",13,Color(.7,.68,.60),root)
 	anchor(controls,Vector2(.5,1),Vector2(-400,-30),Vector2(800,22))
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = label("",19,gold,root)

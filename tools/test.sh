@@ -13,6 +13,7 @@ mkdir -p test-results
 run "$godot_bin" --headless --path . --script tests/progression_regression.gd --log-file "$PWD/test-results/progression-regression.log"
 run "$godot_bin" --headless --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-runtime.log"
 run "$godot_bin" --headless --path . --script tests/warrior_skills.gd --log-file "$PWD/test-results/warrior-skills.log"
+run "$godot_bin" --headless --path . --script tests/ranger_skills.gd --log-file "$PWD/test-results/ranger-skills.log"
 run "$godot_bin" --headless --path . --script tests/overworld.gd --log-file "$PWD/test-results/overworld.log"
 run "$godot_bin" --headless --path . --script tests/procedural_maps.gd --log-file "$PWD/test-results/procedural-maps.log"
 run "$godot_bin" --headless --path . --script tests/map_integration.gd --log-file "$PWD/test-results/map-integration.log"

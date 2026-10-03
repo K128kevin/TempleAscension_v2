@@ -8,6 +8,7 @@ render_mode cull_disabled, diffuse_lambert_wrap, specular_schlick_ggx;
 // the cloth is grimed toward the hem. Patterns are laid on the cloak's rest pose (CUSTOM0, from
 // Art.rest_pose_mesh), so they stay fixed to the cloth as it swings.
 #include "res://assets/shaders/cloth_fold.gdshaderinc"
+uniform float shadowed = 0.0;
 uniform vec3 cloth_color : source_color = vec3(0.1, 0.19, 0.1);
 uniform bool rest_pose = false;
 // 0: a clean garment; 1: a ranger's weathered, tattered cloak.
@@ -131,7 +132,8 @@ void fragment() {
 			if (p.x < lapel - 0.022 && p.x > lapel - 0.05) color *= 0.8;
 		}
 	}
-	ALBEDO = color;
+	// (Hidden in the shadows: scripts/visual.gd set_shadowed.)
+	ALBEDO = mix(color, vec3(0.02, 0.02, 0.04), shadowed * 0.92);
 	vec3 sx = dFdx(VERTEX);
 	vec3 sy = dFdy(VERTEX);
 	vec3 r1 = cross(sy, NORMAL);

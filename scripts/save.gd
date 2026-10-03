@@ -3,13 +3,25 @@ const Data = preload("res://scripts/data.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=7: return d
+	if int(d.get("version",0))>=8: return d
+	if int(d.get("version",0))==7:
+		# The dagger joined the weapons (the ranger carries one with his bow),
+		# and the ranger's skills were replaced: his are refunded.
+		var updated = d.duplicate(true)
+		updated.version = 8
+		if updated.get("owned") is Array and updated.owned.size()==5: updated.owned.append(updated.get("class_id","")=="ranger")
+		if updated.get("class_id","")=="ranger":
+			updated.skills = {}
+			updated.skill_points = int(updated.get("level",1))
+			updated.hotbar = ["","",""]
+			updated["migration_notice"] = true
+		return updated
 	if int(d.get("version",0))==6:
 		# Saves from before the outdoor world were all made inside the temple.
 		var updated = d.duplicate(true)
 		updated.version = 7
 		updated.place = "temple"
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==5:
 		# The level cap fell to 20, each level now grants five attribute points,
 		# and the skill trees changed: everything spent is refunded.
@@ -46,7 +58,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 	for key in ["floor","weapon","difficulty","dead","drops","deaths","seed","position","completed"]:
 		if d.has(key): fresh[key] = d[key]
 	if int(d.get("version",0))<2: fresh.position = [0,9]
-	if d.get("owned",[]) is Array and d.owned.size()==4: fresh.owned = d.owned.duplicate()+[false]
+	if d.get("owned",[]) is Array and d.owned.size()==4: fresh.owned = d.owned.duplicate()+[false,fresh.class_id=="ranger"]
 	var previous_points = float(d.get("points",0))
 	for stat in d.stats:
 		if not (stat is int or stat is float) or stat<0: return {}
@@ -62,7 +74,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<7:
+	if int(d.get("version",0))<8:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -72,14 +84,14 @@ static func valid(d) -> bool:
 	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","deaths"]:
 		if d[key]!=int(d[key]): return false
 	if not d.class_id in Data.CLASSES or not d.place in Data.PLACES: return false
-	if not d.stats is Array or d.stats.size()!=5 or not d.owned is Array or d.owned.size()!=5: return false
+	if not d.stats is Array or d.stats.size()!=5 or not d.owned is Array or d.owned.size()!=6: return false
 	if not d.position is Array or d.position.size()!=2: return false
 	for value in d.position:
 		if not (value is int or value is float) or not is_finite(float(value)): return false
 	for value in d.owned:
 		if not value is bool: return false
 	if int(d.floor)<0 or int(d.floor)>5 or int(d.difficulty)<0 or int(d.difficulty)>2: return false
-	if int(d.weapon)<0 or int(d.weapon)>4 or not d.owned[int(d.weapon)]: return false
+	if int(d.weapon)<0 or int(d.weapon)>5 or not d.owned[int(d.weapon)]: return false
 	if not d.level is float and not d.level is int: return false
 	if d.level<1 or d.level>Data.MAX_LEVEL or d.level!=int(d.level): return false
 	if d.xp<Data.xp_at_level(int(d.level)) or d.xp>Data.xp_at_level(Data.MAX_LEVEL): return false
@@ -109,7 +121,7 @@ static func valid(d) -> bool:
 	if not (d.dead is Array and d.gems is Array and d.drops is Array and d.xp_claimed is Array): return false
 	for drop in d.drops:
 		if not drop is Dictionary or drop.get("kind","")!="weapon" or not drop.get("id",0) is String: return false
-		if not (drop.get("value") is int or drop.get("value") is float) or drop.value<0 or drop.value>4: return false
+		if not (drop.get("value") is int or drop.get("value") is float) or drop.value<0 or drop.value>5: return false
 		if not drop.get("position") is Array or drop.position.size()!=2: return false
 	return true
 

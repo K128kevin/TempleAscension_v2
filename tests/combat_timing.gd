@@ -26,7 +26,6 @@ func playback(visual, clip: String, duration: float, contacts: Array, context: S
 		check(visual.animator.is_playing() and absf(phase(visual)-.99)<.001,"Full recovery fits attack duration: %s / %d" % [context,repeat])
 func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
 	game.run=Data.new_run(class_id); game.run.weapon=weapon
-	if class_id=="ranger": game.run.skills.quick_draw=3
 	game.player.visual.equip(Data.WEAPONS[weapon])
 	game.player.cooldown=0; game.player.busy=0; game.scheduled.clear()
 	game.player.visual.play(game.player.visual.idle_action())
@@ -131,12 +130,15 @@ func test():
 			for duration in [.25,1.75]:
 				playback(game.player.visual,profile.clip,duration,profile.contacts,"%s %.2fs" % [profile.clip,duration])
 	for class_id in Data.CLASSES:
-		for weapon in 5:
+		for weapon in Data.WEAPONS.size():
 			for dt in [1.0/15,1.0/60]: held_attacks(game,victim,class_id,weapon,dt)
 	# All active class skills share the same restart and duration contract.
 	for id in Book.all():
 		var skill: Dictionary=Book.all()[id]
 		if skill.effect=="passive": continue
+		# (Those of the ranger's that take no time, need him hidden or out of
+		# combat, or replay or hold their clip are timed in tests/ranger_skills.gd.)
+		if skill.effect in ["frenzy","vanish","hide","ambush","rapid","power"]: continue
 		game.run=Data.new_run(skill.class_id); game.run.skills[id]=1
 		game.player.busy=0; game.player.cooldown=0; game.skills.reset(); game.leap_left=0
 		game.player.position=game.world.spawn

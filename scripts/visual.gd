@@ -288,10 +288,10 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			elif "HeroArmor" in mesh.name: mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit(hero_class)
 	for clip in animator.get_animation_list():
-		for expected in ["SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
+		for expected in ["DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SkillVolley","SneakIdle","SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
-				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
+				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["SneakIdle","Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
 	if quadruped:
 		play(idle_action())
 		return
@@ -377,7 +377,7 @@ func equip(weapon: String) -> void:
 	blade_charge = null
 	# The hero's hard cuts leave a wake behind the blade, and Ground Slam
 	# charges it.
-	if weapon == "sword" and not is_stone:
+	if weapon in ["sword","dagger"] and not is_stone:
 		sword_trail = SwordTrail.new()
 		add_child(sword_trail)
 		# (Carried on the blade once there is one.)
@@ -390,9 +390,9 @@ func equip(weapon: String) -> void:
 	hand.bone_name = "hand_l" if weapon == "bow" else "hand_r"
 	skeleton.add_child(hand)
 	equipment = hand
-	var sizes = {"sword":Vector3(.19,1.3,.09),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22)}
+	var sizes = {"sword":Vector3(.19,1.3,.09),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22),"dagger":Vector3(.09,.5,.045)}
 	weapon_size = sizes[weapon]
-	var weapon_finish = Art.statue_material() if is_stone else (Art.sword_material() if weapon=="sword" else (Art.bow_wood() if weapon=="bow" else null))
+	var weapon_finish = Art.statue_material() if is_stone else (Art.sword_material() if weapon=="sword" else (Art.dagger_material() if weapon=="dagger" else (Art.bow_wood() if weapon=="bow" else null)))
 	# The Oracle carries a slender staff crowned with a diamond (tools/prepare_staff.py).
 	var oracle = weapon=="staff" and enemy_kind=="wizard"
 	if oracle: weapon_size = ORACLE_STAFF_SIZE
@@ -410,7 +410,7 @@ func equip(weapon: String) -> void:
 	# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
 	item.rotation.x = PI / 2
 	# The grip sits a fixed share up each hilt; the larger sword's hilt is longer.
-	item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22}.get(weapon,-.17))
+	item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22,"dagger":-.10}.get(weapon,-.17))
 	weapon_rest = item.transform
 	if oracle or silver_staff:
 		item.top_level = true
@@ -456,15 +456,16 @@ func equip(weapon: String) -> void:
 	# closed on their grips.
 	if grip != null:
 		grip.hands = []
-		if weapon in ["sword","axe","spear","staff"]: grip.hands.append("r")
+		if weapon in ["sword","axe","spear","staff","dagger"]: grip.hands.append("r")
 		if weapon == "bow" or is_instance_valid(shield_item): grip.hands.append("l")
-	if state in ["Idle","SwordIdle","ScutumSwordIdle","SpearShieldIdle","BowIdle","SpearIdle"]: play(idle_action())
+	if shadowed: set_shadowed(true)
+	if state in ["Idle","SwordIdle","ScutumSwordIdle","SpearShieldIdle","BowIdle","SpearIdle","RangerIdle","SneakIdle"]: play(idle_action())
 
 # Clips in which an archer holds the bow out in the left hand, ready or
 # shooting. Otherwise the ranger carries it at his side in the same left hand,
 # through his own idle, run and crouch (the warrior's, with the left hand
 # closed on the bow), so it never changes hands.
-const BOW_READY_STATES = ["BowIdle","BowShot","BowRapid","ArcherShot"]
+const BOW_READY_STATES = ["BowIdle","BowShot","BowRapid","ArcherShot","SkillVolley"]
 # How long the ranger takes to lower his bow arm after a shot, and to raise
 # it from the carry when he shoots.
 const BOW_LOWER_TIME = .45
@@ -482,7 +483,11 @@ func carries_bow() -> bool:
 func ranger_carry() -> bool:
 	return weapon_kind == "bow" and (not is_stone or enemy_kind == "archer") and clips.has("RangerIdle")
 
+# Hidden in the shadows (the game sets it): he waits and goes crouched.
+var sneaking = false
+
 func idle_action() -> String:
+	if sneaking and clips.has("SneakIdle"): return "SneakIdle"
 	if ranger_carry(): return "RangerIdle"
 	if not is_stone and weapon_kind == "staff": return "WizardIdle" if clips.has("WizardIdle") else "Idle"
 	var wanted = {"bow":"BowIdle","spear":"SpearIdle","sword":"SwordIdle"}.get(weapon_kind,"Idle")
@@ -949,7 +954,7 @@ func align_weapon() -> void:
 		if state=="BowShot":
 			draw = draw_amount(phase,.62,.12)
 			arrow_visible = phase<.62
-		elif state=="ArcherShot":
+		elif state in ["ArcherShot","SkillVolley"]:
 			# The arrow appears once the draw hand brings it from the quiver to the bow.
 			draw = draw_amount(phase,Motion.ARCHER_SHOT.contacts[0],.56)
 			arrow_visible = phase>=.44 and phase<Motion.ARCHER_SHOT.contacts[0]
@@ -958,19 +963,21 @@ func align_weapon() -> void:
 				draw = maxf(draw,draw_amount(phase,pair.y,pair.x))
 				arrow_visible = arrow_visible or (phase>=pair.x and phase<pair.y)
 		# The draw hand's fingers, hooked on the string.
+		# The way the bow points: straight ahead, or up with it for a Volley.
+		var aim: Vector3 = -weapon_item.global_basis.x.normalized()
 		var fingers = draw_fingers()
 		if arrow_visible:
 			# Match the actual baked hand during the pull, including animation blends.
 			var nock = weapon_item.global_transform * Vector3(.5,.5,0)
-			draw = clampf((nock-fingers).dot(facing.z)/(.36*rig.scale.x),0.0,BOW_FULL_DRAW)
+			draw = clampf((nock-fingers).dot(aim)/(.36*rig.scale.x),0.0,BOW_FULL_DRAW)
 		for string in bow_strings: string.mesh.set_blend_shape_value(string.index,draw)
 		if is_instance_valid(nocked_arrow):
 			nocked_arrow.visible = arrow_visible and not dead
 			# Its head (local -Z) toward the target, its nock on the string.
-			nocked_arrow.global_basis = facing * Basis(Vector3.UP,PI) * Basis.from_scale(Art.ARROW_SIZE*rig.scale.x)
+			nocked_arrow.global_basis = Basis.looking_at(aim,weapon_item.global_basis.y.normalized()) * Basis.from_scale(Art.ARROW_SIZE*rig.scale.x)
 			# Nocked on the string, wherever the pull has drawn it.
 			var string = weapon_item.global_transform * Vector3(.5+draw*1.44,.5+draw*.06/1.3,0)
-			nocked_arrow.global_position = string+facing.z*Art.ARROW_SIZE.z*.5*rig.scale.x
+			nocked_arrow.global_position = string+aim*Art.ARROW_SIZE.z*.5*rig.scale.x
 
 # The carried bow's place in the left hand, taken from the idle stance.
 var carry_in_hand = null
@@ -1159,6 +1166,7 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	state = action
 	reaction_time = 0
 	animation_delay = 0
+	hold_time = 0.0
 	pending_animation_time = 0
 	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
 	if action in LOCOMOTION: locomotion_rate = speed_scale
@@ -1197,6 +1205,28 @@ func play_on(action: String, duration: float, start: float) -> void:
 	animator.play(clips[action],0.0,animator.get_playing_speed())
 	animator.seek(animator.current_animation_length*start,true)
 	animator.advance(0)
+
+# Holds the clip now playing for `seconds` once it reaches `phase` of it.
+var hold_phase = 0.0
+var hold_time = 0.0
+func hold_at(phase: float, seconds: float) -> void:
+	hold_phase = phase
+	hold_time = seconds
+
+# Hidden in the shadows: every part of him is drawn over in shadow, a dark
+# shape that can still be made out.
+var shadowed = false
+static var shadow_overlay: ShaderMaterial
+func set_shadowed(on: bool) -> void:
+	shadowed = on
+	if shadow_overlay == null:
+		shadow_overlay = ShaderMaterial.new()
+		shadow_overlay.shader = load("res://assets/shaders/shadowed.gdshader")
+	for mesh in find_children("*","MeshInstance3D",true,false):
+		if mesh == sword_trail: continue
+		# (His cloak's cloth is moved by its own shader, which darkens itself.)
+		if mesh == cloak_mesh and mesh.material_override is ShaderMaterial: mesh.material_override.set_shader_parameter("shadowed",1.0 if on else 0.0)
+		else: mesh.material_overlay = shadow_overlay if on else null
 
 # The wake behind the hero's blade as he cuts (scripts/sword_trail.gd).
 var sword_trail: MeshInstance3D
@@ -1537,6 +1567,10 @@ func advance(dt: float) -> void:
 	reaction_time = maxf(0,reaction_time-dt)
 	var held = minf(dt,animation_delay)
 	animation_delay -= held
+	# Held at a moment of the clip (Power Shot's full draw, while he aims).
+	if hold_time > 0.0 and animator.is_playing() and animator.current_animation_position >= hold_phase*animator.current_animation_length:
+		hold_time -= dt
+		held = dt
 	if animator.is_playing():
 		pending_animation_time += dt-held
 		# Keep the clock while culled; update the pose when visible again.
@@ -1573,6 +1607,10 @@ func advance(dt: float) -> void:
 	if is_instance_valid(sword_trail) and is_instance_valid(weapon_item) and weapon_item.is_inside_tree():
 		var swing = swing_phase()/Motion.SWORD_SWING_SHARE
 		var cutting = not dead and Motion.sword_cuts(state) and swing >= Motion.SWORD_WAKE[0] and swing <= Motion.SWORD_WAKE[1]
+		if weapon_kind == "dagger" and not dead and Motion.DAGGER_WAKES.has(state) and animator.current_animation == clips.get(state,""):
+			# The dagger's slashes, by their shares of the clip.
+			var through = animator.current_animation_position/maxf(.001,animator.current_animation_length)
+			for span in Motion.DAGGER_WAKES[state]: cutting = cutting or (through >= span[0] and through <= span[1])
 		var blade: Transform3D = weapon_item.global_transform
 		var tip: Vector3 = global_transform.affine_inverse()*(blade*Vector3(0,1.02,0))
 		# A skill's swing: where its own clip is playing, how far through.

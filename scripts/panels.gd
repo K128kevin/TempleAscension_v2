@@ -195,8 +195,9 @@ func open_skills() -> void:
 	for s in class_skills:
 		if not gate(s) in gates: gates.append(gate(s))
 	gates.sort()
-	for t in Book.TREES:
-		if t != Book.TREES[0]:
+	var class_trees: Array = Book.trees(game.run.class_id)
+	for t in class_trees:
+		if t != class_trees[0]:
 			var rule = ColorRect.new()
 			rule.color = Color(.3,.27,.2)
 			rule.custom_minimum_size.x = 1
@@ -332,7 +333,7 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 	var active: bool = s.effect!="passive"
 	var lines = {"title":"%s · %d/%d" % [s.title,rank,s.max_rank]}
 	lines.kind = "Passive" if not active else "Active · %d energy" % game.skills.cost(id)
-	if active and s.requirement!="any": lines.kind += " · needs %s" % {"melee":"a melee weapon","shield":"sword and shield","bow":"a bow","staff":"a staff"}[s.requirement]
+	if active and s.requirement!="any": lines.kind += " · needs %s" % {"melee":"a melee weapon","shield":"sword and shield","bow":"a bow","staff":"a staff","dagger":"a dagger","bow_dagger":"a bow or dagger"}[s.requirement]
 	lines.now = Book.describe(id,maxi(1,rank))
 	lines.next = "Next rank: "+Book.describe(id,rank+1) if rank>0 and rank<s.max_rank else ""
 	lines.lock = Book.locked(r,id)
@@ -390,9 +391,6 @@ func learn(id: String) -> void:
 func assign(id: String, slot: int) -> void:
 	var run: Dictionary = game.run
 	if not Book.all().has(id) or int(run.skills.get(id,0))<=0 or Book.all()[id].effect=="passive" or run.hotbar[slot]==id: return
-	if not game.out_of_combat() and (id in run.hotbar or not run.hotbar[slot].is_empty()):
-		game.toast("Change skill assignments out of combat.")
-		return
 	for j in 3:
 		if run.hotbar[j]==id: run.hotbar[j] = ""
 	run.hotbar[slot] = id

@@ -1,13 +1,18 @@
 extends RefCounted
-## The skill roster. Every class's skills sit in three trees: area of effect,
-## single target and passive. The warrior's follow the leveling and skills
-## design document: five ranks each, with every rank's values listed, and a
-## skill opens once enough points are spent in its tree. The ranger's and
-## wizard's are the earlier roster in v2/docs/PLAN.md, still opened by level,
-## where rank changes one primary value.
+## The skill roster. Every class's skills sit in three trees. The warrior's
+## (area of effect, single target, passive) and the ranger's (attacks,
+## utility, passive) follow the leveling and skills design documents: up to
+## five ranks each, with every rank's values listed, and a skill opens once
+## enough points are spent in its tree. The wizard's are the earlier roster in
+## v2/docs/PLAN.md, still opened by level, where rank changes one primary value.
 static var definitions: Dictionary = {}
 const TREES = ["aoe","single","passive"]
-const TREE_TITLES = {"aoe":"Area of Effect","single":"Single Target","passive":"Passive"}
+const RANGER_TREES = ["attack","utility","passive"]
+const TREE_TITLES = {"aoe":"Area of Effect","single":"Single Target","passive":"Passive","attack":"Attacks","utility":"Utility"}
+
+# The three trees a class's skills sit in.
+static func trees(class_id: String) -> Array:
+	return RANGER_TREES if class_id=="ranger" else TREES
 
 # id, title, tree, points required in that tree, behavior, requirement, energy
 # cost, description, and each rank's [x, y, z].
@@ -32,25 +37,40 @@ const WARRIOR = [
 	["defensive_rhythm", "Defensive Rhythm", "passive", 10, "passive", "any", 0, "Each hit you take lowers the damage you take by {x}%, stacking up to {y}×. Lasts {z} seconds, refreshed whenever you are hit.", [[3,2,4],[5,3,5],[7,4,6],[9,5,9],[12,6,12]]],
 	["spiked_shield", "Spiked Shield", "passive", 10, "passive", "any", 0, "Attackers take {x}% of your normal attack damage whenever you block their attack.", [[10],[20],[35],[55],[80]]]]
 
+# The ranger's, laid out as the warrior's. A cost of -1 is the rank's x (Rapid
+# Fire grows cheaper); "bow", "dagger" or "bow_dagger" is the weapon the skill
+# is made with (the ranger carries both, and takes up the one a skill needs).
+const RANGER = [
+	["rapid_fire", "Rapid Fire", "attack", 0, "rapid", "bow", -1, "Rapidly fires {y} arrows in a row. Costs {x} energy. Requires bow.", [[35,2],[32,2],[28,3],[24,3],[20,4]]],
+	["power_shot", "Power Shot", "attack", 0, "power", "bow", 30, "A powerful shot that deals {x}% damage. Takes {y} seconds to aim and fire. Requires bow.", [[200,3],[240,2.6],[280,2.2],[330,1.7],[400,1]]],
+	["flurry", "Flurry", "attack", 0, "flurry", "dagger", 25, "Rapidly stab an enemy {x} times in a row for {y}% damage each. Requires dagger.", [[2,100],[2,125],[3,150],[3,200],[4,275]]],
+	["volley", "Volley", "attack", 5, "volley", "bow", 40, "Fire a volley of {x} arrows that land at random in the targeted area, each dealing {y}% damage. Requires bow.", [[5,80],[6,90],[7,100],[8,120],[10,150]]],
+	["lightning_shot", "Lightning Shot", "attack", 5, "lightning", "bow", 35, "Fire an arrow charged with lightning: it deals {x}% damage and leaps between enemies within 10 meters of your target, up to {y} times. Requires bow.", [[100,1],[120,2],[150,3],[190,4],[250,5]]],
+	["frenzy", "Frenzy", "attack", 10, "frenzy", "any", 0, "Attack {x}% faster for {y} seconds. 30-second cooldown.", [[40,6],[60,8],[85,10],[115,12],[150,15]]],
+	["triple_slash", "Triple Slash", "attack", 10, "triple", "dagger", 25, "Slash three times with the dagger for {x}% damage each, hitting up to {y} enemies beside your target as well. Requires dagger.", [[130,2],[150,2],[170,3],[200,3],[250,4]]],
+	["slow_shot", "Slow Shot", "utility", 0, "slowshot", "bow", 20, "Shoot an arrow that slows its target by {x}% for {y} seconds. Requires bow.", [[30,3],[35,3.5],[45,4],[60,5],[75,6]]],
+	["weakening_strike", "Weakening Strike", "utility", 0, "weaken", "bow_dagger", 15, "Attack the target and leave it taking {x}% more damage from critical strikes for 6 seconds. Stacks up to {y} times. With bow or dagger.", [[50,2],[75,2],[100,3],[125,4],[150,5]]],
+	["hide_in_shadows", "Hide in Shadows", "utility", 5, "hide", "any", 20, "Hide in the shadows: enemies cannot see you, but you move {x}% slower. Attacking, being attacked or dashing ends it. Only out of combat.", [[50],[42],[34],[26],[15]]],
+	["throw_sand", "Throw Sand", "utility", 5, "sand", "any", 40, "Throw sand in the eyes of an enemy within 3 meters: it wanders at random, unable to attack, for {x} seconds. Damage ends it. 45-second cooldown.", [[3],[5],[7],[9],[12]]],
+	["tranquilizer", "Tranquilizer", "utility", 5, "tranq", "bow", 40, "Shoot an arrow that puts its target to sleep for {x} seconds. Damage wakes it. Requires bow. 45-second cooldown.", [[3],[5],[7],[9],[12]]],
+	["vanish", "Vanish", "utility", 10, "vanish", "any", 40, "Hide in the shadows at once, even in combat: every enemy loses you. 60-second cooldown.", [[60]]],
+	["surprise_attack", "Surprise Attack", "utility", 10, "ambush", "any", 50, "Stun an enemy for {x} seconds; it takes {y}% more damage while stunned. Only while hidden in shadows.", [[3,20],[3.5,30],[4,40],[4.5,50],[5,60]]],
+	["swift_footed", "Swift Footed", "passive", 0, "passive", "any", 0, "Move {x}% faster.", [[5],[10],[18],[28],[40]]],
+	["bow_specialization", "Bow Specialization", "passive", 0, "passive", "any", 0, "Bow attacks are {x}% more likely to strike critically, and their critical strikes deal {y}% extra damage.", [[4,25],[8,50],[12,75],[20,100],[30,150]]],
+	["dagger_specialization", "Dagger Specialization", "passive", 0, "passive", "any", 0, "Dagger attacks are {x}% more likely to strike critically, and their critical strikes deal {y}% extra damage.", [[4,25],[8,50],[12,75],[20,100],[30,150]]],
+	["element_of_surprise", "Element of Surprise", "passive", 5, "passive", "any", 0, "Deal {x}% more damage for {y} seconds after leaving the shadows.", [[40,4],[50,5],[60,6],[75,8],[100,10]]],
+	["poisons", "Poisons", "passive", 5, "passive", "any", 0, "Your dagger and arrows carry a corrosive poison: {x}% extra damage over 5 seconds, stacking up to {y} times.", [[10,1],[15,2],[25,3],[40,5],[65,8]]],
+	["penetrating_arrows", "Penetrating Arrows", "passive", 10, "passive", "any", 0, "Your arrows carry on through their targets, and may strike others behind them.", [[1]]]]
+
 static func all() -> Dictionary:
 	if not definitions.is_empty(): return definitions
 	for r in WARRIOR:
 		definitions[r[0]] = {"id":r[0],"title":r[1],"class_id":"warrior","tree":r[2],"points":r[3],"unlock":1,"effect":r[4],"requirement":r[5],"tag":"" if r[4]=="passive" else "melee","cost":r[6],"description":r[7],"ranks":r[8],"max_rank":r[8].size()}
+	for r in RANGER:
+		definitions[r[0]] = {"id":r[0],"title":r[1],"class_id":"ranger","tree":r[2],"points":r[3],"unlock":1,"effect":r[4],"requirement":r[5],"tag":"" if r[4]=="passive" else "ranged","cost":r[6],"description":r[7],"ranks":r[8],"max_rank":r[8].size()}
 	# id, title, class, unlock, behavior, requirement, scaling, cost,
 	# first-rank value, increment, radius, duration, description, tree
 	var rows = [
-		["power_shot", "Power Shot", "ranger", 1, "shot", "bow", "ranged", 15, 1.8, .25, 13, 0, "Draw and release a powerful arrow.", "single"],
-		["snare", "Snare", "ranger", 1, "snare", "any", "", 15, 3, 1, 2, 0, "Place a trap that slows nearby enemies by 60%; value is duration.", "aoe"],
-		["multishot", "Multishot", "ranger", 4, "multishot", "bow", "ranged", 22, .9, .15, 13, 0, "Fire three arrows in a spread.", "aoe"],
-		["retreating_shot", "Retreating Shot", "ranger", 4, "retreat", "bow", "ranged", 20, 1.2, .2, 13, 0, "Fire while stepping back from the target.", "single"],
-		["piercing_arrow", "Piercing Arrow", "ranger", 8, "pierce", "bow", "ranged", 22, 1.5, .2, 14, 0, "An arrow that passes through enemies.", "aoe"],
-		["explosive_trap", "Explosive Trap", "ranger", 8, "trap", "any", "ranged", 25, 2, .3, 3, 1, "Arm a trap after one second; it bursts when a foe enters.", "aoe"],
-		["marked_prey", "Marked Prey", "ranger", 12, "mark", "any", "", 15, 6, 1, 13, 0, "Mark one foe to take 20% more damage; value is duration.", "single"],
-		["rain_of_arrows", "Rain of Arrows", "ranger", 18, "rain", "bow", "ranged", 35, .8, .15, 4, 4, "Four volleys strike the selected area.", "aoe"],
-		["steady_aim", "Steady Aim", "ranger", 1, "passive", "any", "ranged", 0, 5, 5, 0, 0, "Percent additional ranged damage.", "passive"],
-		["quick_draw", "Quick Draw", "ranger", 4, "passive", "any", "", 0, 6, 6, 0, 0, "Percent faster bow attack animations without changing energy cost.", "passive"],
-		["trapcraft", "Trapcraft", "ranger", 12, "passive", "any", "", 0, 20, 20, 0, 0, "Percent longer snare and trap duration.", "passive"],
-		["predator", "Predator", "ranger", 18, "passive", "any", "", 0, 10, 10, 0, 0, "Percent additional damage against marked prey.", "passive"],
 		["firebolt", "Firebolt", "wizard", 1, "firebolt", "staff", "spell", 12, 1.5, .25, 13, 0, "Hurl a fireball that bursts where it lands, burning everything in the blast.", "single"],
 		["frost_nova", "Frost Nova", "wizard", 1, "nova", "staff", "spell", 20, 1, .2, 3.5, 3, "Damage nearby foes and slow them by 60%.", "aoe"],
 		["arcane_lance", "Arcane Lance", "wizard", 4, "lance", "staff", "spell", 22, 1.6, .25, 14, 0, "An arcane projectile that pierces enemies.", "single"],
@@ -96,7 +116,7 @@ static func describe(id: String, rank: int) -> String:
 	rank = clampi(rank,1,s.max_rank)
 	if s.has("ranks"):
 		var v = values(id,rank)
-		return s.description.format({"x":"%d" % v.x,"y":"%d" % v.y,"z":"%d" % v.z})
+		return s.description.format({"x":String.num(v.x,2),"y":String.num(v.y,2),"z":String.num(v.z,2)})
 	var amount = "%.0f%% damage" % (value(id,rank)*100) if not s.tag.is_empty() and s.effect!="passive" else ("%.1f" % value(id,rank)).trim_suffix(".0")
 	return "%s (%s)" % [s.description,amount]
 
@@ -106,7 +126,23 @@ static func compatible(id: String, weapon: int) -> bool:
 		"shield": return weapon==1
 		"bow": return weapon==2
 		"staff": return weapon==4
+		"dagger": return weapon==5
+		"bow_dagger": return weapon in [2,5]
 	return true
+
+# The weapon a skill is made with, for the one who would take it up to use
+# it: the bow or the dagger, or -1 for a skill made with whatever is in hand.
+static func weapon_for(id: String, weapon: int) -> int:
+	if compatible(id,weapon): return -1
+	match all()[id].requirement:
+		"bow","bow_dagger": return 2
+		"dagger": return 5
+	return -1
+
+# What the skill costs at `rank` (a cost of -1 is the rank's x).
+static func cost(id: String, rank: int) -> float:
+	var s: Dictionary = all()[id]
+	return float(s.cost) if s.cost>=0 else values(id,maxi(1,rank)).x
 
 # Points spent in one of the class's trees.
 static func tree_points(skills: Dictionary, tree: String) -> int:

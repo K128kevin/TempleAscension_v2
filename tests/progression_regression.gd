@@ -13,14 +13,15 @@ func test():
 		var run = Data.new_run(class_id)
 		check(run.stats==[5,5,5,5,5] and run.level==1 and Data.max_health(run)==100 and Data.max_energy(run)==100 and Data.energy_regen(run)==10,"Shared base resources and attributes: "+class_id)
 		check(run.skills.size()==1 and run.skill_points==0 and Book.compatible(run.hotbar[0],run.weapon),"Starter point is spent on a usable skill: "+class_id)
-		check(run.owned.count(true)==1 and run.owned[run.weapon],"Each class owns only its starting weapon: "+class_id)
+		check(run.owned.count(true)==(2 if class_id=="ranger" else 1) and run.owned[run.weapon] and run.owned[5]==(class_id=="ranger"),"Each class owns only its starting weapon (the ranger his bow and his dagger): "+class_id)
 		var active = 0; var passive = 0
 		for s in Book.all().values():
 			if s.class_id!=class_id: continue
 			if s.effect=="passive": passive += 1
 			else: active += 1
-			check(s.tree in Book.TREES,"Every skill sits in one of the three trees: "+s.id)
+			check(s.tree in Book.trees(class_id),"Every skill sits in one of the class's three trees: "+s.id)
 			if class_id=="warrior": check(s.max_rank==5 and s.ranks.size()==5 and s.points in [0,5,10,15] and Book.rank_cap(s.id,1)==5,"Warrior skills have five listed ranks behind a tree requirement: "+s.id)
+			elif class_id=="ranger": check(s.max_rank in [1,5] and s.ranks.size()==s.max_rank and s.points in [0,5,10] and Book.rank_cap(s.id,1)==s.max_rank,"Ranger skills have their listed ranks behind a tree requirement: "+s.id)
 			else: check(Book.rank_cap(s.id,s.unlock-1)==0 and Book.rank_cap(s.id,s.unlock)==1 and Book.rank_cap(s.id,s.unlock+3)==2,"Level/rank gate: "+s.id)
 		check(active==(11 if class_id=="warrior" else 8) and passive==(8 if class_id=="warrior" else 4),"The class's active skills and passives: "+class_id)
 		Data.gain_xp(run,Data.xp_at_level(15))
