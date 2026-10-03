@@ -185,11 +185,11 @@ func test():
 	far.position = at+Vector3(7,0,0)
 	check(game.skills.cast("volley",at) and is_equal_approx(game.run.energy,60.0) and game.player.visual.state=="SkillVolley","Volley costs 40 energy and is loosed high")
 	play(.75)
-	check(game.skills.falls.size()==10,"Rank 5 sends ten arrows up")
+	check(game.skills.falls.size()==30,"Rank 5 sends thirty arrows up")
 	play(1.6)
 	var struck: float = 0.0
 	for e in crowd: struck += lost(e)
-	check(game.skills.falls.is_empty() and struck>=10*1.5-.01 and struck<=10*15*1.5+.01 and lost(far)==0,"They come down within the area aimed at, each for 150%% on whoever it lands by (%.1f in all)" % struck)
+	check(game.skills.falls.is_empty() and struck>=10*1.5-.01 and struck<=30*15*1.5+.01 and lost(far)==0,"They come down within the area aimed at, each for 150%% on whoever it lands by (%.1f in all)" % struck)
 	clear()
 
 	# Lightning Shot.

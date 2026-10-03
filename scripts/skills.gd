@@ -42,7 +42,10 @@ var passing: Array = []
 # Volley falls and how near its arrows must land to hit, how far lightning
 # leaps, and how long the cooldowns the document gives are.
 const SAND_REACH = 3.0
-const VOLLEY_RADIUS = 3.0
+# (Twice the ground it once covered: the radius by the root of two.)
+const VOLLEY_RADIUS = 4.25
+# Between one arrow's fall and the next's.
+const VOLLEY_STAGGER = .05/3.0
 const VOLLEY_HIT = 1.1
 const VOLLEY_FALL = .45
 const LIGHTNING_LEAP = 10.0
@@ -583,11 +586,11 @@ func execute(job: Dictionary) -> void:
 			# Up they go from the bow, and down they come over the place aimed
 			# at, each where chance puts it.
 			game.sound.play("archer-arrow")
-			game.effect(at,VOLLEY_RADIUS*2.0,Color(1,.85,.5,.5),VOLLEY_FALL+.05*v.x+.3)
+			game.effect(at,VOLLEY_RADIUS*2.0,Color(1,.85,.5,.5),VOLLEY_FALL+VOLLEY_STAGGER*v.x+.3)
 			for i in int(v.x):
 				var spot: Vector3 = at+Vector3.FORWARD.rotated(Vector3.UP,randf()*TAU)*sqrt(randf())*VOLLEY_RADIUS
 				passing.append([RangerFx.rising(game.world,origin+Vector3.UP*1.5+direction*.5,direction,i),.3])
-				falls.append({"node":RangerFx.falling(game.world),"to":spot,"way":direction,"wait":.25+.05*i,"left":VOLLEY_FALL,"damage":attack_damage(v.y,"ranged")})
+				falls.append({"node":RangerFx.falling(game.world),"to":spot,"way":direction,"wait":.25+VOLLEY_STAGGER*i,"left":VOLLEY_FALL,"damage":attack_damage(v.y,"ranged")})
 		"flurry":
 			var stabbed = single_target(at,direction)
 			if stabbed == null: return

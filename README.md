@@ -361,7 +361,7 @@ as the warrior's do.
 | Attacks | 0 | Rapid Fire (bow) | 35 → 20 | 2 → 4 arrows in a row |
 | | 0 | Power Shot (bow) | 30 | 200% → 400%, after 3 → 1 seconds of aiming |
 | | 0 | Flurry (dagger) | 25 | 2 → 4 stabs of 100% → 275% |
-| | 5 | Volley (bow) | 40 | 5 → 10 arrows falling at random in the area aimed at, 80% → 150% each |
+| | 5 | Volley (bow) | 40 | 15 → 30 arrows falling at random in the area aimed at (4.25 m radius), 80% → 150% each |
 | | 5 | Lightning Shot (bow) | 35 | 100% → 250%, leaping to 1 → 5 more enemies within 10 m of the last |
 | | 10 | Frenzy | 0 | Attacks 40% → 150% faster for 6 → 15 seconds; 30-second cooldown |
 | | 10 | Triple Slash (dagger) | 25 | Three cuts of 130% → 250% on the target and 2 → 4 enemies beside it |

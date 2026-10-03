@@ -44,7 +44,7 @@ const RANGER = [
 	["rapid_fire", "Rapid Fire", "attack", 0, "rapid", "bow", -1, "Rapidly fires {y} arrows in a row. Costs {x} energy. Requires bow.", [[35,2],[32,2],[28,3],[24,3],[20,4]]],
 	["power_shot", "Power Shot", "attack", 0, "power", "bow", 30, "A powerful shot that deals {x}% damage. Takes {y} seconds to aim and fire. Requires bow.", [[200,3],[240,2.6],[280,2.2],[330,1.7],[400,1]]],
 	["flurry", "Flurry", "attack", 0, "flurry", "dagger", 25, "Rapidly stab an enemy {x} times in a row for {y}% damage each. Requires dagger.", [[2,100],[2,125],[3,150],[3,200],[4,275]]],
-	["volley", "Volley", "attack", 5, "volley", "bow", 40, "Fire a volley of {x} arrows that land at random in the targeted area, each dealing {y}% damage. Requires bow.", [[5,80],[6,90],[7,100],[8,120],[10,150]]],
+	["volley", "Volley", "attack", 5, "volley", "bow", 40, "Fire a volley of {x} arrows that land at random in the targeted area, each dealing {y}% damage. Requires bow.", [[15,80],[18,90],[21,100],[24,120],[30,150]]],
 	["lightning_shot", "Lightning Shot", "attack", 5, "lightning", "bow", 35, "Fire an arrow charged with lightning: it deals {x}% damage and leaps between enemies within 10 meters of your target, up to {y} times. Requires bow.", [[100,1],[120,2],[150,3],[190,4],[250,5]]],
 	["frenzy", "Frenzy", "attack", 10, "frenzy", "any", 0, "Attack {x}% faster for {y} seconds. 30-second cooldown.", [[40,6],[60,8],[85,10],[115,12],[150,15]]],
 	["triple_slash", "Triple Slash", "attack", 10, "triple", "dagger", 25, "Slash three times with the dagger for {x}% damage each, hitting up to {y} enemies beside your target as well. Requires dagger.", [[130,2],[150,2],[170,3],[200,3],[250,4]]],

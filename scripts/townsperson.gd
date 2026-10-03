@@ -225,9 +225,11 @@ func hold(thing: Node3D) -> void:
 	thing.rotation = Vector3.ZERO
 
 # Carries the hand to a point in the world (`weight` 1), or lets it go back to
-# the animation (0); the fist closes on a handle as `curl` says.
-func reach(point: Vector3, weight: float, curl: float = -1.0) -> void:
+# the animation (0); the fist closes on a handle as `curl` says, and the
+# elbow swings out from the body as `splay` says (scripts/arm_reach.gd).
+func reach(point: Vector3, weight: float, curl: float = -1.0, splay: float = 0.0) -> void:
 	arm.target = point
+	arm.splay = splay
 	arm.weight = weight
 	arm.grip = global_transform.basis*GRIP_HAND
 	if curl >= 0.0: arm.curl = curl

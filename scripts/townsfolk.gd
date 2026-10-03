@@ -503,9 +503,10 @@ func sip(walker: Walker, delta: float) -> void:
 	var at_mouth: Vector3 = body.hand_for(head+body.global_transform.basis*Vector3(0,-.17,.09))
 	match walker.phase:
 		"reach": body.reach(on_table,eased,eased)
-		"lift": body.reach(on_table.lerp(at_mouth,eased),1.0,1.0)
-		"sip": body.reach(at_mouth,1.0,1.0)
-		"lower": body.reach(at_mouth.lerp(on_table,eased),1.0,1.0)
+		# (The elbow rises out from the side as the mug comes up.)
+		"lift": body.reach(on_table.lerp(at_mouth,eased),1.0,1.0,eased)
+		"sip": body.reach(at_mouth,1.0,1.0,1.0)
+		"lower": body.reach(at_mouth.lerp(on_table,eased),1.0,1.0,1.0-eased)
 		"return": body.reach(on_table,1.0-eased,1.0-eased)
 	if t < 1.0: return
 	walker.phase_time = 0.0

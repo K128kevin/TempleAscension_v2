@@ -8,6 +8,10 @@ var target = Vector3.ZERO
 var weight = 0.0
 var grip = Basis.IDENTITY
 var curl = 0.0
+# How far the elbow swings out from the body (0 down, as the arm hangs; 1
+# well out to the side and forward, as a drinker's lifting a mug to his
+# mouth), so the arm never folds into the chest.
+var splay = 0.0
 # How fast the fingers bend at each joint, by finger.
 const FINGERS = ["index","middle","ring","pinky"]
 const BEND = [.7,.75,.55]
@@ -59,6 +63,11 @@ func bent(shoulder: Vector3, elbow: Vector3, wrist: Vector3, goal: Vector3, a: f
 	bend = bend-direction*bend.dot(direction)
 	var down = Vector3(0,-1,0)-direction*(-direction.y)
 	bend = (bend.normalized()*.4+down.normalized()*.6) if bend.length() > 1e-4 else down
+	if splay > 0.0:
+		# Out from the body's middle on the arm's own side, and forward,
+		# while still hanging below the shoulder.
+		var out = Vector3(signf(shoulder.x),0,0)*.75+Vector3(0,0,.5)
+		bend = bend.normalized()+out.normalized()*splay*1.1
 	bend = (bend-direction*bend.dot(direction)).normalized()
 	var reach = (a*a-b*b+length*length)/(2.0*length)
 	return [shoulder+direction*reach+bend*sqrt(maxf(0.0,a*a-reach*reach)),goal]
