@@ -218,7 +218,8 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	# Each blow or arrow of the motion, as shares of its time.
 	var contacts: Array = []
 	if s.class_id=="ranger":
-		var quick: float = haste()
+		# Dexterity and Frenzy quicken his every attack.
+		var quick: float = haste()*(1.0+Data.attack_haste(game.run)*.01)
 		var v: Dictionary = Book.values(id,level)
 		var with_dagger: bool = int(game.run.weapon)==5
 		if RANGER_CLIPS.has(s.effect):
@@ -256,7 +257,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	elif s.requirement in ["melee","shield"]:
 		clip = "SwordSlash" if game.run.weapon==1 else ("SpearJab" if game.run.weapon==0 else "AxeChop")
 		# Dexterity quickens every melee swing.
-		var haste: float = (1.0+Data.melee_haste(game.run)*.01)*(DASH_CLEAVE_SPEED if free else 1.0)
+		var haste: float = (1.0+Data.attack_haste(game.run)*.01)*(DASH_CLEAVE_SPEED if free else 1.0)
 		duration = maxf(Data.MELEE_MINIMUM,.84/haste)
 		contact = duration*.52
 		# With the sword, each skill has its own swing.
@@ -394,8 +395,8 @@ func single_target(at: Vector3, direction: Vector3):
 	hits.sort_custom(func(a,b): return a.position.distance_squared_to(at)<b.position.distance_squared_to(at))
 	return null if hits.is_empty() else hits[0]
 
-# `percent` of a normal attack's damage (the warrior's by Strength; the
-# ranger's, bow and dagger both, by Dexterity).
+# `percent` of a normal attack's damage (in hand, the dagger's too, by
+# Strength; the bow's by Dexterity).
 func attack_damage(percent: float, tag: String = "melee") -> float:
 	return Data.damage_tag(game.run,tag,randf_range(10,15))*percent*.01
 
@@ -574,7 +575,7 @@ func execute(job: Dictionary) -> void:
 			if int(game.run.weapon)==5:
 				var marked = single_target(at,direction)
 				if marked == null: return
-				strike(marked,attack_damage(100.0,"ranged"))
+				strike(marked,attack_damage(100.0,"melee"))
 				weaken(marked,v.x,v.y)
 				game.player.landed_on(marked)
 			else: loose(direction,100.0,{"kind":"weaken","percent":v.x,"cap":v.y})
@@ -590,7 +591,7 @@ func execute(job: Dictionary) -> void:
 		"flurry":
 			var stabbed = single_target(at,direction)
 			if stabbed == null: return
-			strike(stabbed,attack_damage(v.y,"ranged"))
+			strike(stabbed,attack_damage(v.y,Data.scaling_tag(int(game.run.weapon))))
 			game.player.landed_on(stabbed)
 		"triple":
 			var main = single_target(at,direction)
@@ -598,7 +599,7 @@ func execute(job: Dictionary) -> void:
 			# Those beside the one he cuts at, nearest it first.
 			var beside: Array = arc_targets(origin,direction,170.0,CLEAVE_REACH).filter(func(e): return e != main and e.position.distance_to(main.position)<=TRIPLE_BESIDE)
 			beside.sort_custom(func(a,b): return a.position.distance_squared_to(main.position)<b.position.distance_squared_to(main.position))
-			for enemy in [main]+beside.slice(0,int(v.y)): strike(enemy,attack_damage(v.x,"ranged"))
+			for enemy in [main]+beside.slice(0,int(v.y)): strike(enemy,attack_damage(v.x,Data.scaling_tag(int(game.run.weapon))))
 			game.player.landed_on(main)
 		"sand":
 			passing.append([RangerFx.sand(game.world,origin+Vector3.UP*1.2,direction),1.0])

@@ -114,7 +114,8 @@ func hero_run(class_id: String) -> Dictionary:
 		run.skills[id] = 1
 		if s.effect != "passive" and Book.compatible(id,int(run.weapon)): actives.append(id)
 	actives.sort_custom(func(a,b): return Book.all()[a].points+Book.all()[a].unlock < Book.all()[b].points+Book.all()[b].unlock)
-	run.hotbar = [actives[0] if actives.size()>0 else "",actives[1] if actives.size()>1 else "",actives[2] if actives.size()>2 else ""]
+	run.hotbar = []
+	for i in 5: run.hotbar.append(actives[i] if actives.size()>i else "")
 	return run
 
 func build_panel() -> void:

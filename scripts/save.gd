@@ -3,7 +3,14 @@ const Data = preload("res://scripts/data.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=8: return d
+	if int(d.get("version",0))>=9: return d
+	if int(d.get("version",0))==8:
+		# The hotbar grew from RMB, 1 and 2 to RMB and 1 to 4.
+		if not d.get("hotbar") is Array or d.hotbar.size()!=3: return {}
+		var updated = d.duplicate(true)
+		updated.version = 9
+		updated.hotbar = updated.hotbar+["",""]
+		return updated
 	if int(d.get("version",0))==7:
 		# The dagger joined the weapons (the ranger carries one with his bow),
 		# and the ranger's skills were replaced: his are refunded.
@@ -15,7 +22,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 			updated.skill_points = int(updated.get("level",1))
 			updated.hotbar = ["","",""]
 			updated["migration_notice"] = true
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==6:
 		# Saves from before the outdoor world were all made inside the temple.
 		var updated = d.duplicate(true)
@@ -74,7 +81,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<8:
+	if int(d.get("version",0))<9:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -101,7 +108,7 @@ static func valid(d) -> bool:
 		if not (stat is float or stat is int) or stat<5 or stat>5+(Data.MAX_LEVEL-1)*Data.STAT_POINTS or stat!=int(stat): return false
 		spent += int(stat)-5
 	if d.points<0 or spent+d.points!=(d.level-1)*Data.STAT_POINTS: return false
-	if not d.skills is Dictionary or not d.hotbar is Array or d.hotbar.size()!=3: return false
+	if not d.skills is Dictionary or not d.hotbar is Array or d.hotbar.size()!=5: return false
 	var ranks = 0
 	for id in d.skills:
 		if not Data.Skills.all().has(id): return false

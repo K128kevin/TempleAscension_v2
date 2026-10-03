@@ -10,6 +10,7 @@ extends RefCounted
 ## stands at its height.
 const Kit = preload("res://scripts/world_art.gd")
 const Art = preload("res://scripts/assets.gd")
+const Vfx = preload("res://scripts/vfx.gd")
 const BAY = 4.0
 const MODULES = {"w":"wall","d":"wall_door","s":"wall_window","a":"wall_arched","o":"wall_archwindow","p":"arch","b":"wall_broken"}
 # The inn's loft stands this far above its floor.
@@ -205,6 +206,70 @@ static func arm(world, id: String, at: Vector3, yaw: float) -> Node3D:
 	elif id == "scutum": finish = Art.metal()
 	return made(world,id,at,ARMS[id][0],finish,yaw)
 
+# The forge's charcoal, over a `size` bed whose middle is `at`: a glowing
+# floor of embers, a layer of logs lying every way across it and a few
+# heaped on those, and a thin smoke going up.
+static func charcoal(world, at: Vector3, size: Vector2) -> void:
+	var fire = MeshInstance3D.new()
+	fire.mesh = PlaneMesh.new()
+	fire.mesh.size = size
+	fire.material_override = ShaderMaterial.new()
+	fire.material_override.shader = load("res://assets/shaders/coal_bed.gdshader")
+	fire.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fire.position = at+Vector3.UP*.01
+	world.add_child(fire)
+	var burnt = ShaderMaterial.new()
+	burnt.shader = load("res://assets/shaders/charcoal.gdshader")
+	burnt.set_shader_parameter("bed",at.y)
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 4417
+	var logs = []
+	for layer in 2:
+		var tries = 70 if layer == 0 else 26
+		for i in tries:
+			var thick = rng.randf_range(.055,.1)
+			var long = rng.randf_range(.18,.4)
+			var spot = Vector2(rng.randf_range(-.5,.5)*(size.x-long),rng.randf_range(-.5,.5)*(size.y-long))
+			# Room for it: on the bed, apart from the others; up top, resting
+			# across two below.
+			var below = 0
+			var clear = true
+			for other in logs:
+				var gap = spot.distance_to(other[0])
+				if other[2] == layer and gap < (thick+other[1])*1.15: clear = false
+				if layer == 1 and other[2] == 0 and gap < .2: below += 1
+			if not clear or (layer == 1 and below < 2): continue
+			logs.append([spot,thick,layer])
+			var piece = MeshInstance3D.new()
+			piece.mesh = CylinderMesh.new()
+			piece.mesh.top_radius = thick
+			piece.mesh.bottom_radius = thick*rng.randf_range(.8,1.1)
+			piece.mesh.height = long
+			piece.mesh.radial_segments = 14
+			piece.mesh.rings = 6
+			piece.material_override = burnt
+			piece.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var rise = thick*.75 if layer == 0 else .1+thick*.8
+			piece.position = at+Vector3(spot.x,rise,spot.y)
+			piece.rotation = Vector3(rng.randf_range(-.15,.15),rng.randf_range(0,TAU),PI/2+rng.randf_range(-.12,.12))
+			world.add_child(piece)
+	var smoke = Vfx.particles(world,14,4.0,false,false)
+	smoke.position = at+Vector3.UP*.3
+	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	smoke.emission_box_extents = Vector3(size.x*.35,.05,size.y*.3)
+	smoke.direction = Vector3.UP
+	smoke.spread = 15
+	smoke.initial_velocity_min = .25
+	smoke.initial_velocity_max = .5
+	smoke.gravity = Vector3(0,.15,-.05)
+	smoke.damping_min = .1
+	smoke.damping_max = .2
+	smoke.scale_amount_min = .35
+	smoke.scale_amount_max = .6
+	smoke.scale_amount_curve = Vfx.curve(.5,1.8)
+	smoke.color_ramp = Vfx.ramp([0,.2,1],[Color(.35,.37,.42,0),Color(.3,.32,.37,.16),Color(.25,.26,.3,0)])
+	smoke.emitting = true
+
 static func smithy(world, tint: Color, wood: Color) -> Dictionary:
 	var c = SMITHY
 	var size = Vector2(SMITHY_BAYS.x*BAY,SMITHY_BAYS.y*BAY)
@@ -222,22 +287,9 @@ static func smithy(world, tint: Color, wood: Color) -> Dictionary:
 	made(world,"pillar",forge+Vector3(0,2.45,.85),Vector3(2.9,.75,1.7),soot)
 	made(world,"pillar",forge+Vector3(0,3.0,.75),Vector3(1.3,3.6,1.3),soot)
 	world.block_rect(Rect2(forge.x-1.6,c.z+1.0,3.2,1.9),world.LOW,false)
-	# A bed of burning coals in the hearth: lumps of charcoal, glowing in the
-	# cracks between them (the temple's braziers' coals, spread wide).
-	var coals = MeshInstance3D.new()
-	coals.mesh = SphereMesh.new()
-	coals.mesh.radial_segments = 64
-	coals.mesh.rings = 24
-	var burning = ShaderMaterial.new()
-	burning.shader = load("res://assets/shaders/embers.gdshader")
-	burning.set_shader_parameter("grain",Vector3(34,3,18))
-	burning.set_shader_parameter("fine_grain",90.0)
-	burning.set_shader_parameter("glow",1.1)
-	coals.material_override = burning
-	coals.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	coals.scale = Vector3(2.2,.13,1.15)
-	coals.position = forge+Vector3(0,.95,1.0)
-	world.add_child(coals)
+	# A bed of burning charcoal in the hearth: logs burnt blue-black and split,
+	# glowing in their splits and underneath, on a fire of small embers.
+	charcoal(world,forge+Vector3(0,.95,1.0),Vector2(2.1,1.05))
 	var glow = lamp(world,forge+Vector3(0,1.5,1.3),2.2,9.0,Color(1.0,.52,.20))
 	var fire = preload("res://scripts/torch_flame.gd").new()
 	fire.position = forge+Vector3(0,1.05,1.0)

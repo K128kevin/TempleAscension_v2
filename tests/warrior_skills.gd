@@ -332,12 +332,12 @@ func test():
 	check(dealt_by_rank[1]>dealt_by_rank[0]*3.5,"Rank 5 hits for 50 to rank 1's 10")
 	check(Book.values("dash_attack",1)==({"x":10.0,"y":15.0,"z":0.0}) and Book.values("dash_attack",3)==({"x":20.0,"y":11.0,"z":0.0}),"Dash Attack's damage and extra cost run 10/15/20/30/50 and 15/13/11/8/5")
 
-	# Critical hits: 20%, and 0.2% more a point of Dexterity, for double damage,
+	# Critical hits: 20%, and 0.25% more a point of Dexterity, for double damage,
 	# rolled for every struck_dummy hit.
 	hero({})
 	check(is_equal_approx(Data.crit_chance(game.run),20.0),"A new hero crits 20% of the time")
 	game.run.stats[1] += 10
-	check(is_equal_approx(Data.crit_chance(game.run),22.0),"Each point of Dexterity adds 0.2%")
+	check(is_equal_approx(Data.crit_chance(game.run),22.5),"Each point of Dexterity adds 0.25%")
 	game.run.stats[1] -= 10
 	var struck_dummy = dummy(2.0)
 	game.effects.clear()
@@ -459,25 +459,26 @@ func test():
 	check(game.skills.defense_stacks==0,"Its stacks lapse after their 12 seconds")
 	clear()
 
-	# Attack speed: Dexterity for every melee swing, Quick Strikes for normal attacks.
+	# Attack speed: Dexterity (0.3% a point) for every swing and bowshot, Quick
+	# Strikes for normal melee attacks.
 	hero({})
 	check(is_equal_approx(game.attack_profile().duration,.84),"A sword swing takes .84 seconds")
 	game.run.stats[1] = 25
-	check(is_equal_approx(game.attack_profile().duration,.84/1.2),"Twenty points of Dexterity make it 20% faster")
+	check(is_equal_approx(game.attack_profile().duration,.84/1.06),"Twenty points of Dexterity make it 6% faster")
 	game.run.skills = {"cleave":1,"quick_strikes":1}
-	check(is_equal_approx(game.attack_profile().duration,.84/1.4),"Quick Strikes rank 1 adds 20% more")
+	check(is_equal_approx(game.attack_profile().duration,.84/1.26),"Quick Strikes rank 1 adds 20% more")
 	var target = dummy(1.6)
 	game.attack(false,target.position)
-	check(is_equal_approx(game.player.busy,.84/1.4) and is_equal_approx(game.scheduled[-1].time,.84/1.4*.52),"The quicker swing lands and recovers sooner")
+	check(is_equal_approx(game.player.busy,.84/1.26) and is_equal_approx(game.scheduled[-1].time,.84/1.26*.52),"The quicker swing lands and recovers sooner")
 	ready()
 	game.skills.cast("cleave",target.position)
-	check(is_equal_approx(game.player.busy,1.0/1.2),"Skills quicken with Dexterity, not with Quick Strikes")
+	check(is_equal_approx(game.player.busy,1.0/1.06),"Skills quicken with Dexterity, not with Quick Strikes")
 	game.run.skills = {"quick_strikes":5}; game.run.stats[1] = 5
 	check(is_equal_approx(game.attack_profile().duration,.84/2.7),"Quick Strikes rank 5: 170% faster")
-	game.run.stats[1] = 300
+	game.run.stats[1] = 1000
 	check(is_equal_approx(game.attack_profile().duration,Data.MELEE_MINIMUM),"No swing is quicker than a fifth of a second")
 	game.run.weapon = 2; game.run.stats[1] = 25; game.run.skills = {"quick_strikes":5}
-	check(is_equal_approx(game.attack_profile().duration,.78),"Neither speeds a bow")
+	check(is_equal_approx(game.attack_profile().duration,.78/1.06),"Dexterity quickens a bowshot too; Quick Strikes does not")
 	clear()
 
 	# The sword's normal attack: three swings that follow one another while he
@@ -539,19 +540,19 @@ func test():
 	panels.nodes.leap.button.pressed.emit()
 	check(not game.run.skills.has("leap") and game.run.skill_points==5,"A locked skill cannot be learned")
 	panels.nodes.powerful_strike.button.pressed.emit()
-	check(game.run.skills.powerful_strike==1 and game.run.hotbar==["cleave","powerful_strike",""],"Clicking learns a skill; a new active skill takes the first empty slot")
+	check(game.run.skills.powerful_strike==1 and game.run.hotbar==["cleave","powerful_strike","","",""],"Clicking learns a skill; a new active skill takes the first empty slot")
 	for i in 4: panels.nodes.cleave.button.pressed.emit()
 	game.hud.tick(0)
 	check(game.run.skills.cleave==5 and game.run.skill_points==0 and panels.nodes.cleave.state=="maxed" and panels.nodes.leap.state=="open","Five points in the tree open its next row")
 	check(not panels.skill_plus.visible and not panels.stat_plus.visible,"The + buttons are gone while their panels are open")
 	panels.hovered = "powerful_strike"
 	panels.assign("powerful_strike",2)
-	check(game.run.hotbar==["cleave","","powerful_strike"],"A learned skill can be moved to another slot")
+	check(game.run.hotbar==["cleave","","powerful_strike","",""],"A learned skill can be moved to another slot")
 	panels.assign("endurance",1)
-	check(game.run.hotbar==["cleave","","powerful_strike"],"Unlearned and passive skills cannot be assigned")
+	check(game.run.hotbar==["cleave","","powerful_strike","",""],"Unlearned and passive skills cannot be assigned")
 	game.combat_age = 0
 	panels.assign("powerful_strike",0)
-	check(game.run.hotbar==["powerful_strike","",""],"Slots can be changed in combat too")
+	check(game.run.hotbar==["powerful_strike","","","",""],"Slots can be changed in combat too")
 	game.combat_age = 10
 	game.resume_game(); game.hud.tick(0)
 	check(game.mode=="playing" and not panels.any_open() and panels.stat_plus.visible and not panels.skill_plus.visible,"Closed, the attribute + stays until its points are spent; the skill + is gone with its points")

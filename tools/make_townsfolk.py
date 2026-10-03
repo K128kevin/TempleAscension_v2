@@ -10,7 +10,8 @@ sitting, sitting and talking, drinking, reaching, carrying, dancing.
 The packs have no clothes, so the wardrobe is fitted here from the body's own
 shape. A garment is a tube lofted down the body: at each height the outline
 of the body there (its convex hull, arms left out) is taken, eased outward by
-the cloth's looseness, and joined to the next; sleeves are lofted along the
+the cloth's looseness, and joined to the next, and from the top it is laid
+over the shoulders in to the neck; sleeves are lofted along the
 arms the same way. Every garment is skinned from the flesh nearest it, so it
 moves with the wearer. The woman's dress is such a tube with its neck cut
 square and wide, leaving straps over the shoulders, over a long-sleeved blouse;
@@ -191,9 +192,40 @@ class Garment:
                     middle = (rings[k-1][i]+rings[k+1][i])*.5
                     eased[k][i] = V(rings[k][i].x*.6+middle.x*.4, rings[k][i].y*.6+middle.y*.4, rings[k][i].z)
             rings = eased
+        # Over the shoulders: from the top ring in to the neck, the cloth laid
+        # on the flesh beneath it, so the garment closes about the neck rather
+        # than stopping short of the shoulders' tops.
+        yoke = self.yoke(rings[0], count)
+        edges = [0.0]*len(yoke)+[max(0.0, 1.0-(z-hem)/fray) for z in levels]
+        rings = yoke+rings
         tree = body.tree(lambda i: not body.arm[i] or abs(body.points[i].x) <= body.shoulder)
-        self.tube(rings, [max(0.0, 1.0-(z-hem)/fray) for z in levels], tree, (V(0, body.joint('spine_02').y, 0), V(0, 0, 1)))
+        self.tube(rings, edges, tree, (V(0, body.joint('spine_02').y, 0), V(0, 0, 1)))
         return self
+
+    def yoke(self, top, count, steps=5, ease=.014):
+        """Rings from the neck out to the ring `top`, each point on the
+        flesh beneath it (eased off it), the neck's first."""
+        body = self.body
+        neck = body.joint('neck_01')
+        reach = body.joint('upperarm_l').x
+        # A round neckline, open about the neck's root.
+        around = [(p.x, p.y) for p in body.points if abs(p.z-(neck.z+.02)) < .012 and abs(p.x) < reach*.6]
+        collar = outline(around, count, .03, (0, -1))
+        if collar is None: return []
+        # The flesh the yoke lies on: the shoulders' tops, the arms left out.
+        under = [body.points[i] for i in range(len(body.points)) if neck.z-.15 < body.points[i].z < neck.z+.1 and (not body.arm[i] or abs(body.points[i].x) <= body.shoulder)]
+        rings = []
+        for k in range(steps, 0, -1):
+            t = k/(steps+1)
+            ring = []
+            for i in range(count):
+                x = top[i].x+(collar[i][0]-top[i].x)*t
+                y = top[i].y+(collar[i][1]-top[i].y)*t
+                near = [p.z for p in under if (p.x-x)**2+(p.y-y)**2 < .018**2]
+                z = max(near)+ease if near else top[i].z
+                ring.append(V(x, y, min(neck.z+.035, max(z, top[i].z))))
+            rings.append(ring)
+        return rings
 
     def sleeves(self, reach, ease, cuff, count=14, step=.03, fray=.07):
         """A sleeve down each arm as far as `reach` (metres from the

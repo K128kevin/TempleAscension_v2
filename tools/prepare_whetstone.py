@@ -45,8 +45,8 @@ for start in bm.verts:
     off = Vector((centre.x-AXLE.x, 0, centre.z-AXLE.z)).length
     reach = max(hi.x-lo.x, hi.z-lo.z)/2
     # About the axle: the stone and its faces, the hubs; and the crank, which
-    # hangs off the axle's end.
-    crank = lo.y < -.3 and hi.y < 0 and abs(centre.x) < .1 and hi.z < .8
+    # hangs off the axle's end (narrow: not the boards lying under the frame).
+    crank = lo.y < -.3 and hi.y < 0 and abs(centre.x) < .1 and hi.z < .8 and hi.x-lo.x < .1
     if (off < .04 and reach < .34) or crank:
         for v in part:
             v.select = True

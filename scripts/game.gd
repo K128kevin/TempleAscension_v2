@@ -357,9 +357,9 @@ func _input(event: InputEvent) -> void:
 		if event.physical_keycode in [KEY_C,KEY_K,KEY_I] and mode in ["playing","character"] and not creating_character:
 			toggle_screen(event.physical_keycode)
 			get_viewport().set_input_as_handled()
-		# Pointing at a learned skill in the skill panel, 1 and 2 assign it.
-		if event.physical_keycode in [KEY_1,KEY_2] and mode=="character" and not hud.panels.hovered.is_empty():
-			hud.panels.assign(hud.panels.hovered,1 if event.physical_keycode==KEY_1 else 2)
+		# Pointing at a learned skill in the skill panel, 1 to 4 assign it.
+		if event.physical_keycode in [KEY_1,KEY_2,KEY_3,KEY_4] and mode=="character" and not hud.panels.hovered.is_empty():
+			hud.panels.assign(hud.panels.hovered,event.physical_keycode-KEY_1+1)
 			get_viewport().set_input_as_handled()
 
 # C and K open and close the attribute panel (left) and the skill panel (right);
@@ -415,6 +415,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_X: swap_weapon()
 			KEY_1: cast_key(1)
 			KEY_2: cast_key(2)
+			KEY_3: cast_key(3)
+			KEY_4: cast_key(4)
 			KEY_F11:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
@@ -482,7 +484,7 @@ func update_enemy_hover() -> void:
 	hud.show_enemy_hover(hovered)
 	hud.show_npc_name(world.townsfolk.named_at(world.pointer()) if outdoors() and mode=="playing" and get_viewport().gui_get_hovered_control()==null else {})
 
-# The 1 and 2 keys: a skill used up close is walked to a unit under the cursor,
+# The 1 to 4 keys: a skill used up close is walked to a unit under the cursor,
 # as a right click is; anything else is cast where the cursor points.
 func cast_key(slot: int) -> void:
 	if skills.reach(run.hotbar[slot])<13.0 and is_instance_valid(clicked_enemy()) and not Input.is_physical_key_pressed(KEY_SHIFT): issue_click(true,slot)
@@ -588,13 +590,14 @@ func attack_range(special: bool, slot: int = 0) -> float:
 	if run.weapon in [2,4]: return 12.5
 	return 1.9
 
-# The normal attack's clip and timing. Dexterity and Quick Strikes quicken a
-# melee swing (down to Data.MELEE_MINIMUM); Quick Draw, the bow.
+# The normal attack's clip and timing. Dexterity quickens a swing and a
+# bowshot alike, Quick Strikes a melee swing (down to Data.MELEE_MINIMUM).
 func attack_profile() -> Dictionary:
 	var weapon: int = run.weapon
 	# (Frenzy quickens the ranger's bow and dagger alike.)
 	var frenzy: float = (skills.haste()-1.0)*100.0
-	if weapon in [2,4]: return CombatAnimation.profile(weapon,false,frenzy if weapon==2 else 0,Data.cooldown(run)*.5,.35)
+	if weapon==2: return CombatAnimation.profile(weapon,false,(1.0+Data.attack_haste(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.cooldown(run)*.5,.35)
+	if weapon==4: return CombatAnimation.profile(weapon,false,0,Data.cooldown(run)*.5,.35)
 	return CombatAnimation.profile(weapon,false,(1.0+Data.melee_attack_speed(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.MELEE_MINIMUM,0.0)
 
 # Which swing of the sword's chain (CombatAnimation.SWORD_CHAIN) was last begun.
@@ -1097,7 +1100,7 @@ func pause_game() -> void:
 	left_held = false
 	right_held = false
 	save_run()
-	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1 / 2 skills · Space evade · Q healing spell\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 fullscreen")
+	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1–4 skills · Space evade · Q healing spell\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 fullscreen")
 	hud.button("Resume",resume_game)
 	hud.button("Continue saved ascent",continue_run)
 	hud.button("New ascent / Difficulty",new_run_menu)

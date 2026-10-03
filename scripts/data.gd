@@ -48,7 +48,7 @@ const MELEE_MINIMUM = .2
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	var starter: String = {"warrior":"cleave","ranger":"power_shot","wizard":"firebolt"}.get(class_id,"cleave")
 	var ranks = {}; ranks[starter] = 1
-	return {"version":8,"place":"temple","class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	return {"version":9,"place":"temple","class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 
 # Where a run can be: on a floor of the temple, or in the world outside it
 # (the town, the desert and the temple's front; scripts/overworld.gd).
@@ -75,9 +75,9 @@ static func max_energy(run: Dictionary) -> float:
 static func energy_regen(run: Dictionary) -> float:
 	return (max_energy(run)*.1+(run.stats[4]-5)*.1+passive(run,"attunement"))*(1.0+passive(run,"endurance")*.01)
 
-# (The dagger is a weapon of finesse: Dexterity serves it as it does the bow.)
+# (Strength serves every weapon in hand, the dagger's too; Dexterity the bow.)
 static func scaling_tag(weapon: int) -> String:
-	return "ranged" if weapon in [2,5] else ("spell" if weapon==4 else "melee")
+	return "ranged" if weapon==2 else ("spell" if weapon==4 else "melee")
 
 static func damage_tag(run: Dictionary, tag: String, base: float) -> float:
 	var index: int = {"melee":0,"ranged":1,"spell":2}[tag]
@@ -89,14 +89,16 @@ static func damage(run: Dictionary, roll: float = 12.5) -> float:
 
 static func cooldown(_run: Dictionary) -> float: return .5
 
-# Percent faster every melee swing is: 1% for each point of Dexterity.
-static func melee_haste(run: Dictionary) -> float:
-	return (run.stats[1]-5)*1.0
+# Percent faster every attack is, melee swing or bowshot: 0.3% for each
+# point of Dexterity.
+const HASTE_PER_DEXTERITY = .3
+static func attack_haste(run: Dictionary) -> float:
+	return (run.stats[1]-5)*HASTE_PER_DEXTERITY
 
 # Percent chance that a hit the hero lands is a critical hit, for double
-# damage: 20%, and 0.2% more for each point of Dexterity.
+# damage: 20%, and 0.25% more for each point of Dexterity.
 const CRIT_BASE = 20.0
-const CRIT_PER_DEXTERITY = .2
+const CRIT_PER_DEXTERITY = .25
 const CRIT_MULTIPLIER = 2.0
 static func crit_chance(run: Dictionary) -> float:
 	return CRIT_BASE+(run.stats[1]-5)*CRIT_PER_DEXTERITY
@@ -111,7 +113,7 @@ static func specialization(run: Dictionary, weapon: int) -> Dictionary:
 
 # Percent faster the normal melee attack is: Dexterity and Quick Strikes.
 static func melee_attack_speed(run: Dictionary) -> float:
-	return melee_haste(run)+passive(run,"quick_strikes")
+	return attack_haste(run)+passive(run,"quick_strikes")
 
 static func xp_at_level(level: int) -> int:
 	var total = 0
@@ -142,6 +144,6 @@ static func respec(run: Dictionary) -> void:
 	run.points = (int(run.level)-1)*STAT_POINTS
 	run.skills = {}
 	run.skill_points = int(run.level)
-	run.hotbar = ["","",""]
+	run.hotbar = ["","","","",""]
 	run.health = minf(run.health,max_health(run))
 	run.energy = minf(run.energy,max_energy(run))

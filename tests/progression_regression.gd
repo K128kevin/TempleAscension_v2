@@ -33,7 +33,7 @@ func test():
 		Data.gain_xp(run,100000)
 		check(run.points==points,"XP at cap cannot mint points: "+class_id)
 		Data.respec(run)
-		check(run.skill_points==20 and run.points==95 and run.hotbar==["","",""] and Save.valid(run),"Respec refunds exact budgets and clears slots: "+class_id)
+		check(run.skill_points==20 and run.points==95 and run.hotbar==["","","","",""] and Save.valid(run),"Respec refunds exact budgets and clears slots: "+class_id)
 		for tag in ["melee","ranged","spell"]:
 			var i: int = {"melee":0,"ranged":1,"spell":2}[tag]
 			run.stats[i] += 10
@@ -77,11 +77,13 @@ func test():
 	check(Book.reachable(fresh.skills) and not Book.reachable({"leap":1,"cleave":4}) and not Book.reachable({"execute":1,"powerful_strike":5,"shield_bash":4}),"Saved ranks must be reachable through the tree")
 	var cheat = Data.new_run(); cheat.skills = {"execute":1}
 	check(not Save.valid(cheat),"A save with a skill its tree has not opened is rejected")
-	# Dexterity quickens melee swings; Endurance, energy recovery.
+	# Dexterity quickens every attack; Endurance, energy recovery. Strength
+	# serves every weapon in hand, the dagger's too.
 	var quick = Data.new_run(); quick.stats[1] = 25
-	check(Data.melee_attack_speed(quick)==20 and is_equal_approx(Data.damage_tag(quick,"ranged",100),140),"Each point of Dexterity adds 1% melee attack speed and still 2% ranged damage")
+	check(is_equal_approx(Data.melee_attack_speed(quick),6.0) and is_equal_approx(Data.damage_tag(quick,"ranged",100),140),"Each point of Dexterity adds 0.3% attack speed and still 2% ranged damage")
+	check(Data.scaling_tag(5)=="melee" and Data.scaling_tag(1)=="melee" and Data.scaling_tag(2)=="ranged","Strength serves the dagger as every melee weapon; Dexterity the bow")
 	quick.skills.quick_strikes = 5
-	check(Data.melee_attack_speed(quick)==190 and Data.melee_haste(quick)==20,"Quick Strikes adds to normal attack speed only")
+	check(is_equal_approx(Data.melee_attack_speed(quick),176.0) and is_equal_approx(Data.attack_haste(quick),6.0),"Quick Strikes adds to normal attack speed only")
 	var hardy = Data.new_run(); hardy.skills.endurance = 5
 	check(is_equal_approx(Data.energy_regen(hardy),17.5) and Data.max_health(hardy)==100,"Endurance speeds energy recovery by its listed percent")
 	# Earlier saves: everything spent is refunded under the new rules.
@@ -91,11 +93,14 @@ func test():
 	prior.hotbar=["cleave","","","guard","shield_bash"]
 	prior.drops=[{"kind":"weapon","value":2,"id":"weapon:0","position":[0,9]},{"kind":"weapon","value":3,"id":"weapon:1","position":[0,9]}]
 	var converted = Save.migrate(prior)
-	check(Save.valid(prior) and Save.valid(converted) and converted.version==Data.new_run().version and converted.place=="temple" and converted.hotbar==["","",""] and converted.drops.is_empty() and converted.skills.is_empty() and converted.skill_points==4 and converted.points==15,"Version 3 saves migrate, retire pending bow/axe drops and refund their points")
+	check(Save.valid(prior) and Save.valid(converted) and converted.version==Data.new_run().version and converted.place=="temple" and converted.hotbar==["","","","",""] and converted.drops.is_empty() and converted.skills.is_empty() and converted.skill_points==4 and converted.points==15,"Version 3 saves migrate, retire pending bow/axe drops and refund their points")
 	var veteran = Data.new_run("wizard"); veteran.version=5
 	veteran.level=27; veteran.xp=60000; veteran.stats=[5,5,60,10,18]; veteran.points=0
 	veteran.skills={"firebolt":5,"meteor":4}; veteran.skill_points=18; veteran.hotbar=["firebolt","meteor",""]
 	var capped = Save.migrate(veteran)
+	var eight = Data.new_run("warrior"); eight.version=8; eight.hotbar=["cleave","",""]
+	var nine = Save.migrate(eight)
+	check(Save.valid(eight) and nine.version==9 and nine.hotbar==["cleave","","","",""],"Version 8 saves keep their skills, the hotbar grown to RMB and 1 to 4")
 	check(Save.valid(capped) and capped.level==20 and capped.xp==Data.xp_at_level(20) and capped.stats==[5,5,5,5,5] and capped.points==95 and capped.skill_points==20 and capped.get("migration_notice",false),"Version 5 saves above the new cap come down to level 20 with every point refunded")
 	var old = {"version":2,"floor":3,"stats":[6,3,2,5],"owned":[true,true,true,true],"weapon":0,"difficulty":1,"dead":["3:0"],"gems":["gem:2:0"],"drops":[],"deaths":2,"seed":78,"position":[0,9],"health":140,"energy":120,"phase":"allocation","points":5,"completed":false}
 	var migrated = Save.migrate(old)

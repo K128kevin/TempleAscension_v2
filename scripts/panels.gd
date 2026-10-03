@@ -7,7 +7,7 @@ const Book = preload("res://scripts/skill_data.gd")
 const SkillIcon = preload("res://scripts/skill_icon.gd")
 # A skill's square in the tree.
 const NODE = 44
-const SLOT_NAMES = ["RMB","1","2"]
+const SLOT_NAMES = ["RMB","1","2","3","4"]
 var hud
 var game
 var dim = Color(.62,.6,.53)
@@ -220,7 +220,7 @@ func open_skills() -> void:
 			column.add_child(row)
 			for s in class_skills:
 				if s.tree==t and gate(s)==g: row.add_child(square(s.id))
-	text("Click: learn · Right-click, 1 or 2: assign to that slot",10,dim,body).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text("Click: learn · Right-click or 1–4: assign to that slot",10,dim,body).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	refresh()
 
 # Skills that open together share a row: by points in the tree, then by level.
@@ -341,7 +341,7 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 	if on_hotbar and lines.lock.is_empty(): lines.lock = game.skills.reason(id)
 	lines.hint = ""
 	if Book.can_learn(r,id): lines.hint = "Click to learn" if rank==0 else "Click to raise to rank %d" % (rank+1)
-	if active and rank>0: lines.hint += ("\n" if not lines.hint.is_empty() else "")+"Right-click, 1 or 2: assign to RMB, 1 or 2"
+	if active and rank>0: lines.hint += ("\n" if not lines.hint.is_empty() else "")+"Right-click or 1–4: assign to RMB or that key"
 	if on_hotbar: lines.hint = ""
 	for key in tip_lines:
 		tip_lines[key].text = lines[key]
@@ -386,8 +386,7 @@ func learn(id: String) -> void:
 	game.save_run()
 	refresh()
 
-# Puts a learned active skill on RMB (0), 1 or 2. Swapping what a slot holds
-# waits until the fight is over; filling an empty one does not.
+# Puts a learned active skill on RMB (0) or 1 to 4, in combat or out.
 func assign(id: String, slot: int) -> void:
 	var run: Dictionary = game.run
 	if not Book.all().has(id) or int(run.skills.get(id,0))<=0 or Book.all()[id].effect=="passive" or run.hotbar[slot]==id: return

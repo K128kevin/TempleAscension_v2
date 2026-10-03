@@ -78,7 +78,7 @@ func test():
 		game.player.busy=0; game.player.cooldown=0
 		game.player.position=origin
 		var owned_id = "cleave" if class_id=="warrior" else ("power_shot" if class_id=="ranger" else "firebolt")
-		game.run.hotbar=[owned_id,"",""]
+		game.run.hotbar=[owned_id,"","","",""]
 		game.run.weapon = 4 if class_id!="wizard" else 1
 		# (The ranger carries his bow as well, and takes it up for the skill.)
 		check(game.skills.reason(owned_id).begins_with("Requires") or (class_id=="ranger" and game.skills.reason(owned_id).is_empty()),"Wrong weapon disables skill with explanation: "+class_id)

@@ -95,7 +95,7 @@ func setup(owner_game) -> void:
 	recovery = label("",13,cream,root)
 	anchor(recovery,Vector2(0,1),Vector2(20,-26),Vector2(180,22))
 	recovery.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var energy_caption = label("RMB + 1 / 2 · Skills",13,cream,root)
+	var energy_caption = label("RMB + 1–4 · Skills",13,cream,root)
 	anchor(energy_caption,Vector2(1,1),Vector2(-208,-26),Vector2(188,22))
 	energy_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	objective = label("",20,gold,root)
@@ -118,13 +118,13 @@ func setup(owner_game) -> void:
 	var row = Control.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(row)
-	anchor(row,Vector2(.5,1),Vector2(-118,-124),Vector2(236,56))
+	anchor(row,Vector2(.5,1),Vector2(-178,-124),Vector2(356,56))
 	idle_style = panel_style(Color(.035,.032,.028,.94),Color(.37,.31,.21))
 	selected_style = panel_style(Color(.15,.115,.065,.97),gold)
 	selected_style.set_border_width_all(2)
 	selected_style.shadow_color = Color(.8,.49,.13,.24)
 	selected_style.shadow_size = 5
-	for i in 4:
+	for i in 6:
 		var slot = Button.new()
 		row.add_child(slot)
 		slot.position = Vector2(i*60,0)
@@ -158,7 +158,7 @@ func setup(owner_game) -> void:
 			recharge.position = Vector2(0,12); recharge.size = Vector2(56,28)
 			recharge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			slot_cooldowns.append(recharge)
-		var hotkey = label(["LMB","RMB","1","2"][i],12,gold,slot)
+		var hotkey = label(["LMB","RMB","1","2","3","4"][i],12,gold,slot)
 		hotkey.position = Vector2(5,2)
 		var name_label = label("",10,cream,slot)
 		name_label.position = Vector2(2,39); name_label.size = Vector2(52,15)
@@ -170,7 +170,7 @@ func setup(owner_game) -> void:
 	abilities = label("",16,gold,root)
 	anchor(abilities,Vector2(.5,1),Vector2(-330,-61),Vector2(660,23))
 	abilities.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var controls = label("LMB Move / Attack · RMB + 1 / 2 Skills · SPACE Evade · Q Heal · R Walk / Run · X Bow / Dagger · C Attributes · K Skills · I Equipment",13,Color(.7,.68,.60),root)
+	var controls = label("LMB Move / Attack · RMB + 1–4 Skills · SPACE Evade · Q Heal · R Walk / Run · X Bow / Dagger · C Attributes · K Skills · I Equipment",13,Color(.7,.68,.60),root)
 	anchor(controls,Vector2(.5,1),Vector2(-400,-30),Vector2(800,22))
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = label("",19,gold,root)
@@ -271,7 +271,7 @@ func tick(dt: float) -> void:
 	weapon_icons[0].texture = load(weapon_icon_path) if ResourceLoader.exists(weapon_icon_path) else load("res://assets/textures/seal.png")
 	weapon_icons[0].modulate = Color.WHITE
 	weapon_names[0].text = "Attack"
-	for i in range(1,4):
+	for i in range(1,6):
 		var id: String = r.hotbar[i-1]
 		var problem: String = game.skills.reason(id)
 		weapon_slots[i].disabled = not problem.is_empty()

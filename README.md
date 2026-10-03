@@ -25,7 +25,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Space | Dash: spend 10 energy |
 | R | Toggle between running and walking (a slower pace) |
 | Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
-| 1 / 2 | Cast the other two assigned active skills |
+| 1 – 4 | Cast the other four assigned active skills |
 | C / K / I | Attribute panel (left) / skill tree panel (right) / equipment |
 | Mouse wheel, trackpad scroll or pinch | Zoom (in close enough to look at the models) |
 | E | Ascend, claim the crown, or rest at a safe entrance |
@@ -245,8 +245,8 @@ of maximum per second. Above the base:
 
 | Attribute | Per point |
 |---|---|
-| Strength | +2% melee damage |
-| Dexterity | +2% ranged damage; +1% melee attack speed; +0.2% critical hit chance |
+| Strength | +2% melee damage (every weapon in hand, the dagger's too) |
+| Dexterity | +2% ranged damage; +0.3% attack speed, melee and ranged; +0.25% critical hit chance |
 | Intelligence | +2% spell damage |
 | Vitality | +10 maximum health |
 | Willpower | +3 maximum energy and +0.1 energy per second |
@@ -285,8 +285,8 @@ with a knotted leather sash, wrapped leather bracers and worn leather boots. The
 Every class's skills sit in three trees, shown side by side in the skill panel
 (K): Area of Effect, Single Target and Passive. Click a skill to spend a point
 on it; hovering shows what it does at its current and next rank. A learned
-active skill takes the first empty slot; right-click it, or press 1 or 2 while
-pointing at it, to put it on RMB, 1 or 2, in or out of combat. Passives work automatically. Bow skills need a bow, spells a
+active skill takes the first empty slot; right-click it, or press 1 to 4 while
+pointing at it, to put it on RMB or 1 to 4, in or out of combat. Passives work automatically. Bow skills need a bow, spells a
 staff, and Shield Bash needs sword/shield. All classes can equip every owned family.
 
 The warrior's skills follow the leveling and skills design document. Each has
@@ -342,16 +342,16 @@ slam), translucent, swelling as it spreads and thinning to nothing; and the scre
 shakes hard.
 
 Shield Bash is the one skill with a cooldown; energy is the others' only cost.
-Dexterity quickens every melee swing, skills included; Quick Strikes only the
+Dexterity quickens every attack, melee or bow, skills included; Quick Strikes only the
 normal attack. No swing is faster than a fifth of a second. A right click (or
-1 / 2) on an enemy walks into reach before a melee skill, leaps from Leap's
+1 to 4) on an enemy walks into reach before a melee skill, leaps from Leap's
 range, and slams from within Ground Slam's.
 
 ### The ranger
 
 The ranger carries a bow and a dagger, and fights with either: **X** changes
 between them at any time (in combat too), and a skill made with the other takes it
-up. Both do their damage by Dexterity. The dagger's normal attack is quick (half a
+up. The bow does its damage by Dexterity, the dagger by Strength. The dagger's normal attack is quick (half a
 second), a stab and a slash by turns. His skills sit in three trees (Attacks,
 Utility, Passive), each skill opening once enough points are spent in its own tree,
 as the warrior's do.

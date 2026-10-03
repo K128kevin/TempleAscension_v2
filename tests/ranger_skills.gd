@@ -121,7 +121,12 @@ func test():
 	foe.hp = foe.max_hp
 	game.attack(false,foe.position)
 	while game.player.busy>0: play(STEP)
-	check(lost(foe)>=10*1.5-.01 and lost(foe)<=15*1.5+.01,"Dexterity raises the dagger's damage as it does the bow's")
+	check(lost(foe)>=10-.01 and lost(foe)<=15+.01,"Dexterity does not raise the dagger's damage")
+	game.run.stats[1] = 5; game.run.stats[0] = 30
+	foe.hp = foe.max_hp
+	game.attack(false,foe.position)
+	while game.player.busy>0: play(STEP)
+	check(lost(foe)>=10*1.5-.01 and lost(foe)<=15*1.5+.01,"Strength raises the dagger's damage as every melee weapon's")
 	clear()
 
 	# Rapid Fire.
@@ -428,7 +433,7 @@ func test():
 	old.skills = {"power_shot":1}
 	old.level = 1
 	var migrated = Save.migrate(old)
-	check(Save.valid(old) and migrated.version==8 and migrated.owned.size()==6 and migrated.owned[5] and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
+	check(Save.valid(old) and migrated.version==9 and migrated.owned.size()==6 and migrated.owned[5] and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
 	game.run.skills = {"power_shot":1}
 	check(Save.valid(game.run),"The character is save-valid throughout")
 	FileAccess.open("res://test-results/ranger-skills.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
