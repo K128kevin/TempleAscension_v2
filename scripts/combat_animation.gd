@@ -13,8 +13,11 @@ const NORMAL = [
 # down from the upper right to the lower left, a backhand cut down from the
 # upper left to the lower right, and a thrust (tools/import_skills.py). Each
 # takes the sword's normal time above and lands at the same moment of it.
-# The first is wound up out of his stance (SWORD_OPENER); after the thrust the
-# first cut follows on again. Each clip is its swing and then a recovery to
+# He walks into his target as he swings, each swing struck on a step of the
+# rear foot past the front: the feet alternate, so each of the three has a
+# clip stepping with either foot (its name with SWORD_FEET's R or L added).
+# The first is wound up out of his stance (SWORD_OPENER), stepping with the
+# right; after the thrust the first cut follows on again. Each clip is its swing and then a recovery to
 # the stance, which plays out only if he swings no more: SWORD_SWING_SHARE of
 # the clip is the swing. A swing follows on from the last if it is begun
 # within SWORD_FOLLOW (a share of the clip) of that swing's end: so far, each
@@ -22,6 +25,7 @@ const NORMAL = [
 # over from it mid-motion with nothing to blend.
 const SWORD_CHAIN = ["SwordCut1","SwordCut2","SwordThrust"]
 const SWORD_OPENER = "SwordOpen"
+const SWORD_FEET = ["R","L"]
 const SWORD_SWING_SHARE = 2.0/3.0
 const SWORD_FOLLOW = .12
 const SPECIAL = [

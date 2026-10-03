@@ -78,9 +78,9 @@ var ground_speed = 0.0
 # the planted feet still in the world): the warrior's lunge and cleave, the
 # centurion's stepping thrust. Visual.advance() measures the travel; the unit moves it
 # (Actor.tick).
-# (The sword chain's swings take the library swing's step over the swing's
-# share of each clip, Motion.SWORD_SWING_SHARE; its recovery stands still.)
-const ROOT_ADVANCE = {"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.28,.24],[.4133,.24],[.6,.5],[1.0,.5]],"SwordCut1":[[0.0,0.0],[.12,0.0],[.28,.24],[.4133,.24],[.6,.5],[1.0,.5]],"SwordCut2":[[0.0,0.0],[.12,0.0],[.28,.24],[.4133,.24],[.6,.5],[1.0,.5]],"SwordThrust":[[0.0,0.0],[.12,0.0],[.28,.24],[.4133,.24],[.6,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]]}
+# (The sword chain's swings each walk him a stride on over the swing's share
+# of the clip, Motion.SWORD_SWING_SHARE; its recovery stands still.)
+const ROOT_ADVANCE = {"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustR":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustL":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]]}
 var travelled = 0.0
 var pending_travel = 0.0
 
@@ -283,7 +283,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			elif "HeroArmor" in mesh.name: mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit(hero_class)
 	for clip in animator.get_animation_list():
-		for expected in ["SwordOpen","SwordCut1","SwordCut2","SwordThrust","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
+		for expected in ["SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
@@ -1149,7 +1149,7 @@ func play_on(action: String, duration: float, start: float) -> void:
 # The sword chain (Motion.SWORD_CHAIN): whether one of its swings is still
 # playing (its swing, or the recovery after it), and how far through the clip.
 func swing_phase() -> float:
-	if not (state in Motion.SWORD_CHAIN or state == Motion.SWORD_OPENER): return -1.0
+	if not (state.left(state.length()-1) in Motion.SWORD_CHAIN or state == Motion.SWORD_OPENER): return -1.0
 	if not animator.is_playing() or animator.current_animation != clips.get(state,""): return -1.0
 	return animator.current_animation_position/maxf(.001,animator.current_animation_length)
 

@@ -573,6 +573,8 @@ func attack_profile() -> Dictionary:
 
 # Which swing of the sword's chain (CombatAnimation.SWORD_CHAIN) was last begun.
 var sword_swing = 0
+# How many swings the chain has run to: each steps with the other foot.
+var sword_steps = 0
 func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	if player.cooldown>0 or player.busy>0 or player.dead or mode!="playing": return
 	if special:
@@ -599,9 +601,11 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 			# next takes over at that same moment of it, and still ends on time.
 			var into: float = maxf(0.0,phase-share)
 			sword_swing = (sword_swing+1)%CombatAnimation.SWORD_CHAIN.size()
-			player.visual.play_on(CombatAnimation.SWORD_CHAIN[sword_swing],animation.duration/(share-into),into)
+			sword_steps += 1
+			player.visual.play_on(CombatAnimation.SWORD_CHAIN[sword_swing]+CombatAnimation.SWORD_FEET[sword_steps%2],animation.duration/(share-into),into)
 		else:
 			sword_swing = 0
+			sword_steps = 0
 			player.visual.play(CombatAnimation.SWORD_OPENER,animation.duration/share)
 	else: player.visual.play(animation.clip,animation.duration)
 	combat_age = 0

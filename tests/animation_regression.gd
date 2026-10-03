@@ -79,9 +79,9 @@ func run():
 	# centurion's thrust too), his feet planted as he goes.
 	# The sword's chain of swings, each begun as the last one's swing ends (its
 	# recovery unplayed), twice round: one runs into the next without a jump,
-	# every swing stepping forward on planted feet.
+	# every swing walking him a step forward, on either foot in turn.
 	var chain = [[0.0,"stop"]]
-	var chain_clips = ["SwordOpen","SwordCut2","SwordThrust","SwordCut1","SwordCut2","SwordThrust","SwordCut1"]
+	var chain_clips = ["SwordOpen","SwordCut2L","SwordThrustR","SwordCut1L","SwordCut2R","SwordThrustL","SwordCut1R"]
 	for i in chain_clips.size(): chain.append([.4+.84*i,"play_on" if i > 0 else "play",chain_clips[i],1.26,"play"])
 	chain.append([.4+.84*chain_clips.size()+1.0,"stop"])
 	var chained = await record(specs["hero_sword"],chain)

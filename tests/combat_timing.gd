@@ -62,7 +62,7 @@ func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
 		clock+=dt
 		if clock>10: check(false,"Held attack test timed out: "+context); break
 	check(starts==4 and contacts==4,"Four held attacks produce four animated contacts: "+context)
-	if weapon==1: check(game.player.visual.state=="SwordCut1" and game.sword_swing==0,"Held, the sword's swings follow one another round the chain: "+context)
+	if weapon==1: check(game.player.visual.state=="SwordCut1L" and game.sword_swing==0,"Held, the sword's swings follow one another round the chain: "+context)
 	victim.dead=true
 func live_attacks(game):
 	# Exercise the normal frame callbacks as well as deterministic playback.

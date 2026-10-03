@@ -307,7 +307,8 @@ Percentages of damage are of a normal attack.
 
 The sword's normal attack is three swings that run into one another while he keeps
 attacking: a cut down from upper right to lower left, a backhand cut down from upper
-left to lower right, then a thrust, and round again, each with its step forward. If
+left to lower right, then a lunging thrust, and round again, his whole body thrown
+into each. He walks into his target as he swings, stepping with each foot in turn. If
 he breaks off (moves, casts, or simply stops), the next attack starts from the first.
 
 With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):
