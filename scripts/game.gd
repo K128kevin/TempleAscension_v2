@@ -955,13 +955,15 @@ func effect(at: Vector3, diameter: float, color: Color, duration: float) -> Dict
 
 # `swell`: a critical hit's number, which starts at the usual size and
 # quickly grows larger before it fades.
-const SWELL_SCALE = 1.8
+const SWELL_SCALE = 1.5
 const SWELL_TIME = .14
 func float_text(at: Vector3, text: String, color: Color, swell: bool = false) -> void:
 	var l = Label3D.new()
 	l.text = text
 	l.font_size = 40
 	l.pixel_size = .009
+	# A thin dark border (the default is 12) keeps the numbers legible.
+	l.outline_size = 5
 	l.modulate = color
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.no_depth_test = true
