@@ -26,10 +26,22 @@ the left forearm).
   SkillLeap       Leap: the crouch, the spring, the tuck and the landing
                   blow
 
+The warrior's normal attack is keyed here too: three swings that run on
+into one another for as long as he keeps attacking (a cut down from the
+upper right to the lower left, a backhand cut down from the upper left to
+the lower right, and a thrust), each stepping him forward. They are one
+unbroken cycle of motion, cut into a clip a swing; each clip ends with a
+recovery to the stance, played only if he swings no more.
+
+  SwordOpen       the first cut, wound up out of the stance
+  SwordCut1       the same cut, following on from the thrust
+  SwordCut2       the backhand cut, following on from the first
+  SwordThrust     the thrust, following on from the backhand
+
   .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_skills.py
 """
 from pathlib import Path
-import math
+import math, os
 import bpy
 from mathutils import Vector, Matrix, Quaternion
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,10 +53,16 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.context.scene.render.fps = 30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
+# The normal attack's swings (scripts/combat_animation.gd SWORD_CHAIN): each
+# clip is SWING_SECONDS of swing and then TAIL_SECONDS of recovery, keyed at
+# half the speed it is played at so the fast cuts are sampled closely.
+SWINGS = ['SwordOpen', 'SwordCut1', 'SwordCut2', 'SwordThrust']
+SWING_SECONDS = 1.6
+TAIL_SECONDS = .8
 for track in list(rig.animation_data.nla_tracks):
-    if track.name in CLIPS: rig.animation_data.nla_tracks.remove(track)
+    if track.name in CLIPS or track.name in SWINGS: rig.animation_data.nla_tracks.remove(track)
 for a in list(bpy.data.actions):
-    if a.name in CLIPS: bpy.data.actions.remove(a)
+    if a.name in CLIPS or a.name in SWINGS: bpy.data.actions.remove(a)
 for track in rig.animation_data.nla_tracks: track.mute = True
 
 def V(x, y, z):
@@ -397,6 +415,227 @@ def charge(t):
     held = chest @ (GUARD_HAND+V(-.02, -.34, .1))
     arm('l', V(.14, -.62, 1.22)*running+held*(1-running), V(.55, -.3, .95))
     sword(V(-.42, .25, 1.0), V(-.85, .3, .9), V(-.3, -.8, -.25))
+
+# ---- The normal attack: three swings in one unbroken cycle ----
+
+def flow(points, t, period=3.0):
+    """A value carried round a cycle of (time, value) points along a smooth
+    curve (no pause at any of them), `period` long."""
+    n = len(points)
+    t %= period
+    i = max((k for k in range(n) if points[k][0] <= t), default=-1)
+    def at(k):
+        time, value = points[k % n]
+        value = Vector(value) if not isinstance(value, (int, float)) else value
+        return time+period*(k//n), value
+    (t0, v0), (t1, v1), (t2, v2), (t3, v3) = at(i-1), at(i), at(i+1), at(i+2)
+    h = t2-t1
+    u = (t-t1)/h
+    m1 = (v2-v0)*(1/(t2-t0))
+    m2 = (v3-v1)*(1/(t3-t1))
+    return v1*(2*u**3-3*u*u+1)+m1*(h*(u**3-2*u*u+u))+v2*(-2*u**3+3*u*u)+m2*(h*(u**3-u*u))
+
+# The cycle, a swing to each unit of its time: the first cut through 0..1,
+# the backhand through 1..2, the thrust through 2..3, each landing .52 through
+# its own. The sword hand, the way the blade points and the elbow's side:
+SWING_HAND = [(.20, (-.33, .20, 1.74)), (.36, (-.36, .24, 1.72)), (.44, (-.36, -.06, 1.64)), (.52, (-.12, -.42, 1.3)), (.66, (.08, -.34, .98)), (.84, (.14, -.38, 1.3)),
+    (1.20, (.12, -.36, 1.5)), (1.36, (.14, -.34, 1.52)), (1.52, (-.1, -.45, 1.3)), (1.66, (-.42, -.02, 1.02)), (1.84, (-.42, .14, 1.0)),
+    (2.14, (-.38, .3, 1.02)), (2.36, (-.39, .33, 1.0)), (2.52, (-.13, -.48, 1.0)), (2.64, (-.13, -.46, 1.0)), (2.84, (-.3, -.1, 1.45))]
+SWING_BLADE = [(.20, (-.25, .6, .75)), (.36, (-.3, .7, .6)), (.44, (-.45, -.1, .9)), (.52, (.15, -.85, .5)), (.66, (.75, -.6, -.2)), (.84, (.35, 0, .9)),
+    (1.20, (.5, .3, .8)), (1.36, (.55, .4, .72)), (1.52, (-.15, -.85, .5)), (1.66, (-.75, -.6, -.2)), (1.84, (-.45, -.85, -.1)),
+    (2.14, (0, -1, .16)), (2.36, (.02, -1, .18)), (2.52, (.04, -1, .2)), (2.64, (.04, -1, .2)), (2.84, (-.1, -.6, .8))]
+SWING_POLE = [(.20, (-.9, .4, 1.5)), (.52, (-.8, -.1, .9)), (.66, (-.7, -.5, .6)), (1.20, (-.6, -.7, 1.1)), (1.52, (-.8, -.1, .9)),
+    (1.66, (-.9, .5, 1.2)), (2.14, (-.7, .9, 1.2)), (2.52, (-1, 0, 1.3)), (2.84, (-.9, 0, 1.2))]
+# The body's turn (to the left) and its lean forward.
+SWING_TURN = [(.20, -.45), (.36, -.55), (.52, .25), (.66, .6), (1.20, .55), (1.36, .65), (1.52, .1), (1.66, -.4), (2.14, -.5), (2.36, -.6),
+    (2.52, .5), (2.64, .5), (2.84, 0)]
+SWING_LEAN = [(.20, -.05), (.36, -.08), (.52, .18), (.66, .3), (.9, .1), (1.20, .05), (1.36, 0), (1.52, .18), (1.66, .22), (1.9, .1),
+    (2.14, .05), (2.36, 0), (2.52, .28), (2.64, .28), (2.84, .08)]
+# Each swing's step, as tools/import_combat.py keys the library swing's: the
+# travel the game carries him through (scripts/visual.gd ROOT_ADVANCE), and
+# each foot's step (start, end, distance, lift) over ground that stays still.
+# (The step waits until SWING_FOLLOW into the swing: so far each clip runs on
+# into the next swing, for the next clip to take over from it on the way.)
+SWING_FOLLOW = .18
+SWING_ADVANCE = [(0, 0), (.18, 0), (.42, .24), (.62, .24), (.90, .5), (1, .5)]
+SWING_STEPS = {'l': (.18, .40, .5, .09), 'r': (.64, .86, .5, .08)}
+# How far the sword hand's wrist may bend sideways from the forearm's line.
+WRIST_BEND = math.radians(42)
+TOES = {}
+for s in 'lr':
+    d = rig.pose.bones['ball_'+s].head-rig.pose.bones['foot_'+s].head
+    d.z = 0
+    TOES[s] = d.normalized()
+
+# What the pose asked of the sword arm beyond its reach (checked below).
+short = [0.0]
+
+def hand_twist():
+    """How far the sword hand is turned about its own length from the way
+    the arm carries it (radians, within half a turn either way)."""
+    q = rig.pose.bones['hand_r'].matrix_basis.to_quaternion()
+    return (2*math.atan2(q.y, q.w)+math.pi) % (2*math.pi)-math.pi
+
+def roll(name, angle):
+    """Turns a bone about its own length, where it is."""
+    b = rig.pose.bones[name]
+    m = b.matrix.copy()
+    q = m.to_quaternion()
+    set_world(b, m.translation, Quaternion(q @ V(0, 1, 0), angle) @ q)
+
+# The hand's turn through the cycle (filled in below), and the share of it
+# the upper arm and the forearm take up (the wrist is left the rest).
+TWIST = []
+TWIST_STEPS = 96
+ARM_ROLL = (.45, .3)
+
+def swing_pose(tau, twist=True):
+    u = tau % 1.0
+    turn = flow(SWING_TURN, tau)
+    lean = flow(SWING_LEAN, tau)
+    hips(down=sample([(0, .03), (.3, .08), (.52, .19), (.66, .19), (1, .03)], u), forward=sample([(0, 0), (.36, -.02), (.52, .06), (.66, .06), (1, 0)], u))
+    rotate('pelvis', (0, 0, 1), turn*.4)
+    rotate('spine_01', (0, 0, 1), turn*.35)
+    rotate('spine_02', (0, 0, 1), turn*.3)
+    rotate('spine_01', (1, 0, 0), lean*.5)
+    rotate('spine_02', (1, 0, 0), lean*.5)
+    rotate('neck_01', (0, 0, 1), -turn*.5)
+    rotate('Head', (1, 0, 0), -lean*.6)
+    hand = flow(SWING_HAND, tau)
+    short[0] = (arm('r', hand, flow(SWING_POLE, tau))-hand).length
+    # The wrist bends only so far: where the blade would lie nearer along
+    # the forearm than that, it is held off it.
+    fore = rig.pose.bones['lowerarm_r'].matrix.to_quaternion() @ V(0, 1, 0)
+    blade = flow(SWING_BLADE, tau).normalized()
+    across = (blade-fore*blade.dot(fore)).normalized()
+    angle = max(math.pi/2-WRIST_BEND, min(math.pi/2+WRIST_BEND, fore.angle(blade)))
+    point_hand('r', fore*math.cos(angle)+across*math.sin(angle), fore)
+    if twist:
+        # A fist turned far round on the end of the forearm wrings the wrist:
+        # the whole arm turns with it instead, the upper arm a little, the
+        # forearm more, and the fist only what is left.
+        at = (tau % 3.0)*TWIST_STEPS
+        i = int(at)
+        turned = TWIST[i]+(TWIST[i+1]-TWIST[i])*(at-i)
+        hand = rig.pose.bones['hand_r'].matrix.copy()
+        fore = rig.pose.bones['lowerarm_r'].matrix.copy()
+        roll('upperarm_r', turned*ARM_ROLL[0])
+        set_world(rig.pose.bones['lowerarm_r'], fore.translation, fore.to_quaternion())
+        roll('lowerarm_r', turned*(ARM_ROLL[0]+ARM_ROLL[1]))
+        set_world(rig.pose.bones['hand_r'], hand.translation, hand.to_quaternion())
+    guard()
+    carried = sample(SWING_ADVANCE, u)
+    for s in 'lr':
+        a0, a1, distance, height = SWING_STEPS[s]
+        w = (u-a0)/(a1-a0)
+        ahead = distance*ease(w)
+        lift = height*math.sin(math.pi*w) if 0 < w < 1 else 0.0
+        at = PLANTED[s]+V(0, -(ahead-carried), lift)
+        leg(s, at, (rig.pose.bones['thigh_'+s].head+at)/2+TOES[s]*.6)
+
+# The hand's turn at each moment of the cycle, followed round it unbroken (it
+# comes back to where it began: the arm is never wound up).
+for i in range(3*TWIST_STEPS+1):
+    reset()
+    swing_pose(i/TWIST_STEPS, twist=False)
+    angle = hand_twist()
+    if TWIST: angle += 2*math.pi*round((TWIST[-1]-angle)/(2*math.pi))
+    TWIST.append(angle)
+print('SWING_TWIST', [round(math.degrees(a)) for a in TWIST[::12]], 'wound', round(math.degrees(TWIST[-1]-TWIST[0])))
+TWIST.append(TWIST[-1])
+
+# ---- Checking the swings: nothing through anything else ----
+
+def near(p, a, b):
+    """The point of the line a-b nearest p."""
+    d = b-a
+    return a+d*max(0.0, min(1.0, (p-a).dot(d)/max(1e-9, d.dot(d))))
+
+def between(a0, a1, b0, b1, n=24):
+    """The least distance between two lines' points (sampled along the first)."""
+    return min((p-near(p, b0, b1)).length for p in (a0.lerp(a1, i/n) for i in range(n+1)))
+
+def clearances():
+    """How far the blade and the sword arm are from the body, the other arm
+    and the shield (less than nothing: one is in the other), and how far the
+    wrist is bent to hold the blade so (degrees)."""
+    B = rig.pose.bones
+    def head(n): return B[n].matrix.translation.copy()
+    hand = B['hand_r'].matrix
+    blade = (hand @ V(0, .075, 0), hand @ V(0, .075, 1.08))
+    fore = (head('lowerarm_r'), head('hand_r'))
+    top = head('Head')+(B['Head'].matrix.to_quaternion() @ V(0, 1, 0))*.13
+    body = [('head', top, top, .13), ('neck', head('neck_01'), head('Head'), .07), ('chest', head('spine_02'), head('neck_01'), .15),
+        ('belly', head('pelvis'), head('spine_02'), .15), ('upper arm', head('upperarm_l'), head('lowerarm_l'), .05),
+        ('shield arm', head('lowerarm_l'), head('hand_l'), .05)]
+    for s in 'lr':
+        body += [('thigh '+s, head('thigh_'+s), head('calf_'+s), .085), ('shin '+s, head('calf_'+s), head('foot_'+s), .06),
+            ('foot '+s, head('foot_'+s), head('ball_'+s), .05)]
+    out = {}
+    for name, a, b, r in body:
+        out['blade / '+name] = between(blade[0], blade[1], a, b)-r-.045
+        if name in ('head', 'chest', 'belly', 'thigh r', 'thigh l'): out['arm / '+name] = between(fore[0], fore[1], a, b)-r-.045
+    # The round shield on the forearm (scripts/visual.gd SHIELD_CENTER, SHIELD_SIZE).
+    board = B['lowerarm_l'].matrix
+    centre = board @ V(0, .14, -.135)
+    normal = (board.to_quaternion() @ V(0, 0, 1)).normalized()
+    def off_board(a, b, r):
+        gap = 9.0
+        for i in range(41):
+            d = a.lerp(b, i/40)-centre
+            axial = abs(d.dot(normal))
+            gap = min(gap, max(axial-.06-r, (d-normal*d.dot(normal)).length-.33-r))
+        return gap
+    out['blade / shield'] = off_board(blade[0], blade[1], .045)
+    out['arm / shield'] = off_board(fore[0], fore[1], .045)
+    y = B['lowerarm_r'].matrix.to_quaternion() @ V(0, 1, 0)
+    out['wrist'] = math.degrees(y.angle(B['hand_r'].matrix.to_quaternion() @ V(0, 1, 0)))
+    out['reach'] = short[0]
+    return out
+
+def author_swing(name, start, opening):
+    """One swing of the cycle from `start`, then the recovery to the stance;
+    `opening`, it winds up out of the stance instead of following on from
+    the swing before."""
+    a = bpy.data.actions.new(name)
+    rig.animation_data.action = a
+    swing = int(round(SWING_SECONDS*30))
+    frames = swing+int(round(TAIL_SECONDS*30))
+    worst = {}
+    for f in range(frames+1):
+        reset()
+        if f <= swing:
+            t = f/swing
+            swing_pose(start+t)
+            w = 1-ease(t/.3) if opening else 0.0
+        else:
+            # On into the next swing as far as SWING_FOLLOW, exactly as the
+            # next clip begins; from there it slows and settles to the stance.
+            on = (f-swing)/swing
+            x = max(0.0, on-SWING_FOLLOW)
+            swing_pose(start+1+min(on, SWING_FOLLOW)+(x-x*x/.4 if x < .2 else .1))
+            w = ease(x/((frames-swing)/swing-SWING_FOLLOW))
+        if w > 0:
+            for b in rig.pose.bones: b.matrix_basis = blend(b.matrix_basis, BASE[b.name], w)
+            update()
+        for k, v in clearances().items():
+            if k in ('wrist', 'reach'): v = -v
+            if k not in worst or v < worst[k][0]: worst[k] = (v, f/swing)
+        if os.environ.get('SWINGS_ONLY') and not opening and f <= swing and f % 2 == 0:
+            c = clearances()
+            least = min((k for k in c if k not in ('wrist', 'reach')), key=lambda k: c[k])
+            print('SWING_AT', round(start+f/swing, 2), 'wrist', round(c['wrist']), 'reach', round(c['reach'], 2), least, round(c[least], 3), 'shield', round(c['blade / shield'], 2))
+        keys(f)
+    finish(name, a, frames/30)
+    for k, (v, t) in sorted(worst.items(), key=lambda item: item[1][0]):
+        if k in ('wrist', 'reach'): print('SWING_CHECK', name, k, round(-v, 3), 'at', round(t, 2))
+        elif v < .08: print('SWING_CHECK', name, k, round(v, 3), 'at', round(t, 2))
+
+for name, start, opening in [('SwordOpen', 0, True), ('SwordCut1', 0, False), ('SwordCut2', 1, False), ('SwordThrust', 2, False)]:
+    author_swing(name, start, opening)
+
+if os.environ.get('SWINGS_ONLY'):
+    raise SystemExit
 
 for name, pose in [('SkillCleave', cleave), ('SkillStrike', strike), ('SkillStab', stab), ('SkillBash', bash), ('SkillExecute', execute),
         ('SkillSlam', slam), ('SkillShockwave', shockwave), ('SkillCry', cry), ('SkillCharge', charge), ('SkillLeap', leap)]:

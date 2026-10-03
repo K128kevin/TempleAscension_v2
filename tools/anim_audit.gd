@@ -136,6 +136,10 @@ func record(spec, plan: Array, speed: float = 0.0) -> Dictionary:
 					if s.size() > 4 and s[4] == "nova": v.play_from(s[2],s[3],.8)
 					else: v.play(s[2],s[3])
 					busy = s[3]
+				# (One swing of the sword's chain taking over from the last.)
+				"play_on":
+					v.play_on(s[2],s[3],0.0)
+					busy = s[3]
 				"react": v.react(s[2],s[3])
 				"move": moving = true
 				"stop": moving = false

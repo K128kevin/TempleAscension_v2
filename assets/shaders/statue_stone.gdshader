@@ -24,6 +24,13 @@ uniform float figure_scale = 1.0;
 uniform float pale = 0.0;
 uniform sampler2D body_normal : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D kit_height : filter_linear_mipmap, repeat_enable;
+// A slain statue breaks apart (scripts/visual.gd crumble()): chunks of stone,
+// the cells of a pattern fixed to the body, crack loose and fall away above
+// a front sweeping down it (a world height). Each chunk goes when the front
+// is within `shatter_band` metres of it, at its own moment.
+instance uniform float shatter_front = 0.0;
+instance uniform float shatter_band = 0.0;
+varying vec3 world_position;
 varying float body_uv;
 // Stone cloth (a cape): carved in drapery folds, its marble finer grained.
 varying float stone_cloth;
@@ -72,10 +79,31 @@ float cell_border(vec3 p) {
 	return sqrt(d2) - sqrt(d1);
 }
 
+// The random value of the Voronoi cell around `p`, and the distance to its border.
+float shatter_cell(vec3 p, out float border) {
+	vec3 cell = floor(p);
+	vec3 f = fract(p);
+	float d1 = 8.0;
+	float d2 = 8.0;
+	vec3 nearest = cell;
+	for (int x = -1; x <= 1; x++)
+	for (int y = -1; y <= 1; y++)
+	for (int z = -1; z <= 1; z++) {
+		vec3 o = vec3(float(x), float(y), float(z));
+		vec3 r = o + hash33(cell + o) - f;
+		float d = dot(r, r);
+		if (d < d1) { d2 = d1; d1 = d; nearest = cell + o; }
+		else if (d < d2) { d2 = d; }
+	}
+	border = sqrt(d2) - sqrt(d1);
+	return hash3(nearest + 7.31);
+}
+
 void vertex() {
 	// Preserve a consistent grain size on the body and differently scaled gear.
 	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
 	if (COLOR.g < 0.5) VERTEX = fold_cloth(VERTEX);
+	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	stone_cloth = 1.0 - step(0.5, COLOR.g);
 	stone_scale = scale.y / figure_scale;
 	stone_position = (rest_pose ? CUSTOM0.xyz : VERTEX) * scale / figure_scale;
@@ -89,6 +117,17 @@ void fragment() {
 	// Drawn from both sides for single-layer cloth; the inside faces light as
 	// the inside.
 	if (!FRONT_FACING) NORMAL = -NORMAL;
+	// Breaking apart: the chunk is gone once the front passes it; before
+	// that, the cracks around it open and darken.
+	float shatter_crack = 0.0;
+	if (shatter_band > 0.0) {
+		float border;
+		float r = shatter_cell(stone_position * 4.0 + 3.1, border);
+		float edge = world_position.y + r * shatter_band;
+		if (edge > shatter_front) discard;
+		float near = 1.0 - smoothstep(0.0, shatter_band, shatter_front - edge);
+		shatter_crack = (1.0 - smoothstep(0.015, 0.05 + 0.06 * near, border)) * (0.35 + 0.65 * near);
+	}
 	vec3 weights = pow(abs(normalize(stone_normal)), vec3(4.0));
 	weights /= max(dot(weights, vec3(1.0)), 0.0001);
 	// On a cape's broad sweep the marble's large veins would read as smears:
@@ -141,6 +180,8 @@ void fragment() {
 		shade *= mix(1.0, 0.72 + 0.4 * relief, scale_mask);
 		height += (relief - 0.5) * 0.004 * scale_mask;
 	}
+	shade *= 1.0 - shatter_crack * 0.8;
+	height -= shatter_crack * 0.004;
 	ALBEDO = mix(vec3(clamp(shade, 0.06, 0.42)), clamp(vec3(0.47, 0.46, 0.44) + (shade - 0.25) * 1.5, 0.16, 0.7), pale);
 	vec3 surface_x = dFdx(VERTEX);
 	vec3 surface_y = dFdy(VERTEX);

@@ -316,7 +316,7 @@ func _process(dt: float) -> void:
 		shake_left = maxf(0,shake_left-dt)
 		var ring = shake_left/SHAKE_TIME
 		var jolt = shake_strength*ring*ring
-		world.camera.position += Vector3(sin(combat_age*97.0)*jolt,cos(combat_age*83.0)*jolt*.7,sin(combat_age*71.0)*jolt)
+		world.camera.position += Vector3(sin(combat_age*139.0)*jolt,cos(combat_age*119.0)*jolt*.7,sin(combat_age*101.0)*jolt)
 		if shake_left<=0: shake_strength = 0.0
 	if is_instance_valid(world.fountain): world.fountain.tick(dt,player.position,mode=="playing")
 	hud.tick(dt)
@@ -556,7 +556,8 @@ func player_control(dt: float) -> void:
 			var aim: Vector3 = world.pointer()
 			if player.position.distance_to(aim) > .6: player.face(aim)
 	player.visual.walking = walking
-	player.visual.locomotion(moved,player.busy>0,false,1.0,pace)
+	# (Standing after a sword swing, its recovery to the stance plays out.)
+	player.visual.locomotion(moved,player.busy>0 or (not moved and player.visual.swing_phase() >= 0.0),false,1.0,pace)
 
 func attack_range(special: bool, slot: int = 0) -> float:
 	if special: return skills.reach(run.hotbar[slot])
@@ -570,6 +571,8 @@ func attack_profile() -> Dictionary:
 	if weapon in [2,4]: return CombatAnimation.profile(weapon,false,Data.passive(run,"quick_draw") if weapon==2 else 0,Data.cooldown(run))
 	return CombatAnimation.profile(weapon,false,Data.melee_attack_speed(run),Data.MELEE_MINIMUM,0.0)
 
+# Which swing of the sword's chain (CombatAnimation.SWORD_CHAIN) was last begun.
+var sword_swing = 0
 func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	if player.cooldown>0 or player.busy>0 or player.dead or mode!="playing": return
 	if special:
@@ -586,7 +589,21 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	var damage = Data.damage(run,randf_range(10,15))
 	var weapon: int = run.weapon
 	if weapon not in [2,4]: scheduled.append({"time":maxf(.01,animation.times[0]-.12),"type":"swing","sound":"swing-spear" if weapon==0 else "swing-blade"})
-	player.visual.play(animation.clip,animation.duration)
+	var phase: float = player.visual.swing_phase() if weapon == 1 else -1.0
+	if weapon == 1 and player.visual.clips.has(CombatAnimation.SWORD_OPENER):
+		# The sword's swings run on into one another while he keeps swinging;
+		# broken off, the next attack starts the chain over.
+		var share: float = CombatAnimation.SWORD_SWING_SHARE
+		if phase >= 0.0 and phase <= share+CombatAnimation.SWORD_FOLLOW:
+			# Each clip carries on a moment into the next swing's motion: the
+			# next takes over at that same moment of it, and still ends on time.
+			var into: float = maxf(0.0,phase-share)
+			sword_swing = (sword_swing+1)%CombatAnimation.SWORD_CHAIN.size()
+			player.visual.play_on(CombatAnimation.SWORD_CHAIN[sword_swing],animation.duration/(share-into),into)
+		else:
+			sword_swing = 0
+			player.visual.play(CombatAnimation.SWORD_OPENER,animation.duration/share)
+	else: player.visual.play(animation.clip,animation.duration)
 	combat_age = 0
 	if weapon in [2,4]:
 		for release_time in animation.times:

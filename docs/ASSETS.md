@@ -387,6 +387,17 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   `tools/import_combat.py` authors and bakes BowIdle, BowShot, BowRapid, BowRun, BowCrouch,
   SpearIdle, SpearStab and SpearJab on the supplied skeleton. These animate
   existing bones and meshes; no replacement geometry is generated.
+- The warrior's normal sword attack (SwordOpen, SwordCut1, SwordCut2, SwordThrust)
+  is authored by `tools/import_skills.py` as one unbroken cycle of three swings, cut
+  into a clip a swing: a cut down from the upper right to the lower left, a backhand
+  cut down from the upper left to the lower right, and a thrust, each stepping
+  forward as the library swing does. Swinging on, one runs into the next
+  (`scripts/combat_animation.gd` SWORD_CHAIN); broken off, the next attack starts
+  again from SwordOpen, the first cut wound up out of the stance. Each clip ends
+  with a recovery to the stance that plays only if he swings no more. The script
+  checks every frame that the blade and sword arm keep clear of the body, the
+  shield arm and the shield (`SWING_CHECK` in its output), and holds the wrist's
+  bend within reach. The library's SwordSwing remains the Crowned Statue's swing.
 - The warrior's skill swings (SkillCleave, SkillStrike, SkillStab, SkillBash,
   SkillExecute, SkillSlam, SkillShockwave, SkillCry, SkillCharge, SkillLeap) are
   authored by `tools/import_skills.py` from the sword-and-shield stance, frame by

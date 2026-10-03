@@ -9,6 +9,8 @@ static var center = Vector3.ZERO
 static var stone: PhysicsMaterial
 var age = 0.0
 var launch_impulse = Vector3.ZERO
+var held = false
+var launch_spin = Vector3.ZERO
 
 # Launch velocity at contact, in world space. A ground blow lifts and throws
 # fragments away from its impact point; ordinary hits give a small shove.
@@ -54,7 +56,26 @@ static func make(parent: Node3D, at: Vector3, diameter: float, velocity: Vector3
 	body.add_child(collision)
 	body.launch_impulse = velocity*body.mass
 	body.angular_velocity = spin
+	body.launch_spin = spin
 	return body
+
+# Waiting inside the statue until its stone breaks loose there: still, unseen
+# and touching nothing.
+func hold() -> void:
+	held = true
+	freeze = true
+	visible = false
+	collision_layer = 0
+	collision_mask = 0
+
+func release() -> void:
+	if not held: return
+	held = false
+	freeze = false
+	visible = true
+	collision_layer = DEBRIS_LAYER
+	collision_mask = WORLD_LAYER | DEBRIS_LAYER
+	angular_velocity = launch_spin
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	# The first physics step has the hull's mass and inertia ready. Applying
@@ -64,6 +85,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		launch_impulse = Vector3.ZERO
 
 func _physics_process(dt: float) -> void:
+	if held: return
 	age += dt
 	# Also retire pieces thrown over a parapet or down a stairwell.
 	if age >= LIFETIME or global_position.y < -30.0: queue_free()

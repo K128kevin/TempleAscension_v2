@@ -305,6 +305,11 @@ Percentages of damage are of a normal attack.
 | | 10 | Defensive Rhythm | | Each hit taken: 3% → 12% less damage, up to 2 → 6 stacks, lasting 4 → 12 seconds |
 | | 10 | Spiked Shield | | A blocked attacker takes 10% → 80% of a normal attack |
 
+The sword's normal attack is three swings that run into one another while he keeps
+attacking: a cut down from upper right to lower left, a backhand cut down from upper
+left to lower right, then a thrust, and round again, each with its step forward. If
+he breaks off (moves, casts, or simply stops), the next attack starts from the first.
+
 With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):
 a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for
 Vampiric and Shadow Strike, the shield shoved out behind a step for Shield Bash, the

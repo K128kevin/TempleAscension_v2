@@ -311,8 +311,10 @@ func refresh() -> void:
 				for look in ["normal","hover","pressed"]: n.button.add_theme_stylebox_override(look,styles[state+("" if look=="normal" else "-hover")])
 		if not hovered.is_empty() and nodes.has(hovered): show_tip(hovered)
 
-# The hovered skill's details, beside the tree.
-func show_tip(id: String) -> void:
+# The hovered skill's details: beside the tree, or above a hotbar slot when
+# `slot` (that slot's rect) is given.
+func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
+	var on_hotbar: bool = slot.has_area()
 	if not is_instance_valid(tip):
 		tip = frame(270)
 		tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -335,17 +337,23 @@ func show_tip(id: String) -> void:
 	lines.next = "Next rank: "+Book.describe(id,rank+1) if rank>0 and rank<s.max_rank else ""
 	lines.lock = Book.locked(r,id)
 	if lines.lock.is_empty() and rank<s.max_rank and rank>=Book.rank_cap(id,int(r.level)): lines.lock = "Next rank requires level %d." % (s.unlock+rank*3)
+	if on_hotbar and lines.lock.is_empty(): lines.lock = game.skills.reason(id)
 	lines.hint = ""
 	if Book.can_learn(r,id): lines.hint = "Click to learn" if rank==0 else "Click to raise to rank %d" % (rank+1)
 	if active and rank>0: lines.hint += ("\n" if not lines.hint.is_empty() else "")+"Right-click, 1 or 2: assign to RMB, 1 or 2"
+	if on_hotbar: lines.hint = ""
 	for key in tip_lines:
 		tip_lines[key].text = lines[key]
 		tip_lines[key].visible = not lines[key].is_empty()
 	tip.visible = true
 	tip.move_to_front()
 	tip.reset_size()
-	var at: Rect2 = nodes[id].button.get_global_rect()
 	var height: float = tip.get_combined_minimum_size().y
+	if on_hotbar:
+		var width: float = tip.get_combined_minimum_size().x
+		tip.position = Vector2(clampf(slot.get_center().x-width*.5,8,hud.root.size.x-width-8),maxf(8,slot.position.y-height-8))
+		return
+	var at: Rect2 = nodes[id].button.get_global_rect()
 	tip.position = Vector2(tree.position.x-278,clampf(at.position.y,8,hud.root.size.y-height-8))
 
 # Shift-click spends five at once.

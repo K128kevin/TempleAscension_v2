@@ -6,11 +6,23 @@ const FootPlanter = preload("res://scripts/foot_planter.gd")
 const HandGrip = preload("res://scripts/hand_grip.gd")
 const ShieldArm = preload("res://scripts/shield_arm.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
-# A slain statue collapses into individual physics-driven stone fragments.
-const CRUMBLE_TIME = .7
+# A slain statue breaks apart into individual physics-driven stone fragments:
+# a front sweeps down the body, the stone above it cracking loose (the statue
+# shader's shatter) and each fragment let go as the front reaches it. A blast
+# shatters it faster than a blow.
+const CRUMBLE_TIME = .5
+const BLAST_CRUMBLE_TIME = .3
 const CHIPS = 36
+# Metres (at life size) over which the chunks at one height break off.
+const SHATTER_BAND = .35
 var crumbling = -1.0
 var crumble_size = 1.0
+var crumble_time = CRUMBLE_TIME
+var crumble_base = 0.0
+# The statue's meshes that break up in the shader, and the rest, which go
+# when the front passes their middle.
+var shattering: Array = []
+var shattered_whole: Array = []
 var chips: Array = []
 var dust: CPUParticles3D
 var animator: AnimationPlayer
@@ -66,7 +78,9 @@ var ground_speed = 0.0
 # the planted feet still in the world): the warrior's lunge and cleave, the
 # centurion's stepping thrust. Visual.advance() measures the travel; the unit moves it
 # (Actor.tick).
-const ROOT_ADVANCE = {"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]]}
+# (The sword chain's swings take the library swing's step over the swing's
+# share of each clip, Motion.SWORD_SWING_SHARE; its recovery stands still.)
+const ROOT_ADVANCE = {"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.28,.24],[.4133,.24],[.6,.5],[1.0,.5]],"SwordCut1":[[0.0,0.0],[.12,0.0],[.28,.24],[.4133,.24],[.6,.5],[1.0,.5]],"SwordCut2":[[0.0,0.0],[.12,0.0],[.28,.24],[.4133,.24],[.6,.5],[1.0,.5]],"SwordThrust":[[0.0,0.0],[.12,0.0],[.28,.24],[.4133,.24],[.6,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]]}
 var travelled = 0.0
 var pending_travel = 0.0
 
@@ -269,7 +283,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			elif "HeroArmor" in mesh.name: mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit(hero_class)
 	for clip in animator.get_animation_list():
-		for expected in ["SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
+		for expected in ["SwordOpen","SwordCut1","SwordCut2","SwordThrust","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
@@ -1122,6 +1136,23 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	animator.advance(0)
 	if action == "Death": dead = true
 
+# Carries straight on from the clip now playing into `action`, `start` (a
+# fraction of it) in, without a crossfade: for a clip keyed to continue the
+# last one's motion exactly (the sword chain's swings).
+func play_on(action: String, duration: float, start: float) -> void:
+	play(action,duration)
+	if state != action: return
+	animator.play(clips[action],0.0,animator.get_playing_speed())
+	animator.seek(animator.current_animation_length*start,true)
+	animator.advance(0)
+
+# The sword chain (Motion.SWORD_CHAIN): whether one of its swings is still
+# playing (its swing, or the recovery after it), and how far through the clip.
+func swing_phase() -> float:
+	if not (state in Motion.SWORD_CHAIN or state == Motion.SWORD_OPENER): return -1.0
+	if not animator.is_playing() or animator.current_animation != clips.get(state,""): return -1.0
+	return animator.current_animation_position/maxf(.001,animator.current_animation_length)
+
 # Plays `action` from `start` (a fraction of it) on, crossfading into that
 # moment of it rather than jumping there.
 func play_from(action: String, duration: float, start: float) -> void:
@@ -1149,7 +1180,15 @@ func crumble(settled: bool = false, impact: Vector3 = Vector3.ZERO) -> void:
 	crumbling = 0.0
 	crumble_size = rig.scale.x
 	var size = crumble_size
+	crumble_base = global_position.y
+	crumble_time = BLAST_CRUMBLE_TIME if impact.length()>4.0 else CRUMBLE_TIME
 	if not settled:
+		for mesh in find_children("*","MeshInstance3D",true,false):
+			var finish = mesh.material_override
+			if finish is ShaderMaterial and finish.shader == Art.statue_material().shader:
+				mesh.set_instance_shader_parameter("shatter_band",SHATTER_BAND*size)
+				shattering.append(mesh)
+			else: shattered_whole.append(mesh)
 		var actor = get_parent()
 		if actor.get("game") != null and actor.game.world.has_method("ensure_debris_collision"):
 			actor.game.world.ensure_debris_collision()
@@ -1164,7 +1203,9 @@ func crumble(settled: bool = false, impact: Vector3 = Vector3.ZERO) -> void:
 			var start = global_position+(outward*.34+Vector3.UP*(.23+.29*layer))*size
 			var scatter = outward*(.55+.45*fposmod(seed*.13+i*.29,1.0))*sqrt(size)
 			var velocity = impact*(.85+.3*fposmod(i*.61,1.0))+scatter+Vector3.UP*.8*sqrt(size)
-			chips.append(StoneFragment.make(self,start,diameter,velocity,Vector3(cos(angle)*4,3,sin(angle)*4)*(1+i%3)))
+			var chip = StoneFragment.make(self,start,diameter,velocity,Vector3(cos(angle)*4,3,sin(angle)*4)*(1+i%3))
+			chip.hold()
+			chips.append(chip)
 		dust = Vfx.particles(self,18,1.2,true,false)
 		dust.explosiveness = .9
 		dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -1178,17 +1219,29 @@ func crumble(settled: bool = false, impact: Vector3 = Vector3.ZERO) -> void:
 		dust.color_ramp = Vfx.ramp([0,.2,1],[Color(.42,.42,.4,0),Color(.4,.4,.38,.55),Color(.36,.36,.34,0)])
 		dust.position.y = .3*size
 		dust.emitting = true
-	crumble_step(CRUMBLE_TIME if settled else 0.0)
+	crumble_step(crumble_time if settled else 0.0)
+
+# The front's height: from the top ring of stone (whose fragments go at once)
+# down past the feet, gathering speed as the statue gives way.
+func shatter_front(u: float) -> float:
+	var size = crumble_size
+	var top = crumble_base+(1.68+SHATTER_BAND*.5)*size
+	var bottom = crumble_base-SHATTER_BAND*size
+	return lerpf(top,bottom,u*(.5+.5*u))
 
 func crumble_step(dt: float) -> void:
 	crumbling += dt
-	var u = clampf(crumbling/CRUMBLE_TIME,0.0,1.0)
-	var eased = u*u
-	var size = crumble_size
-	# The body collapses and disappears, leaving only the physical fragments.
-	rig.scale = Vector3(size*(1.0+.25*eased),size*maxf(.02,1.0-eased),size*(1.0+.25*eased))
+	var u = clampf(crumbling/crumble_time,0.0,1.0)
+	var front = shatter_front(u)
+	for mesh in shattering:
+		if is_instance_valid(mesh): mesh.set_instance_shader_parameter("shatter_front",front)
+	for mesh in shattered_whole:
+		if is_instance_valid(mesh): mesh.visible = mesh.visible and mesh.global_position.y<front
+	# Each fragment breaks loose as the front reaches the middle of the stone
+	# that falls away around it.
+	for chip in chips:
+		if is_instance_valid(chip) and chip.held and chip.global_position.y+SHATTER_BAND*.5*crumble_size>=front: chip.release()
 	rig.visible = u<1.0
-	if is_instance_valid(weapon_item): weapon_item.visible = u<.4
 	if is_instance_valid(nocked_arrow): nocked_arrow.visible = false
 	if is_instance_valid(dust): dust.speed_scale = 1.0 if dt>0 else dust.speed_scale
 
@@ -1358,7 +1411,7 @@ func advance(dt: float) -> void:
 	bow_lowering = maxf(0.0,bow_lowering-dt)
 	bow_raising = maxf(0.0,bow_raising-dt)
 	if crumbling >= 0.0:
-		if crumbling < CRUMBLE_TIME+1.5: crumble_step(dt)
+		if crumbling < crumble_time+1.5: crumble_step(dt)
 		return
 	reaction_time = maxf(0,reaction_time-dt)
 	var held = minf(dt,animation_delay)

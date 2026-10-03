@@ -29,6 +29,7 @@ func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
 	if class_id=="ranger": game.run.skills.quick_draw=3
 	game.player.visual.equip(Data.WEAPONS[weapon])
 	game.player.cooldown=0; game.player.busy=0; game.scheduled.clear()
+	game.player.visual.play(game.player.visual.idle_action())
 	game.skills.reset()
 	game.left_held=true; game.right_held=false; game.target=victim
 	game.order_pending=true; game.ordered_special=false; game.route.clear()
@@ -44,12 +45,16 @@ func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
 		game.tick_scheduled(dt)
 		if victim.hp<old_hp or game.projectiles.size()>old_projectiles:
 			contacts+=1
-			check(absf(phase(game.player.visual)-profile.contacts[0])<=dt/profile.duration+.001,"One visible contact for each held attack: "+context)
+			# (A sword swing is the first share of its clip; the rest is its recovery.)
+			var swing_share: float=Motion.SWORD_SWING_SHARE if weapon==1 else 1.0
+			# (A swing that follows on a frame late takes over that far in, and makes it up.)
+			check(absf(phase(game.player.visual)/swing_share-profile.contacts[0])<=dt/profile.duration*(1.5 if weapon==1 else 1.0)+.001,"One visible contact for each held attack: "+context)
 		var ready: bool=game.player.cooldown<=0
 		game.player_control(dt)
 		if ready and game.player.cooldown>0:
 			starts+=1
-			check(is_zero_approx(phase(game.player.visual)),"Held click restarts each swing: "+context)
+			# (The sword's next swing takes over from the last where that has run on to.)
+			check(is_zero_approx(phase(game.player.visual)) or (weapon==1 and starts>1 and phase(game.player.visual)<=dt/profile.duration*Motion.SWORD_SWING_SHARE+.001),"Held click restarts each swing: "+context)
 			check(clock-last_start>=profile.duration-.001,"Held click waits for full recovery: "+context)
 			check(absf(game.player.busy-profile.duration)<.001 and absf(game.player.cooldown-profile.duration)<.001,"Visual and attack locks use one duration: "+context)
 			last_start=clock
@@ -57,6 +62,7 @@ func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
 		clock+=dt
 		if clock>10: check(false,"Held attack test timed out: "+context); break
 	check(starts==4 and contacts==4,"Four held attacks produce four animated contacts: "+context)
+	if weapon==1: check(game.player.visual.state=="SwordCut1" and game.sword_swing==0,"Held, the sword's swings follow one another round the chain: "+context)
 	victim.dead=true
 func live_attacks(game):
 	# Exercise the normal frame callbacks as well as deterministic playback.
@@ -105,7 +111,8 @@ func test():
 		game.projectiles.clear()
 		victim.dead=false; victim.hp=10000; victim.position=game.world.spawn+Vector3(0,0,1.4)
 		game.attack(false,victim.position)
-		check(game.player.visual.state==profile.clip,"Basic uses dedicated animation: "+profile.clip)
+		# (The sword's first swing of its chain: Motion.SWORD_CHAIN.)
+		check(game.player.visual.state==(Motion.SWORD_OPENER if weapon==1 else profile.clip),"Basic uses dedicated animation: "+profile.clip)
 		var count=game.scheduled.size()
 		game.attack(false,victim.position)
 		check(game.scheduled.size()==count and game.run.energy==100,"Repeated input cannot restart basic attack; basics cost no energy")

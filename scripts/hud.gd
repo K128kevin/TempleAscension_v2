@@ -36,6 +36,8 @@ var modal_body: VBoxContainer
 var weapon_slots: Array[Button] = []
 var weapon_icons: Array[TextureRect] = []
 var weapon_names: Array[Label] = []
+# The hotbar slot under the cursor, -1 for none; a skill there shows its details.
+var hovered_slot = -1
 # The three skill slots' icons and recharge countdowns.
 var slot_glyphs: Array = []
 var slot_cooldowns: Array[Label] = []
@@ -135,6 +137,9 @@ func setup(owner_game) -> void:
 			var at: Vector3 = game.target.position if is_instance_valid(game.target) and not game.target.dead else game.player.position+game.player.forward()*4
 			if i==0: game.attack(false,at)
 			else: game.skills.cast_slot(i-1,at))
+		slot.mouse_entered.connect(func(): hovered_slot = i)
+		slot.mouse_exited.connect(func():
+			if hovered_slot==i: hovered_slot = -1)
 		weapon_slots.append(slot)
 		var icon = TextureRect.new()
 		icon.texture = load("res://assets/textures/seal.png")
@@ -270,7 +275,8 @@ func tick(dt: float) -> void:
 		var id: String = r.hotbar[i-1]
 		var problem: String = game.skills.reason(id)
 		weapon_slots[i].disabled = not problem.is_empty()
-		weapon_slots[i].tooltip_text = problem if not problem.is_empty() else "%s · %.0f energy" % [game.Book.all()[id].title,game.skills.cost(id)]
+		# A skill's details come from the skill panel's tip instead.
+		weapon_slots[i].tooltip_text = "Assign skills in the skill panel (K)" if id.is_empty() else ""
 		weapon_slots[i].add_theme_stylebox_override("normal",selected_style if i==1 else idle_style)
 		weapon_icons[i].modulate = Color(.5,.65,1,.25) if r.class_id=="wizard" else Color(1,.8,.4,.2)
 		# An empty slot keeps the faint seal; a skill shows its icon, and its
@@ -282,6 +288,9 @@ func tick(dt: float) -> void:
 		weapon_names[i].text = "Empty" if id.is_empty() else game.Book.all()[id].title
 	abilities.text = game.skills.status()
 	panels.tick(dt)
+	var hovered_skill: String = r.hotbar[hovered_slot-1] if hovered_slot>0 else ""
+	if not hovered_skill.is_empty(): panels.show_tip(hovered_skill,weapon_slots[hovered_slot].get_global_rect())
+	elif panels.hovered.is_empty() and is_instance_valid(panels.tip): panels.tip.visible = false
 	recovery.text = "Q · Heal 60%% · 60 energy%s" % [" · %ds" % ceili(game.heal_cd) if game.heal_cd>0 else ""]
 	prompt.text = ""
 	if game.mode == "playing":

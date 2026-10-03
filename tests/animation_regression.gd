@@ -67,7 +67,7 @@ func run():
 		check(r.pop < .02 and r.slide < .08,"%s stops without sliding (%.3fm)" % [name,r.slide])
 	# Attacks and reactions: in and out of the idle without a jump, feet
 	# planted, weapons in the fist.
-	for case in [["hero_sword","SwordSwing",.84,"play"],["hero_sword","SwordSlash",.84,"play"],["hero_axe","AxeChop",.94,"play"],["hero_bow","ArcherShot",.78,"play"],["archer","ArcherShot",1.54,"play"],["gladiator","ScutumSwordSwing",.81,"play"],["gladiator","HitKnockdown",1.5,"react"],["boss","SwordSwing",1.25,"play"],["hero_sword","HitStagger",.6,"react"],["wizard","OracleCast",2.5,"nova"]]:
+	for case in [["hero_sword","SwordOpen",1.26,"play"],["hero_sword","SwordSwing",.84,"play"],["hero_sword","SwordSlash",.84,"play"],["hero_axe","AxeChop",.94,"play"],["hero_bow","ArcherShot",.78,"play"],["archer","ArcherShot",1.54,"play"],["gladiator","ScutumSwordSwing",.81,"play"],["gladiator","HitKnockdown",1.5,"react"],["boss","SwordSwing",1.25,"play"],["hero_sword","HitStagger",.6,"react"],["wizard","OracleCast",2.5,"nova"]]:
 		var spec = specs[case[0]]
 		var plan = [[0.0,"stop"],[.4,"react" if case[3] == "react" else "play",case[1],case[2],case[3]],[.4+case[2]+.6,"stop"]]
 		var r = analyse(await record(spec,plan),[.35,.4+case[2]+.7])
@@ -77,7 +77,20 @@ func run():
 		if spec.weapon == "bow": check(r.grip < .01,"%s %s: the bow stays in the fist (%.3fm)" % [case[0],case[1],r.grip])
 	# The warrior's swing and cleave step forward, carrying him on (the
 	# centurion's thrust too), his feet planted as he goes.
-	for case in [["hero_sword","SwordSwing",.84],["hero_sword","SwordSlash",.84],["centurion","ShieldStab",.84]]:
+	# The sword's chain of swings, each begun as the last one's swing ends (its
+	# recovery unplayed), twice round: one runs into the next without a jump,
+	# every swing stepping forward on planted feet.
+	var chain = [[0.0,"stop"]]
+	var chain_clips = ["SwordOpen","SwordCut2","SwordThrust","SwordCut1","SwordCut2","SwordThrust","SwordCut1"]
+	for i in chain_clips.size(): chain.append([.4+.84*i,"play_on" if i > 0 else "play",chain_clips[i],1.26,"play"])
+	chain.append([.4+.84*chain_clips.size()+1.0,"stop"])
+	var chained = await record(specs["hero_sword"],chain)
+	var swung = analyse(chained,[.35,.4+.84*chain_clips.size()+1.0])
+	check(swung.pop < .03,"The sword's swings run on into one another: nothing leaps between frames (%.3fm at %s)" % [swung.pop,swung.pop_at])
+	check(swung.slide < .06,"The sword's swings run on into one another: planted feet keep still (%.3fm)" % swung.slide)
+	var stepped: float = chained.frames[-1].root.z-chained.frames[0].root.z
+	check(absf(stepped-.5*chain_clips.size()) < .05,"Each swing of the chain takes the same step forward (%.2fm over %d)" % [stepped,chain_clips.size()])
+	for case in [["hero_sword","SwordOpen",1.26],["hero_sword","SwordSwing",.84],["hero_sword","SwordSlash",.84],["centurion","ShieldStab",.84]]:
 		var spec = specs[case[0]]
 		var rec = await record(spec,[[0.0,"stop"],[.4,"play",case[1],case[2],"play"],[.4+case[2]+.6,"stop"]])
 		var moved: float = rec.frames[-1].root.z-rec.frames[0].root.z

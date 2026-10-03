@@ -33,10 +33,13 @@ func victim(at: Vector3, kind: String = "centurion"):
 	enemy.hp = .01
 	return enemy
 
+# The chips that have broken loose: the rest wait in the statue until the
+# break reaches them.
 func velocity(chips: Array) -> Vector3:
+	var loose = chips.filter(func(chip): return not chip.held)
 	var sum = Vector3.ZERO
-	for chip in chips: sum += chip.linear_velocity
-	return sum/chips.size()
+	for chip in loose: sum += chip.linear_velocity
+	return sum/maxi(1,loose.size())
 
 func center(chips: Array) -> Vector3:
 	var sum = Vector3.ZERO
@@ -110,14 +113,16 @@ func test():
 	var normal_velocity = velocity(chips)
 	print("NORMAL_LAUNCH ",normal_velocity)
 	check(normal_velocity.dot(Vector3.FORWARD) > .6 and normal_velocity.dot(Vector3.FORWARD) < 2.4,"A normal attack gives a small push away from the attacker in world space")
-	var start = center(chips)
+	# The top ring breaks loose first; the statue gives way down to its feet.
+	var top_ring: Array = chips.slice(30)
+	var start = center(top_ring)
 	var transforms = positions(chips)
 	enemy.position += Vector3.RIGHT*3
 	enemy.rotation.y += PI/2
 	check(positions(chips) == transforms,"Corpse movement and facing cannot drag or rotate airborne fragments")
 	await frames(24)
-	check((center(chips)-start).dot(Vector3.FORWARD) > .2 and velocity(chips).y < -.5,"Gravity pulls fragments down while their hit momentum carries them backward")
-	check(chips[0].global_basis != transforms[0].basis,"Fragments tumble during flight")
+	check((center(top_ring)-start).dot(Vector3.FORWARD) > .2 and velocity(top_ring).y < -.5,"Gravity pulls fragments down while their hit momentum carries them backward")
+	check(chips[-1].global_basis != transforms[-1].basis,"Fragments tumble during flight")
 	await snapshot("normal")
 	game.pause_game()
 	transforms = positions(chips)
@@ -125,7 +130,9 @@ func test():
 	await frames(30)
 	check(positions(chips) == transforms and chips[0].age == age,"Pausing freezes both the rocks and their cleanup timer")
 	game.resume_game()
-	await frames(210)
+	# Plus the half second the statue takes to break apart, and the moment
+	# the last of its rocks then need to fall asleep.
+	await frames(270)
 	check(chips.all(func(c): return c.global_position.y > 0 and c.global_position.y < .75),"All normal fragments settle on the paving or one another without sinking through it")
 	check(not enemy.visual.rig.visible and physical_rocks_only(enemy.visual),"Every visible remnant is a physics body, with no static rubble pile")
 	check(chips.all(func(c): return c.linear_velocity.length() < .15),"Friction settles the fragments instead of letting them slide forever")

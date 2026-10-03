@@ -41,8 +41,8 @@ const CHARGE_SPEED = 11.0
 const CHARGE_THROW = 1.6
 const SHOCKWAVE_THROW = 2.2
 # The screen shakes this hard (metres) as the ground breaks.
-const SHAKE_LEAP = .5
-const SHAKE_SLAM = .65
+const SHAKE_LEAP = .4
+const SHAKE_SLAM = .52
 
 func reset() -> void:
 	pending.clear()

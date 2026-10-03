@@ -429,6 +429,29 @@ func test():
 	check(is_equal_approx(game.attack_profile().duration,.78),"Neither speeds a bow")
 	clear()
 
+	# The sword's normal attack: three swings that follow one another while he
+	# keeps swinging, starting over when he breaks off.
+	hero({})
+	target = dummy(1.6)
+	var swings: Array = []
+	var landed: Array = []
+	for i in 5:
+		game.attack(false,target.position)
+		swings.append(game.player.visual.state)
+		landed.append(is_equal_approx(game.player.busy,.84) and is_equal_approx(game.scheduled[-1].time,.84*.52))
+		while game.player.busy > 0: play(STEP)
+	check(swings == ["SwordOpen","SwordCut2","SwordThrust","SwordCut1","SwordCut2"],"Swinging on, the sword cuts down one way, then the other, then thrusts, and round again: %s" % [swings])
+	check(not false in landed,"Every swing of the three takes the sword's time and lands at the same moment of it")
+	play(.3)
+	check(game.player.visual.state == "SwordCut2" and game.player.visual.swing_phase() > .85,"Standing after a swing, he recovers to his stance")
+	game.attack(false,target.position)
+	check(game.player.visual.state == "SwordOpen","Broken off, the swings start over from the first")
+	while game.player.busy > 0: play(STEP)
+	game.player.visual.locomotion(true,false)
+	game.attack(false,target.position)
+	check(game.player.visual.state == "SwordOpen","Moving between swings starts them over too")
+	clear()
+
 	# The panels: attributes on the left, the skill tree on the right.
 	hero({"cleave":1})
 	Data.gain_xp(game.run,Data.xp_at_level(6))
