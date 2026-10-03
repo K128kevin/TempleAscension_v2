@@ -4,8 +4,10 @@ extends Node3D
 ## its lower part, with branching lightning crackling out from it into the air,
 ## forking as it goes, and a cold light, all as strong as `intensity` (0 to 1),
 ## which scripts/visual.gd raises as he lifts the sword and drives it down. As
-## the blade meets the ground the charge breaks off it, lightning racing out
-## over the ground for a moment. Drawn only; nothing about the skill depends
+## the blade meets the ground the charge is spent into it (the shockwave's
+## glowing cracks: scripts/shockwave.gd), lightning crackling over the ground
+## about the point for a moment, and what is left on the blade comes away
+## from it in wisps that drift up and fade. Drawn only; nothing about the skill depends
 ## on it. It is carried on the blade (attach()).
 
 const Vfx = preload("res://scripts/vfx.gd")
@@ -130,6 +132,8 @@ func attach(weapon: Node3D, from: float, to: float) -> void:
 # A tick: how charged the blade is.
 func step(dt: float, strength: float) -> void:
 	intensity = clampf(strength,0.0,1.0)
+	# (Spent, the next charge gathers on the blade again.)
+	if intensity <= .02 and ground_left <= 0.0: drift(false)
 	show_strength()
 	ground_left = maxf(0.0,ground_left-dt)
 	bolt_clock -= dt
@@ -165,6 +169,19 @@ func discharge(at: Vector3) -> void:
 	ground_left = GROUND_TIME
 	ground_at = at
 	bolt_clock = 0.0
+	drift(true)
+
+# The glow held to the blade as the charge gathers, or let go of it once the
+# blow is struck: wisps that stay where they were shed, rise and thin away.
+var drifting = false
+func drift(loose: bool) -> void:
+	if loose == drifting: return
+	drifting = loose
+	for motes in [glow,core]:
+		motes.local_coords = not loose
+		motes.gravity = Vector3(0,1.6,0) if loose else Vector3.ZERO
+		motes.lifetime = (.75 if loose else .24) if motes == glow else (.6 if loose else .3)
+		motes.initial_velocity_max = .5 if loose else (.12 if motes == glow else .05)
 
 # Lightning about the blade: channels leaping out from its lower part into
 # the air, forking as they go, as many as the charge is strong.

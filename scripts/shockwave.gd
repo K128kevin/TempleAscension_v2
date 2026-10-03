@@ -1,71 +1,132 @@
 extends Node3D
-## The shockwave of a blow on the ground (Leap's landing, Ground Slam): a
-## puff of dust and smoke bursting out from the point of impact and racing
-## low over the ground across the whole area the blow reaches, all round for
-## the leap and across the arc ahead for the slam. Translucent billows (the
-## soft dot of scripts/vfx.gd, in dust's colours), thrown out at SPEED and
-## slowing as they spread, swelling as they go and thinning to nothing.
+## The shockwave of a blow on the ground (Leap's landing, Ground Slam,
+## Shockwave): everything in the blow goes into the ground at once. A flash
+## where it lands; the floor cracked about it, the cracks glowing and dying
+## away (blue with the blade's charge for Ground Slam: `plasma`); a column of
+## dust thrown straight up; and one front of pressed air racing out across
+## the whole area the blow reaches, like a sonic boom: a hard pale edge over
+## the ground with a low wall of haze standing on it, all round for the leap
+## and across the arc ahead for the slam, quick at first and slowing as it
+## thins to nothing at the blow's reach (assets/shaders/shockwave.gdshader).
 const Vfx = preload("res://scripts/vfx.gd")
-const SPEED = 26.0
+# How long the front takes to cross the area, and the cracks to die.
+const SWEEP = .55
+const CRACKS = 1.3
+# The front's wall of haze: how high it stands as it sets out.
+const WALL = 1.1
+const DUST = Color(.93,.9,.84,.85)
+const CHARGE = Color(.45,.72,1.0)
+const EMBER = Color(1.0,.62,.3)
 var age = 0.0
 var life = 1.0
+var reach = 1.0
+var ground: MeshInstance3D
+var wall: MeshInstance3D
+var flash: OmniLight3D
+var plasma = false
 
-# `plasma` (Ground Slam): the blade's charge blasts out with the dust, a burst
-# of glowing blue plasma racing ahead of it and fading fast.
+# `plasma` (Ground Slam): the blade's charge is driven into the ground with
+# the blow, and shows in the cracks and the flash.
 static func make(at: Vector3, reach: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0, plasma: bool = false) -> Node3D:
 	var node = new()
-	node.position = at+Vector3.UP*.25
-	node.life = clampf(reach/SPEED*2.2+.5,.9,1.8)
+	node.position = at+Vector3.UP*.04
+	node.reach = reach
+	node.plasma = plasma
+	node.life = maxf(SWEEP,CRACKS)
 	var way: Vector3 = direction.normalized() if direction.length() > .01 else Vector3.FORWARD
-	# A share of a full circle: the puff is as dense across an arc as all round.
-	var share = degrees/360.0
-	# Heavy dust low over the ground, racing out; thinner smoke above it,
-	# slower and larger.
-	for layer in [[int(120*share)+24,1.0,.55,Color(.72,.62,.46),.9,2.4],[int(70*share)+16,.72,.45,Color(.58,.52,.45),1.6,3.6]]:
-		var puff = Vfx.particles(node,layer[0],node.life*layer[1],true,false)
-		puff.mesh.size = Vector2.ONE
-		puff.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		puff.emission_sphere_radius = .4
-		puff.direction = way
-		puff.spread = degrees*.5
-		puff.flatness = .92
-		puff.initial_velocity_min = SPEED*.6
-		puff.initial_velocity_max = SPEED
-		puff.damping_min = SPEED*1.1
-		puff.damping_max = SPEED*1.6
-		puff.gravity = Vector3(0,.4,0)
-		puff.scale_amount_min = layer[4]
-		puff.scale_amount_max = layer[5]
-		puff.scale_amount_curve = Vfx.curve(.35,1.0)
-		var tint: Color = layer[3]
-		puff.color_ramp = Vfx.ramp([0.0,.15,.6,1.0],[Color(tint.r,tint.g,tint.b,0.0),Color(tint.r,tint.g,tint.b,layer[2]),Color(tint.r,tint.g,tint.b,layer[2]*.5),Color(tint.r,tint.g,tint.b,0.0)])
-		puff.angle_min = 0.0
-		puff.angle_max = 360.0
-		puff.angular_velocity_min = -60.0
-		puff.angular_velocity_max = 60.0
-		puff.explosiveness = .95
-		puff.emitting = true
-	if plasma:
-		var blast = Vfx.particles(node,int(50*share)+14,minf(node.life,.7),true,true)
-		blast.mesh.size = Vector2.ONE
-		blast.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		blast.emission_sphere_radius = .25
-		blast.direction = way
-		blast.spread = degrees*.5
-		blast.flatness = .85
-		blast.initial_velocity_min = SPEED*.7
-		blast.initial_velocity_max = SPEED*1.15
-		blast.damping_min = SPEED*1.4
-		blast.damping_max = SPEED*2.0
-		blast.gravity = Vector3(0,.6,0)
-		blast.scale_amount_min = .6
-		blast.scale_amount_max = 1.4
-		blast.scale_amount_curve = Vfx.curve(.6,1.0)
-		blast.color_ramp = Vfx.ramp([0.0,.08,.35,1.0],[Color(.5,.75,1,0),Color(.4,.65,1,.38),Color(.2,.42,1,.22),Color(.1,.25,1,0)])
-		blast.explosiveness = .97
-		blast.emitting = true
+	# (The slice is built about +Z and turned to face the blow's way.)
+	node.rotation.y = atan2(way.x,way.z)
+	var half = deg_to_rad(degrees*.5)
+	var steps = maxi(12,int(96*degrees/360.0))
+	var glow: Color = CHARGE if plasma else EMBER
+	# The ground under the blow, out to its reach: rings of a slice.
+	var disc = ImmediateMesh.new()
+	var rings = 28
+	for r in rings:
+		disc.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+		for s in steps+1:
+			var angle = lerpf(-half,half,float(s)/steps)
+			for edge in [r,r+1]:
+				var out = float(edge)/rings
+				disc.surface_set_uv(Vector2(out,float(s)/steps))
+				disc.surface_add_vertex(Vector3(sin(angle),0,cos(angle))*out*reach)
+		disc.surface_end()
+	node.ground = sheet(disc,false,glow)
+	node.ground.material_override.set_shader_parameter("crack_reach",clampf((3.2 if plasma else 2.2)/reach,.12,.6))
+	node.add_child(node.ground)
+	# The wall standing on the front: a strip a metre across, widened to the
+	# front's distance as it runs out.
+	var strip = ImmediateMesh.new()
+	strip.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for s in steps+1:
+		var angle = lerpf(-half,half,float(s)/steps)
+		for up in [0.0,1.0]:
+			strip.surface_set_uv(Vector2(up,float(s)/steps))
+			# (Leaning out over the way it goes, as a wave's crest does.)
+			strip.surface_add_vertex(Vector3(sin(angle),up,cos(angle))*Vector3(1.0+.1*up,1,1.0+.1*up))
+	strip.surface_end()
+	node.wall = sheet(strip,true,glow)
+	node.add_child(node.wall)
+	# The flash of it, and the dust thrown straight up from where it landed.
+	node.flash = OmniLight3D.new()
+	node.flash.light_color = Color(.7,.85,1.0) if plasma else Color(1.0,.85,.6)
+	node.flash.omni_range = 7.0
+	node.flash.position = (way*.4 if degrees < 360.0 else Vector3.ZERO)+Vector3.UP*.6
+	node.flash.shadow_enabled = false
+	node.add_child(node.flash)
+	var column = Vfx.particles(node,26,.7,true,false)
+	column.mesh.size = Vector2.ONE
+	column.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	column.emission_sphere_radius = .35
+	column.direction = Vector3.UP
+	column.spread = 28
+	column.initial_velocity_min = 3.5
+	column.initial_velocity_max = 8.0
+	column.damping_min = 7.0
+	column.damping_max = 11.0
+	column.gravity = Vector3(0,-1.5,0)
+	column.scale_amount_min = .5
+	column.scale_amount_max = 1.2
+	column.scale_amount_curve = Vfx.curve(.5,1.3)
+	column.color_ramp = Vfx.ramp([0.0,.12,1.0],[Color(.7,.62,.5,0),Color(.7,.62,.5,.5),Color(.62,.56,.48,0)])
+	column.explosiveness = .96
+	column.emitting = true
+	node.show_front()
 	return node
+
+static func sheet(mesh: Mesh, standing: bool, glow: Color) -> MeshInstance3D:
+	var m = MeshInstance3D.new()
+	m.mesh = mesh
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material = ShaderMaterial.new()
+	material.shader = preload("res://assets/shaders/shockwave.gdshader")
+	material.set_shader_parameter("wall",standing)
+	material.set_shader_parameter("tint",DUST)
+	material.set_shader_parameter("crack_glow",Vector3(glow.r,glow.g,glow.b))
+	m.material_override = material
+	return m
+
+# How far out the front is (a share of the reach): away fast, slowing as it goes.
+func front() -> float:
+	var u = clampf(age/SWEEP,0.0,1.0)
+	return 1.0-pow(1.0-u,2.6)
+
+func show_front() -> void:
+	var out = front()
+	var u = clampf(age/SWEEP,0.0,1.0)
+	# It thins as it spreads, and is gone as it reaches the edge.
+	var strength = (1.0-smoothstep(.55,1.0,u))*smoothstep(0.0,.06,u)
+	ground.material_override.set_shader_parameter("front",out)
+	ground.material_override.set_shader_parameter("strength",strength)
+	# The cracks flare as the blow lands and die away after it.
+	var cracked = clampf(age/CRACKS,0.0,1.0)
+	ground.material_override.set_shader_parameter("crack_strength",(1.0 if plasma else .55)*pow(1.0-cracked,1.6))
+	wall.scale = Vector3(maxf(.05,out*reach),WALL*(1.0-.6*u),maxf(.05,out*reach))
+	wall.material_override.set_shader_parameter("strength",strength)
+	flash.light_energy = (5.0 if plasma else 3.5)*pow(maxf(0.0,1.0-age/.22),2.0)
+	flash.visible = age < .22
 
 func tick(dt: float) -> bool:
 	age += dt
-	return age >= life+.2
+	show_front()
+	return age >= life+.1

@@ -474,8 +474,9 @@ func pulse(at: Vector3, radius: float, damage: float, type: String, slow: float 
 		strike(enemy,damage,type)
 		if slow>0: enemy.slow(60.0,slow)
 
-# A blow on the ground: a shockwave of dust and smoke racing out across the
-# area it hits (scripts/shockwave.gd), the screen shaken and the impact heard.
+# A blow on the ground: its shockwave racing out across the area it hits, the
+# ground cracked under it (scripts/shockwave.gd; `plasma`: the blade's charge
+# driven into the ground with it), the screen shaken and the impact heard.
 func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0, sound: String = "whirl-impact", plasma: bool = false) -> void:
 	var wave = Shockwave.make(at+Vector3.UP*game.world.lift(at),reach,direction,degrees,plasma)
 	game.world.add_child(wave)

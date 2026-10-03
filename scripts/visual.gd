@@ -1255,7 +1255,7 @@ const SLAM_LIGHT_LOW = .5
 const SLAM_RAISED = .36
 const SLAM_GROUND = .40
 const SLAM_BLOW = .52
-const SLAM_FADED = .72
+const SLAM_FADED = .9
 
 # Judged from the blade as it is shown (the skeleton just posed: the blade
 # drops a metre in a frame as it is driven down, and judged a frame behind,

@@ -427,10 +427,12 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   swing sends it, the shield arm held in its guard (moved as the swing needs), both
   feet kept planted by leg IK (the charge borrows the sprint's legs), and each eased
   out of the stance and back into it so nothing leaps between frames. The shockwave of a blow
-  on the ground is `scripts/shockwave.gd`: two one-shot bursts of the soft-dot
-  billboards (`scripts/vfx.gd`), heavy dust low over the ground and thinner smoke
-  above it, thrown out at 26 m/s across the blow's reach (an arc for the slam) and
-  damped as they spread, swelling and fading; the floor itself is untouched.
+  on the ground is `scripts/shockwave.gd`: a disc laid on the floor over the blow's
+  reach (a slice of one for the slam's arc) and a low wall standing on the front,
+  both drawn by `assets/shaders/shockwave.gdshader` (the racing front, its haze,
+  and the cracks about the point of impact), with a flash of light and one burst of
+  the soft-dot billboards (`scripts/vfx.gd`) for the dust thrown up; the floor's
+  own meshes are untouched.
   `scripts/skills.gd` picks each skill's
   clip, duration and contact point (`WARRIOR_CLIPS`).
 - The hero's walk (the R key) is the animation library's `Walk_Loop`, retargeted as

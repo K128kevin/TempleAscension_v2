@@ -124,9 +124,13 @@ func test():
 	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(past_reach)==0 and lost(off)>0,"Ground Slam rank 5: 250% damage in a 120° arc out to 15 metres")
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillSlam","The slam sends out a shockwave of dust, shakes the screen, and has its own swing")
 	var wave = game.skills.waves[0]
-	var puffs = wave.get_children().filter(func(c): return c is CPUParticles3D)
-	check(puffs.size()==3 and puffs.all(func(p): return p.emitting and absf(p.spread-60.0)<.01 and p.initial_velocity_max>=20.0),"Dust, smoke and the blade's blue plasma burst out fast across the slam's arc")
-	check(puffs.filter(func(p): return p.mesh.material is ShaderMaterial).size()==1,"one layer of it glowing plasma")
+	var ring: ShaderMaterial = wave.ground.material_override
+	check(wave.plasma and wave.get_children().filter(func(c): return c is CPUParticles3D).size()==1,"The blade's charge no longer shoots out over the ground: only a column of dust is thrown up")
+	var front_then: float = ring.get_shader_parameter("front")
+	var cracks_then: float = ring.get_shader_parameter("crack_strength")
+	wait(.2)
+	check(float(ring.get_shader_parameter("front"))>front_then+.2 and wave.wall.scale.x>2.0,"One front races out across the slam's arc, a wall of haze standing on it")
+	check(cracks_then>.6 and float(ring.get_shader_parameter("crack_strength"))<cracks_then and Vector3(ring.get_shader_parameter("crack_glow")).z>.9,"The ground is cracked where it struck, the cracks glowing blue with the blade's charge and dying away")
 	wait(3.0)
 	check(game.skills.waves.is_empty(),"The shockwave passes within a couple of seconds")
 	clear()

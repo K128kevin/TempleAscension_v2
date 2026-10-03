@@ -335,11 +335,16 @@ crouch for Shockwave, the blade thrust at the sky for War Cry, a braced run behi
 the shield for Shield Charge (the sprint, the shield held straight out before him),
 and for Leap a deep crouch, the spring, the body stretched in the air with the blade
 over the head, and the landing driven down with everything behind it. Leap's
-landing and Ground Slam send a shockwave over the ground: a puff of dust and
-smoke bursting from the point of impact and racing low across the whole area the
-blow reaches (all round the warrior under the leap, across the arc ahead for the
-slam), translucent, swelling as it spreads and thinning to nothing; and the screen
-shakes hard.
+landing, Ground Slam and Shockwave put everything into the ground at once
+(`scripts/shockwave.gd`): a flash where the blow lands, the floor cracked about it
+(dark splits lit along their lips, dying away), a column of dust thrown up, and a
+single front racing out across the whole area the blow reaches, like a sonic boom
+(a hard pale edge with a fainter one after it and a low wall of haze standing on
+it; all round the warrior under the leap, across the arc ahead for the slam),
+quick at first and gone as it reaches the blow's edge; and the screen shakes. The
+charge on the blade in Ground Slam does not shoot out: it is spent into the
+ground (the cracks glow blue with it), and what is left on the blade drifts off it
+in wisps and fades.
 
 Shield Bash is the one skill with a cooldown; energy is the others' only cost.
 Dexterity quickens every attack, melee or bow, skills included; Quick Strikes only the
