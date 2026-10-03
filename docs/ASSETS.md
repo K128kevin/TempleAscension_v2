@@ -613,10 +613,10 @@ terms continue to apply.
 `assets/audio/stone-crumble.wav` is the original game's `public/stone-crumble.m4a`,
 decoded with macOS `afconvert` to 48 kHz stereo 16-bit PCM (1.02 s) and its extensible
 WAV header rewritten as standard PCM, samples unchanged. It plays when a statue dies:
-instead of falling over, the statue crumbles as in the original game. The body sinks
-and spreads over 0.7 s into a rubble pile (the KayKit rubble mesh in statue stone),
-twelve stone chips (the imported rock mesh) burst out as rigid bodies with convex
-collision hulls. They tumble, bounce against the paving and architecture, and settle
+instead of falling over, the statue crumbles as in the original game. The body
+collapses and disappears over 0.7 s, leaving thirty-six stone fragments (the imported
+rock mesh in statue stone), each a rigid body with a convex collision hull. There
+is no static rubble pile. They tumble, bounce against the paving and architecture, and settle
 with friction. Normal attacks push them away from the hit; Ground Slam and Leap
 throw them farther outward and upward. The body collapse and dust follow the combat
 clock; the chips use Godot's physics clock, pause with the world, and expire after

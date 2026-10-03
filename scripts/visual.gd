@@ -6,13 +6,11 @@ const FootPlanter = preload("res://scripts/foot_planter.gd")
 const HandGrip = preload("res://scripts/hand_grip.gd")
 const ShieldArm = preload("res://scripts/shield_arm.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
-# A slain statue crumbles, as in the original game: the body collapses into a
-# rubble pile while stone chips burst out and fall around it.
+# A slain statue collapses into individual physics-driven stone fragments.
 const CRUMBLE_TIME = .7
-const CHIPS = 12
+const CHIPS = 36
 var crumbling = -1.0
 var crumble_size = 1.0
-var rubble: Node3D
 var chips: Array = []
 var dust: CPUParticles3D
 var animator: AnimationPlayer
@@ -1142,7 +1140,7 @@ func react(action: String, duration: float) -> void:
 	play(action,duration)
 	reaction_time = duration
 
-# `settled` shows the finished pile at once (a statue already slain on load).
+# `settled` hides a statue already slain on load, without replaying its debris.
 func crumble(settled: bool = false, impact: Vector3 = Vector3.ZERO) -> void:
 	if crumbling >= 0.0: return
 	dead = true
@@ -1151,19 +1149,19 @@ func crumble(settled: bool = false, impact: Vector3 = Vector3.ZERO) -> void:
 	crumbling = 0.0
 	crumble_size = rig.scale.x
 	var size = crumble_size
-	rubble = Art.model("rubble",Vector3(1.0,.5,1.0)*size,Art.statue_material())
-	add_child(rubble)
-	rubble.rotation.y = fposmod(global_position.x*7.1+global_position.z*3.3,TAU)
 	if not settled:
 		var actor = get_parent()
 		if actor.get("game") != null and actor.game.world.has_method("ensure_debris_collision"):
 			actor.game.world.ensure_debris_collision()
 		var seed = global_position.x*12.9898+global_position.z*78.233
 		for i in CHIPS:
-			var angle = TAU*i/CHIPS+sin(seed+i)*.4
+			# Six staggered rings fill the body with stone. Spacing the chips
+			# apart avoids an artificial explosion from overlapping colliders.
+			var layer = floorf(i/6.0)
+			var angle = TAU*(i%6)/6.0+layer*PI/6.0+fposmod(seed,TAU)
 			var outward = Vector3(sin(angle),0,cos(angle))
 			var diameter = (.18+.12*fposmod(seed*.37+i*.61,1.0))*size
-			var start = global_position+(outward*.28+Vector3.UP*(.4+1.1*fposmod(i*.47,1.0)))*size
+			var start = global_position+(outward*.34+Vector3.UP*(.23+.29*layer))*size
 			var scatter = outward*(.55+.45*fposmod(seed*.13+i*.29,1.0))*sqrt(size)
 			var velocity = impact*(.85+.3*fposmod(i*.61,1.0))+scatter+Vector3.UP*.8*sqrt(size)
 			chips.append(StoneFragment.make(self,start,diameter,velocity,Vector3(cos(angle)*4,3,sin(angle)*4)*(1+i%3)))
@@ -1187,12 +1185,11 @@ func crumble_step(dt: float) -> void:
 	var u = clampf(crumbling/CRUMBLE_TIME,0.0,1.0)
 	var eased = u*u
 	var size = crumble_size
-	# The body sinks and spreads into the pile, then is gone.
+	# The body collapses and disappears, leaving only the physical fragments.
 	rig.scale = Vector3(size*(1.0+.25*eased),size*maxf(.02,1.0-eased),size*(1.0+.25*eased))
 	rig.visible = u<1.0
 	if is_instance_valid(weapon_item): weapon_item.visible = u<.4
 	if is_instance_valid(nocked_arrow): nocked_arrow.visible = false
-	rubble.scale = Vector3(1.0,.5,1.0)*size*clampf(u*1.3,0.0,1.0)
 	if is_instance_valid(dust): dust.speed_scale = 1.0 if dt>0 else dust.speed_scale
 
 # The ranger's cloak below the waist hangs from chains of bones

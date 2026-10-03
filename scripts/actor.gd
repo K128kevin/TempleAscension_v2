@@ -674,7 +674,7 @@ func die(reward: bool = true, death_impact: Vector3 = Vector3.ZERO) -> void:
 	dots.clear()
 	end_stun()
 	if is_instance_valid(laser_model): laser_model.queue_free()
-	# Statues crumble into a rubble pile, with the original game's crumble sound.
+	# Statues crumble into physical fragments, with the original crumble sound.
 	visual.crumble(false,death_impact)
 	game.sound.play("stone-crumble",-8)
 	if reward: game.enemy_died(self)

@@ -46,6 +46,16 @@ func center(chips: Array) -> Vector3:
 func positions(chips: Array) -> Array:
 	return chips.map(func(chip): return chip.global_transform)
 
+# Every visible rock must belong to a rigid body; a separate decorative pile
+# would leave a visible mesh outside those bodies after the statue vanishes.
+func physical_rocks_only(visual) -> bool:
+	for mesh in visual.find_children("*","MeshInstance3D",true,false):
+		if not mesh.is_visible_in_tree(): continue
+		var parent = mesh.get_parent()
+		while parent != visual and not parent is RigidBody3D: parent = parent.get_parent()
+		if not parent is RigidBody3D: return false
+	return true
+
 func snapshot(label: String):
 	if not render: return
 	await RenderingServer.frame_post_draw
@@ -76,7 +86,9 @@ func test():
 	game.world = Temple.new()
 	game.add_child(game.world)
 	game.world.setup(Temple.Layout.PLAYGROUND,1)
-	origin = game.world.spawn+Vector3(0,0,10)
+	# Leave floor around the whole burst, including stones deflected sideways
+	# by the wall. Landing checks should not send them off the test plane.
+	origin = game.world.spawn
 	game.player = Actor.new()
 	game.world.add_child(game.player)
 	game.player.setup(game,"player","hero",origin)
@@ -93,7 +105,7 @@ func test():
 	game.attack(false,enemy.position)
 	game.tick_scheduled(1.0)
 	var chips: Array = enemy.visual.chips.duplicate()
-	check(enemy.dead and chips.size() == 12 and chips.all(func(c): return c is RigidBody3D),"A lethal normal attack creates twelve physical stone fragments")
+	check(enemy.dead and chips.size() == 36 and chips.all(func(c): return c is RigidBody3D),"A lethal normal attack creates thirty-six physical stone fragments")
 	await frames(2)
 	var normal_velocity = velocity(chips)
 	print("NORMAL_LAUNCH ",normal_velocity)
@@ -114,7 +126,8 @@ func test():
 	check(positions(chips) == transforms and chips[0].age == age,"Pausing freezes both the rocks and their cleanup timer")
 	game.resume_game()
 	await frames(210)
-	check(chips.all(func(c): return c.global_position.y > 0 and c.global_position.y < .3),"All normal fragments land on the paving without sinking through it")
+	check(chips.all(func(c): return c.global_position.y > 0 and c.global_position.y < .75),"All normal fragments settle on the paving or one another without sinking through it")
+	check(not enemy.visual.rig.visible and physical_rocks_only(enemy.visual),"Every visible remnant is a physics body, with no static rubble pile")
 	check(chips.all(func(c): return c.linear_velocity.length() < .15),"Friction settles the fragments instead of letting them slide forever")
 	check(chips.any(func(c): return c.sleeping),"Settled fragments go to sleep")
 	clear()
@@ -156,7 +169,7 @@ func test():
 	# Leap's right-hand target throws its rocks into the real wall at x=4.
 	check(wall_contacts[0] > 0 and blast_chips.all(func(c): return c.global_position.x < origin.x+4),"Blasted rocks collide with the temple wall rather than passing through it")
 	await frames(180)
-	check(blast_chips.all(func(c): return c.global_position.y > 0 and c.global_position.y < .35),"The larger blast still settles onto the floor")
+	check(blast_chips.all(func(c): return c.global_position.y > 0 and c.global_position.y < .75),"The larger blast still settles onto the floor")
 	await frames(300)
 	check(blast_chips.all(func(c): return not is_instance_valid(c)),"Fragments expire after eight seconds of active physics")
 	clear()
@@ -174,7 +187,7 @@ func test():
 	var restored = victim(origin,"boss")
 	restored.dead = true
 	restored.visual.crumble(true)
-	check(restored.visual.chips.is_empty() and not restored.visual.rig.visible,"A restored dead boss shows settled rubble without replaying the blast")
+	check(restored.visual.chips.is_empty() and not restored.visual.rig.visible and physical_rocks_only(restored.visual),"A restored dead boss stays gone without a static pile or a replayed blast")
 	var revived = victim(origin+Vector3.RIGHT*2,"lion")
 	revived.playground_kill()
 	var old_chips: Array = revived.visual.chips.duplicate()

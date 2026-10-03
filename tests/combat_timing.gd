@@ -257,13 +257,13 @@ func test():
 	check(not is_instance_valid(crowned.laser_model) or crowned.laser_model.is_queued_for_deletion(),"The beam ends with the boss")
 	game.enemies.erase(crowned); crowned.queue_free()
 	game.player.hp=game.player.max_hp; game.slowed=0
-	# Slain statues crumble into a rubble pile with the original crumble sound.
+	# Slain statues crumble into physical fragments with the original sound.
 	var fallen=game.spawn_enemy("centurion","crumble",game.world.spawn)
 	fallen.awake=true; fallen.visible=true
 	fallen.die(false)
-	check(fallen.visual.state=="Crumble" and fallen.visual.rubble!=null and fallen.visual.chips.size()==fallen.visual.CHIPS,"A slain statue crumbles, throwing stone chips")
+	check(fallen.visual.state=="Crumble" and fallen.visual.chips.size()==fallen.visual.CHIPS and fallen.visual.chips.all(func(c): return c is RigidBody3D),"A slain statue crumbles, throwing physical stone chips")
 	for step in 90: fallen.tick(1.0/60)
-	check(not fallen.visual.rig.visible and fallen.visual.rubble.scale.y>.4,"The body is gone, leaving a rubble pile")
+	check(not fallen.visual.rig.visible and fallen.visual.chips.all(func(c): return c.visible),"The body is gone, leaving individual stone fragments")
 	check(ResourceLoader.exists("res://assets/audio/stone-crumble.wav") and load("res://assets/audio/stone-crumble.wav") is AudioStreamWAV,"The original crumble sound is available")
 	check(game.player.visual.crumbling<0,"The hero is not stone and never crumbles")
 	fallen.visible=false
