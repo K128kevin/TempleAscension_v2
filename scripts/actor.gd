@@ -57,7 +57,11 @@ var stun_mark: Sprite3D
 # Damage over time: Cursed Blade's stacks and Shadow Strike's lingering damage.
 # Each is {"kind", "rate" (damage a second), "left", "seconds"}.
 var dots: Array = []
-var dot_shown = 0.0
+# Damage over time is shown by kind: Cursed Blade's in purple, Shadow
+# Strike's (a skill's) in yellow.
+const HIT_COLORS = {"normal":Color(1,1,1),"skill":Color(1,.88,.3),"crit":Color(1,.5,.08)}
+const DOT_COLORS = {"curse":Color(.72,.45,1),"shadow":Color(1,.88,.3)}
+var dot_shown: Dictionary = {}
 var dot_clock = 0.0
 var hit_reactions = 0
 # Driven by the debug playground instead of the AI.
@@ -595,10 +599,12 @@ func refresh_dots(dot_kind: String) -> void:
 func tick_dots(dt: float) -> void:
 	if dots.is_empty(): return
 	var total = 0.0
+	var by_kind: Dictionary = {}
 	for i in range(dots.size()-1,-1,-1):
 		var d: Dictionary = dots[i]
 		var step = minf(dt,d.left)
 		total += d.rate*step
+		by_kind[d.kind] = by_kind.get(d.kind,0.0)+d.rate*step
 		d.left -= dt
 		if d.left<=0: dots.remove_at(i)
 	if dead or game.playground != null:
@@ -607,12 +613,17 @@ func tick_dots(dt: float) -> void:
 	var dealt: float = Data.mitigate(total,armor(),0.0,int(game.run.level),"physical")
 	hp -= dealt
 	if dealt>0: end_stun()
-	# Shown as one number every half second rather than one a frame.
-	dot_shown += dealt
+	# Shown as one number a kind every half second rather than one a frame.
+	for k in by_kind:
+		if total>0: dot_shown[k] = dot_shown.get(k,0.0)+dealt*by_kind[k]/total
 	dot_clock += dt
 	if dot_clock>=.5 or hp<=0 or dots.is_empty():
-		if dot_shown>=.5: game.float_text(position+Vector3.UP*1.2,str(roundi(dot_shown)),Color(.72,.45,1))
-		dot_shown = 0.0
+		var rise = 1.2
+		for k in dot_shown:
+			if dot_shown[k]>=.5:
+				game.float_text(position+Vector3.UP*rise,str(roundi(dot_shown[k])),DOT_COLORS.get(k,DOT_COLORS.curse))
+				rise += .3
+		dot_shown.clear()
 		dot_clock = 0.0
 	if hp<=0: die()
 
@@ -628,8 +639,10 @@ func react_to_hit(heavy: bool = false) -> void:
 	if heavy: visual.react("HitStagger",.6)
 	else: visual.react("HitHead" if hit_reactions%2==0 else "Hit",.34)
 
-# `bonus` is damage added after armor.
-func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO) -> void:
+# `bonus` is damage added after armor. `look` is how its number shows: a
+# normal attack's in white, a skill's in yellow, a critical hit's in orange,
+# swelling as it rises.
+func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO, look: String = "normal") -> void:
 	if dead or dormant: return
 	if game.playground != null:
 		# The playground shows every hit, but nothing takes damage.
@@ -643,7 +656,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	hp -= damage
 	if damage>0: end_stun()
 	game.sound.play("weapon-impact",-15)
-	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),Color(1,.83,.46))
+	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),HIT_COLORS[look],look=="crit")
 	if hp <= 0:
 		if death_impact == Vector3.ZERO:
 			death_impact = StoneFragment.impact(position-game.player.position)

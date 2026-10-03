@@ -91,6 +91,14 @@ static func cooldown(_run: Dictionary) -> float: return .5
 static func melee_haste(run: Dictionary) -> float:
 	return (run.stats[1]-5)*1.0
 
+# Percent chance that a hit the hero lands is a critical hit, for double
+# damage: 20%, and 0.2% more for each point of Dexterity.
+const CRIT_BASE = 20.0
+const CRIT_PER_DEXTERITY = .2
+const CRIT_MULTIPLIER = 2.0
+static func crit_chance(run: Dictionary) -> float:
+	return CRIT_BASE+(run.stats[1]-5)*CRIT_PER_DEXTERITY
+
 # Percent faster the normal melee attack is: Dexterity and Quick Strikes.
 static func melee_attack_speed(run: Dictionary) -> float:
 	return melee_haste(run)+passive(run,"quick_strikes")

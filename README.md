@@ -241,10 +241,16 @@ of maximum per second. Above the base:
 | Attribute | Per point |
 |---|---|
 | Strength | +2% melee damage |
-| Dexterity | +2% ranged damage; +1% melee attack speed |
+| Dexterity | +2% ranged damage; +1% melee attack speed; +0.2% critical hit chance |
 | Intelligence | +2% spell damage |
 | Vitality | +10 maximum health |
 | Willpower | +3 maximum energy and +0.1 energy per second |
+
+Every hit the hero lands, a normal attack's or a skill's, has a 20% chance
+(plus Dexterity's share) to be a critical hit for double damage, rolled
+separately for each target. Damage numbers show a normal attack's hit in white,
+a skill's in yellow and a critical hit's in orange, swelling as it rises;
+Cursed Blade's damage over time shows in purple.
 
 Each hero wears a painted, detailed kit after his concept art
 (tools/paint_kits.py paints it through the body's UVs, with relief and sheen

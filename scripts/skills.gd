@@ -16,6 +16,8 @@ var charge: Dictionary = {}
 # Shockwaves under way (scripts/shockwave.gd).
 var waves: Array = []
 # Offensive and Defensive Rhythm: the stacks built, and how long they last.
+# Tests fix the crit roll: -1 rolls, 0 never crits, 1 always does.
+var crit_override = -1
 var offense_stacks = 0
 var offense_time = 0.0
 var defense_stacks = 0
@@ -24,7 +26,7 @@ var defense_time = 0.0
 const MELEE_REACH = 1.9
 const CLEAVE_REACH = 2.6
 const LEAP_RANGE = 10.0
-const LEAP_RADIUS = 3.0
+const LEAP_RADIUS = 4.5
 const CURSE_SECONDS = 4.0
 const SHADOW_SECONDS = 5.0
 # Dash Attack's Cleave is a quick cut out of the dash.
@@ -194,14 +196,18 @@ func attack_damage(percent: float) -> float:
 func rhythm_boost() -> float:
 	return 1.0+offense_stacks*Data.passive(game.run,"offensive_rhythm")*.01
 
-# Every hit the hero lands on an enemy: Offensive Rhythm raises it and gains a
-# stack, and Cursed Blade leaves its extra damage on the target. `bonus` is
-# added after armor (Vampiric Strike's drain).
-func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO) -> void:
+# Every hit the hero lands on an enemy: it may be a critical hit (rolled for
+# each target), Offensive Rhythm raises it and gains a stack, and Cursed Blade
+# leaves its extra damage on the target. `bonus` is added after armor
+# (Vampiric Strike's drain). `skill` is false for the normal attack, whose
+# numbers show white rather than a skill's yellow.
+func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO, skill: bool = true) -> void:
 	if not is_instance_valid(enemy) or enemy.dead or enemy.dormant: return
 	var rhythm: Dictionary = Book.values("offensive_rhythm",rank("offensive_rhythm"))
 	amount *= rhythm_boost()
-	enemy.hit(amount,type,bonus,death_impact)
+	var crit: bool = randf()*100.0<Data.crit_chance(game.run) if crit_override<0 else crit_override==1
+	if crit: amount *= Data.CRIT_MULTIPLIER
+	enemy.hit(amount,type,bonus,death_impact,"crit" if crit else ("skill" if skill else "normal"))
 	if rhythm.y>0:
 		offense_stacks = mini(int(rhythm.y),offense_stacks+1)
 		offense_time = rhythm.z

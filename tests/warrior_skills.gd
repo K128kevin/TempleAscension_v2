@@ -65,6 +65,8 @@ func ready():
 	game.scheduled.clear(); game.skills.reset()
 	game.run.energy = Data.max_energy(game.run)
 	game.leap_left = 0; game.dash_time = 0; game.dash_attack = false; game.combat_age = 10
+	# Damage checks are exact; critical hits are tested on their own.
+	game.skills.crit_override = 0
 	game.player.visual.position = Vector3.ZERO
 
 # Skills and enemies run on; the hero stays where he stands.
@@ -171,6 +173,7 @@ func test():
 	# Leap: through the air to the target, striking everything around the landing.
 	hero({"cleave":5,"leap":1})
 	var landing = dummy(8.0,0); var beside = dummy(8.0,14); var start = dummy(1.5,180)
+	var reached = dummy(10.7,0); var past = dummy(11.7,0)
 	check(game.skills.cast("leap",origin+forward*6.5) and game.run.energy==60,"Leap costs 40 energy")
 	check(game.leap_left>0 and game.player.invulnerable>0,"He is in the air, out of harm's way")
 	# (The warrior gathers himself for a fifth of the swing, then flies.)
@@ -180,6 +183,7 @@ func test():
 	check(game.player.position.distance_to(origin+forward*6.5)<.6 and game.player.visual.position.y==0,"He lands at the target (%.2f m off)" % game.player.position.distance_to(origin+forward*6.5))
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillLeap","The landing sends out a shockwave all round and shakes the screen")
 	check(lost(landing)>=10 and lost(landing)<=15 and lost(beside)>0 and lost(start)==0,"Leap rank 1 deals 100% to everyone around the landing")
+	check(game.skills.LEAP_RADIUS==4.5 and lost(reached)>0 and lost(past)==0,"Its blast reaches 4.5 metres from the landing")
 	hero({"cleave":5,"leap":5})
 	game.skills.cast("leap",origin+forward*20)
 	play(1.0)
@@ -326,6 +330,49 @@ func test():
 		clear()
 	check(dealt_by_rank[1]>dealt_by_rank[0]*3.5,"Rank 5 hits for 50 to rank 1's 10")
 	check(Book.values("dash_attack",1)==({"x":10.0,"y":15.0,"z":0.0}) and Book.values("dash_attack",3)==({"x":20.0,"y":11.0,"z":0.0}),"Dash Attack's damage and extra cost run 10/15/20/30/50 and 15/13/11/8/5")
+
+	# Critical hits: 20%, and 0.2% more a point of Dexterity, for double damage,
+	# rolled for every struck_dummy hit.
+	hero({})
+	check(is_equal_approx(Data.crit_chance(game.run),20.0),"A new hero crits 20% of the time")
+	game.run.stats[1] += 10
+	check(is_equal_approx(Data.crit_chance(game.run),22.0),"Each point of Dexterity adds 0.2%")
+	game.run.stats[1] -= 10
+	var struck_dummy = dummy(2.0)
+	game.effects.clear()
+	game.skills.strike(struck_dummy,10.0,"physical",0.0,Vector3.ZERO,false)
+	var plain = lost(struck_dummy)
+	check(game.effects[-1].node.modulate.r==1.0 and game.effects[-1].node.modulate.b==1.0,"A normal attack's number is white")
+	game.skills.strike(struck_dummy,10.0)
+	check(is_equal_approx(lost(struck_dummy),plain*2) and game.effects[-1].node.modulate.b<.5 and game.effects[-1].node.modulate.g>.8,"A skill's number is yellow")
+	game.skills.crit_override = 1
+	game.skills.strike(struck_dummy,10.0,"physical",0.0,Vector3.ZERO,false)
+	var crit_number = game.effects[-1]
+	check(is_equal_approx(lost(struck_dummy),plain*4),"A critical hit deals double damage")
+	check(crit_number.node.modulate.g<.6 and crit_number.node.modulate.r==1.0 and crit_number.get("swell",false),"and shows its number in orange")
+	game.tick_effects(.05)
+	var early: float = crit_number.node.scale.x
+	game.tick_effects(.2)
+	check(early>1.0 and early<game.SWELL_SCALE and is_equal_approx(crit_number.node.scale.x,game.SWELL_SCALE),"growing quickly from the usual size to a larger one (%.2f, then %.2f)" % [early,crit_number.node.scale.x])
+	game.skills.strike(struck_dummy,10.0)
+	check(game.effects[-1].node.modulate.g<.6,"A skill's critical hit is orange too")
+	game.skills.crit_override = -1
+	seed(7)
+	var crits = 0
+	for i in 2000:
+		game.skills.strike(struck_dummy,1.0)
+		if game.effects[-1].get("swell",false): crits += 1
+	check(crits>340 and crits<460,"Left to chance, about one hit in five crits (%d of 2000)" % crits)
+	game.skills.crit_override = 0
+	clear()
+	# Cursed Blade's damage over time shows in purple.
+	hero({"cursed_blade":1})
+	var blighted = dummy(2.0)
+	game.skills.strike(blighted,40.0)
+	game.effects.clear()
+	wait(1.0)
+	check(not game.effects.is_empty() and game.effects.all(func(e): return e.node.modulate.b==1.0 and e.node.modulate.r<.8),"Cursed Blade's damage numbers are purple")
+	clear()
 
 	# Offensive Rhythm: every hit raises the next.
 	hero({"offensive_rhythm":5})

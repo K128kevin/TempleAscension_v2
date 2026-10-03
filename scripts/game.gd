@@ -629,7 +629,7 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	combat_age = 0
 	if weapon in [2,4]:
 		for release_time in animation.times:
-			scheduled.append({"time":release_time,"type":"arcane" if weapon==4 else "arrow","at":point,"damage":damage*(2.0/3.0 if special else 1.0)})
+			scheduled.append({"time":release_time,"type":"arcane" if weapon==4 else "arrow","at":point,"damage":damage*(2.0/3.0 if special else 1.0),"special":special})
 	elif weapon==3 and special:
 		var offset = point-player.position
 		offset.y = 0
@@ -653,8 +653,8 @@ func tick_scheduled(dt: float) -> void:
 			"swing": sound.play(job.sound)
 			"arrow","arcane":
 				sound.play("archer-arrow")
-				projectile(player.position,job.at,job.damage,true,job.type)
-			"blast": blast(player.position if job.get("follow_player",false) else job.at,2.88,job.damage,true)
+				projectile(player.position,job.at,job.damage,true,job.type,false,null,job.special)
+			"blast": blast(player.position if job.get("follow_player",false) else job.at,2.88,job.damage,true,true)
 			"melee":
 				var hit_list: Array = []
 				var reach: float = 2.44 if job.special else 1.9
@@ -665,7 +665,7 @@ func tick_scheduled(dt: float) -> void:
 				hit_list.sort_custom(func(a,b): return player.position.distance_squared_to(a.position)<player.position.distance_squared_to(b.position))
 				if not (job.special and job.weapon==1) and hit_list.size()>1: hit_list.resize(1)
 				for enemy in hit_list:
-					skills.strike(enemy,job.damage)
+					skills.strike(enemy,job.damage,"physical",0.0,Vector3.ZERO,job.special)
 					player.landed_on(enemy)
 					if job.special and job.weapon==0 and not enemy.dead: enemy.position = world.move(enemy.position,job.direction*6.5)
 				if job.special: effect(player.position,4.5,Color(1,.78,.35,.65),.25)
@@ -852,7 +852,8 @@ func tick_pickups(dt: float) -> void:
 const ARROW_SPEED = 20.6
 const BOLT_SPEED = 10.3
 
-func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type: String, piercing: bool = false, source = null) -> void:
+# `skill`: a skill's shot rather than the normal attack's.
+func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type: String, piercing: bool = false, source = null, skill: bool = true) -> void:
 	var direction = (at-from).normalized()
 	# Arrows are real arrows: the hero's in their own wood, fletching and
 	# steel, a statue's in stone.
@@ -864,7 +865,7 @@ func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type:
 	node.position = from + Vector3.UP
 	# The arrow's head is toward its local -Z; turn that into the flight.
 	node.rotation = Vector3(0,atan2(direction.x,direction.z)+(PI if type=="arrow" else 0.0),0)
-	projectiles.append({"node":node,"direction":direction,"damage":damage,"friendly":friendly,"age":0.0,"type":type,"piercing":piercing,"hit":[],"source":source})
+	projectiles.append({"node":node,"direction":direction,"damage":damage,"friendly":friendly,"age":0.0,"type":type,"piercing":piercing,"hit":[],"source":source,"skill":skill})
 
 func tick_projectiles(dt: float) -> void:
 	for i in range(projectiles.size()-1,-1,-1):
@@ -887,7 +888,7 @@ func tick_projectiles(dt: float) -> void:
 						var kind: String = "physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type)
 						# The hero's own shots count as his hits.
 						var impact = StoneFragment.impact(p.direction)
-						if p.friendly: skills.strike(a,p.damage,kind,0.0,impact)
+						if p.friendly: skills.strike(a,p.damage,kind,0.0,impact,p.skill)
 						else: a.hit(p.damage,kind,0.0,impact)
 						p.hit.append(a.uid)
 					else:
@@ -900,16 +901,19 @@ func tick_projectiles(dt: float) -> void:
 			p.node.queue_free()
 			projectiles.remove_at(i)
 
-func blast(at: Vector3, radius: float, damage: float, friendly: bool) -> void:
+func blast(at: Vector3, radius: float, damage: float, friendly: bool, skill: bool = false) -> void:
 	effect(at,radius*2,Color(1,.55,.13,.95),.6)
-	area_damage(at,radius,damage,friendly)
+	area_damage(at,radius,damage,friendly,null,skill)
 
-func area_damage(at: Vector3, radius: float, damage: float, friendly: bool, source = null) -> void:
+# The hero's own blasts are his hits (with their chance to crit); a puppet's
+# in the playground are not.
+func area_damage(at: Vector3, radius: float, damage: float, friendly: bool, source = null, skill: bool = false) -> void:
 	if puppet_attack(source): friendly = true
 	var candidates: Array = targets(source if puppet_attack(source) else player) if friendly else [player]
 	for a in candidates:
 		if a.dead or a.position.distance_to(at)>radius or not world.clear_line(at,a.position): continue
-		if friendly: a.hit(damage)
+		if friendly and not puppet_attack(source): skills.strike(a,damage,"physical",0.0,Vector3.ZERO,skill)
+		elif friendly: a.hit(damage)
 		else: hurt_player(damage,"physical",source)
 
 # The Oracle's lobbed fireball; it deals area damage when it lands.
@@ -949,7 +953,11 @@ func effect(at: Vector3, diameter: float, color: Color, duration: float) -> Dict
 	effects.append(entry)
 	return entry
 
-func float_text(at: Vector3, text: String, color: Color) -> void:
+# `swell`: a critical hit's number, which starts at the usual size and
+# quickly grows larger before it fades.
+const SWELL_SCALE = 1.8
+const SWELL_TIME = .14
+func float_text(at: Vector3, text: String, color: Color, swell: bool = false) -> void:
 	var l = Label3D.new()
 	l.text = text
 	l.font_size = 40
@@ -959,7 +967,10 @@ func float_text(at: Vector3, text: String, color: Color) -> void:
 	l.no_depth_test = true
 	world.add_child(l)
 	l.position = at+Vector3.UP
-	effects.append({"node":l,"life":.85,"total":.85,"float":true})
+	if swell:
+		l.outline_modulate = Color(.3,.08,0)
+		effects.append({"node":l,"life":1.0,"total":1.0,"float":true,"swell":true})
+	else: effects.append({"node":l,"life":.85,"total":.85,"float":true})
 
 func tick_effects(dt: float) -> void:
 	for i in range(effects.size()-1,-1,-1):
@@ -969,6 +980,7 @@ func tick_effects(dt: float) -> void:
 		if e.has("velocity"): e.node.position += e.velocity*dt
 		e.node.visible = world.can_see(e.node.position)
 		e.node.modulate.a = clampf(e.life/e.total,0,1)
+		if e.get("swell",false): e.node.scale = Vector3.ONE*lerpf(1.0,SWELL_SCALE,ease(clampf((e.total-e.life)/SWELL_TIME,0,1),.4))
 		if e.life<=0:
 			e.node.queue_free()
 			effects.remove_at(i)
