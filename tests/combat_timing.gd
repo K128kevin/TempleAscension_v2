@@ -358,7 +358,8 @@ func test():
 		check(game.skills.pending.size()==1,"RMB queues assigned class starter: "+class_id)
 		game.skills.tick(.1)
 		check(victim.hp==10000 and game.projectiles.is_empty() and game.fireballs.is_empty(),"Class skill respects windup: "+class_id)
-		game.skills.tick(.5)
+		# (The ranger's Power Shot is aimed for three seconds at its first rank.)
+		game.skills.tick(3.0 if class_id=="ranger" else .5)
 		# (The wizard's Firebolt is the Oracle's fireball.)
 		check(victim.hp<10000 or not game.projectiles.is_empty() or not game.fireballs.is_empty(),"Class skill executes after windup: "+class_id)
 		game.skills.pending.clear(); game.player.busy=0

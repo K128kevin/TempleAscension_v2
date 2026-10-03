@@ -631,6 +631,8 @@ func execute(job: Dictionary) -> void:
 
 # Shield Charge's blow on one unit: damage, thrown aside, the first stunned.
 func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
+	# (The run's own record may be gone by its last blow, if it was cut short.)
+	if not charge.has("hit"): charge = {"left":0.0,"hit":[],"stunned":false}
 	charge.hit.append(enemy)
 	var first_hit: bool = not charge.stunned
 	strike(enemy,attack_damage(v.y))

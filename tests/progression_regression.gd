@@ -23,7 +23,7 @@ func test():
 			if class_id=="warrior": check(s.max_rank==5 and s.ranks.size()==5 and s.points in [0,5,10,15] and Book.rank_cap(s.id,1)==5,"Warrior skills have five listed ranks behind a tree requirement: "+s.id)
 			elif class_id=="ranger": check(s.max_rank in [1,5] and s.ranks.size()==s.max_rank and s.points in [0,5,10] and Book.rank_cap(s.id,1)==s.max_rank,"Ranger skills have their listed ranks behind a tree requirement: "+s.id)
 			else: check(Book.rank_cap(s.id,s.unlock-1)==0 and Book.rank_cap(s.id,s.unlock)==1 and Book.rank_cap(s.id,s.unlock+3)==2,"Level/rank gate: "+s.id)
-		check(active==(11 if class_id=="warrior" else 8) and passive==(8 if class_id=="warrior" else 4),"The class's active skills and passives: "+class_id)
+		check(active=={"warrior":11,"ranger":14}.get(class_id,8) and passive=={"warrior":8,"ranger":6}.get(class_id,4),"The class's active skills and passives: "+class_id)
 		Data.gain_xp(run,Data.xp_at_level(15))
 		check(run.level==15 and run.points==70 and run.skill_points==14 and Data.max_health(run)==100,"Level 15 awards 70 attributes and 15 total skills without implicit stats: "+class_id)
 		check(Save.valid(run),"Progression state validates: "+class_id)
