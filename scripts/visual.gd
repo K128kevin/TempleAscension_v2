@@ -6,6 +6,7 @@ const FootPlanter = preload("res://scripts/foot_planter.gd")
 const HandGrip = preload("res://scripts/hand_grip.gd")
 const ShieldArm = preload("res://scripts/shield_arm.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
+const SwordTrail = preload("res://scripts/sword_trail.gd")
 # A slain statue breaks apart into individual physics-driven stone fragments:
 # a front sweeps down the body, the stone above it cracking loose (the statue
 # shader's shatter) and each fragment let go as the front reaches it. A blast
@@ -366,6 +367,12 @@ func equip(weapon: String) -> void:
 	nocked_arrow = null
 	weapon_kind = weapon
 	weapon_item = null
+	if is_instance_valid(sword_trail): sword_trail.queue_free()
+	sword_trail = null
+	# The hero's hard cuts leave a wake behind the blade.
+	if weapon == "sword" and not is_stone:
+		sword_trail = SwordTrail.new()
+		add_child(sword_trail)
 	if is_instance_valid(equipment):
 		equipment.queue_free()
 		equipment = null
@@ -1146,6 +1153,9 @@ func play_on(action: String, duration: float, start: float) -> void:
 	animator.seek(animator.current_animation_length*start,true)
 	animator.advance(0)
 
+# The wake behind the hero's blade as he cuts (scripts/sword_trail.gd).
+var sword_trail: MeshInstance3D
+
 # The sword chain (Motion.SWORD_CHAIN): whether one of its swings is still
 # playing (its swing, or the recovery after it), and how far through the clip.
 func swing_phase() -> float:
@@ -1449,6 +1459,11 @@ func advance(dt: float) -> void:
 			planter.owed = owed
 			planter.shoved = shoved and not floored
 		skeleton.advance(dt)
+	if is_instance_valid(sword_trail) and is_instance_valid(weapon_item) and weapon_item.is_inside_tree():
+		var swing = swing_phase()/Motion.SWORD_SWING_SHARE
+		var cutting = not dead and Motion.sword_cuts(state) and swing >= Motion.SWORD_WAKE[0] and swing <= Motion.SWORD_WAKE[1]
+		var blade: Transform3D = weapon_item.global_transform
+		sword_trail.step(dt,cutting,blade*Vector3(0,.42,0),blade*Vector3(0,1.02,0))
 
 # The forward travel to move the unit by since last asked (Actor.tick).
 # How much further the current clip will carry the unit (not yet taken).

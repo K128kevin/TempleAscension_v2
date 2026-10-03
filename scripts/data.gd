@@ -2,12 +2,14 @@ extends RefCounted
 ## Balance translated from the original game's src/config/balance.ts.
 # The temple's floors: five and the summit. (No place in the game has a name.)
 const FLOORS = 6
+# (Three quarters more statues on every floor than the original's 24, 32, 54,
+# 57 and 80, most of the added ones gladiators, centurions and lions.)
 const COUNTS = [
-	{"gladiator":14,"archer":10},
-	{"gladiator":12,"archer":10,"lion":10},
-	{"gladiator":18,"archer":15,"lion":12,"wizard":9},
-	{"gladiator":15,"archer":12,"lion":12,"wizard":12,"centurion":6},
-	{"gladiator":23,"archer":12,"lion":15,"wizard":18,"centurion":12}]
+	{"gladiator":23,"archer":13,"lion":4,"centurion":2},
+	{"gladiator":21,"archer":15,"lion":16,"centurion":4},
+	{"gladiator":32,"archer":20,"lion":22,"wizard":14,"centurion":7},
+	{"gladiator":28,"archer":17,"lion":22,"wizard":17,"centurion":16},
+	{"gladiator":42,"archer":18,"lion":30,"wizard":24,"centurion":26}]
 const ENEMIES = {
 	"gladiator":{"title":"Gladiator","hp":33.0,"damage":7.5,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"sword","shield":"scutum","size":1.0,"color":Color(.70,.73,.69)},
 	"archer":{"title":"Archer","hp":18.0,"damage":12.5,"speed":3.56,"range":10.6,"interval":1.22,"weapon":"bow","size":.94,"color":Color(.59,.73,.68)},

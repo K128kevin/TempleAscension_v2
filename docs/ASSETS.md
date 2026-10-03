@@ -392,7 +392,10 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   `tools/import_skills.py` as one unbroken cycle of three swings, cut into a clip a
   swing: a cut down from the upper right to the lower left, a backhand cut down from
   the upper left to the lower right, and a lunging thrust, the whole body wound
-  round against each and thrown into it. He walks into his target as he swings: each
+  round against each and thrown into it, the cuts followed through almost to the
+  ground. The cuts trail a wake of air behind the blade (`scripts/sword_trail.gd`,
+  `assets/shaders/sword_trail.gdshader`): a ribbon through the blade's last places,
+  fading out. He walks into his target as he swings: each
   swing is struck on a full stride of the rear foot past the front, so the feet
   alternate. Swinging on, one runs into the next (`scripts/combat_animation.gd`
   SWORD_CHAIN); broken off, the next attack starts again from SwordOpen, the first

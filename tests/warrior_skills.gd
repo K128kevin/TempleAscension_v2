@@ -450,6 +450,24 @@ func test():
 	game.player.visual.locomotion(true,false)
 	game.attack(false,target.position)
 	check(game.player.visual.state == "SwordOpen","Moving between swings starts them over too")
+	# The cuts leave a wake of air behind the blade; the thrust leaves none.
+	var wake = game.player.visual.sword_trail
+	play(.84*.4)
+	check(wake.samples.is_empty() and wake.mesh.get_surface_count() == 0,"Winding up, the blade leaves no wake")
+	play(.84*.15)
+	check(wake.samples.size() >= 3 and wake.mesh.get_surface_count() == 1,"Cutting, the blade trails a wake of air (%d places)" % wake.samples.size())
+	check(wake.samples[-1][2].distance_to(game.player.visual.weapon_item.global_transform*Vector3(0,1.02,0)) < .02,"The wake follows the blade's point")
+	while game.player.busy > 0: play(STEP)
+	check(wake.samples.is_empty(),"The wake is gone by the swing's end")
+	game.attack(false,target.position); play(.84*.5)
+	game.attack(false,target.position)
+	while game.player.busy > 0: play(STEP)
+	game.attack(false,target.position)
+	var thrust_wake = 0
+	while game.player.busy > 0:
+		play(STEP)
+		thrust_wake = maxi(thrust_wake,wake.samples.size())
+	check(game.player.visual.state == "SwordThrustR" and thrust_wake == 0,"The thrust leaves no wake")
 	clear()
 
 	# The panels: attributes on the left, the skill tree on the right.

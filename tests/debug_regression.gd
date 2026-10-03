@@ -27,7 +27,7 @@ func test():
 		check(not is_instance_valid(debug.panel) and game.run.class_id=="ranger" and game.run.seed==93741,"Normal launch loads its character without debug UI")
 		var generation=game.run_generation
 		for code in [KEY_F8,KEY_T,KEY_N,KEY_B,KEY_L,KEY_H,KEY_J,KEY_F9,KEY_G,KEY_F,KEY_F10]: key(code)
-		check(game.run_generation==generation and game.remaining()==24,"Debug shortcuts are gated")
+		check(game.run_generation==generation and game.remaining()==42,"Debug shortcuts are gated")
 		key(KEY_R)
 		check(game.walking and game.player_pace() < game.PLAYER_RUN_SPEED*.5,"R slows the hero to a walk")
 		key(KEY_R)

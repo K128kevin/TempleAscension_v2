@@ -214,7 +214,9 @@ ascent. Invulnerability is a session toggle and starts off on each launch.
 
 ## Campaign
 
-The original 24 / 32 / 54 / 57 / 80 enemy counts are preserved. Gladiators,
+Each floor holds three quarters more statues than the original's 24 / 32 / 54 / 57 /
+80: 42 / 56 / 95 / 100 / 140, most of the added ones gladiators, centurions and lions
+(which now stand on every floor). Gladiators,
 archers, fast Lion Guardians, spellcasting oracles and centurions activate as
 statues and alert nearby allies. Hitting an enemy pushes back its next attack by 50% of its normal
 time between attacks and roots it for that time; further hits add 30%, then 15%,
@@ -308,7 +310,10 @@ Percentages of damage are of a normal attack.
 The sword's normal attack is three swings that run into one another while he keeps
 attacking: a cut down from upper right to lower left, a backhand cut down from upper
 left to lower right, then a lunging thrust, and round again, his whole body thrown
-into each. He walks into his target as he swings, stepping with each foot in turn. If
+into each: the cuts are struck fast and followed through almost to the ground, the
+blade trailing a translucent wake of air (`scripts/sword_trail.gd`; drawn only, it
+changes nothing about the blow). He walks into his target as he swings, stepping with
+each foot in turn. If
 he breaks off (moves, casts, or simply stops), the next attack starts from the first.
 
 With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):

@@ -28,6 +28,12 @@ const SWORD_OPENER = "SwordOpen"
 const SWORD_FEET = ["R","L"]
 const SWORD_SWING_SHARE = 2.0/3.0
 const SWORD_FOLLOW = .12
+# The part of each cut (a share of the swing, from the blade starting down to
+# the end of its follow-through) through which the blade leaves a wake of
+# disturbed air behind it (scripts/sword_trail.gd). The thrust leaves none.
+const SWORD_WAKE = [.43,.66]
+static func sword_cuts(clip: String) -> bool:
+	return clip == SWORD_OPENER or clip.begins_with("SwordCut")
 const SPECIAL = [
 	{"clip":"SpearJab","seconds":.82,"contacts":[.52]},
 	{"clip":"SwordSlash","seconds":.96,"contacts":[.52]},

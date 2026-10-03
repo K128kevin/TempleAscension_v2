@@ -59,12 +59,12 @@ bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
 # The normal attack's swings (scripts/combat_animation.gd SWORD_CHAIN): each
 # clip is SWING_SECONDS of swing and then TAIL_SECONDS of recovery, keyed at
-# half the speed it is played at so the fast cuts are sampled closely.
+# a quarter of the speed it is played at so the fast cuts are sampled closely.
 SWINGS = ['SwordOpen']+[name+foot for name in ('SwordCut1', 'SwordCut2', 'SwordThrust') for foot in 'RL']
 # (The first version's clips, one foot only.)
 OLD_SWINGS = ['SwordCut1', 'SwordCut2', 'SwordThrust']
-SWING_SECONDS = 1.6
-TAIL_SECONDS = .8
+SWING_SECONDS = 3.2
+TAIL_SECONDS = 1.6
 for track in list(rig.animation_data.nla_tracks):
     if track.name in CLIPS or track.name in SWINGS+OLD_SWINGS: rig.animation_data.nla_tracks.remove(track)
 for a in list(bpy.data.actions):
@@ -444,24 +444,26 @@ def flow(points, t, period=3.0):
 # The cycle, a swing to each unit of its time: the first cut through 0..1,
 # the backhand through 1..2, the thrust through 2..3, each landing .52 through
 # its own. The sword hand, the way the blade points and the elbow's side:
-SWING_HAND = [(.20, (-.34, .32, 1.68)), (.36, (-.36, .4, 1.62)), (.44, (-.38, 0, 1.62)), (.52, (-.04, -.62, 1.2)), (.66, (.12, -.42, .8)), (.84, (.16, -.4, 1.2)),
-    (1.20, (.18, -.26, 1.5)), (1.36, (.18, -.2, 1.52)), (1.44, (.12, -.42, 1.48)), (1.52, (-.1, -.6, 1.2)), (1.66, (-.37, -.02, .92)), (1.84, (-.42, .18, .98)),
+SWING_HAND = [(.22, (-.34, .32, 1.68)), (.42, (-.36, .4, 1.62)), (.47, (-.38, 0, 1.62)), (.52, (-.04, -.62, 1.2)), (.60, (.12, -.66, .5)), (.70, (.14, -.62, .5)), (.88, (.16, -.4, 1.15)),
+    (1.22, (.18, -.26, 1.5)), (1.42, (.18, -.2, 1.52)), (1.47, (.12, -.42, 1.48)), (1.52, (-.1, -.6, 1.2)), (1.60, (-.4, -.18, .68)), (1.70, (-.42, -.14, .68)), (1.88, (-.42, .14, .95)),
     (2.14, (-.4, .36, 1.05)), (2.36, (-.4, .4, 1.02)), (2.52, (-.1, -.73, .9)), (2.64, (-.1, -.71, .9)), (2.84, (-.32, -.05, 1.4))]
-SWING_BLADE = [(.20, (-.25, .7, .6)), (.36, (-.3, .9, .1)), (.44, (-.5, .2, .85)), (.52, (.15, -.85, .5)), (.66, (.9, -.3, -.3)), (.84, (.5, -.1, .85)),
-    (1.20, (.5, .5, .7)), (1.36, (.5, .82, .2)), (1.44, (.55, .1, .8)), (1.52, (-.15, -.85, .5)), (1.66, (-.9, -.3, -.3)), (1.84, (-.5, -.8, -.2)),
+SWING_BLADE = [(.22, (-.25, .7, .6)), (.42, (-.3, .9, .1)), (.47, (-.5, .2, .85)), (.52, (.15, -.85, .5)), (.60, (.88, -.35, -.25)), (.70, (.9, -.25, -.22)), (.88, (.5, -.1, .85)),
+    (1.22, (.5, .5, .7)), (1.42, (.5, .82, .2)), (1.47, (.55, .1, .8)), (1.52, (-.15, -.85, .5)), (1.60, (-.8, -.4, -.4)), (1.70, (-.84, -.3, -.38)), (1.88, (-.5, -.8, -.1)),
     (2.14, (0, -1, .16)), (2.36, (.02, -1, .18)), (2.52, (.04, -1, .2)), (2.64, (.04, -1, .2)), (2.84, (-.1, -.6, .8))]
-SWING_POLE = [(.20, (-.9, .4, 1.5)), (.52, (-.8, -.1, .9)), (.66, (-.7, -.5, .6)), (1.20, (-.6, -.7, 1.1)), (1.52, (-.8, -.1, .9)),
-    (1.66, (-.9, .5, 1.2)), (2.14, (-.7, .9, 1.2)), (2.52, (-1, 0, 1.3)), (2.84, (-.9, 0, 1.2))]
+SWING_POLE = [(.22, (-.9, .4, 1.5)), (.52, (-.8, -.1, .9)), (.60, (-.9, -.6, .9)), (1.22, (-.6, -.7, 1.1)), (1.52, (-.8, -.1, .9)),
+    (1.60, (-.9, .3, .9)), (2.14, (-.7, .9, 1.2)), (2.52, (-1, 0, 1.3)), (2.84, (-.9, 0, 1.2))]
 # The whole body goes into each: wound far round against the swing and
 # thrown round with it (the turn, to the left), bent over it (the lean
-# forward), the hips dropped and driven forward under it.
-SWING_TURN = [(.20, -.75), (.36, -.9), (.52, .3), (.66, .9), (1.20, .8), (1.36, .9), (1.52, .2), (1.66, -.8), (2.14, -.7), (2.36, -.85),
+# forward), the hips dropped and driven forward under it. The cuts are
+# struck fast and followed all the way through, down almost to the ground,
+# as a serve is; he rises out of each into the next.
+SWING_TURN = [(.22, -.75), (.42, -.95), (.52, .3), (.60, .95), (.70, 1.0), (1.22, .8), (1.42, .95), (1.52, .2), (1.60, -.6), (1.70, -.7), (2.14, -.7), (2.36, -.85),
     (2.52, .8), (2.64, .8), (2.84, 0)]
-SWING_LEAN = [(.20, -.1), (.36, -.15), (.52, .3), (.66, .5), (.9, .15), (1.20, 0), (1.36, -.05), (1.52, .3), (1.66, .45), (1.9, .15),
+SWING_LEAN = [(.22, -.1), (.42, -.18), (.52, .35), (.60, .8), (.70, .8), (.9, .2), (1.22, 0), (1.42, -.1), (1.52, .35), (1.60, .75), (1.70, .75), (1.9, .2),
     (2.14, .05), (2.36, -.05), (2.52, .4), (2.64, .4), (2.84, .1)]
-SWING_DOWN = [(0, .05), (.2, .04), (.36, .08), (.52, .16), (.66, .2), (.86, .08), (1.2, .04), (1.36, .08), (1.52, .16), (1.66, .2), (1.86, .08),
+SWING_DOWN = [(0, .06), (.22, .04), (.42, .08), (.52, .25), (.60, .38), (.70, .38), (.88, .12), (1.22, .04), (1.42, .08), (1.52, .25), (1.60, .38), (1.70, .38), (1.88, .12),
     (2.14, .06), (2.36, .1), (2.52, .22), (2.64, .22), (2.86, .06)]
-SWING_FORWARD = [(0, 0), (.36, -.06), (.52, .1), (.66, .12), (.9, 0), (1.36, -.06), (1.52, .1), (1.66, .12), (1.9, 0), (2.36, -.08), (2.52, .16),
+SWING_FORWARD = [(0, 0), (.42, -.06), (.52, .1), (.62, .14), (.9, 0), (1.42, -.06), (1.52, .1), (1.62, .14), (1.9, 0), (2.36, -.08), (2.52, .16),
     (2.64, .16), (2.9, 0)]
 # Each swing's step: the travel the game carries him through over the swing
 # (scripts/visual.gd ROOT_ADVANCE keeps the same keys), and the rear foot's
@@ -565,7 +567,8 @@ def swing_feet(foot, u, settle=0.0):
     stretch[0] = 0.0
     for s in 'lr':
         at = PLANTED[s]+V(0, back[s], lift[s])
-        leg(s, at, (rig.pose.bones['thigh_'+s].head+at)/2+TOES[s]*.6)
+        # (The knees bend more nearly forward than the splayed feet point.)
+        leg(s, at, (rig.pose.bones['thigh_'+s].head+at)/2+(TOES[s]*.4+V(0, -.6, 0)).normalized()*.6)
         if lift[s] == 0: stretch[0] = max(stretch[0], (rig.pose.bones['foot_'+s].head-at).length)
 
 # The hand's turn at each moment of the cycle, followed round it unbroken (it
@@ -576,6 +579,9 @@ for i in range(3*TWIST_STEPS+1):
     angle = hand_twist()
     if TWIST: angle += 2*math.pi*round((TWIST[-1]-angle)/(2*math.pi))
     TWIST.append(angle)
+# (Counted from the turn nearest none: the arm turns the short way round.)
+middle = 2*math.pi*round((max(TWIST)+min(TWIST))/2/(2*math.pi))
+TWIST = [a-middle for a in TWIST]
 print('SWING_TWIST', [round(math.degrees(a)) for a in TWIST[::12]], 'wound', round(math.degrees(TWIST[-1]-TWIST[0])))
 TWIST.append(TWIST[-1])
 
@@ -621,6 +627,7 @@ def clearances():
             axial = abs(d.dot(normal))
             gap = min(gap, max(axial-.06-r, (d-normal*d.dot(normal)).length-.33-r))
         return gap
+    out['blade / ground'] = min(blade[0].z, blade[1].z)-.045
     out['blade / shield'] = off_board(blade[0], blade[1], .045)
     out['arm / shield'] = off_board(fore[0], fore[1], .045)
     y = B['lowerarm_r'].matrix.to_quaternion() @ V(0, 1, 0)
