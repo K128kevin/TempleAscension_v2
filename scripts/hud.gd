@@ -27,6 +27,8 @@ var prompt: Label
 var boss_bar: ProgressBar
 var boss_name: Label
 var hover_health: ProgressBar
+# The name of a townsperson under the cursor (only Anya has one).
+var npc_name: Label
 # One amber cast bar over each Oracle while it casts a fireball.
 var cast_bars: Array = []
 var modal: PanelContainer
@@ -79,6 +81,11 @@ func setup(owner_game) -> void:
 	hover_background.set_border_width_all(1)
 	hover_background.set_corner_radius_all(2)
 	hover_health.add_theme_stylebox_override("background",hover_background)
+	npc_name = label("",14,Color(.93,.86,.7),root)
+	npc_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	npc_name.size = Vector2(160,20)
+	npc_name.z_index = 1
+	npc_name.visible = false
 	var left = make_orb(false)
 	health = left.orb; hp_text = left.value
 	var right = make_orb(true)
@@ -337,6 +344,13 @@ func show_cast_bars() -> void:
 		# Just above where the hover health bar sits.
 		var head: Vector3 = caster.position+Vector3.UP*caster.config.size*2.25
 		cast_bars[i].position = game.world.camera.unproject_position(head)-Vector2(cast_bars[i].size.x*.5,24)
+
+# The name of the townsperson under the cursor, over her head.
+func show_npc_name(who: Dictionary) -> void:
+	npc_name.visible = not who.is_empty()
+	if not npc_name.visible: return
+	npc_name.text = who.name
+	npc_name.position = game.world.camera.unproject_position(who.at)-Vector2(npc_name.size.x*.5,10)
 
 func show_enemy_hover(enemy) -> void:
 	hover_health.visible = is_instance_valid(enemy) and not enemy.dead

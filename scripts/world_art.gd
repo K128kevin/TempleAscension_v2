@@ -23,8 +23,8 @@ const SIZE = {
 	"shrub_b":Vector3(1.11,1.51,1.28),"scrub":Vector3(.43,.45,.47),
 	"tree":Vector3(6.1,9.5,5.7),"dead_tree":Vector3(6.39,13.28,6.43),
 	"olive_a":Vector3(13.5,16.7,11.5),"olive_b":Vector3(11.4,16.1,11.5),
-	"dry_grass":Vector3(1.54,1.67,1.59),"agave":Vector3(1.81,2.35,1.95),"pavers_a":Vector3(2.11,.113,2.13),
-	"pavers_c":Vector3(1.06,.113,1.48),"palm_a":Vector3(5.98,9.14,6.36),"palm_b":Vector3(6.28,10.49,6.88),
+	"dry_grass":Vector3(1.54,1.67,1.59),"agave":Vector3(1.81,2.35,1.95),
+	"palm_a":Vector3(5.98,9.14,6.36),"palm_b":Vector3(6.28,10.49,6.88),
 	"palm_c":Vector3(6.13,8.23,6.04),"well":Vector3(.67,1.25,1.0),"column":Vector3(.7,3.8,.7),"rubble":Vector3(8.1,3.5,3.2),
 	"vase":Vector3(.7,.5,.7),"fire_bowl":Vector3(.5,.42,.48),
 	# The furniture of the inn and the smithy (scripts/world_interiors.gd).
@@ -69,7 +69,6 @@ static func shared(name: String) -> Material:
 	if cache.has(name): return cache[name]
 	var m: StandardMaterial3D = null
 	match name:
-		"PathRocks": m = textured("res://assets/models/props/gem_PathRocks_Diffuse.png",Color(.82,.68,.50),.95)
 		# The date palm (tools/make_palm.py): photographed bark, painted fronds.
 		"PalmBark":
 			m = textured("res://assets/textures/palm_bark.jpg",Color(.86,.80,.74),.95)

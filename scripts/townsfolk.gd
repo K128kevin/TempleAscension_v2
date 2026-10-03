@@ -1,0 +1,766 @@
+extends Node3D
+## The town's people (scripts/townsperson.gd draws each).
+##
+## Twenty-five grown townspeople wander the street that rings the arena, the
+## market and, now and then, an alley, stopping here and there; two who pass
+## may stop a moment to talk. They drift in and out of the inn so that between
+## three and eight of them are inside at any moment: one who comes in sits at
+## a table and waits; Anya, the innkeeper, fills a mug at the barrels behind
+## her bar, carries it over upright in her fist and sets it on the table in
+## front of him; he drinks for a minute (lifting the mug to his mouth for a
+## sip now and then and setting it down again), then leaves or waits for
+## another. Six children run about the streets at their games (tag,
+## follow-my-leader, and a rest in a huddle between them); they keep out of
+## the inn. No one goes into the arena, through the palace gate or out of
+## the town.
+const Person = preload("res://scripts/townsperson.gd")
+const Kit = preload("res://scripts/world_art.gd")
+const Town = preload("res://scripts/world_town.gd")
+const Interiors = preload("res://scripts/world_interiors.gd")
+const ADULTS = 25
+const CHILDREN = 6
+# How many of the grown townspeople are in the inn at once.
+const INN_LEAST = 3
+const INN_MOST = 8
+# How long a drink lasts, and a sip between whiles.
+const DRINK_TIME = 60.0
+const WALK = 1.15
+const ANYA_WALK = 1.7
+const CHILD_RUN = 3.0
+# The chance that two who pass stop to talk, and how long before either may again.
+const CHAT_CHANCE = .4
+const CHAT_REST = 25.0
+# The chance that one choosing where to go next heads for the inn, by how
+# many are already in it or on their way; and that one who has finished a
+# drink leaves, by how many are staying.
+const INN_CHANCE = {4:.35,5:.22,6:.14,7:.07}
+const LEAVE_CHANCE = {4:.3,5:.5,6:.65,7:.8,8:.92}
+# Clothes: neutral, undyed or faded.
+const CLOTHS = [Color(.74,.68,.56),Color(.52,.50,.47),Color(.42,.33,.25),Color(.60,.52,.40),Color(.42,.42,.30),Color(.38,.40,.42),Color(.50,.36,.28),Color(.78,.75,.68),Color(.30,.29,.27)]
+const HAIRS = [Color(.07,.05,.04),Color(.13,.08,.05),Color(.2,.14,.09),Color(.26,.2,.14),Color(.42,.41,.4)]
+# The twenty-five: [body, garment, cloth, wear, hair, beard, belt, skin]. Ten
+# are in rags, nine in worn and patched clothes, six decently dressed.
+const LOOKS = [
+	["man","Sack",3,.95,"Hair_Buzzed",true,false,"dark"],["man","Sack",1,.9,"Hair_SimpleParted",false,false,"light"],
+	["man","Tunic",8,.88,"",true,true,"light"],["woman","Shift",3,.92,"Hair_Buns",false,false,"dark"],
+	["woman","Shift",1,.86,"Hair_Long",false,true,"light"],["man","Robe",2,.9,"Hair_SimpleParted",true,true,"dark"],
+	["man","Tunic",0,.6,"Hair_SimpleParted",false,true,"light"],["man","Robe",5,.55,"",true,true,"light"],
+	["woman","Gown",4,.6,"Hair_Long",false,true,"dark"],["woman","Gown",6,.5,"Hair_Buns",false,true,"light"],
+	["man","Tunic",2,.62,"Hair_Buzzed",true,true,"dark"],
+	["man","Tunic",7,.2,"Hair_SimpleParted",true,true,"light"],["woman","Gown",0,.15,"Hair_Long",false,true,"light"],
+	["man","Robe",1,.22,"Hair_Buzzed",false,true,"dark"],["woman","Gown",5,.2,"Hair_Buns",false,true,"dark"],
+	["man","Sack",8,.93,"",true,false,"light"],["woman","Shift",6,.88,"Hair_Long",false,false,"dark"],
+	["man","Tunic",2,.9,"Hair_Buzzed",false,false,"light"],["woman","Shift",4,.95,"Hair_Buns",false,false,"light"],
+	["man","Robe",3,.58,"Hair_SimpleParted",true,true,"dark"],["woman","Gown",1,.52,"Hair_Long",false,true,"light"],
+	["man","Tunic",5,.64,"",false,true,"light"],["man","Sack",0,.56,"Hair_Buzzed",true,true,"dark"],
+	["woman","Gown",7,.18,"Hair_Buns",false,true,"light"],["man","Tunic",6,.24,"Hair_SimpleParted",false,true,"dark"]]
+
+class Walker:
+	var body: Node3D
+	var state = "pause"
+	var route = PackedVector3Array()
+	var timer = 0.0
+	var speed = 1.15
+	var pace = "Walk"
+	var chat_rest = 0.0
+	var partner: Walker
+	var after = "pause"
+	# The seat taken (or made for), its mug, and how the visit is going.
+	var seat = {}
+	var mug: Node3D
+	var drinks = 0
+	var sip = 0.0
+	# A reach of the hand in stages (a sip, a mug set down): which, how far.
+	var phase = ""
+	var phase_time = 0.0
+	var from = Vector3.ZERO
+	var child = false
+	var repath = 0.0
+	var at: Vector3:
+		get: return body.position
+		set(value): body.position = value
+
+var world
+var rng = RandomNumberGenerator.new()
+# The streets the townspeople keep to, as a grid of their own: the world's
+# open ground in the town, less the arena, the palace hill and the smithy.
+var grid = AStarGrid2D.new()
+var region = Rect2i(-346,-90,166,170)
+var haunts: Array[Dictionary] = []
+var inn = Rect2()
+var seats: Array[Dictionary] = []
+var people: Array[Walker] = []
+var children: Array[Walker] = []
+var anya: Walker
+# Anya's round: who she is taking a drink to, and where she stands.
+var round: Array[Walker] = []
+# Where the mug rides in her fist as she carries it, relative to her.
+const CARRY = Vector3(.22,1.02,.3)
+var post = Vector3.ZERO
+var tap = Vector3.ZERO
+var bar_end: Array[Vector3] = []
+# The children's game: "tag", "follow" or "rest".
+var play = {"mode":"rest","timer":4.0,"it":0,"spot":Vector3.ZERO,"next":"tag","freeze":0.0}
+var check = 0.0
+# Mugs not in a hand or on a table wait here, unseen.
+var pantry: Node3D
+
+func setup(overworld) -> void:
+	world = overworld
+	rng.seed = 90210
+	inn = world.rooms[0].area
+	pantry = Node3D.new()
+	pantry.visible = false
+	add_child(pantry)
+	lay_grid()
+	mark_haunts()
+	furnish()
+	lay_service()
+	var c = Interiors.INN
+	post = Vector3(c.x+7.0,0,c.z+7.7)
+	tap = Vector3(c.x+9.2,0,c.z+7.7)
+	bar_end = [Vector3(c.x+11.9,0,c.z+7.7),Vector3(c.x+11.9,0,c.z+9.6)]
+	anya = Walker.new()
+	anya.body = figure({"who":"woman","garment":"Dress","under":"Blouse","cloth":Color(.36,.24,.15),"under_cloth":Color(.92,.9,.85),"wear":.06,
+		"hair":"Hair_BuzzedFemale","braid":true,"hair_colour":Color(.06,.045,.035),"skin":"light","tone":Color(1.0,.95,.9),"size":.97,"seed":.11})
+	anya.body.name = "Anya"
+	anya.at = post
+	anya.state = "post"
+	anya.speed = ANYA_WALK
+	anya.mug = Kit.prop("mug",.17)
+	stow(anya.mug)
+	for i in ADULTS:
+		var look: Array = LOOKS[i]
+		var wear: float = look[3]
+		var walker = Walker.new()
+		walker.body = figure({"who":look[0],"garment":look[1],"cloth":CLOTHS[look[2]],"wear":wear,"weave":"hessian" if wear>.8 else "linen",
+			"hair":look[4],"beard":look[5],"hair_colour":HAIRS[rng.randi_range(0,HAIRS.size()-1)],"belt":(Color(.42,.36,.26) if wear>.5 else Color(.3,.2,.12)) if look[6] else null,
+			"skin":look[7],"tone":Color(1.0,.93,.86) if look[7]=="light" else Color.WHITE,"dirt":clampf(wear*1.1-.1,0.0,1.0),"size":rng.randf_range(.93,1.02),"seed":rng.randf()})
+		walker.body.name = "Townsperson%d" % i
+		walker.speed = WALK*rng.randf_range(.88,1.12)
+		people.append(walker)
+		# Five begin at the inn's tables; the rest about the streets.
+		if i%5 == 0:
+			walker.seat = free_seat()
+			walker.seat.taken = walker
+			sit(walker)
+		else:
+			walker.at = haunts[rng.randi_range(0,haunts.size()-1)].at+Vector3(rng.randf_range(-.4,.4),0,rng.randf_range(-.4,.4))
+			walker.body.rotation.y = rng.randf_range(0,TAU)
+			walker.timer = rng.randf_range(0.0,6.0)
+	for i in CHILDREN:
+		var girl = i%2 == 1
+		var walker = Walker.new()
+		walker.child = true
+		walker.body = figure({"who":"woman" if girl else "man","garment":"Shift" if girl else "Sack","cloth":CLOTHS[[3,1,0,2,6,8][i]],"wear":[.92,.85,.8,.95,.9,.86][i],
+			"weave":"hessian" if i%3==0 else "linen","hair":["Hair_SimpleParted","Hair_Long","Hair_Buzzed","Hair_Buns","Hair_SimpleParted","Hair_Long"][i],"hair_colour":HAIRS[i%HAIRS.size()],
+			"skin":["light","dark","dark","light","dark","light"][i],"dirt":.85,"size":[.6,.57,.66,.62,.58,.64][i],"child":true,"seed":rng.randf()})
+		walker.body.name = "Child%d" % i
+		walker.at = haunts[3].at+Vector3(i*.9-1.4,0,rng.randf_range(-.5,.5))
+		walker.speed = CHILD_RUN
+		children.append(walker)
+	play.spot = haunts[3].at
+
+func figure(look: Dictionary) -> Node3D:
+	var person = Person.new()
+	add_child(person)
+	person.setup(look)
+	return person
+
+# ---- The streets ----
+
+func closed(x: int, z: int) -> bool:
+	if world.cells[world.index(x,z)] != world.OPEN: return true
+	var arena = Vector2((x-Town.ARENA.x)/Town.ARENA_RADII.x,(z-Town.ARENA.z)/Town.ARENA_RADII.y)
+	if arena.length() < 1.0 or z < -77 or x > -184: return true
+	if world.rooms[1].area.has_point(Vector2(x,z)): return true
+	return world.height_at(x,z) > .01
+
+func lay_grid() -> void:
+	grid.region = region
+	grid.cell_size = Vector2.ONE
+	grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	grid.update()
+	for z in range(region.position.y,region.end.y):
+		for x in range(region.position.x,region.end.x):
+			if closed(x,z): grid.set_point_solid(Vector2i(x,z))
+	# People keep off the walls: a cell beside one costs more to cross.
+	for z in range(region.position.y+1,region.end.y-1):
+		for x in range(region.position.x+1,region.end.x-1):
+			if grid.is_point_solid(Vector2i(x,z)): continue
+			for step in [Vector2i(1,0),Vector2i(-1,0),Vector2i(0,1),Vector2i(0,-1)]:
+				if grid.is_point_solid(Vector2i(x,z)+step):
+					grid.set_point_weight_scale(Vector2i(x,z),3.0)
+					break
+
+func open_at(at: Vector3) -> bool:
+	var cell = Vector2i(floori(at.x+.5),floori(at.z+.5))
+	return region.has_point(cell) and not grid.is_point_solid(cell)
+
+# The open cell nearest a point (itself, if it is open), or the point.
+func nearest_open(at: Vector3, reach: int = 4) -> Vector3:
+	var cell = Vector2i(floori(at.x+.5),floori(at.z+.5))
+	var best = at
+	var least = INF
+	for dz in range(-reach,reach+1):
+		for dx in range(-reach,reach+1):
+			var other = cell+Vector2i(dx,dz)
+			if not region.has_point(other) or grid.is_point_solid(other): continue
+			var distance = Vector2(other.x-at.x,other.y-at.z).length()
+			if distance < least:
+				least = distance
+				best = Vector3(other.x,0,other.y)
+	return best
+
+func clear_way(a: Vector3, b: Vector3) -> bool:
+	var steps = maxi(1,ceili(a.distance_to(b)/.4))
+	var side = (b-a).normalized().cross(Vector3.UP)*.4
+	for i in range(steps+1):
+		var at = a.lerp(b,float(i)/steps)
+		if not open_at(at) or not open_at(at+side) or not open_at(at-side): return false
+	return true
+
+# The way from one place to another by the streets, its corners cut where
+# the ground between is open.
+func way(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var a = nearest_open(from)
+	var b = nearest_open(to)
+	var cells = grid.get_id_path(Vector2i(roundi(a.x),roundi(a.z)),Vector2i(roundi(b.x),roundi(b.z)))
+	var out = PackedVector3Array()
+	if cells.is_empty(): return out
+	var points: Array[Vector3] = []
+	for cell in cells: points.append(Vector3(cell.x,0,cell.y))
+	var i = 0
+	var here = from
+	while i < points.size():
+		var ahead = i
+		while ahead+1 < points.size() and ahead-i < 14 and clear_way(here,points[ahead+1]): ahead += 1
+		out.append(points[ahead])
+		here = points[ahead]
+		i = ahead+1
+	return out
+
+func mark_haunts() -> void:
+	var reach = Town.ARENA_RADII+Vector2(Town.RING*.5,Town.RING*.5)
+	for k in 28:
+		var angle = k*TAU/28.0
+		add_haunt(Town.ARENA+Vector3(cos(angle)*reach.x,0,sin(angle)*reach.y),"ring")
+	for lane in Town.ALLEYS:
+		var long = lane.size.x > lane.size.y
+		for t in [.2,.5,.85]:
+			add_haunt(Vector3(lane.position.x+lane.size.x*(t if long else .5),0,lane.position.y+lane.size.y*(.5 if long else t)),"alley")
+	var market: Rect2 = Town.MARKET
+	for spot in [Vector2(.25,.3),Vector2(.7,.35),Vector2(.4,.75),Vector2(.8,.8)]:
+		add_haunt(Vector3(market.position.x+market.size.x*spot.x,0,market.position.y+market.size.y*spot.y),"market")
+	add_haunt(Vector3(-197,0,0),"market")
+	add_haunt(Vector3(-189,0,2),"market")
+
+func add_haunt(at: Vector3, kind: String) -> void:
+	var spot = nearest_open(at,5)
+	if open_at(spot): haunts.append({"at":spot,"kind":kind})
+
+# ---- The inn ----
+
+# The seats at the inn's tables: where one sits (`at`), facing `face`; where
+# he stands to sit down and get up (`step`); where his mug stands (`mug`).
+func furnish() -> void:
+	var c = Interiors.INN
+	var west = Vector3(c.x+4.6,0,c.z+12.6)
+	for side in [-1.0,1.0]:
+		for along in [-.65,.65]: add_seat(west+Vector3(along,0,side*.98),Vector3(0,0,-side),.5,west)
+	var east = Vector3(c.x+13.4,0,c.z+11.0)
+	for seat in [Vector3(-.95,0,-.8),Vector3(-.95,0,.7),Vector3(.95,0,-.6),Vector3(.95,0,.8),Vector3(0,0,1.9)]:
+		add_seat(east+seat,Vector3(-signf(seat.x),0,0) if absf(seat.x) > .1 else Vector3(0,0,-1),.55,east)
+
+func add_seat(at: Vector3, face: Vector3, height: float, table: Vector3) -> void:
+	var step = nearest_open(at-face*1.1,3)
+	seats.append({"at":at,"face":face,"height":height,"step":step,"table":table,"taken":null,"left":null})
+
+# Each seat's open side, where Anya stands to serve it, and where the mug is
+# set down on the table: at the table's edge before the drinker, toward her.
+func lay_service() -> void:
+	for seat in seats:
+		var side: Vector3 = seat.face.cross(Vector3.UP)
+		var room = 0.0
+		for sign in [1.0,-1.0]:
+			var spot: Vector3 = seat.at+side*sign*.9
+			var nearest = INF
+			for other in seats:
+				if other != seat: nearest = minf(nearest,other.at.distance_to(spot))
+			if nearest > room:
+				room = nearest
+				seat.side = side*sign
+		seat.serve = seat.at+seat.side*.55+seat.face*.25
+		seat.mug = Vector3(seat.at.x,.87,seat.at.z)+seat.face*.55+seat.side*.22
+
+func free_seat() -> Dictionary:
+	var open = seats.filter(func(seat): return seat.taken == null)
+	return {} if open.is_empty() else open[rng.randi_range(0,open.size()-1)]
+
+func inside(walker: Walker) -> bool:
+	return inn.has_point(Vector2(walker.at.x,walker.at.z))
+
+# How many of the grown townspeople are in the inn.
+func patrons() -> int:
+	return people.filter(func(w): return inside(w)).size()
+
+func inbound() -> int:
+	return people.filter(func(w): return w.state == "to_inn" and not inside(w)).size()
+
+# Those inside who are not on their way out.
+func staying() -> int:
+	return people.filter(func(w): return inside(w) and not w.state in ["stand_up","leaving"]).size()
+
+func can_enter() -> bool:
+	return patrons()+inbound() < INN_MOST and not free_seat().is_empty()
+
+func can_leave() -> bool:
+	return staying()-1 >= INN_LEAST
+
+func go_to_inn(walker: Walker) -> bool:
+	var seat = free_seat()
+	if seat.is_empty(): return false
+	var route = way(walker.at,seat.step)
+	if route.is_empty(): return false
+	seat.taken = walker
+	walker.seat = seat
+	walker.route = route
+	walker.state = "to_inn"
+	return true
+
+# Seated at once (as the day begins).
+func sit(walker: Walker) -> void:
+	var seat: Dictionary = walker.seat
+	walker.at = seat.at+seat.face*.3
+	walker.body.rotation.y = atan2(seat.face.x,seat.face.z)
+	walker.state = "wait"
+	walker.body.play("Sit",0.0)
+	clear_mug(seat)
+
+func stow(mug: Node3D) -> void:
+	if mug.get_parent() != null: mug.get_parent().remove_child(mug)
+	pantry.add_child(mug)
+
+func clear_mug(seat: Dictionary) -> void:
+	if seat.left != null and is_instance_valid(seat.left): seat.left.queue_free()
+	seat.left = null
+
+# ---- Every frame ----
+
+func tick(delta: float, hero: Vector3) -> void:
+	delta = minf(delta,.1)
+	for walker in people: tend(walker,delta)
+	serve(delta)
+	romp(delta)
+	meet(delta)
+	part(hero)
+	check -= delta
+	if check <= 0.0:
+		check = .5
+		# The inn is never let run low: the nearest stroller is called in.
+		if staying()+inbound() <= INN_LEAST and can_enter():
+			var strollers = people.filter(func(w): return w.state in ["walk","pause"] and not inside(w))
+			strollers.sort_custom(func(a, b): return a.at.distance_to(world.rooms[0].door) < b.at.distance_to(world.rooms[0].door))
+			for walker in strollers:
+				if go_to_inn(walker): break
+
+# Walks a walker along its route; true once it has arrived.
+func advance(walker: Walker, delta: float) -> bool:
+	if walker.route.is_empty(): return true
+	var to: Vector3 = walker.route[0]-walker.at
+	to.y = 0
+	var step = walker.speed*delta
+	if to.length() <= step:
+		walker.at = Vector3(walker.route[0].x,0,walker.route[0].z)
+		walker.route.remove_at(0)
+	else: walker.at += to.normalized()*step
+	walker.body.turn_to(to,delta)
+	walker.body.stride(walker.pace,walker.speed)
+	return walker.route.is_empty()
+
+func rest(walker: Walker, least: float, most: float) -> void:
+	walker.state = "pause"
+	walker.timer = rng.randf_range(least,most)
+	walker.body.play("Arms" if rng.randf() < .25 else "Idle")
+
+func wander(walker: Walker) -> void:
+	var occupancy = staying()+inbound()
+	if can_enter() and rng.randf() < INN_CHANCE.get(occupancy,1.0 if occupancy < 4 else 0.0) and go_to_inn(walker): return
+	# Mostly round the arena, sometimes the market, now and then an alley;
+	# and somewhere not too near.
+	var roll = rng.randf()
+	var kind = "ring" if roll < .62 else ("market" if roll < .82 else "alley")
+	var choices = haunts.filter(func(h): return h.kind == kind and h.at.distance_to(walker.at) > 12.0 and h.at.distance_to(walker.at) < 110.0)
+	if choices.is_empty(): choices = haunts
+	walker.route = way(walker.at,choices[rng.randi_range(0,choices.size()-1)].at+Vector3(rng.randf_range(-.4,.4),0,rng.randf_range(-.4,.4)))
+	if walker.route.is_empty(): rest(walker,1.0,3.0)
+	else: walker.state = "walk"
+
+func tend(walker: Walker, delta: float) -> void:
+	walker.chat_rest = maxf(0.0,walker.chat_rest-delta)
+	walker.timer -= delta
+	match walker.state:
+		"pause":
+			if walker.timer <= 0.0: wander(walker)
+		"walk":
+			if advance(walker,delta): rest(walker,2.0,9.0)
+			# An occasional stop on the way.
+			elif rng.randf() < delta*.012:
+				walker.after = "walk"
+				walker.state = "halt"
+				walker.timer = rng.randf_range(2.0,5.0)
+				walker.body.play("Idle")
+		"halt":
+			if walker.timer <= 0.0: walker.state = "walk"
+		"chat":
+			var other: Walker = walker.partner
+			if other != null: walker.body.turn_to(other.at-walker.at,delta,5.0)
+			if walker.timer <= 0.0:
+				walker.partner = null
+				walker.chat_rest = CHAT_REST
+				walker.state = walker.after if not walker.route.is_empty() else "pause"
+				if walker.state == "pause": walker.timer = rng.randf_range(1.0,3.0)
+		"to_inn":
+			if advance(walker,delta):
+				walker.state = "sit_down"
+				walker.timer = walker.body.length("SitDown")
+				walker.from = walker.at
+				walker.body.play("SitDown",.15)
+				clear_mug(walker.seat)
+		"sit_down":
+			var seat: Dictionary = walker.seat
+			var t = clampf(1.0-walker.timer/walker.body.length("SitDown"),0.0,1.0)
+			walker.at = walker.from.lerp(seat.at+seat.face*.3,smoothstep(0.0,.7,t))
+			walker.body.turn_to(seat.face,delta,10.0)
+			if walker.timer <= 0.0:
+				walker.state = "wait"
+				walker.body.play("Sit")
+		"wait":
+			# (Anya brings the drink: see serve.) Those at a table with company talk.
+			walker.body.reach(Vector3.ZERO,0.0,0.0)
+			var company = people.any(func(w): return w != walker and w.state in ["wait","drink"] and w.seat.table == walker.seat.table)
+			walker.body.play("SitTalk" if company and fmod(walker.timer,14.0) < -7.0 else "Sit")
+		"drink":
+			if walker.phase != "": sip(walker,delta)
+			else:
+				walker.sip -= delta
+				if walker.sip <= 0.0:
+					walker.sip = rng.randf_range(7.0,13.0)
+					walker.phase = "reach"
+					walker.phase_time = 0.0
+			if walker.timer <= 0.0 and walker.phase == "":
+				walker.drinks += 1
+				var stays = staying()
+				if can_leave() and (walker.drinks >= 3 or rng.randf() < LEAVE_CHANCE.get(stays,1.0 if stays > 8 else 0.0)): leave(walker)
+				else:
+					walker.state = "wait"
+					walker.timer = 0.0
+					walker.body.play("Sit",.3)
+		"stand_up":
+			var seat: Dictionary = walker.seat
+			var t = clampf(1.0-walker.timer/walker.body.length("StandUp"),0.0,1.0)
+			walker.at = walker.from.lerp(seat.step,smoothstep(.3,1.0,t))
+			if walker.timer <= 0.0:
+				seat.taken = null
+				walker.seat = {}
+				walker.drinks = 0
+				var outside = haunts.filter(func(h): return h.kind == "ring")
+				walker.route = way(walker.at,outside[rng.randi_range(0,outside.size()-1)].at)
+				walker.state = "leaving"
+		"leaving":
+			if advance(walker,delta): rest(walker,2.0,6.0)
+			elif not inside(walker): walker.state = "walk"
+
+# A sip: the hand goes to the mug on the table, closes on its handle, lifts
+# it to the mouth, sets it down again and lets go.
+const SIP = {"reach":.55,"lift":.6,"sip":.9,"lower":.6,"return":.5}
+
+func sip(walker: Walker, delta: float) -> void:
+	var seat: Dictionary = walker.seat
+	var body = walker.body
+	walker.phase_time += delta
+	var t = clampf(walker.phase_time/SIP[walker.phase],0.0,1.0)
+	var eased = smoothstep(0.0,1.0,t)
+	var on_table: Vector3 = body.hand_for(seat.mug+Vector3.UP*world.lift(seat.at))
+	var head: Vector3 = body.skeleton.global_transform*body.skeleton.get_bone_global_pose(body.skeleton.find_bone("Head")).origin
+	var at_mouth: Vector3 = body.hand_for(head+body.global_transform.basis*Vector3(0,-.17,.09))
+	match walker.phase:
+		"reach": body.reach(on_table,eased,eased)
+		"lift": body.reach(on_table.lerp(at_mouth,eased),1.0,1.0)
+		"sip": body.reach(at_mouth,1.0,1.0)
+		"lower": body.reach(at_mouth.lerp(on_table,eased),1.0,1.0)
+		"return": body.reach(on_table,1.0-eased,1.0-eased)
+	if t < 1.0: return
+	walker.phase_time = 0.0
+	match walker.phase:
+		"reach":
+			body.hold(walker.mug)
+			walker.phase = "lift"
+		"lift": walker.phase = "sip"
+		"sip": walker.phase = "lower"
+		"lower":
+			set_down(walker.mug,seat)
+			walker.phase = "return"
+		"return": walker.phase = ""
+
+# A mug stood on the table before a seat.
+func set_down(mug: Node3D, seat: Dictionary) -> void:
+	if mug.get_parent() != null: mug.get_parent().remove_child(mug)
+	add_child(mug)
+	mug.position = seat.mug+Vector3.UP*world.lift(seat.at)
+	mug.rotation = Vector3(0,atan2(seat.face.x,seat.face.z)+PI/2,0)
+
+func leave(walker: Walker) -> void:
+	# The mug is left on the table for Anya to clear.
+	var seat: Dictionary = walker.seat
+	walker.body.reach(Vector3.ZERO,0.0,0.0)
+	walker.phase = ""
+	if walker.mug != null:
+		set_down(walker.mug,seat)
+		seat.left = walker.mug
+		walker.mug = null
+	walker.state = "stand_up"
+	walker.timer = walker.body.length("StandUp")
+	walker.from = walker.at
+	walker.body.play("StandUp",.2)
+
+# Anya: at her post behind the bar until someone is waiting; then to the
+# barrels, where she fills a mug, carries it upright in her fist round the
+# end of the bar to his seat, sets it on the table before him, and goes back
+# for the next.
+func serve(delta: float) -> void:
+	anya.timer -= delta
+	anya.phase_time += delta
+	var body = anya.body
+	match anya.state:
+		"post":
+			body.turn_to(Vector3(0,0,1),delta,6.0)
+			if body.state != "Idle" and body.state != "Arms": body.play("Idle")
+			var waiting = people.filter(func(w): return w.state == "wait")
+			if not waiting.is_empty() and anya.timer <= 0.0:
+				round.clear()
+				round.append(waiting[0])
+				anya.route = PackedVector3Array([tap])
+				anya.state = "to_tap"
+		"to_tap":
+			if advance(anya,delta):
+				anya.state = "fill"
+				anya.phase_time = 0.0
+				body.play("Idle",.2)
+		"fill":
+			# Facing the barrels on their rack against the kitchen wall, she
+			# holds the mug under the tap a moment.
+			body.turn_to(Vector3(0,0,-1),delta,8.0)
+			var t = anya.phase_time
+			var spout: Vector3 = body.hand_for(body.global_transform*Vector3(.12,.95,.55))
+			if t < .6: body.reach(spout,smoothstep(0.0,1.0,t/.6),smoothstep(0.0,1.0,t/.6))
+			elif t < .8 and anya.body.held == null: body.hold(anya.mug)
+			elif t >= 2.0:
+				next_table(true)
+		"carry":
+			body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
+			if advance(anya,delta):
+				anya.state = "place"
+				anya.phase_time = 0.0
+				body.play("Idle",.2)
+		"place":
+			var patron: Walker = round[0]
+			var seat: Dictionary = patron.seat
+			body.turn_to(seat.mug-anya.at,delta,8.0)
+			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
+			var on_table: Vector3 = body.hand_for(seat.mug+Vector3.UP*world.lift(seat.at))
+			var t = anya.phase_time
+			if t < .7: body.reach(carried.lerp(on_table,smoothstep(0.0,1.0,t/.7)),1.0,1.0)
+			elif t < .9:
+				if body.held != null:
+					# The mug stands before him; what was left on the table goes.
+					body.hold(null)
+					for other in seats:
+						if other.table == seat.table and other.taken == null: clear_mug(other)
+					if patron.state == "wait":
+						if patron.mug != null: patron.mug.queue_free()
+						patron.mug = anya.mug
+						anya.mug = Kit.prop("mug",.17)
+						stow(anya.mug)
+						set_down(patron.mug,seat)
+						patron.state = "drink"
+						patron.timer = DRINK_TIME
+						patron.sip = rng.randf_range(2.0,5.0)
+					else: set_down(anya.mug,seat)
+				body.reach(on_table,1.0,0.0)
+			elif t < 1.4: body.reach(on_table,1.0-smoothstep(0.0,1.0,(t-.9)/.5),0.0)
+			else:
+				body.reach(on_table,0.0,0.0)
+				round.remove_at(0)
+				next_table(false)
+		"return":
+			body.reach(Vector3.ZERO,0.0,0.0)
+			if advance(anya,delta):
+				anya.state = "post"
+				anya.timer = rng.randf_range(1.0,3.0)
+				body.play("Idle")
+
+func next_table(from_bar: bool) -> void:
+	while not round.is_empty() and round[0].state != "wait": round.remove_at(0)
+	var route = PackedVector3Array()
+	if round.is_empty():
+		# Back behind the bar.
+		if anya.body.held != null:
+			anya.body.hold(null)
+			stow(anya.mug)
+		route.append_array(way(anya.at,bar_end[1]))
+		route.append_array(PackedVector3Array([bar_end[1],bar_end[0],post]))
+		anya.state = "return"
+	else:
+		if from_bar: route.append_array(PackedVector3Array([bar_end[0],bar_end[1]]))
+		var patron: Walker = round[0]
+		route.append_array(way(bar_end[1] if from_bar else anya.at,patron.seat.serve))
+		route.append(patron.seat.serve)
+		anya.state = "carry"
+	anya.route = route
+
+# ---- Talk ----
+
+# Two who pass each other may stop and talk a moment.
+func meet(_delta: float) -> void:
+	for i in people.size():
+		var a: Walker = people[i]
+		if a.state != "walk" or a.chat_rest > 0.0: continue
+		for j in range(i+1,people.size()):
+			var b: Walker = people[j]
+			if b.state != "walk" or b.chat_rest > 0.0 or a.at.distance_to(b.at) > 2.6: continue
+			if rng.randf() < CHAT_CHANCE:
+				var time = rng.randf_range(4.0,9.0)
+				for pair in [[a,b],[b,a]]:
+					var walker: Walker = pair[0]
+					walker.partner = pair[1]
+					walker.after = "walk"
+					walker.state = "chat"
+					walker.timer = time
+				a.body.play("Talk")
+				b.body.play("Idle" if rng.randf() < .4 else "Talk")
+			else:
+				# They pass with a nod; no second chance for a while.
+				a.chat_rest = CHAT_REST*.5
+				b.chat_rest = CHAT_REST*.5
+			break
+
+# No two stand in the same spot, and all give way to the hero.
+func part(hero: Vector3) -> void:
+	var loose: Array[Walker] = []
+	for walker in people+children+[anya]:
+		if walker.state in ["walk","pause","halt","chat","leaving","to_inn","run","idle"]: loose.append(walker)
+	for i in loose.size():
+		var a: Walker = loose[i]
+		var away: Vector3 = a.at-Vector3(hero.x,0,hero.z)
+		if away.length() < .75 and away.length() > .01: nudge(a,away.normalized()*(.75-away.length()))
+		for j in range(i+1,loose.size()):
+			var b: Walker = loose[j]
+			var apart: Vector3 = a.at-b.at
+			var gap = .62 if not (a.state == "chat" and b.state == "chat") else .95
+			if apart.length() >= gap or apart.length() < .01: continue
+			var push = apart.normalized()*(gap-apart.length())*.5
+			nudge(a,push)
+			nudge(b,-push)
+
+func nudge(walker: Walker, by: Vector3) -> void:
+	if open_at(walker.at+by): walker.at += by
+
+# ---- The children ----
+
+func romp(delta: float) -> void:
+	play.timer -= delta
+	play.freeze = maxf(0.0,play.freeze-delta)
+	if play.timer <= 0.0:
+		if play.mode == "rest":
+			play.mode = play.next
+			play.next = "follow" if play.mode == "tag" else "tag"
+			play.timer = rng.randf_range(32.0,55.0)
+			play.it = rng.randi_range(0,CHILDREN-1)
+			for child in children: child.route = PackedVector3Array()
+		else:
+			# A rest in a huddle at the nearest corner.
+			var middle = Vector3.ZERO
+			for child in children: middle += child.at/CHILDREN
+			var nearest = haunts[0]
+			for haunt in haunts:
+				if haunt.at.distance_to(middle) < nearest.at.distance_to(middle): nearest = haunt
+			play.spot = nearest.at
+			play.mode = "rest"
+			play.timer = rng.randf_range(9.0,15.0)
+			for i in CHILDREN: children[i].route = way(children[i].at,play.spot+Vector3(cos(i*TAU/CHILDREN),0,sin(i*TAU/CHILDREN))*1.0)
+	for i in CHILDREN:
+		var child: Walker = children[i]
+		child.repath -= delta
+		child.state = "run"
+		match play.mode:
+			"rest":
+				child.speed = CHILD_RUN*.8
+				if child.route.is_empty():
+					child.state = "idle"
+					child.body.turn_to(play.spot-child.at,delta,6.0)
+					# They take turns to show off.
+					child.body.play("Dance" if int(play.timer/3.0)%CHILDREN == i else "Talk")
+			"tag":
+				var it: Walker = children[play.it]
+				if i == play.it:
+					child.speed = CHILD_RUN*1.12
+					if play.freeze > 0.0:
+						# Just caught: he counts before he gives chase.
+						child.state = "idle"
+						child.route = PackedVector3Array()
+						child.body.play("Idle")
+					elif child.repath <= 0.0:
+						child.repath = .6
+						var quarry: Walker = null
+						for other in children:
+							if other != child and (quarry == null or other.at.distance_to(child.at) < quarry.at.distance_to(child.at)): quarry = other
+						child.route = way(child.at,quarry.at)
+						if quarry.at.distance_to(child.at) < 1.2:
+							play.it = children.find(quarry)
+							play.freeze = 2.0
+							for other in children: other.repath = 0.0
+				else:
+					child.speed = CHILD_RUN
+					if child.route.is_empty() or (child.repath <= 0.0 and it.at.distance_to(child.at) < 7.0):
+						child.repath = 2.5
+						child.route = way(child.at,flee(child,it))
+			"follow":
+				if i == 0:
+					child.speed = CHILD_RUN*.85
+					if child.route.is_empty():
+						var choices = haunts.filter(func(h): return h.at.distance_to(child.at) > 15.0 and h.at.distance_to(child.at) < 70.0)
+						child.route = way(child.at,choices[rng.randi_range(0,choices.size()-1)].at)
+				else:
+					var ahead: Walker = children[i-1]
+					child.speed = CHILD_RUN*(1.05 if ahead.at.distance_to(child.at) > 3.0 else .85)
+					if ahead.at.distance_to(child.at) < 1.5: child.route = PackedVector3Array()
+					elif child.repath <= 0.0:
+						child.repath = .5
+						child.route = way(child.at,ahead.at)
+		if child.state == "run":
+			if child.route.is_empty():
+				child.state = "idle"
+				child.body.play("Idle")
+			else:
+				child.pace = "Jog" if child.speed > 2.0 else "Walk"
+				advance(child,delta)
+
+# Where a child runs from the one who is "it": a corner well away from him.
+func flee(child: Walker, it: Walker) -> Vector3:
+	var best = haunts[0].at
+	var most = -INF
+	for k in 8:
+		var haunt: Dictionary = haunts[rng.randi_range(0,haunts.size()-1)]
+		var away = haunt.at.distance_to(it.at)-haunt.at.distance_to(child.at)*.6
+		if haunt.at.distance_to(child.at) < 55.0 and away > most:
+			most = away
+			best = haunt.at
+	return best
+
+# ---- For the HUD ----
+
+# The named townsperson at a point of the ground (only Anya has a name).
+func named_at(point: Vector3) -> Dictionary:
+	if Vector2(point.x-anya.at.x,point.z-anya.at.z).length() < 1.1: return {"name":"Anya","at":anya.at+Vector3.UP*1.9}
+	return {}

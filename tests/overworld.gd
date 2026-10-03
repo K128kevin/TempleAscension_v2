@@ -423,9 +423,11 @@ func test():
 	var forge_floor = Interiors.SMITHY+Vector3(8.0,0,8.0)
 	check(world.fits(common) and not world.path(world.rooms[0].door,common).is_empty() and world.fits(forge_floor) and not world.path(world.rooms[1].door,forge_floor).is_empty(),"The hero can walk in through each door")
 	world.follow(common,1)
-	check(world.rooms[0].inside and world.rooms[0].shell.all(func(node): return not node.visible) and world.rooms[1].shell.all(func(node): return node.visible),"Inside the inn its roof and near walls are lifted away, and only its own")
+	var inn_screens = world.screens.filter(func(g): return g.get("room") == world.rooms[0])
+	check(world.rooms[0].inside and not world.rooms[0].roof.visible and world.rooms[0].front.size()>=10 and world.rooms[0].front.all(func(node): return not node.visible) and world.rooms[1].roof.visible and world.rooms[1].front.all(func(node): return node.visible),"Inside the inn its roof and near walls are lifted away, and only its own")
+	check(not inn_screens.is_empty() and inn_screens.all(func(g): return not g.hidden),"Its far walls stand as they are")
 	world.follow(world.rooms[0].door+Vector3(0,0,3.0),1)
-	check(not world.rooms[0].inside and world.rooms[0].shell.all(func(node): return node.visible),"Outside again, it is whole")
+	check(not world.rooms[0].inside and world.rooms[0].roof.visible and world.rooms[0].front.all(func(node): return node.visible),"Outside again, it is whole")
 	var loft = Interiors.INN+Vector3(10.0,0,5.4)
 	var stair_foot = Interiors.INN+Vector3(18.0,0,12.9)
 	var stair_middle = Interiors.INN+Vector3(18.0,0,9.75)
@@ -444,6 +446,44 @@ func test():
 	check(furniture.get("anvil_log",0)+furniture.get("anvil",0)>=3 and furniture.get("workbench",0)>=2 and furniture.get("whetstone",0)==1 and arms>=20,"The smithy has its anvils, benches, a grindstone and arms hung all about (%d)" % arms)
 	var fires = world.get_children().filter(func(node): return node.name.begins_with("AnimatedTorchFlame") and world.rooms[1].area.has_point(Vector2(node.position.x,node.position.z))).size()
 	check(fires==1,"A fire burns in its forge")
+
+	# The town's people.
+	var folk = world.townsfolk
+	check(folk.people.size()==25 and folk.children.size()==6 and folk.anya != null and folk.anya.body.name=="Anya","Twenty-five townspeople, six children and Anya the innkeeper are about")
+	var anya_look: Dictionary = folk.anya.body.look
+	check(anya_look.who=="woman" and anya_look.garment=="Dress" and anya_look.under=="Blouse" and anya_look.braid and anya_look.hair_colour.r<.1 and anya_look.cloth.r>anya_look.cloth.b*1.8 and anya_look.under_cloth.r>.85,"Anya: a young woman, dark hair in a braid, a white blouse under a brown dress")
+	var ragged = folk.people.filter(func(w): return w.body.look.wear>=.8).size()
+	var neat = folk.people.filter(func(w): return w.body.look.wear<=.3).size()
+	check(ragged>=9 and neat>=5 and folk.children.all(func(c): return c.body.look.wear>=.75 and c.body.look.size<.7),"Many are in rags, some decently dressed; the children are poor and small")
+	# Three minutes of town life.
+	var least = 99
+	var most = 0
+	var served = 0
+	var chats = 0
+	var strayed = 0
+	var kids_in = 0
+	var walled = 0
+	var was = {}
+	for step in 3600:
+		folk.tick(.05,Overworld.START)
+		var n: int = folk.patrons()
+		least = mini(least,n)
+		most = maxi(most,n)
+		for w in folk.people:
+			if w.state=="drink" and not was.get(w.body.name,false): served += 1
+			was[w.body.name] = w.state=="drink"
+			if w.state=="chat" and not was.get(w.body.name+"c",false): chats += 1
+			was[w.body.name+"c"] = w.state=="chat"
+		for w in folk.people+folk.children:
+			var a = Vector2((w.at.x-Town.ARENA.x)/Town.ARENA_RADII.x,(w.at.z-Town.ARENA.z)/Town.ARENA_RADII.y)
+			if a.length()<1.0 or w.at.z<-77 or w.at.x>Overworld.TOWN_GATE.x: strayed += 1
+			if step%20==0 and not w.state in ["sit_down","wait","drink","stand_up"] and not folk.open_at(w.at): walled += 1
+		for c in folk.children:
+			if folk.inside(c): kids_in += 1
+	check(least>=3 and most<=8,"Between three and eight are in the inn at every moment (%d to %d)" % [least,most])
+	check(served>=6,"Anya has served drinks to those at the tables (%d)" % served)
+	check(chats>=2,"Townspeople who pass stop to talk (%d chats)" % (chats/2))
+	check(strayed==0 and kids_in==0 and walled==0,"No one enters the arena, the palace hill or the desert; the children keep out of the inn; none walk through walls (%d, %d, %d)" % [strayed,kids_in,walled])
 
 	# The save keeps the hero's place in the world.
 	game.player.position = Vector3(-40,0,12)

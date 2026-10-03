@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://ctp3hdvm5rb3g"
-path="res://.godot/imported/pavers_c.glb-cba8871281748ac6a75f7fa24fa376a1.scn"
+uid="uid://dp2v78ce7l3xk"
+path="res://.godot/imported/townsman.glb-5e6b2853b9bfac9813d41a78fe0b0501.scn"
 
 [deps]
 
-source_file="res://assets/models/props/pavers_c.glb"
-dest_files=["res://.godot/imported/pavers_c.glb-cba8871281748ac6a75f7fa24fa376a1.scn"]
+source_file="res://assets/models/character/townsman.glb"
+dest_files=["res://.godot/imported/townsman.glb-5e6b2853b9bfac9813d41a78fe0b0501.scn"]
 
 [params]
 

@@ -342,7 +342,9 @@ static func inn(world) -> void:
 	var room: Dictionary = Interiors.inn(world,LIMEWASH,WOODS[0])
 	var door: Vector3 = room.door
 	# (What hangs on the front wall goes when the wall does.)
-	for side in [-3.0,3.0]: room.shell.append(hanging(world,"cloth_blue",door+Vector3(side,3.0,-.85),2.4,0.0,Color(.36,.30,.20)))
+	var cloths: Array = []
+	for side in [-3.0,3.0]: cloths.append(hanging(world,"cloth_blue",door+Vector3(side,3.0,-.85),2.4,0.0,Color(.36,.30,.20)))
+	world.screen_in_room(cloths,room,"front")
 	world.add_place("inn","inn",door,4.0)
 	# The cellar's barrels by the wall.
 	item(world,"barrel_rack",door+Vector3(8.2,0,-.5),1.3,0.0,.9)
@@ -355,7 +357,7 @@ static func armorer(world) -> void:
 	world.upkeep["armorer"] = .6
 	var room: Dictionary = Interiors.smithy(world,OCHRE,WOODS[1])
 	var door: Vector3 = room.door
-	room.shell.append(hanging(world,"cloth_red",door+Vector3(3.2,2.9,-.85),2.4,0.0,Color(.40,.18,.12)))
+	world.screen_in_room([hanging(world,"cloth_red",door+Vector3(3.2,2.9,-.85),2.4,0.0,Color(.40,.18,.12))],room,"front")
 	world.add_place("blacksmith","shop",door,4.0)
 	item(world,"weapon_stand",door+Vector3(6.4,0,-.3),1.25,0.0,.8)
 	item(world,"dummy",door+Vector3(-4.6,0,1.2),1.9,.5,.5)

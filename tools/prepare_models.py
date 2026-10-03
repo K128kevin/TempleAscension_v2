@@ -40,7 +40,6 @@ sources={
  'lantern':props/'Lantern_Wall.gltf','chair':props/'Chair_1.gltf','urn_broken':props/'Vase_Rubble_Medium.gltf',
  'dead_tree':nature/'DeadTree_3.gltf','olive_a':nature/'TwistedTree_1.gltf','olive_b':nature/'TwistedTree_3.gltf',
  'dry_grass':nature/'Grass_Wispy_Tall.gltf','agave':nature/'Plant_1_Big.gltf',
- 'pavers_a':nature/'RockPath_Round_Wide.gltf','pavers_c':nature/'RockPath_Round_Small_1.gltf',
  # Quaternius's well, from Poly Pizza (CC0). (The rocks, stones and shrubs are
  # photo scans, prepared by tools/prepare_scans.py; the palms are built by
  # tools/make_palm.py.)
@@ -61,7 +60,7 @@ sources={
 # Exported without their images: the game gives these one shared material per
 # surface, by the surface material's name (Art.SHARED in scripts/assets.gd),
 # instead of a copy of the same large textures inside every model.
-shared={'dead_tree','olive_a','olive_b','dry_grass','agave','pavers_a','pavers_c'}
+shared={'dead_tree','olive_a','olive_b','dry_grass','agave'}
 out=ROOT/'assets/models/props';out.mkdir(parents=True,exist_ok=True)
 # --only takes one name or a comma-separated list.
 only = sys.argv[sys.argv.index("--only")+1].split(',') if "--only" in sys.argv else None

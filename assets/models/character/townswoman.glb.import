@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bc46x0hfi1iiw"
-path="res://.godot/imported/pavers_a.glb-774ddcbfba770f9dba71b4766867f95e.scn"
+uid="uid://dl5eqj3vhcq3l"
+path="res://.godot/imported/townswoman.glb-08ab10e924579b41924fef185ebd6f18.scn"
 
 [deps]
 
-source_file="res://assets/models/props/pavers_a.glb"
-dest_files=["res://.godot/imported/pavers_a.glb-774ddcbfba770f9dba71b4766867f95e.scn"]
+source_file="res://assets/models/character/townswoman.glb"
+dest_files=["res://.godot/imported/townswoman.glb-08ab10e924579b41924fef185ebd6f18.scn"]
 
 [params]
 

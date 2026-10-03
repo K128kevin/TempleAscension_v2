@@ -450,6 +450,7 @@ func update_enemy_hover() -> void:
 		hover_ring.position = hovered.position+Vector3.UP*.08
 		hover_ring.scale = Vector3.ONE*hovered.config.size
 	hud.show_enemy_hover(hovered)
+	hud.show_npc_name(world.townsfolk.named_at(world.pointer()) if outdoors() and mode=="playing" and get_viewport().gui_get_hovered_control()==null else {})
 
 # The 1 and 2 keys: a skill used up close is walked to a unit under the cursor,
 # as a right click is; anything else is cast where the cursor points.

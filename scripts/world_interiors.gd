@@ -40,23 +40,23 @@ static func hall(world, corner: Vector3, bays: Vector2i, faces: Dictionary, tint
 			shell.append(world.place(MODULES[faces.west[storey][i]],Vector3(corner.x+.5,y,z),Vector3(BAY,BAY,1),material,-PI/2))
 			back.append(world.place(MODULES[faces.east[storey][i]],Vector3(corner.x+size.x-.5,y,z),Vector3(BAY,BAY,1),material,PI/2))
 	# The roof lies below the top course, which stands round it as a parapet.
-	shell.append(world.place("floor",Vector3(corner.x+size.x*.5,storeys*BAY-1.0,corner.z+size.y*.5),Vector3(size.x-1.0,.3,size.y-1.0),Kit.masonry(tint*Color(.9,.87,.82),wood,.4,snappedf(wear,.05),0.0)))
+	var roof = world.place("floor",Vector3(corner.x+size.x*.5,storeys*BAY-1.0,corner.z+size.y*.5),Vector3(size.x-1.0,.3,size.y-1.0),Kit.masonry(tint*Color(.9,.87,.82),wood,.4,snappedf(wear,.05),0.0))
 	world.block_rect(Rect2(corner.x,corner.z,size.x,1.0))
 	world.block_rect(Rect2(corner.x,corner.z+size.y-1.0,size.x,1.0))
 	world.block_rect(Rect2(corner.x,corner.z,1.0,size.y))
 	world.block_rect(Rect2(corner.x+size.x-1.0,corner.z,1.0,size.y))
 	# A doorway stands open.
-	var room = {"area":Rect2(corner.x,corner.z,size.x,size.y),"shell":shell,"inside":false,"door":Vector3.ZERO}
+	var room = {"area":Rect2(corner.x,corner.z,size.x,size.y),"roof":roof,"front":[],"inside":false,"door":Vector3.ZERO}
 	for i in bays.x:
 		if faces.south[0][i] != "p": continue
 		var x = corner.x+BAY*.5+i*BAY
 		world.open_rect(Rect2(x-1.0,corner.z+size.y-1.0,2.0,1.0))
 		room.door = Vector3(x,0,corner.z+size.y+1.4)
 	world.rooms.append(room)
-	# (Nothing grows indoors; and its own walls never screen the hero inside.)
+	# (Nothing grows indoors.)
 	world.keep_clear.append(room.area)
-	world.screen(shell+back)
-	world.screens[-1]["room"] = room
+	world.screen_in_room(shell,room,"front")
+	world.screen_in_room(back,room,"back")
 	return room
 
 # A floor of 4 m tiles of model `id` over `area`, its top at `top`.

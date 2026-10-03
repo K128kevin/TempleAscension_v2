@@ -234,10 +234,44 @@ bushes; they were replaced.)
   its leg bent to it by IK, and when the lion is driven over the ground by a blow
   the diagonal pairs of paws step in turn, landing ahead of the body the way it is
   carried.
+- **The townspeople.** `tools/make_townsfolk.py` builds `townsman.glb` and
+  `townswoman.glb` (`assets/models/character/`) from the base character pack's two
+  bodies (its "superhero" male and female, which come unclothed, cut to 7,000
+  triangles each), with the pack's hairstyles and eyebrows, and thirteen clips from
+  the two animation libraries retargeted as the hero's are (standing, talking,
+  walking, jogging, sitting down and getting up, sitting, sitting and talking,
+  drinking, reaching, carrying, dancing, arms folded); the seated drink is made in
+  the game from the sitting and drinking clips. The packs have no clothes, so a
+  wardrobe is fitted by the script from each body's own shape: a garment is a tube
+  lofted down the body (at each height, the outline of the body there, its convex
+  hull with the arms left out, eased outward by the cloth's looseness and joined to
+  the next; sleeves lofted along the arms), skinned from the flesh nearest it. Men
+  have a knee-length tunic, a short sleeveless sack and a mid-calf robe; women a
+  gown, a shift, and Anya's long-sleeved blouse and square-necked dress (the tube
+  with its neck cut out, leaving straps over the shoulders); there is a belt, and
+  Anya's braid is laid down her back lobe over lobe. Each mesh carries extra data
+  in its second UV set: on the body, every point's height at rest and how far
+  along the arm it is, so `assets/shaders/townsfolk_skin.gdshader` leaves out the
+  flesh under a garment (and dirties the poor); on a garment, how near its hem or
+  cuff a point is and how far down its length. `assets/shaders/cloth.gdshader`
+  dyes Poly Haven's photographed rough linen or hessian (CC0,
+  `assets/textures/cloth_*.jpg`) and wears it out as far as `wear` says: fading,
+  grime toward the hem, sewn-on patches, frayed hems and cuffs, holes. The
+  renderer lights two-sided cloth from the wrong side, so the inside is a second
+  pass (`cloth_inside.gdshader`). `scripts/wardrobe.gd`, written by the script,
+  records what each garment covers. A mug is held by its handle in the left fist
+  (`scripts/arm_reach.gd`, a two-bone IK on the arm that carries the hand to a point,
+  turns the fist to keep the mug upright and curls the fingers): Anya's hand holds
+  the mug under the tap, carries it at her side and sets it on the table; a
+  drinker's goes from his lap to the mug on the table, lifts it to his mouth and
+  sets it down again. `scripts/townsperson.gd` dresses a figure and
+  `scripts/townsfolk.gd` runs the town: its own A* grid of the streets (the arena,
+  palace hill, smithy and the inn's loft closed), the seats at the inn's tables,
+  the inn's occupancy rules, Anya's rounds and the children's games.
 - **Walk-in buildings.** `scripts/world_interiors.gd` builds the inn and the smithy
   as halls of the town's wall modules on all four sides, with an open doorway.
-  `Overworld.rooms` holds each hall's footprint and its shell (the roof and the south
-  and west walls, the camera's side), hidden while the hero stands inside; its own
+  `Overworld.rooms` holds each hall's footprint, its roof and its front (the south
+  and west walls, the camera's side), hidden while the hero stands inside; its far
   walls never fade over him there. `Overworld.decks` holds floors above the ground
   (the inn's loft, and the ramp of its stair): `height_at` adds a deck's height, so
   the hero, the camera, clicks and anything set down there stand on it, as on the
@@ -293,7 +327,7 @@ bushes; they were replaced.)
   (the twisted tree; `tools/paint_flora.py` repaints its leaf cards with clusters of
   narrow grey-green olive leaves, inside the kit texture's own shapes, as
   `assets/textures/olive_leaves.png`), `dry_grass`, `agave`
-  (`assets/textures/desert_leaves.png`, darkened), `pavers_a`, `pavers_c`. These are
+  (`assets/textures/desert_leaves.png`, darkened). These are
   exported bare and share one copy of each texture.
 - **The well.** A CC0 model by Quaternius from [Poly Pizza](https://poly.pizza/m/QlqncKYxXb)
   (`source_art/poly_pizza/`). It comes in flat colours; the game gives its stone, roof
@@ -362,6 +396,7 @@ animation licenses sit beside it. Rebuild with Blender:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_combat.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_walk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
 ```
 
 ## Additional authored geometry (CC0)

@@ -14,6 +14,7 @@ const Desert = preload("res://scripts/world_desert.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Palace = preload("res://scripts/world_palace.gd")
 const Front = preload("res://scripts/world_temple_front.gd")
+const Townsfolk = preload("res://scripts/townsfolk.gd")
 const GLOW_COLOUR = Front.GLOW
 # `level` of the outdoor world, where a temple floor has its index.
 const OUTDOORS = -2
@@ -91,9 +92,11 @@ var places: Array[Dictionary] = []
 # whole, normal, faded, box}], hidden}; they turn see-through while they do.
 var screens: Array[Dictionary] = []
 # Buildings the hero can walk into (scripts/world_interiors.gd): the "area"
-# each stands on, and its "shell" (the roof and the walls on the camera's
-# side), which is lifted away while he is "inside".
+# each stands on, and its "roof" and "front" (the walls on the camera's
+# side), lifted away while he is "inside".
 var rooms: Array[Dictionary] = []
+# The town's people (scripts/townsfolk.gd).
+var townsfolk: Node3D
 # Floors above the ground indoors: over its "area" a deck stands "low" high
 # at "start" and climbs to "high" the way "along" points (a level one has no
 # "along").
@@ -144,6 +147,10 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 	for z in range(NORTH,SOUTH):
 		for x in range(WEST,EAST):
 			if cells[index(x,z)] != OPEN: nav.set_point_solid(Vector2i(x,z))
+	townsfolk = Townsfolk.new()
+	townsfolk.name = "Townsfolk"
+	add_child(townsfolk)
+	townsfolk.setup(self)
 	fixtures = get_child_count()
 	follow(spawn,1)
 
@@ -453,6 +460,15 @@ func screen(nodes: Array) -> void:
 	if parts.is_empty(): return
 	screens.append({"box":box,"parts":parts,"hidden":false})
 
+# Registers a room's walls as screens (see-through when they stand before
+# the hero outside); while he is in the room its "front" walls (the camera's
+# side) are lifted away and its "back" walls never fade.
+func screen_in_room(nodes: Array, room: Dictionary, side: String) -> void:
+	var before = screens.size()
+	screen(nodes)
+	if screens.size() > before: screens[-1]["room"] = room
+	if side == "front": room.front.append_array(nodes)
+
 # ---- The interface Game drives ----
 
 func fits(p: Vector3, radius: float = .4) -> bool:
@@ -553,9 +569,10 @@ func ground_at(viewport_position: Vector2) -> Vector3:
 		hit = raised
 	return Vector3(hit.x,0,hit.z)
 
-# Nothing outdoors is hidden by line of sight.
-func update_visibility(_pos: Vector3, _delta: float) -> void:
-	pass
+# Nothing outdoors is hidden by line of sight. (The game calls this every
+# frame it is running: the townspeople go about their day.)
+func update_visibility(pos: Vector3, delta: float) -> void:
+	townsfolk.tick(delta,pos)
 
 func can_see(_at: Vector3) -> bool:
 	return true
@@ -578,7 +595,8 @@ func follow(pos: Vector3, delta: float) -> void:
 		var inside: bool = room.area.has_point(Vector2(pos.x,pos.z))
 		if inside == room.inside: continue
 		room.inside = inside
-		for node in room.shell: node.visible = not inside
+		room.roof.visible = not inside
+		for node in room.front: node.visible = not inside
 	screen_tick -= delta
 	if screen_tick>0: return
 	screen_tick = .1
@@ -586,18 +604,19 @@ func follow(pos: Vector3, delta: float) -> void:
 	for group in screens:
 		var hides = false
 		# Only what stands on the camera's side of someone, and near, can hide them.
-		for target in targets:
-			if group.has("room") and group.room.inside: break
-			var feet: Vector3 = target.position
-			feet.y = lift(feet)
-			var box: AABB = group.box
-			if feet.x<box.position.x-1.0 or feet.z>box.end.z+1.0: continue
-			if feet.x-box.end.x>box.size.y*1.2+3.0 or box.position.z-feet.z>box.size.y*1.2+3.0: continue
-			for part in group.parts:
-				for share in [.1,.55,1.0]:
-					if part.box.intersects_segment(camera.position,feet+Vector3.UP*target.height*share): hides = true; break
+		if group.has("room") and group.room.inside: hides = false
+		else:
+			for target in targets:
+				var feet: Vector3 = target.position
+				feet.y = lift(feet)
+				var box: AABB = group.box
+				if feet.x<box.position.x-1.0 or feet.z>box.end.z+1.0: continue
+				if feet.x-box.end.x>box.size.y*1.2+3.0 or box.position.z-feet.z>box.size.y*1.2+3.0: continue
+				for part in group.parts:
+					for share in [.1,.55,1.0]:
+						if part.box.intersects_segment(camera.position,feet+Vector3.UP*target.height*share): hides = true; break
+					if hides: break
 				if hides: break
-			if hides: break
 		if hides == group.hidden: continue
 		group.hidden = hides
 		for part in group.parts:

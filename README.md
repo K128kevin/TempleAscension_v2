@@ -84,7 +84,24 @@ The temple stands in a larger world, one continuous outdoor map
   the east, and a market square with stalls and the well in the south-east
   corner. Five streets and alleys run off the ring, each with houses down both
   sides: thirty-five in all. A wall with a towered gateway closes the town off
-  from the desert. The town is empty of people for now.
+  from the desert.
+- **The townspeople.** Twenty-five grown townspeople wander the ring street, the
+  market and, now and then, an alley, stopping here and there; two who pass
+  may stop a moment to talk (no words, just the gestures). They drift in and
+  out of the inn so that between three and eight of them are inside at any
+  moment: one who comes in sits at a table and waits; Anya, the innkeeper (a
+  young woman, dark hair in a braid, a white blouse under a brown dress; her
+  name shows when the cursor is on her), fills a mug at the barrels behind her
+  bar, carries it upright in her fist round to the table and sets it down in
+  front of the drinker, clearing the empties; a patron drinks for a minute,
+  lifting the mug to his mouth for a sip now and then and setting it back on
+  the table, then leaves or waits for another. Their clothes are
+  neutral and plain, and most are poor: ten in rags (frayed, patched, holed
+  and filthy), nine in worn and patched tunics and gowns, six decently
+  dressed. Six ragged children run about the streets at tag and
+  follow-my-leader, resting in a huddle between games; they never go into the
+  inn. No one goes into the arena, through the palace gate or out of the town,
+  and all give way to the hero.
 - **The inn and the smithy** stand open: the hero walks in through the
   doorway, and while he is inside the roof and the two walls on the camera's
   side are lifted away, so the room is seen from above. The inn is a

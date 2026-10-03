@@ -216,23 +216,6 @@ static func waymarks(world) -> void:
 				world.place("pillar",spot,Vector3(.9,height,.9),stone,rng.randf_range(-.2,.2))
 				world.block_disc(spot,.5)
 		x += 46.0
-	# Worn cobbles show through the sand where the track nears the town's
-	# paving and the temple's court.
-	var key = "track_cobbles"
-	if not Kit.cache.has(key):
-		var m: StandardMaterial3D = Kit.shared("PathRocks").duplicate()
-		m.albedo_color = Color(1.12,.96,.76)
-		Kit.cache[key] = m
-	var pavers = Kit.cache[key]
-	for stretch in [[world.TOWN_GATE.x+12.0,world.TOWN_GATE.x+52.0],[world.TEMPLE_DOOR.x-78.0,world.TEMPLE_DOOR.x-36.0]]:
-		x = stretch[0]
-		while x<stretch[1]:
-			var id: String = "pavers_a" if rng.randf()<.5 else "pavers_c"
-			var size: Vector3 = Kit.SIZE[id]*rng.randf_range(.8,1.2)
-			size.y = .08
-			var at = Vector3(x,-.03,world.track_z(x)+rng.randf_range(-1.8,1.8))
-			world.batch(id,world.stance(at,size,rng.randf_range(0,TAU)),pavers,false)
-			x += rng.randf_range(2.6,5.0)
 
 # Dry grass, shrubs, agaves, loose stones and a few dead trees over the open sand.
 static func scatter(world) -> void:
