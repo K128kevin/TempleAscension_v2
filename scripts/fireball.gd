@@ -1,6 +1,6 @@
 extends Node3D
-## The Oracle's fire spell: a fireball shot in a straight line from the staff,
-## bursting at its target. Advanced by Game on the combat clock; damage lands on
+## The Oracle's fire spell, and the hero wizard's Firebolt (`friendly`): a
+## fireball shot in a straight line from the staff, bursting at its target. Advanced by Game on the combat clock; damage lands on
 ## impact through Game.area_damage. Every visible piece is a billboard, particle
 ## or light; no mesh geometry is generated.
 const SHADER = preload("res://assets/shaders/fireball.gdshader")
@@ -20,6 +20,9 @@ var exploded = false
 var since_impact = 0.0
 # The Oracle that cast it; landing the blast resets its hit pushback.
 var source = null
+# Cast by the hero: the blast strikes the statues (a skill's hits, each with
+# its chance to crit), not the hero.
+var friendly = false
 
 var core: MeshInstance3D
 var core_material: ShaderMaterial
@@ -62,7 +65,8 @@ func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_da
 	trail.scale_amount_curve = Vfx.curve(1,0)
 	trail.color_ramp = Vfx.ramp([0,.25,.6,1],[Color(1,.62,.22,.55),Color(1,.4,.08,.45),Color(.55,.12,.03,.25),Color(.1,.08,.07,0)])
 	position = origin
-	game.sound.play("fire-whoosh",-17)
+	# Its only sound: the flames bursting from the staff.
+	game.sound.play("fire-whoosh",-10)
 
 func fire_material(burst_amount: float) -> ShaderMaterial:
 	var m = ShaderMaterial.new()
@@ -117,8 +121,8 @@ func explode() -> void:
 	core.visible = false
 	carry_light.visible = false
 	trail.emitting = false
-	game.area_damage(target,radius,damage,false,source)
-	game.sound.play("whirl-impact",-9)
+	if friendly: game.area_damage(target,radius,damage,true,null,true)
+	else: game.area_damage(target,radius,damage,false,source)
 	burst_material = fire_material(1.0)
 	burst = billboard(burst_material,radius*.55)
 	flash = OmniLight3D.new()

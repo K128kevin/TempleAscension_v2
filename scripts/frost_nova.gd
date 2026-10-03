@@ -105,7 +105,6 @@ func setup(owner_game, center: Vector3, blast_radius: float) -> void:
 	glints.scale_amount_max = .13
 	glints.color_ramp = Vfx.ramp([0,.5,1],[Color(1,1,1,1),Color(.7,.9,1,.8),Color(.6,.85,1,0)])
 	glints.emitting = true
-	game.sound.play("whirl-impact",-10)
 	tick(0.0)
 
 func ground_sprite(diameter: float, gradient: Gradient) -> Sprite3D:

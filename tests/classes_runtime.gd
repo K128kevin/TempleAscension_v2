@@ -62,7 +62,7 @@ func test():
 			var repeat_energy: float=game.run.energy
 			check(game.skills.cast(id,at)==(repeat_energy>=game.skills.cost(id) and not s.effect in ["bash","shockwave"]),"Energy cost (and Shield Bash's and Shockwave's cooldowns) controls repeated casts: "+id)
 			game.skills.tick(.6)
-			for i in 90: game.tick_projectiles(.016)
+			for i in 90: game.tick_projectiles(.016); game.tick_fireballs(.016)
 			game.skills.tick(1.0)
 			if s.tag!="" and s.effect!="cry": check(victim.hp<full,"Skill deals damage: "+id)
 			elif s.effect=="cry": check(victim.rally_time>0,"War Cry cows the enemy: "+id)

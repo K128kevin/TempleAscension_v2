@@ -40,6 +40,9 @@ const WARRIOR_CLIPS = {"cleave":["SkillCleave",1.0,.52],"strike":["SkillStrike",
 	"cry":["SkillCry",1.0,.3],"charge":["SkillCharge",1.0,.82],"leap":["SkillLeap",1.0,.56]}
 # Shield Charge: how fast he goes, and how far the ones in his way are thrown.
 const CHARGE_SPEED = 11.0
+# Firebolt is the Oracle's fireball: how far it flies, and its blast.
+const FIREBALL_REACH = 13.0
+const FIREBALL_RADIUS = 2.2
 const CHARGE_THROW = 1.6
 const SHOCKWAVE_THROW = 2.2
 # The screen shakes this hard (metres) as the ground breaks.
@@ -252,14 +255,15 @@ func pulse(at: Vector3, radius: float, damage: float, type: String, slow: float 
 
 # A blow on the ground: a shockwave of dust and smoke racing out across the
 # area it hits (scripts/shockwave.gd), the screen shaken and the impact heard.
-func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0) -> void:
-	var wave = Shockwave.make(at+Vector3.UP*game.world.lift(at),reach,direction,degrees)
+func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0, sound: String = "whirl-impact", plasma: bool = false) -> void:
+	var wave = Shockwave.make(at+Vector3.UP*game.world.lift(at),reach,direction,degrees,plasma)
 	game.world.add_child(wave)
 	waves.append(wave)
 	game.shake(shake)
-	# The original game's Whirl impact: the blow meeting the ground (Ground
-	# Slam and Shockwave), or the warrior landing (Leap).
-	game.sound.play("whirl-impact",-9)
+	# The blow meeting the ground: a crash of rock (Ground Slam and
+	# Shockwave), or the original game's Whirl impact as the warrior lands
+	# (Leap).
+	game.sound.play(sound,-9)
 
 func execute(job: Dictionary) -> void:
 	var s: Dictionary = Book.all()[job.id]
@@ -277,7 +281,7 @@ func execute(job: Dictionary) -> void:
 		"slam":
 			for enemy in arc_targets(origin,direction,v.y,v.z):
 				strike(enemy,attack_damage(v.x),"physical",0.0,StoneFragment.impact(enemy.position-origin,true))
-			ground_blow(origin+direction*.9,v.z,SHAKE_SLAM,direction,v.y)
+			ground_blow(origin+direction*.9,v.z,SHAKE_SLAM,direction,v.y,"rock-impact",true)
 		"leap":
 			for enemy in targets(origin,LEAP_RADIUS):
 				strike(enemy,attack_damage(v.x),"physical",0.0,StoneFragment.impact(enemy.position-origin,true))
@@ -288,7 +292,7 @@ func execute(job: Dictionary) -> void:
 				var away: Vector3 = enemy.position-origin
 				away.y = 0
 				if away.length()>.05: enemy.shove(away.normalized(),SHOCKWAVE_THROW)
-			ground_blow(origin,v.y,SHAKE_SLAM)
+			ground_blow(origin,v.y,SHAKE_SLAM,Vector3.ZERO,360.0,"rock-impact")
 		"cry":
 			for enemy in targets(origin,v.x): enemy.rally(v.y,v.z)
 			game.float_text(game.player.position+Vector3.UP*2.3,"War Cry!",Color(1,.8,.4))
@@ -327,13 +331,22 @@ func execute(job: Dictionary) -> void:
 		"barrier": barrier = value; barrier_time = s.duration
 		"blink":
 			game.player.position = game.world.move(origin,direction*minf(value,origin.distance_to(at)))
-		"shot","multishot","retreat","pierce","firebolt","lance":
+		"firebolt":
+			# The Oracle's own fireball, from the staff to the target (as far
+			# as the spell reaches, and short of any wall), bursting there.
+			var reach: float = minf(FIREBALL_REACH,origin.distance_to(at)) if origin.distance_to(at) > .5 else FIREBALL_REACH
+			var landing: Vector3 = origin+direction*reach
+			while reach > 1.0 and not game.world.clear_line(origin,landing):
+				reach -= .5
+				landing = origin+direction*reach
+			var staff: Vector3 = game.player.visual.staff_tip() if game.player.visual.weapon_kind=="staff" else origin+Vector3.UP*1.5
+			game.fireball(staff,landing,FIREBALL_RADIUS,damage,clampf(reach/14.0,.4,.8),null,true)
+		"shot","multishot","retreat","pierce","lance":
 			var spell: bool = s.tag=="spell"
 			var angles = [-.18,0.0,.18] if s.effect=="multishot" else [0.0]
 			for angle in angles:
 				var aim = direction.rotated(Vector3.UP,angle)
-				game.projectile(origin,origin+aim*13,damage,true,"fire" if s.effect=="firebolt" else ("arcane" if spell else "arrow"),s.effect in ["pierce","lance"])
-			if s.effect=="firebolt": game.sound.play("fire-whoosh",-12)
+				game.projectile(origin,origin+aim*13,damage,true,"arcane" if spell else "arrow",s.effect in ["pierce","lance"])
 			if s.effect=="retreat": game.player.position = game.world.move(origin,-direction*3)
 		"nova": pulse(origin,s.radius,damage,"frost",s.duration)
 		"chain":

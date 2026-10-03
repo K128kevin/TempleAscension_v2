@@ -647,6 +647,11 @@ whooshes pack), unedited: a 3.8 s burst of flame with a burning tail. It plays a
 the Oracle's fireball leaves its staff and as the wizard casts Firebolt. It is
 credited to www.zapsplat.com under ZapSplat's license, like the other effects.
 
+`assets/audio/rock-impact.mp3` is PMSFX's "Rock Crash, Designed Rock Impact Crash,
+Big Cinematic" (PMSFX_ROCKCrsh_Designed_Rock_Impact_Carsh_Big_Cinematic_41RI2_2442.mp3),
+unedited, supplied by the user: a 0.9 s crash of breaking rock. It plays as Ground Slam's
+and Shockwave's blows meet the ground. Its licence follows the user's PMSFX terms.
+
 `assets/audio/fountain-trickle.wav` is the original game's
 `public/sfx-fountain-trickle.m4a`, decoded without normalization or editing to
 48 kHz stereo 16-bit PCM. macOS `afconvert` performed the decode; its extensible

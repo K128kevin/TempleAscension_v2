@@ -349,13 +349,16 @@ func test():
 		game.player.visual.equip(Data.WEAPONS[game.run.weapon])
 		for p in game.projectiles: p.node.queue_free()
 		game.projectiles.clear()
+		for f in game.fireballs: f.queue_free()
+		game.fireballs.clear()
 		victim.dead=false; victim.hp=10000
 		game.attack(true,victim.position)
 		check(game.skills.pending.size()==1,"RMB queues assigned class starter: "+class_id)
 		game.skills.tick(.1)
-		check(victim.hp==10000 and game.projectiles.is_empty(),"Class skill respects windup: "+class_id)
+		check(victim.hp==10000 and game.projectiles.is_empty() and game.fireballs.is_empty(),"Class skill respects windup: "+class_id)
 		game.skills.tick(.5)
-		check(victim.hp<10000 or not game.projectiles.is_empty(),"Class skill executes after windup: "+class_id)
+		# (The wizard's Firebolt is the Oracle's fireball.)
+		check(victim.hp<10000 or not game.projectiles.is_empty() or not game.fireballs.is_empty(),"Class skill executes after windup: "+class_id)
 		game.skills.pending.clear(); game.player.busy=0
 		game.skills.cast_slot(0,victim.position)
 		game.run.energy=10; game.dash()

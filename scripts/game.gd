@@ -652,7 +652,8 @@ func tick_scheduled(dt: float) -> void:
 		match job.type:
 			"swing": sound.play(job.sound)
 			"arrow","arcane":
-				sound.play("archer-arrow")
+				# (The wizard's bolt is silent; only the bow sounds.)
+				if job.type=="arrow": sound.play("archer-arrow")
 				projectile(player.position,job.at,job.damage,true,job.type,false,null,job.special)
 			"blast": blast(player.position if job.get("follow_player",false) else job.at,2.88,job.damage,true,true)
 			"melee":
@@ -914,9 +915,10 @@ func area_damage(at: Vector3, radius: float, damage: float, friendly: bool, sour
 		else: hurt_player(damage,"physical",source)
 
 # The Oracle's lobbed fireball; it deals area damage when it lands.
-func fireball(from: Vector3, at: Vector3, radius: float, damage: float, seconds: float, source = null) -> void:
+func fireball(from: Vector3, at: Vector3, radius: float, damage: float, seconds: float, source = null, friendly: bool = false) -> void:
 	var ball = preload("res://scripts/fireball.gd").new()
 	world.add_child(ball)
+	ball.friendly = friendly
 	ball.setup(self,from,at,radius,damage,seconds)
 	ball.source = source
 	fireballs.append(ball)

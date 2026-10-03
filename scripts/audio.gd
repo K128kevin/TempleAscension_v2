@@ -2,7 +2,12 @@ extends Node
 var music: AudioStreamPlayer
 var streams: Dictionary = {}
 var muted := false
-var last_sound: Dictionary = {}
+# When each sound last began, its latest few: up to TOGETHER copies of one
+# sound may start at once (statues crumbling together each heard), and no
+# more, so a burst of hits does not pile up into a roar.
+var recent_sounds: Dictionary = {}
+const TOGETHER = 4
+const TOGETHER_MS = 80
 
 func _ready() -> void:
 	music = AudioStreamPlayer.new()
@@ -20,8 +25,10 @@ func track(floor_index: int, ending: bool = false) -> void:
 func play(id: String, volume: float = -11) -> void:
 	if muted or DisplayServer.get_name()=="headless": return
 	var now := Time.get_ticks_msec()
-	if now-int(last_sound.get(id,0))<80: return
-	last_sound[id] = now
+	var started: Array = recent_sounds.get(id,[]).filter(func(at): return now-int(at)<TOGETHER_MS)
+	if started.size()>=TOGETHER: return
+	started.append(now)
+	recent_sounds[id] = started
 	if not streams.has(id):
 		var path = "res://assets/audio/%s.mp3" % id
 		# A few effects were decoded to WAV from the original game's m4a files.

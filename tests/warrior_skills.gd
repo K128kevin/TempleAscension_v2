@@ -125,7 +125,8 @@ func test():
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillSlam","The slam sends out a shockwave of dust, shakes the screen, and has its own swing")
 	var wave = game.skills.waves[0]
 	var puffs = wave.get_children().filter(func(c): return c is CPUParticles3D)
-	check(puffs.size()==2 and puffs.all(func(p): return p.emitting and absf(p.spread-60.0)<.01 and p.initial_velocity_max>=20.0),"Dust and smoke burst out fast across the slam's arc")
+	check(puffs.size()==3 and puffs.all(func(p): return p.emitting and absf(p.spread-60.0)<.01 and p.initial_velocity_max>=20.0),"Dust, smoke and the blade's blue plasma burst out fast across the slam's arc")
+	check(puffs.filter(func(p): return p.mesh.material is ShaderMaterial).size()==1,"one layer of it glowing plasma")
 	wait(3.0)
 	check(game.skills.waves.is_empty(),"The shockwave passes within a couple of seconds")
 	clear()

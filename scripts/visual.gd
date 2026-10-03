@@ -532,7 +532,8 @@ func cast_glow(phase: float) -> float:
 
 # The top of the Oracle's staff, where the flame sits and the fireball leaves.
 func staff_tip() -> Vector3:
-	if not is_instance_valid(weapon_item) or enemy_kind != "wizard": return global_position+Vector3.UP*1.5
+	# (The Oracle's staff, or the hero wizard's, the same staff in silver.)
+	if not is_instance_valid(weapon_item) or weapon_kind != "staff": return global_position+Vector3.UP*1.5
 	return weapon_item.global_transform*Vector3(0,.93,0)
 
 func oracle_staff_direction(phase: float) -> Vector2:
@@ -850,6 +851,8 @@ func shown_pose_updated() -> void:
 	in_shown_pose = true
 	align_weapon()
 	in_shown_pose = false
+	# (Once the blade has followed the hand: its attachment moves after this.)
+	if is_instance_valid(blade_charge) and (slam_u >= 0.0 or blade_charge.lit > 0.0): slam_strike_check.call_deferred()
 
 func align_weapon() -> void:
 	keep_shield_off_legs()
@@ -1211,13 +1214,32 @@ var blade_tip_was = null
 # fading after the blow).
 var blade_charge: Node3D
 var slam_struck = false
+var slam_u = -1.0
 # How near the ground (metres, at life size) the blade's point is when it
 # strikes it.
 const SLAM_POINT_DOWN = .3
+# The blade's light is full above SLAM_LIGHT_HIGH (metres over the ground, at
+# life size) and out by SLAM_LIGHT_LOW.
+const SLAM_LIGHT_HIGH = 1.5
+const SLAM_LIGHT_LOW = .5
 const SLAM_RAISED = .36
 const SLAM_GROUND = .40
 const SLAM_BLOW = .52
 const SLAM_FADED = .72
+
+# Judged from the blade as it is shown (the skeleton just posed: the blade
+# drops a metre in a frame as it is driven down, and judged a frame behind,
+# its light lit the floor it had already reached): the charge breaks off where
+# the blade's point comes down to the ground, and the blade's light fades as
+# it comes down near the ground and is out once it strikes.
+func slam_strike_check() -> void:
+	if not is_instance_valid(blade_charge) or not blade_charge.is_inside_tree(): return
+	var point_at: Vector3 = blade_charge.tip()
+	if slam_u >= 0.0 and not slam_struck and slam_u >= SLAM_RAISED-.06 and slam_u <= SLAM_BLOW and point_at.y-global_position.y < SLAM_POINT_DOWN*rig.scale.x:
+		slam_struck = true
+		blade_charge.discharge(Vector3(point_at.x,global_position.y,point_at.z))
+	var light_height: float = (blade_charge.light.global_position.y-global_position.y)/rig.scale.x
+	blade_charge.shed_light(0.0 if slam_struck else slam_charge(slam_u)*clampf((light_height-SLAM_LIGHT_LOW)/(SLAM_LIGHT_HIGH-SLAM_LIGHT_LOW),0.0,1.0))
 
 # How charged the blade is `u` of the way through Ground Slam's swing.
 static func slam_charge(u: float) -> float:
@@ -1565,15 +1587,10 @@ func advance(dt: float) -> void:
 		sword_trail.step(dt,cutting,blade*Vector3(0,.42,0),blade*Vector3(0,1.02,0))
 		if is_instance_valid(blade_charge):
 			if blade_charge.get_parent() != weapon_item: blade_charge.attach(weapon_item,.42,1.02)
-			var slam_u: float = u if state == "SkillSlam" and not dead else -1.0
-			# The charge breaks off where the blade's point comes down to the
-			# ground, on its way down; its light goes out with it.
-			var point_at: Vector3 = blade_charge.tip()
+			slam_u = u if state == "SkillSlam" and not dead else -1.0
 			if slam_u < 0.0: slam_struck = false
-			elif not slam_struck and slam_u >= SLAM_RAISED-.06 and slam_u <= SLAM_BLOW and point_at.y-global_position.y < SLAM_POINT_DOWN*rig.scale.x:
-				slam_struck = true
-				blade_charge.discharge(Vector3(point_at.x,global_position.y,point_at.z))
-			blade_charge.step(dt,slam_charge(slam_u),0.0 if slam_struck else slam_charge(slam_u))
+			blade_charge.step(dt,slam_charge(slam_u))
+			slam_strike_check()
 
 # The forward travel to move the unit by since last asked (Actor.tick).
 # How much further the current clip will carry the unit (not yet taken).

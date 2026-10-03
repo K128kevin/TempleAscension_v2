@@ -51,7 +51,7 @@ static func all() -> Dictionary:
 		["quick_draw", "Quick Draw", "ranger", 4, "passive", "any", "", 0, 6, 6, 0, 0, "Percent faster bow attack animations without changing energy cost.", "passive"],
 		["trapcraft", "Trapcraft", "ranger", 12, "passive", "any", "", 0, 20, 20, 0, 0, "Percent longer snare and trap duration.", "passive"],
 		["predator", "Predator", "ranger", 18, "passive", "any", "", 0, 10, 10, 0, 0, "Percent additional damage against marked prey.", "passive"],
-		["firebolt", "Firebolt", "wizard", 1, "firebolt", "staff", "spell", 12, 1.5, .25, 13, 0, "Launch a bolt of fire.", "single"],
+		["firebolt", "Firebolt", "wizard", 1, "firebolt", "staff", "spell", 12, 1.5, .25, 13, 0, "Hurl a fireball that bursts where it lands, burning everything in the blast.", "single"],
 		["frost_nova", "Frost Nova", "wizard", 1, "nova", "staff", "spell", 20, 1, .2, 3.5, 3, "Damage nearby foes and slow them by 60%.", "aoe"],
 		["arcane_lance", "Arcane Lance", "wizard", 4, "lance", "staff", "spell", 22, 1.6, .25, 14, 0, "An arcane projectile that pierces enemies.", "single"],
 		["barrier", "Barrier", "wizard", 4, "barrier", "staff", "", 22, 35, 15, 0, 8, "Absorb the listed damage for up to eight seconds.", "single"],

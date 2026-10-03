@@ -10,7 +10,9 @@ const SPEED = 26.0
 var age = 0.0
 var life = 1.0
 
-static func make(at: Vector3, reach: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0) -> Node3D:
+# `plasma` (Ground Slam): the blade's charge blasts out with the dust, a burst
+# of glowing blue plasma racing ahead of it and fading fast.
+static func make(at: Vector3, reach: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0, plasma: bool = false) -> Node3D:
 	var node = new()
 	node.position = at+Vector3.UP*.25
 	node.life = clampf(reach/SPEED*2.2+.5,.9,1.8)
@@ -43,6 +45,25 @@ static func make(at: Vector3, reach: float, direction: Vector3 = Vector3.ZERO, d
 		puff.angular_velocity_max = 60.0
 		puff.explosiveness = .95
 		puff.emitting = true
+	if plasma:
+		var blast = Vfx.particles(node,int(50*share)+14,minf(node.life,.7),true,true)
+		blast.mesh.size = Vector2.ONE
+		blast.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		blast.emission_sphere_radius = .25
+		blast.direction = way
+		blast.spread = degrees*.5
+		blast.flatness = .85
+		blast.initial_velocity_min = SPEED*.7
+		blast.initial_velocity_max = SPEED*1.15
+		blast.damping_min = SPEED*1.4
+		blast.damping_max = SPEED*2.0
+		blast.gravity = Vector3(0,.6,0)
+		blast.scale_amount_min = .6
+		blast.scale_amount_max = 1.4
+		blast.scale_amount_curve = Vfx.curve(.6,1.0)
+		blast.color_ramp = Vfx.ramp([0.0,.08,.35,1.0],[Color(.5,.75,1,0),Color(.4,.65,1,.38),Color(.2,.42,1,.22),Color(.1,.25,1,0)])
+		blast.explosiveness = .97
+		blast.emitting = true
 	return node
 
 func tick(dt: float) -> bool:

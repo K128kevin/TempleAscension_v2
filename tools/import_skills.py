@@ -16,7 +16,8 @@ the left forearm).
   SkillBash       Shield Bash: the shield shoved forward behind a step
   SkillExecute    the blade raised far behind the head and brought down
                   with the whole body, to the knees
-  SkillSlam       Ground Slam: the blade driven into the ground ahead
+  SkillSlam       Ground Slam: the blade brought down flat on the ground
+                  ahead
   SkillShockwave  Shockwave: the blade's pommel hammered down between the
                   feet from a deep crouch
   SkillCry        War Cry: blade thrust at the sky, shield flung wide, head
@@ -249,6 +250,13 @@ def author(name, pose):
         if w > 0:
             for b in rig.pose.bones: b.matrix_basis = blend(b.matrix_basis, BASE[b.name], w)
             update()
+        # SLAM_CHECK=1: how high the blade is over the ground (its two ends)
+        # through Ground Slam and Leap, and how near the body it comes.
+        if name in ('SkillSlam', 'SkillLeap') and os.environ.get('SLAM_CHECK') and (f % 3 == 0):
+            c = clearances()
+            hand = rig.pose.bones['hand_r'].matrix
+            ends = [hand @ V(0, .075, 0), hand @ V(0, .075, 1.08)]
+            print('SLAM_CHECK', name, round(t, 2), 'blade z', round(ends[0].z, 3), round(ends[1].z, 3), 'worst body', min((v, k) for k, v in c.items() if k.startswith('blade /') and k != 'blade / ground'), 'wrist', round(c['wrist']))
         keys(f)
     finish(name, a, length)
 
@@ -330,11 +338,22 @@ def execute(t):
     guard(up=.08*wind-.12*fall, out=.06*fall)
     plant()
 
+# Ground Slam's and Leap's blow: the blade struck down along the ground
+# rather than point-first into it. The hand (held with the grip the swing
+# gives it) comes down as low as the folded body lets it, a little ahead; the
+# blade points ahead, tipped just enough that it meets the ground along its
+# length to the point (Leap lands lower, so tips it less).
+SLAM_HAND = .14
+SLAM_AHEAD = .6
+FLAT_BLADE = V(0, -1, -.3)
+LEAP_BLADE = V(0, -1, -.25)
+
 def slam(t):
     # The blade swung high over the head as the body arches back and rises
     # onto its toes, then the whole body hurled down behind it: the lead foot
-    # driven forward, the hips dropped, the back folded, the blade rammed
-    # point-first into the ground ahead; held there, and a slow rise.
+    # driven forward, the hips dropped, the back folded, the blade struck down
+    # flat along the ground ahead (its length meets the floor, not its
+    # point); held there, and a slow rise.
     up = sample([(0, 0), (.26, 1), (.36, 1), (1, 0)], t)
     down = sample([(0, 0), (.36, 0), (.46, 1), (.7, 1), (1, 0)], t)
     hips(down=-.03*up+.5*down, forward=-.08*up+.22*down)
@@ -344,8 +363,8 @@ def slam(t):
     rotate('spine_03', (1, 0, 0), -.1*up+.25*down)
     rotate('neck_01', (1, 0, 0), -.15*up+.1*down)
     rotate('Head', (1, 0, 0), .2*up-.2*down)
-    hand = vsample([(0, SWORD_HOME), (.26, V(-.2, .35, 2.15)), (.36, V(-.2, .4, 2.2)), (.46, V(-.18, -1.05, .2)), (.7, V(-.18, -1.02, .16)), (1, SWORD_HOME)], t)
-    blade = vsample([(0, V(-.2, -1, .3)), (.26, V(0, .7, .8)), (.36, V(0, .8, .6)), (.46, V(0, -.3, -1)), (.7, V(0, -.3, -1)), (1, V(-.2, -1, .3))], t)
+    hand = vsample([(0, SWORD_HOME), (.26, V(-.2, .35, 2.15)), (.36, V(-.2, .4, 2.2)), (.46, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.7, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)], t)
+    blade = vsample([(0, V(-.2, -1, .3)), (.26, V(0, .7, .8)), (.36, V(0, .8, .6)), (.46, FLAT_BLADE), (.7, FLAT_BLADE), (1, V(-.2, -1, .3))], t)
     sword(hand, V(-.9, .1, 1.6) if t < .42 else V(-.9, -.4, .9), blade)
     # Both hands to the hilt for the blow: the shield arm comes across.
     guard(forward=-.08*up+.3*down, out=-.12*down, up=.25*up-.2*down)
@@ -355,7 +374,7 @@ def leap(t):
     # A deep crouch, the arms swung back; the spring, the body stretched and
     # the blade carried up over the head in the air; the landing, driven
     # down with everything: the hips to the heels, the back folded, the
-    # blade hammered into the ground; then the slow rise.
+    # blade struck down flat along the ground; then the slow rise.
     crouch = sample([(0, 0), (.12, 1), (.2, 1), (.28, 0), (1, 0)], t)
     air = sample([(0, 0), (.2, 0), (.3, 1), (.46, 1), (.56, 0), (1, 0)], t)
     land = sample([(0, 0), (.48, 0), (.57, 1), (.76, 1), (1, 0)], t)
@@ -365,8 +384,8 @@ def leap(t):
     rotate('spine_02', (1, 0, 0), .25*crouch-.2*air+.25*land)
     rotate('spine_03', (1, 0, 0), .1*crouch-.1*air+.12*land)
     rotate('Head', (1, 0, 0), -.3*crouch+.25*air-.3*land)
-    hand = vsample([(0, SWORD_HOME), (.12, V(-.5, .45, .75)), (.2, V(-.5, .45, .72)), (.3, V(-.25, .3, 2.1)), (.46, V(-.2, .25, 2.2)), (.57, V(-.18, -.95, .18)), (.76, V(-.18, -.92, .14)), (1, SWORD_HOME)], t)
-    blade = vsample([(0, V(-.2, -1, .3)), (.12, V(-.2, .9, -.3)), (.2, V(-.2, .9, -.3)), (.3, V(0, .6, .8)), (.46, V(0, .7, .7)), (.57, V(0, -.3, -1)), (.76, V(0, -.3, -1)), (1, V(-.2, -1, .3))], t)
+    hand = vsample([(0, SWORD_HOME), (.12, V(-.5, .45, .75)), (.2, V(-.5, .45, .72)), (.3, V(-.25, .3, 2.1)), (.46, V(-.2, .25, 2.2)), (.57, V(-.18, -SLAM_AHEAD+.1, SLAM_HAND)), (.76, V(-.18, -SLAM_AHEAD+.13, SLAM_HAND-.02)), (1, SWORD_HOME)], t)
+    blade = vsample([(0, V(-.2, -1, .3)), (.12, V(-.2, .9, -.3)), (.2, V(-.2, .9, -.3)), (.3, V(0, .6, .8)), (.46, V(0, .7, .7)), (.57, LEAP_BLADE), (.76, LEAP_BLADE), (1, V(-.2, -1, .3))], t)
     sword(hand, V(-.9, .4, 1.1) if t < .25 else (V(-.9, .1, 1.7) if t < .52 else V(-.9, -.4, .9)), blade)
     guard(up=-.1*crouch+.3*air-.05*land, out=.15*crouch+.1*air+.15*land, forward=-.15*crouch+.1*air+.2*land)
     if air > 0:
