@@ -454,6 +454,8 @@ func test():
 	check(anya_look.who=="woman" and anya_look.garment=="Dress" and anya_look.under=="Blouse" and anya_look.braid and anya_look.hair_colour.r<.1 and anya_look.cloth.r>anya_look.cloth.b*1.8 and anya_look.under_cloth.r>.85,"Anya: a young woman, dark hair in a braid, a white blouse under a brown dress")
 	var ragged = folk.people.filter(func(w): return w.body.look.wear>=.8).size()
 	var neat = folk.people.filter(func(w): return w.body.look.wear<=.3).size()
+	var orion_look: Dictionary = folk.orion.body.look
+	check(folk.orion.body.name=="Orion" and orion_look.hair=="" and orion_look.beard and orion_look.hair_colour.r<.08 and orion_look.bulk>=1.0 and orion_look.garment=="Sack" and orion_look.cloth.r>orion_look.cloth.b*2.0,"Orion the blacksmith: bald, black-bearded, heavy, in a sleeveless brown tunic")
 	check(ragged>=9 and neat>=5 and folk.children.all(func(c): return c.body.look.wear>=.75 and c.body.look.size<.7),"Many are in rags, some decently dressed; the children are poor and small")
 	# Three minutes of town life.
 	var least = 99
@@ -483,6 +485,11 @@ func test():
 	check(least>=3 and most<=8,"Between three and eight are in the inn at every moment (%d to %d)" % [least,most])
 	check(served>=6,"Anya has served drinks to those at the tables (%d)" % served)
 	check(chats>=2,"Townspeople who pass stop to talk (%d chats)" % (chats/2))
+	var tasks = {}
+	for step in 2400:
+		folk.tick(.05,Overworld.START)
+		tasks[folk.orion.state] = true
+	check(tasks.has("anvil") and tasks.has("wheel") and tasks.has("forge") and world.rooms[1].area.has_point(Vector2(folk.orion.at.x,folk.orion.at.z)),"Orion goes between the anvil, the grindstone and the forge, and stays in his smithy (%s)" % str(tasks.keys()))
 	check(strayed==0 and kids_in==0 and walled==0,"No one enters the arena, the palace hill or the desert; the children keep out of the inn; none walk through walls (%d, %d, %d)" % [strayed,kids_in,walled])
 
 	# The save keeps the hero's place in the world.

@@ -22,7 +22,7 @@ func test():
 			check(s.tree in Book.TREES,"Every skill sits in one of the three trees: "+s.id)
 			if class_id=="warrior": check(s.max_rank==5 and s.ranks.size()==5 and s.points in [0,5,10,15] and Book.rank_cap(s.id,1)==5,"Warrior skills have five listed ranks behind a tree requirement: "+s.id)
 			else: check(Book.rank_cap(s.id,s.unlock-1)==0 and Book.rank_cap(s.id,s.unlock)==1 and Book.rank_cap(s.id,s.unlock+3)==2,"Level/rank gate: "+s.id)
-		check(active==8 and passive==(8 if class_id=="warrior" else 4),"Eight active skills and the class's passives: "+class_id)
+		check(active==(11 if class_id=="warrior" else 8) and passive==(8 if class_id=="warrior" else 4),"The class's active skills and passives: "+class_id)
 		Data.gain_xp(run,Data.xp_at_level(15))
 		check(run.level==15 and run.points==70 and run.skill_points==14 and Data.max_health(run)==100,"Level 15 awards 70 attributes and 15 total skills without implicit stats: "+class_id)
 		check(Save.valid(run),"Progression state validates: "+class_id)
@@ -47,12 +47,12 @@ func test():
 	check(slam.x==250 and slam.y==120 and slam.z==21 and Book.all().ground_slam.cost==40 and Book.all().ground_slam.points==5,"Ground Slam's listed ranks, cost and requirement")
 	var bash = Book.values("shield_bash",1); var bash_top = Book.values("shield_bash",5)
 	check(bash.x==25 and bash.y==5 and bash.z==32 and bash_top.x==50 and bash_top.y==10 and bash_top.z==20 and Book.all().shield_bash.cost==35,"Shield Bash's listed ranks and cost")
-	check(Book.values("execute",5).x==450 and Book.values("execute",5).y==40 and Book.all().execute.cost==45 and Book.all().execute.points==15,"Execute's listed ranks, cost and requirement")
+	check(Book.values("execute",5).x==450 and Book.values("execute",5).y==40 and Book.all().execute.cost==45 and Book.all().execute.points==10,"Execute's listed ranks, cost and requirement")
 	check(Book.values("quick_strikes",5).x==170 and Book.values("dash_attack",5).x==0 and Book.values("dash_attack",1).x==20 and Book.values("cursed_blade",5).y==8,"Passive ranks as listed")
 	var requirements = {}
 	for s in Book.all().values():
 		if s.class_id=="warrior": requirements[s.id] = s.points
-	check(requirements=={"cleave":0,"leap":5,"ground_slam":5,"powerful_strike":0,"shield_bash":0,"vampiric_strike":5,"shadow_strike":5,"execute":15,"dash_attack":0,"shield_expertise":0,"endurance":0,"quick_strikes":5,"cursed_blade":5,"offensive_rhythm":10,"defensive_rhythm":10,"spiked_shield":10},"Document levels 1, 5, 10 and 15 become 0, 5, 10 and 15 points in the tree (Shadow Strike opening with Vampiric Strike, at 5)")
+	check(requirements=={"cleave":0,"leap":5,"ground_slam":5,"powerful_strike":0,"shield_bash":0,"vampiric_strike":5,"shadow_strike":5,"execute":10,"war_cry":0,"shield_charge":10,"shockwave":10,"dash_attack":0,"shield_expertise":0,"endurance":0,"quick_strikes":5,"cursed_blade":5,"offensive_rhythm":10,"defensive_rhythm":10,"spiked_shield":10},"Document levels 1, 5, 10 and 15 become 0, 5, 10 and 15 points in the tree (Shadow Strike opening with Vampiric Strike, at 5; Execute at 10)")
 	# A skill opens once enough points are spent in its own tree.
 	var fresh = Data.new_run()
 	fresh.skill_points = 1
@@ -69,11 +69,11 @@ func test():
 	check(not Book.can_learn(fresh,"shadow_strike"),"Four Single Target points do not open Shadow Strike")
 	Book.learn(fresh,"powerful_strike")
 	check(Book.can_learn(fresh,"shadow_strike") and not Book.can_learn(fresh,"execute"),"Five Single Target points open Shadow Strike, not Execute")
-	for i in 5: Book.learn(fresh,"shield_bash")
-	check(not Book.can_learn(fresh,"execute") and Book.learn(fresh,"shadow_strike"),"Ten points still do not open Execute")
-	for i in 4: Book.learn(fresh,"vampiric_strike")
-	check(Book.tree_points(fresh.skills,"single")==15 and Book.learn(fresh,"execute"),"Fifteen points open Execute")
-	check(Book.reachable(fresh.skills) and not Book.reachable({"leap":1,"cleave":4}) and not Book.reachable({"execute":1,"powerful_strike":5,"shield_bash":5,"shadow_strike":4}),"Saved ranks must be reachable through the tree")
+	for i in 4: Book.learn(fresh,"shield_bash")
+	check(not Book.can_learn(fresh,"execute"),"Nine points still do not open Execute")
+	Book.learn(fresh,"shield_bash")
+	check(Book.tree_points(fresh.skills,"single")==10 and Book.learn(fresh,"execute"),"Ten points open Execute")
+	check(Book.reachable(fresh.skills) and not Book.reachable({"leap":1,"cleave":4}) and not Book.reachable({"execute":1,"powerful_strike":5,"shield_bash":4}),"Saved ranks must be reachable through the tree")
 	var cheat = Data.new_run(); cheat.skills = {"execute":1}
 	check(not Save.valid(cheat),"A save with a skill its tree has not opened is rejected")
 	# Dexterity quickens melee swings; Endurance, energy recovery.

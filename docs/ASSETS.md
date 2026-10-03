@@ -264,7 +264,15 @@ bushes; they were replaced.)
   turns the fist to keep the mug upright and curls the fingers): Anya's hand holds
   the mug under the tap, carries it at her side and sets it on the table; a
   drinker's goes from his lap to the mug on the table, lifts it to his mouth and
-  sets it down again. `scripts/townsperson.gd` dresses a figure and
+  sets it down again; the fist holds the mug as a mug is held, fingers through the
+  handle and wrapped round its bar, the thumb resting on top, the body off the
+  palm's side (the mug prop's handle is on its +X side, its body off-centre the
+  other way, as the prop was centred on its bounds). Orion the blacksmith is a
+  townsman given a heavy build (the figure broadened across and through) and
+  tools in his right fist: a hammer assembled from the column and metal-crate
+  props, the game's sword, and the column as an iron rod; a second arm reach drives
+  that arm through his hammer strokes, the blade's draw along the grindstone and the
+  rod's stirring in the coals. `scripts/townsperson.gd` dresses a figure and
   `scripts/townsfolk.gd` runs the town: its own A* grid of the streets (the arena,
   palace hill, smithy and the inn's loft closed), the seats at the inn's tables,
   the inn's occupancy rules, Anya's rounds and the children's games.
@@ -379,6 +387,20 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   `tools/import_combat.py` authors and bakes BowIdle, BowShot, BowRapid, BowRun, BowCrouch,
   SpearIdle, SpearStab and SpearJab on the supplied skeleton. These animate
   existing bones and meshes; no replacement geometry is generated.
+- The warrior's skill swings (SkillCleave, SkillStrike, SkillStab, SkillBash,
+  SkillExecute, SkillSlam, SkillShockwave, SkillCry, SkillCharge, SkillLeap) are
+  authored by `tools/import_skills.py` from the sword-and-shield stance, frame by
+  frame: the hips, spine and head turned and bent along smooth curves, the sword arm
+  carried by two-bone IK with the fist turned outright so the blade runs where the
+  swing sends it, the shield arm held in its guard (moved as the swing needs), both
+  feet kept planted by leg IK (the charge borrows the sprint's legs), and each eased
+  out of the stance and back into it so nothing leaps between frames. The shockwave of a blow
+  on the ground is `scripts/shockwave.gd`: two one-shot bursts of the soft-dot
+  billboards (`scripts/vfx.gd`), heavy dust low over the ground and thinner smoke
+  above it, thrown out at 26 m/s across the blow's reach (an arc for the slam) and
+  damped as they spread, swelling and fading; the floor itself is untouched.
+  `scripts/skills.gd` picks each skill's
+  clip, duration and contact point (`WARRIOR_CLIPS`).
 - The hero's walk (the R key) is the animation library's `Walk_Loop`, retargeted as
   the clip `Walk` by `tools/import_walk.py`. The walks that carry a weapon
   (SwordWalk, RangerWalk, WizardWalk) are made from it when the figure is set up
@@ -395,6 +417,7 @@ animation licenses sit beside it. Rebuild with Blender:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_character.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_combat.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_walk.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_skills.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
 ```

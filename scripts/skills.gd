@@ -1,6 +1,8 @@
 extends Node
 const Data = preload("res://scripts/data.gd")
 const Book = preload("res://scripts/skill_data.gd")
+const Shockwave = preload("res://scripts/shockwave.gd")
+const Art = preload("res://scripts/assets.gd")
 var game
 var pending: Array = []
 var zones: Array = []
@@ -8,6 +10,10 @@ var barrier = 0.0
 var barrier_time = 0.0
 # Seconds until a skill with a cooldown (Shield Bash) is ready again.
 var cooldowns: Dictionary = {}
+# Shield Charge under way: how long he runs on, which way, and who he has hit.
+var charge: Dictionary = {}
+# Shockwaves under way (scripts/shockwave.gd).
+var waves: Array = []
 # Offensive and Defensive Rhythm: the stacks built, and how long they last.
 var offense_stacks = 0
 var offense_time = 0.0
@@ -23,12 +29,27 @@ const SHADOW_SECONDS = 5.0
 # Dash Attack's Cleave is a quick cut out of the dash.
 const DASH_CLEAVE_SPEED = 1.6
 # The warrior's blows, aimed by facing rather than at a point in sight.
-const SWINGS = ["cleave","slam","strike","bash","vampiric","shadow","execute"]
+const SWINGS = ["cleave","slam","strike","bash","vampiric","shadow","execute","cry","charge","shockwave"]
+# Each of the warrior's skills has a swing of its own (tools/import_skills.py):
+# its clip, how long it plays, and how far through it the blow lands.
+const WARRIOR_CLIPS = {"cleave":["SkillCleave",1.0,.52],"strike":["SkillStrike",1.0,.55],"vampiric":["SkillStab",.9,.52],"shadow":["SkillStab",.9,.52],
+	"bash":["SkillBash",.9,.5],"execute":["SkillExecute",1.3,.58],"slam":["SkillSlam",1.1,.52],"shockwave":["SkillShockwave",1.2,.56],
+	"cry":["SkillCry",1.0,.3],"charge":["SkillCharge",1.0,.82],"leap":["SkillLeap",1.0,.56]}
+# Shield Charge: how fast he goes, and how far the ones in his way are thrown.
+const CHARGE_SPEED = 11.0
+const CHARGE_THROW = 1.6
+const SHOCKWAVE_THROW = 2.2
+# The screen shakes this hard (metres) as the ground breaks.
+const SHAKE_LEAP = .5
+const SHAKE_SLAM = .65
 
 func reset() -> void:
 	pending.clear()
 	zones.clear()
 	cooldowns.clear()
+	charge.clear()
+	for w in waves: w.queue_free()
+	waves.clear()
 	barrier = 0; barrier_time = 0
 	offense_stacks = 0; offense_time = 0; defense_stacks = 0; defense_time = 0
 
@@ -56,6 +77,9 @@ func reach(id: String) -> float:
 		"cleave","strike","bash","vampiric","shadow","execute": return MELEE_REACH
 		"leap": return LEAP_RANGE
 		"slam": return maxf(MELEE_REACH,Book.values(id,maxi(1,rank(id))).z-1.0)
+		"charge": return Book.values(id,maxi(1,rank(id))).x-1.0
+		"shockwave": return Book.values(id,maxi(1,rank(id))).y-.5
+		"cry": return Book.values(id,maxi(1,rank(id))).x-.5
 	return 13.0
 
 func cast_slot(slot: int, at: Vector3) -> bool:
@@ -89,7 +113,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 			game.toast("Execute needs an enemy below %d%% health." % limit)
 			return false
 	if not free: game.run.energy -= cost(id)
-	if s.effect=="bash": cooldowns[id] = Book.values(id,level).z
+	if s.effect in ["bash","shockwave"]: cooldowns[id] = Book.values(id,level).z
 	game.order_pending = false
 	game.route.clear()
 	game.player.face(at)
@@ -107,14 +131,29 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	elif s.requirement in ["melee","shield"]:
 		clip = "SwordSlash" if game.run.weapon==1 else ("SpearJab" if game.run.weapon==0 else "AxeChop")
 		# Dexterity quickens every melee swing.
-		duration = maxf(Data.MELEE_MINIMUM,.84/((1.0+Data.melee_haste(game.run)*.01)*(DASH_CLEAVE_SPEED if free else 1.0)))
+		var haste: float = (1.0+Data.melee_haste(game.run)*.01)*(DASH_CLEAVE_SPEED if free else 1.0)
+		duration = maxf(Data.MELEE_MINIMUM,.84/haste)
 		contact = duration*.52
+		# With the sword, each skill has its own swing.
+		if game.run.weapon==1 and WARRIOR_CLIPS.has(s.effect) and game.player.visual.clips.has(WARRIOR_CLIPS[s.effect][0]):
+			var own: Array = WARRIOR_CLIPS[s.effect]
+			clip = own[0]
+			duration = maxf(Data.MELEE_MINIMUM,own[1]/haste)
+			contact = duration*own[2]
 	if s.effect=="leap":
 		var gap: float = game.player.position.distance_to(at)
 		# He lands beside a unit standing at the target, not on it.
 		for enemy in game.targets(game.player):
 			if not enemy.dead and not enemy.dormant and enemy.position.distance_to(at)<.6: gap = maxf(0.0,gap-game.player.standoff(enemy))
-		game.start_leap(direction.normalized(),gap,contact)
+		# (The flight begins after the crouch and ends on the blow.)
+		game.start_leap(direction.normalized(),gap,contact,duration*.2 if clip=="SkillLeap" else 0.0)
+	if s.effect=="charge":
+		var reach: float = Book.values(id,level).x
+		var run_time = minf(reach,direction.length())/CHARGE_SPEED
+		charge = {"left":run_time,"direction":direction.normalized(),"hit":[],"id":id,"rank":level,"stunned":false}
+		duration = maxf(duration,run_time+.35)
+		contact = duration*.95
+		game.player.invulnerable = run_time
 	game.player.visual.play(clip,duration)
 	game.player.busy = duration
 	game.player.cooldown = duration
@@ -205,6 +244,14 @@ func pulse(at: Vector3, radius: float, damage: float, type: String, slow: float 
 		strike(enemy,damage,type)
 		if slow>0: enemy.slow_time = maxf(enemy.slow_time,slow)
 
+# A blow on the ground: a shockwave of dust and smoke racing out across the
+# area it hits (scripts/shockwave.gd), and the screen shaken.
+func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0) -> void:
+	var wave = Shockwave.make(at+Vector3.UP*game.world.lift(at),reach,direction,degrees)
+	game.world.add_child(wave)
+	waves.append(wave)
+	game.shake(shake)
+
 # Ground Slam's shockwave: seals racing out along the arc.
 func shockwave(origin: Vector3, direction: Vector3, degrees: float, distance: float) -> void:
 	var rays = maxi(3,roundi(degrees/18.0))
@@ -230,9 +277,28 @@ func execute(job: Dictionary) -> void:
 		"slam":
 			for enemy in arc_targets(origin,direction,v.y,v.z): strike(enemy,attack_damage(v.x))
 			shockwave(origin,direction,v.y,v.z)
+			ground_blow(origin+direction*.9,v.z,SHAKE_SLAM,direction,v.y)
 		"leap":
 			for enemy in targets(origin,LEAP_RADIUS): strike(enemy,attack_damage(v.x))
 			game.effect(origin,LEAP_RADIUS*2,Color(1,.55,.13,.95),.5)
+			ground_blow(origin,LEAP_RADIUS,SHAKE_LEAP)
+		"shockwave":
+			for enemy in targets(origin,v.y):
+				strike(enemy,attack_damage(v.x))
+				var away: Vector3 = enemy.position-origin
+				away.y = 0
+				if away.length()>.05: enemy.shove(away.normalized(),SHOCKWAVE_THROW)
+			shockwave(origin,direction,360.0,v.y)
+			ground_blow(origin,v.y,SHAKE_SLAM)
+		"cry":
+			for enemy in targets(origin,v.x): enemy.rally(v.y,v.z)
+			game.effect(origin,v.x*2,Color(1,.75,.3,.6),.5)
+			game.float_text(game.player.position+Vector3.UP*2.3,"War Cry!",Color(1,.8,.4))
+		"charge":
+			# The blow at the end of the run: whoever is still before him.
+			for enemy in arc_targets(origin,direction,100.0,MELEE_REACH):
+				if not enemy in charge.get("hit",[]): charge_hit(enemy,direction,v)
+			charge.clear()
 		"strike","bash","vampiric","shadow","execute":
 			var victim = single_target(at,direction)
 			if victim == null: return
@@ -303,7 +369,37 @@ func execute(job: Dictionary) -> void:
 			game.effect(at,s.radius*2,color,duration)
 			zones.append({"effect":s.effect,"at":at,"radius":float(s.radius),"damage":damage,"value":value,"life":duration,"tick":float(s.duration) if s.effect=="meteor" else (1.0 if s.effect=="trap" else 0.0),"pulses":4 if s.effect=="rain" else (5 if s.effect=="blizzard" else 3)})
 
+# Shield Charge's blow on one unit: damage, thrown aside, the first stunned.
+func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
+	charge.hit.append(enemy)
+	var first_hit: bool = not charge.stunned
+	strike(enemy,attack_damage(v.y))
+	var aside: Vector3 = enemy.position-game.player.position
+	aside.y = 0
+	var side: Vector3 = direction.cross(Vector3.UP)
+	var throw: Vector3 = (side if aside.dot(side)>=0 else -side)*.7+direction*.7
+	enemy.shove(throw.normalized(),CHARGE_THROW)
+	if first_hit:
+		enemy.stun(v.z)
+		charge.stunned = true
+	game.effect(enemy.position,2.2,Color(.75,.85,1,.9),.3)
+
 func tick(dt: float) -> void:
+	for i in range(waves.size()-1,-1,-1):
+		if waves[i].tick(dt):
+			waves[i].queue_free()
+			waves.remove_at(i)
+	if not charge.is_empty() and not game.player.dead:
+		var step = minf(dt,charge.left)
+		charge.left -= dt
+		var before: Vector3 = game.player.position
+		game.player.position = game.world.move(before,charge.direction*CHARGE_SPEED*step)
+		if before.distance_to(game.player.position) < CHARGE_SPEED*step*.3: charge.left = 0.0
+		var v: Dictionary = Book.values(charge.id,charge.rank)
+		for enemy in arc_targets(game.player.position,charge.direction,120.0,1.3):
+			if not enemy in charge.hit: charge_hit(enemy,charge.direction,v)
+		if charge.left<=0.0:
+			charge.left = 0.0
 	barrier_time = maxf(0,barrier_time-dt)
 	if barrier_time<=0: barrier = 0
 	for id in cooldowns: cooldowns[id] = maxf(0,cooldowns[id]-dt)

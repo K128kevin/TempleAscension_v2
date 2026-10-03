@@ -10,7 +10,7 @@ var grip = Basis.IDENTITY
 var curl = 0.0
 # How fast the fingers bend at each joint, by finger.
 const FINGERS = ["index","middle","ring","pinky"]
-const BEND = [.55,.75,.75]
+const BEND = [.7,.75,.55]
 # The axis a finger bends about, in its own bone's space.
 var bend_axis = Vector3(-1,0,0)
 
@@ -26,7 +26,7 @@ func _process_modification() -> void:
 				skeleton.set_bone_pose_rotation(bone,skeleton.get_bone_pose_rotation(bone)*turn)
 		for joint in 2:
 			var bone = skeleton.find_bone("thumb_0%d_%s" % [joint+2,side])
-			if bone >= 0: skeleton.set_bone_pose_rotation(bone,skeleton.get_bone_pose_rotation(bone)*Quaternion(bend_axis,-curl*.5*(1.0 if side == "l" else -1.0)))
+			if bone >= 0: skeleton.set_bone_pose_rotation(bone,skeleton.get_bone_pose_rotation(bone)*Quaternion(bend_axis,-curl*.75*(1.0 if side == "l" else -1.0)))
 	if weight <= 0.0: return
 	var upper = skeleton.find_bone("upperarm_"+side)
 	var lower = skeleton.find_bone("lowerarm_"+side)

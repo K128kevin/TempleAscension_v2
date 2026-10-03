@@ -310,6 +310,13 @@ func _process(dt: float) -> void:
 		if enemy.dead or not enemy.awake or not enemy.visible or enemy.position.distance_squared_to(player.position)>900: continue
 		world.occlusion_targets.append({"position":enemy.position,"height":1.8*enemy.config.size})
 	world.follow(playground.focus() if playground != null else player.position,dt)
+	if shake_left>0:
+		# A jolt that rings down: the camera thrown about its place.
+		shake_left = maxf(0,shake_left-dt)
+		var ring = shake_left/SHAKE_TIME
+		var jolt = shake_strength*ring*ring
+		world.camera.position += Vector3(sin(combat_age*97.0)*jolt,cos(combat_age*83.0)*jolt*.7,sin(combat_age*71.0)*jolt)
+		if shake_left<=0: shake_strength = 0.0
 	if is_instance_valid(world.fountain): world.fountain.tick(dt,player.position,mode=="playing")
 	hud.tick(dt)
 	update_enemy_hover()
@@ -487,10 +494,13 @@ func issue_click(special: bool, slot: int = 0) -> void:
 func player_control(dt: float) -> void:
 	if player.dead: return
 	if leap_left>0:
-		var step = minf(dt,leap_left)
+		# The flight is the last `leap_duration` seconds; before that he gathers.
+		var before: float = leap_left
 		leap_left = maxf(0,leap_left-dt)
-		player.position = world.move(player.position,leap_direction*leap_speed*step)
-		player.visual.position.y = world.lift(player.position)+sin((1.0-leap_left/leap_duration)*PI)*1.8
+		var step: float = minf(before,leap_duration)-minf(leap_left,leap_duration)
+		if step>0:
+			player.position = world.move(player.position,leap_direction*leap_speed*step)
+			player.visual.position.y = world.lift(player.position)+sin((1.0-minf(leap_left,leap_duration)/leap_duration)*PI)*1.8
 		if leap_left<=0: player.visual.position.y = world.lift(player.position)
 		return
 	if dash_time>0:
@@ -622,12 +632,22 @@ func tick_scheduled(dt: float) -> void:
 
 # Carries the hero through the air to land `distance` away after `seconds`
 # (the Leap skill); he cannot be hurt on the way.
-func start_leap(direction: Vector3, distance: float, seconds: float) -> void:
-	leap_duration = seconds
+# A leap of `distance` landing after `seconds`; the flight itself begins
+# after `crouch` seconds (the warrior's own leap gathers first).
+func start_leap(direction: Vector3, distance: float, seconds: float, crouch: float = 0.0) -> void:
+	leap_duration = seconds-crouch
 	leap_left = seconds
 	leap_direction = direction
-	leap_speed = distance/seconds
+	leap_speed = distance/leap_duration
 	player.invulnerable = seconds
+
+# The screen shaken: the camera jolted `strength` metres, settling over half a second.
+var shake_left = 0.0
+var shake_strength = 0.0
+const SHAKE_TIME = .7
+func shake(strength: float) -> void:
+	shake_strength = maxf(shake_strength,strength)
+	shake_left = SHAKE_TIME
 
 func dash() -> void:
 	if leap_left>0: return

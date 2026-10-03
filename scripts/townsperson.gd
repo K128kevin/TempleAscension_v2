@@ -9,6 +9,7 @@ extends Node3D
 ##   hair      a hairstyle of that body's, or ""; `hair_colour`; `beard`; `braid`
 ##   belt      a colour, or null for none
 ##   size      its height against the body's own (a child is about .6)
+##   bulk      0 as the body comes; 1 broad and heavy (thick trunk, arms and neck)
 const Kit = preload("res://scripts/world_art.gd")
 const Art = preload("res://scripts/assets.gd")
 const Wardrobe = preload("res://scripts/wardrobe.gd")
@@ -16,14 +17,17 @@ const LOOPS = ["Idle","Talk","Walk","Jog","Sit","SitTalk","Dance","Carry","Arms"
 # The ground each stride covers a second as the library authored it, for a
 # figure of full size.
 const STRIDE = {"Walk":1.0,"Jog":2.9,"Carry":1.0}
-# Where a mug sits in the fist (its handle in the fingers, its body beyond
-# them, off the palm's side), in the hand bone's space; how it is turned
-# there; and how the fist itself is turned, relative to the figure, to hold
-# it upright: palm inward, fingers forward, thumb up.
-const GRIP_AT = Vector3(-.085,.03,-.115)
-const GRIP_TURN = Vector3(0,0,-PI/2)
-const GRIP_YAW = PI
-const GRIP_HAND = Basis(Vector3(0,1,0),Vector3(0,0,1),Vector3(1,0,0))
+# How a mug is held, as a mug is: the fingers through its handle and
+# wrapped round the handle's bar, the thumb resting on top, the mug's body
+# off the palm's side. In the hand bone's space (X toward the palm, Y along
+# the fingers, Z across the palm toward the thumb) the handle's bar lies in
+# the curl of the fingers and the mug's base is GRIP_AT, its axis along Z
+# (GRIP_MUG turns it so; the model's handle is on its +X side, its body
+# off-centre the other way, as the prop was centred on its bounds). GRIP_HAND is how the fist is turned, relative to
+# the figure, to hold the mug upright: palm inward, fingers forward, thumb up.
+const GRIP_AT = Vector3(.135,.13,-.10)
+const GRIP_MUG = Basis(Vector3(-1,0,0),Vector3(0,0,1),Vector3(0,1,0))
+const GRIP_HAND = Basis(Vector3(-1,0,0),Vector3(0,0,1),Vector3(0,1,0))
 # The arm that lifts the mug, and the head that meets it.
 const DRINKING = ["clavicle_l","upperarm_l","lowerarm_l","hand_l","index","middle","ring","pinky","thumb","neck_01","Head"]
 static var materials: Dictionary = {}
@@ -85,6 +89,10 @@ func setup(appearance: Dictionary) -> void:
 		mesh.extra_cull_margin = 1.0
 	# A child's head is large for its body.
 	if look.get("child",false): skeleton.set_bone_pose_scale(skeleton.find_bone("Head"),Vector3.ONE*1.22)
+	# A heavy build: the whole figure broadened across and through (its own
+	# frame turns with it, so the bulk never shears as the limbs move).
+	var bulk: float = look.get("bulk",0.0)
+	if bulk > 0.0: figure.scale = Vector3(1.0+.22*bulk,1.0,1.0+.22*bulk)*size
 	hand = BoneAttachment3D.new()
 	# (The library's drinker lifts the left hand.)
 	hand.bone_name = "hand_l"
@@ -96,7 +104,7 @@ func setup(appearance: Dictionary) -> void:
 	skeleton.add_child(arm)
 	# In the palm, upright when the forearm is level; a thing keeps its own
 	# size in a child's hand.
-	grip.transform = Transform3D((Basis.from_euler(GRIP_TURN)*Basis(Vector3.UP,GRIP_YAW)).scaled(Vector3.ONE/size),GRIP_AT)
+	grip.transform = Transform3D(GRIP_MUG.scaled(Vector3.ONE/size),GRIP_AT)
 	play("Idle",0.0)
 
 # The library's drinker stands. A seated one keeps the sitting pose and takes

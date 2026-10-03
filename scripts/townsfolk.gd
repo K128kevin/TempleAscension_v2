@@ -11,12 +11,16 @@ extends Node3D
 ## sip now and then and setting it down again), then leaves or waits for
 ## another. Six children run about the streets at their games (tag,
 ## follow-my-leader, and a rest in a huddle between them); they keep out of
-## the inn. No one goes into the arena, through the palace gate or out of
+## the inn. Orion, the blacksmith, works in the smithy: hammering at the
+## anvil, sharpening a blade on the grindstone, and stoking the forge with
+## an iron rod, going from one to the next. No one goes into the arena,
+## through the palace gate or out of
 ## the town.
 const Person = preload("res://scripts/townsperson.gd")
 const Kit = preload("res://scripts/world_art.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Interiors = preload("res://scripts/world_interiors.gd")
+const Art = preload("res://scripts/assets.gd")
 const ADULTS = 25
 const CHILDREN = 6
 # How many of the grown townspeople are in the inn at once.
@@ -92,6 +96,10 @@ var seats: Array[Dictionary] = []
 var people: Array[Walker] = []
 var children: Array[Walker] = []
 var anya: Walker
+# Orion, the blacksmith, and his work: the anvil he hammers at, the
+# grindstone, and the forge he stokes.
+var orion: Walker
+var smithy = {}
 # Anya's round: who she is taking a drink to, and where she stands.
 var round: Array[Walker] = []
 # Where the mug rides in her fist as she carries it, relative to her.
@@ -129,6 +137,47 @@ func setup(overworld) -> void:
 	anya.speed = ANYA_WALK
 	anya.mug = Kit.prop("mug",.17)
 	stow(anya.mug)
+	# Orion: bald, black-bearded, heavy and strong, in a sleeveless brown tunic.
+	orion = Walker.new()
+	orion.body = figure({"who":"man","garment":"Sack","cloth":Color(.40,.27,.16),"wear":.35,"hair":"","beard":true,"hair_colour":Color(.05,.04,.035),
+		"skin":"light","tone":Color(.95,.86,.78),"dirt":.45,"size":1.04,"bulk":1.0,"belt":Color(.25,.17,.1),"seed":.77})
+	orion.body.name = "Orion"
+	var f = Interiors.SMITHY+Vector3(9.0,0,1.0)
+	smithy = {"anvil":{"at":f+Vector3(-1.5,0,3.3),"stand":f+Vector3(-1.5,0,4.4),"face":Vector3(0,0,-1)},
+		"wheel":{"at":Interiors.SMITHY+Vector3(12.6,0,9.0),"stand":Interiors.SMITHY+Vector3(11.6,0,9.0),"face":Vector3(1,0,0)},
+		"forge":{"at":f+Vector3(0,0,1.0),"stand":f+Vector3(0,0,2.8),"face":Vector3(0,0,-1)}}
+	orion.at = smithy.anvil.stand
+	orion.state = "anvil"
+	orion.timer = 12.0
+	orion.body.rotation.y = atan2(smithy.anvil.face.x,smithy.anvil.face.z)
+	# His tools, in the right fist (through it, as the hero's weapons are):
+	# a hammer (an iron head on a wooden shaft), a blade, and an iron rod.
+	var fist = BoneAttachment3D.new()
+	fist.bone_name = "hand_r"
+	orion.body.skeleton.add_child(fist)
+	var hammer = Node3D.new()
+	var shaft = Art.model("column",Vector3(.028,.36,.028),Kit.planks(Color(.45,.33,.2),2.0))
+	shaft.position = Vector3(0,.18,0)
+	hammer.add_child(shaft)
+	var head = Art.model("crate_metal",Vector3(.13,.06,.06),Kit.iron())
+	head.position = Vector3(0,.33,0)
+	hammer.add_child(head)
+	var blade = Art.model("sword",Vector3(.27,1.13,.065),Art.sword_material())
+	blade.position = Vector3(0,-.1,0)
+	var rod = Art.model("column",Vector3(.022,1.1,.022),Kit.iron())
+	rod.position = Vector3(0,.4,0)
+	for tool in [hammer,blade,rod]:
+		fist.add_child(tool)
+		# (A tool's length runs out of the fist on the thumb's side.)
+		tool.rotation.x = PI/2
+		tool.position.y += .075
+		tool.scale = Vector3.ONE/orion.body.size
+		tool.visible = false
+	smithy.tools = {"anvil":hammer,"wheel":blade,"forge":rod}
+	smithy.swing = preload("res://scripts/arm_reach.gd").new()
+	smithy.swing.side = "r"
+	orion.body.skeleton.add_child(smithy.swing)
+	hammer.visible = true
 	for i in ADULTS:
 		var look: Array = LOOKS[i]
 		var wear: float = look[3]
@@ -173,7 +222,7 @@ func closed(x: int, z: int) -> bool:
 	if world.cells[world.index(x,z)] != world.OPEN: return true
 	var arena = Vector2((x-Town.ARENA.x)/Town.ARENA_RADII.x,(z-Town.ARENA.z)/Town.ARENA_RADII.y)
 	if arena.length() < 1.0 or z < -77 or x > -184: return true
-	if world.rooms[1].area.has_point(Vector2(x,z)): return true
+	# (The smithy is open ground for Orion; no one else has business there.)
 	return world.height_at(x,z) > .01
 
 func lay_grid() -> void:
@@ -351,6 +400,7 @@ func tick(delta: float, hero: Vector3) -> void:
 	delta = minf(delta,.1)
 	for walker in people: tend(walker,delta)
 	serve(delta)
+	smith(delta)
 	romp(delta)
 	meet(delta)
 	part(hero)
@@ -600,6 +650,76 @@ func serve(delta: float) -> void:
 				anya.timer = rng.randf_range(1.0,3.0)
 				body.play("Idle")
 
+# Orion's day: a spell at each of his three tasks in turn, walking between
+# them. At the anvil the hammer rises above his shoulder and falls on the
+# work, over and over; at the wheel he holds a blade's edge to the stone,
+# drawing it back and forth; at the forge he works an iron rod in the coals.
+const SMITH_TASKS = ["anvil","wheel","forge","anvil","forge","wheel"]
+var smith_step = 0
+
+func smith(delta: float) -> void:
+	orion.timer -= delta
+	orion.phase_time += delta
+	var body = orion.body
+	var swing = smithy.swing
+	var task: String = orion.state
+	if task == "walk":
+		swing.weight = 0.0
+		swing.curl = 0.0
+		if advance(orion,delta):
+			smith_step = (smith_step+1) % SMITH_TASKS.size()
+			orion.state = SMITH_TASKS[smith_step]
+			orion.timer = rng.randf_range(14.0,26.0)
+			orion.phase_time = 0.0
+			for name in smithy.tools: smithy.tools[name].visible = name == orion.state
+			body.play("Idle",.3)
+		return
+	var post: Dictionary = smithy[task]
+	body.turn_to(post.face,delta,6.0)
+	if body.state != "Idle": body.play("Idle",.3)
+	var basis: Basis = body.global_transform.basis
+	var shoulder: Vector3 = body.global_transform*Vector3(-.18,1.42,0)
+	var t = orion.phase_time
+	swing.weight = 1.0
+	swing.curl = 1.0
+	match task:
+		"anvil":
+			# A stroke a second: up above the shoulder, down hard on the anvil.
+			var stroke = fposmod(t,1.0)
+			var raised = 1.0-smoothstep(0.0,.3,stroke) if stroke < .3 else smoothstep(.45,1.0,stroke)
+			var hand: Vector3 = post.at+Vector3(-.1,1.08,-.22)
+			var up: Vector3 = shoulder+Vector3(-.05,.55,-.2)
+			var at: Vector3 = hand.lerp(up,raised)
+			# The head leads: the hammer points down at the bottom, back over the shoulder at the top.
+			var tilt = lerp_angle(-.2,-2.3,raised)
+			swing.grip = basis*Basis(Vector3(1,0,0),tilt)*HAMMER_HAND
+			swing.target = at
+			body.figure.position.y = -.03*(1.0-raised)
+		"wheel":
+			# The blade laid along the stone, drawn back and forth.
+			var draw = sin(t*3.2)*.12
+			swing.target = post.at+Vector3(-.28,1.12,draw-.05)
+			swing.grip = basis*Basis(Vector3(0,1,0),-.3)*Basis(Vector3(1,0,0),1.25)*HAMMER_HAND
+			body.figure.position.y = 0.0
+		"forge":
+			# The rod's end in the coals, stirred round and thrust in.
+			var stir = t*1.6
+			swing.target = post.stand+Vector3(-.12+cos(stir)*.06,1.05,-(.55+sin(stir*.5)*.15))
+			swing.grip = basis*Basis(Vector3(1,0,0),.35)*HAMMER_HAND
+			body.figure.position.y = -.02*(sin(stir*.5)*.5+.5)
+	if orion.timer <= 0.0:
+		var next = SMITH_TASKS[(smith_step+1) % SMITH_TASKS.size()]
+		orion.route = way(orion.at,smithy[next].stand)
+		orion.route.append(smithy[next].stand)
+		orion.speed = WALK*.9
+		orion.pace = "Walk"
+		orion.state = "walk"
+		body.figure.position.y = 0.0
+
+# The right fist turned to hold a tool out before the body along the ground,
+# thumb up: the tool's length runs out of the fist along the hand's Z.
+const HAMMER_HAND = Basis(Vector3(0,-1,0),Vector3(1,0,0),Vector3(0,0,1))
+
 func next_table(from_bar: bool) -> void:
 	while not round.is_empty() and round[0].state != "wait": round.remove_at(0)
 	var route = PackedVector3Array()
@@ -763,4 +883,5 @@ func flee(child: Walker, it: Walker) -> Vector3:
 # The named townsperson at a point of the ground (only Anya has a name).
 func named_at(point: Vector3) -> Dictionary:
 	if Vector2(point.x-anya.at.x,point.z-anya.at.z).length() < 1.1: return {"name":"Anya","at":anya.at+Vector3.UP*1.9}
+	if Vector2(point.x-orion.at.x,point.z-orion.at.z).length() < 1.2: return {"name":"Orion","at":orion.at+Vector3.UP*2.0}
 	return {}

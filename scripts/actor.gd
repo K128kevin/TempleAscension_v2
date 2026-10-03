@@ -32,6 +32,9 @@ var thresholds = 0
 var invulnerable = 0.0
 var slow_time = 0.0
 var mark_time = 0.0
+# War Cry: takes this much more damage (percent) for this long.
+var rally_bonus = 0.0
+var rally_time = 0.0
 # Rooted and unable to act (Shield Bash's stun).
 var stagger_time = 0.0
 # A stun ends at the first damage. Stunned again within STUN_MEMORY seconds of
@@ -121,6 +124,8 @@ func tick(dt: float) -> void:
 	visual.owed += forward()*catch_up
 	slow_time = maxf(0,slow_time-dt)
 	mark_time = maxf(0,mark_time-dt)
+	rally_time = maxf(0,rally_time-dt)
+	if rally_time<=0: rally_bonus = 0.0
 	stagger_time = maxf(0,stagger_time-dt)
 	stun_memory = maxf(0,stun_memory-dt)
 	if stunned and stagger_time<=0: end_stun()
@@ -512,6 +517,13 @@ func forward() -> Vector3:
 # Shield Bash: stunned for `seconds` (less when stunned again soon after), its
 # attack broken off, until the time runs out or it takes damage. The crown's
 # gaze, once it burns, cannot be stopped.
+# War Cry: cowed, it takes `percent` more damage for `seconds`.
+func rally(percent: float, seconds: float) -> void:
+	if dead or dormant: return
+	rally_bonus = maxf(rally_bonus,percent)
+	rally_time = maxf(rally_time,seconds)
+	game.effect(position,1.8,Color(1,.7,.25,.8),.4)
+
 func stun(seconds: float) -> void:
 	if dead or dormant or laser_time>0: return
 	stun_count = stun_count+1 if stun_memory>0 else 0
@@ -601,6 +613,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0) -> void:
 		return
 	damage = Data.mitigate(damage,armor(),0.0,int(game.run.level),type)+bonus
 	if mark_time>0: damage *= 1.2+Data.passive(game.run,"predator")*.01
+	if rally_time>0: damage *= 1.0+rally_bonus*.01
 	hp -= damage
 	if damage>0: end_stun()
 	game.sound.play("weapon-impact",-15)
