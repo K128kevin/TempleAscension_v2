@@ -40,8 +40,9 @@ var order_pending = false
 var ordered_special = false
 # The skill slot a special order casts (RMB is 0; the 1 and 2 keys, 1 and 2).
 var ordered_slot = 0
-# Dash Attack: a Cleave follows the dash under way.
-var dash_cleave = false
+# Dash Attack: the dash under way strikes whoever it passes through, each once.
+var dash_attack = false
+var dash_struck: Array = []
 var dash_speed = 41.0
 var leap_left = 0.0
 var leap_duration = .26
@@ -140,7 +141,8 @@ func load_floor() -> void:
 	right_held = false
 	crown_available = false
 	dash_time = 0
-	dash_cleave = false
+	dash_attack = false
+	dash_struck.clear()
 	leap_left = 0
 	heal_cd = run.heal_cooldown
 	regen_recovery_time = 3.0
@@ -149,6 +151,9 @@ func load_floor() -> void:
 	world = Overworld.new() if outdoors() else Temple.new()
 	add_child(world)
 	world.setup(int(run.floor),int(run.seed))
+	# (The fallen stones' ground, laid with the floor rather than at the first
+	# statue's fall, which it held up.)
+	if world.has_method("ensure_debris_collision"): world.ensure_debris_collision()
 	hover_ring = Art.target_ring()
 	world.add_child(hover_ring)
 	hud.show_enemy_hover(null)
@@ -259,6 +264,19 @@ func pass_door() -> bool:
 	save_run()
 	toast("The town lies west, across the desert.")
 	return true
+
+# The statues awake and standing, listed once a frame: each keeps its
+# distance from the rest of these as it walks.
+var crowd_list: Array = []
+var crowd_frame = -1
+var crowd_size = -1
+func crowd() -> Array:
+	var frame = Engine.get_process_frames()
+	if frame != crowd_frame or crowd_size != enemies.size():
+		crowd_frame = frame
+		crowd_size = enemies.size()
+		crowd_list = enemies.filter(func(e): return e.awake and not e.dead)
+	return crowd_list
 
 func spawn_enemy(kind: String, id: String, at: Vector3):
 	var a = Actor.new()
@@ -507,10 +525,10 @@ func player_control(dt: float) -> void:
 	if dash_time>0:
 		dash_time -= dt
 		player.position = world.move(player.position,dash_direction*dash_speed*dt)
-		if dash_time<=0 and dash_cleave:
-			# Dash Attack: he comes out of the dash into a Cleave.
-			dash_cleave = false
-			skills.cast("cleave",player.position+dash_direction*2.0,true)
+		if dash_attack:
+			for enemy in skills.targets(player.position,1.0):
+				if not enemy in dash_struck: skills.dash_hit(enemy,dash_direction,dash_struck)
+		if dash_time<=0: dash_attack = false
 		return
 	# The original game's mouse orders are authoritative. Shift plants the hero;
 	# a tap keeps its destination, while a held ground order follows the cursor.
@@ -674,14 +692,15 @@ func shake(strength: float) -> void:
 func dash() -> void:
 	if leap_left>0: return
 	if mode!="playing" or player.dead: return
-	# Dash Attack adds a Cleave to the dash, and to its cost.
-	var cleaves: bool = run.skills.has("dash_attack") and Book.compatible("cleave",int(run.weapon))
-	var price: float = 10.0+(Data.passive(run,"dash_attack") if cleaves else 0.0)
+	# Dash Attack makes the dash strike, and adds to its cost.
+	var attacks: bool = run.skills.has("dash_attack")
+	var price: float = 10.0+Book.values("dash_attack",int(run.skills.get("dash_attack",0))).y
 	if run.energy<price:
 		toast("Evade needs %d energy." % price)
 		return
 	run.energy -= price
-	dash_cleave = cleaves
+	dash_attack = attacks
+	dash_struck.clear()
 	scheduled.clear() # Evading cancels an unfinished wind-up or remaining volley.
 	sound.play("dash-whoosh")
 	skills.pending.clear()

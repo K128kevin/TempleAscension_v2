@@ -387,6 +387,19 @@ func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
 		charge.stunned = true
 	game.effect(enemy.position,2.2,Color(.75,.85,1,.9),.3)
 
+# Dash Attack: an enemy the dash passes through takes the rank's damage and is
+# pushed back, out of the hero's path.
+const DASH_PUSH = .8
+func dash_hit(enemy, direction: Vector3, struck: Array) -> void:
+	struck.append(enemy)
+	strike(enemy,Book.values("dash_attack",rank("dash_attack")).x)
+	var aside: Vector3 = enemy.position-game.player.position
+	aside.y = 0
+	var side: Vector3 = direction.cross(Vector3.UP)
+	var push: Vector3 = (side if aside.dot(side)>=0 else -side)*.7+direction*.7
+	enemy.shove(push.normalized(),DASH_PUSH)
+	game.effect(enemy.position,1.6,Color(.6,.9,1,.7),.25)
+
 func tick(dt: float) -> void:
 	for i in range(waves.size()-1,-1,-1):
 		if waves[i].tick(dt):

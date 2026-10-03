@@ -12,6 +12,15 @@ var hp = 100.0
 var max_hp = 100.0
 var config: Dictionary = {}
 var awake = false
+# Ticks an unwoken statue has stood still (it is left be after SETTLE_TICKS).
+const SETTLE_TICKS = 30
+var settled = 0
+# More statues awake than CROWD: those further than CROWD_NEAR metres from
+# the hero are posed at half rate.
+const CROWD = 20
+const CROWD_NEAR = 6.0
+var pose_debt = 0.0
+var pose_skip = false
 # A summit centurion held in reserve until the Crowned Statue summons it.
 var dormant = false
 var dead = false
@@ -99,7 +108,23 @@ func tick(dt: float) -> void:
 	if kind!="player" and not dead:
 		visible = game.world.can_see(position)
 		visual.animator.active = visible
-	visual.advance(dt)
+	# A statue not yet woken stands as it was carved: once it has settled
+	# into its pose there is nothing of it to move.
+	if kind != "player" and not awake and not dead and not visual.animator.is_playing() and visual.reaction_time <= 0 and shove_left <= 0 and follow_left <= 0:
+		settled = mini(settled+1,SETTLE_TICKS+1)
+	else: settled = 0
+	# In a crowd, the statues further from the hero are posed every other
+	# frame (each then taking both frames' time): half the skeletons to work
+	# out and skin, at a distance where the difference does not show.
+	var pose_time = dt
+	if kind != "player" and awake and not dead and game.crowd().size() > CROWD and position.distance_squared_to(game.player.position) > CROWD_NEAR*CROWD_NEAR:
+		pose_debt += dt
+		pose_skip = not pose_skip
+		pose_time = 0.0 if pose_skip else pose_debt
+	elif pose_debt > 0.0: pose_time += pose_debt
+	if pose_time > 0.0:
+		pose_debt = 0.0
+		if settled <= SETTLE_TICKS: visual.advance(pose_time)
 	# Stepping into an attack carries the unit forward (Visual.ROOT_ADVANCE).
 	# (Not in the air: a leap carries the hero itself.)
 	var travel: float = visual.take_travel()
@@ -378,8 +403,8 @@ func walk_to(destination: Vector3, dt: float) -> void:
 			return
 	var direction = (next-position).normalized()
 	var separation = Vector3.ZERO
-	for other in game.enemies:
-		if other == self or other.dead or not other.awake: continue
+	for other in game.crowd():
+		if other == self or not is_instance_valid(other) or other.dead: continue
 		var difference: Vector3 = position-other.position
 		# (A lion is two metres long: it keeps a body's length from the others.)
 		var room = 2.6 if kind == "lion" or other.kind == "lion" else .85

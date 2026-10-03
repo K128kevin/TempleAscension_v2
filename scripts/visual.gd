@@ -14,6 +14,9 @@ const SwordTrail = preload("res://scripts/sword_trail.gd")
 const CRUMBLE_TIME = .5
 const BLAST_CRUMBLE_TIME = .3
 const CHIPS = 36
+# (Past the temple's budget of loose stone: scripts/stone_fragment.gd BUDGET.)
+const CROWDED_CHIPS = 10
+const SPARSE_CHIPS = 5
 # Metres (at life size) over which the chunks at one height break off.
 const SHATTER_BAND = .35
 var crumbling = -1.0
@@ -1193,27 +1196,39 @@ func crumble(settled: bool = false, impact: Vector3 = Vector3.ZERO) -> void:
 	crumble_base = global_position.y
 	crumble_time = BLAST_CRUMBLE_TIME if impact.length()>4.0 else CRUMBLE_TIME
 	if not settled:
+		# The breaking stone is drawn by the statue's own copies of its
+		# materials, which carry the break's front.
+		var own: Dictionary = {}
 		for mesh in find_children("*","MeshInstance3D",true,false):
 			var finish = mesh.material_override
 			if finish is ShaderMaterial and finish.shader == Art.statue_material().shader:
-				mesh.set_instance_shader_parameter("shatter_band",SHATTER_BAND*size)
-				shattering.append(mesh)
+				if not own.has(finish):
+					own[finish] = finish.duplicate()
+					own[finish].set_shader_parameter("shatter_band",SHATTER_BAND*size)
+					shattering.append(own[finish])
+				mesh.material_override = own[finish]
 			else: shattered_whole.append(mesh)
 		var actor = get_parent()
 		if actor.get("game") != null and actor.game.world.has_method("ensure_debris_collision"):
 			actor.game.world.ensure_debris_collision()
 		var seed = global_position.x*12.9898+global_position.z*78.233
-		for i in CHIPS:
+		# With the temple already strewn with stone (many statues falling
+		# together), it breaks into fewer, larger pieces.
+		var crowded = StoneFragment.live+CHIPS > StoneFragment.BUDGET
+		var count = CROWDED_CHIPS if crowded else CHIPS
+		if StoneFragment.live+count > StoneFragment.LIMIT: count = SPARSE_CHIPS
+		for piece in count:
 			# Six staggered rings fill the body with stone. Spacing the chips
 			# apart avoids an artificial explosion from overlapping colliders.
+			var i = piece*(CHIPS/count+1)%CHIPS if crowded else piece
 			var layer = floorf(i/6.0)
 			var angle = TAU*(i%6)/6.0+layer*PI/6.0+fposmod(seed,TAU)
 			var outward = Vector3(sin(angle),0,cos(angle))
-			var diameter = (.18+.12*fposmod(seed*.37+i*.61,1.0))*size
+			var diameter = (.18+.12*fposmod(seed*.37+i*.61,1.0))*size*(1.4 if crowded else 1.0)
 			var start = global_position+(outward*.34+Vector3.UP*(.23+.29*layer))*size
 			var scatter = outward*(.55+.45*fposmod(seed*.13+i*.29,1.0))*sqrt(size)
 			var velocity = impact*(.85+.3*fposmod(i*.61,1.0))+scatter+Vector3.UP*.8*sqrt(size)
-			var chip = StoneFragment.make(self,start,diameter,velocity,Vector3(cos(angle)*4,3,sin(angle)*4)*(1+i%3))
+			var chip = StoneFragment.make(self,start,diameter,velocity,Vector3(cos(angle)*4,3,sin(angle)*4)*(1+i%3),crowded)
 			chip.hold()
 			chips.append(chip)
 		dust = Vfx.particles(self,18,1.2,true,false)
@@ -1243,8 +1258,7 @@ func crumble_step(dt: float) -> void:
 	crumbling += dt
 	var u = clampf(crumbling/crumble_time,0.0,1.0)
 	var front = shatter_front(u)
-	for mesh in shattering:
-		if is_instance_valid(mesh): mesh.set_instance_shader_parameter("shatter_front",front)
+	for finish in shattering: finish.set_shader_parameter("shatter_front",front)
 	for mesh in shattered_whole:
 		if is_instance_valid(mesh): mesh.visible = mesh.visible and mesh.global_position.y<front
 	# Each fragment breaks loose as the front reaches the middle of the stone

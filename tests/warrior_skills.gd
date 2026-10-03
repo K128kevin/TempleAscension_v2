@@ -64,7 +64,7 @@ func ready():
 	game.player.hp = Data.max_health(game.run); game.player.max_hp = game.player.hp
 	game.scheduled.clear(); game.skills.reset()
 	game.run.energy = Data.max_energy(game.run)
-	game.leap_left = 0; game.dash_time = 0; game.dash_cleave = false; game.combat_age = 10
+	game.leap_left = 0; game.dash_time = 0; game.dash_attack = false; game.combat_age = 10
 	game.player.visual.position = Vector3.ZERO
 
 # Skills and enemies run on; the hero stays where he stands.
@@ -301,28 +301,31 @@ func test():
 	check(390-doomed.hp>=45 and 390-doomed.hp<=67.5,"and deals 450%")
 	clear()
 
-	# Dash Attack: a Cleave at the end of the dash, for extra energy.
+	# Dash Attack: the dash strikes and pushes back whoever it passes through,
+	# for extra energy.
 	hero({"cleave":1})
 	game.dash()
-	check(game.run.energy==90 and not game.dash_cleave,"Without Dash Attack a dash costs 10 energy")
-	hero({"cleave":2,"dash_attack":1})
-	var met = dummy(8.0)
-	game.run.energy = 29; game.dash()
-	check(game.run.energy==29 and game.dash_time<=0,"Dash Attack rank 1 raises the dash to 30 energy")
-	game.run.energy = 100; game.dash_direction = forward
-	game.dash()
-	game.dash_direction = forward; game.dash_speed = 41.0; game.player.face(origin+forward)
-	check(game.run.energy==70 and game.dash_cleave,"and the dash will end in a Cleave")
-	play(.2)
-	check(game.skills.pending.size()==1 and game.skills.pending[0].id=="cleave" and game.skills.pending[0].rank==2 and game.run.energy>=70,"Coming out of the dash he Cleaves at his Cleave's rank, at no further cost")
-	play(.5)
-	check(lost(met)>=13.5 and lost(met)<=20.25,"The dash's Cleave hits what he dashed to (%.1f)" % lost(met))
-	hero({"dash_attack":5})
-	game.dash()
-	check(game.run.energy==90 and game.dash_cleave,"Dash Attack rank 5 costs nothing extra")
-	play(.2)
-	check(game.skills.pending.size()==1 and game.skills.pending[0].rank==1,"Without Cleave learned, the dash's Cleave is rank 1")
-	clear()
+	check(game.run.energy==90 and not game.dash_attack,"Without Dash Attack a dash costs 10 energy")
+	var dealt_by_rank: Array = []
+	for r in [1,5]:
+		hero({"dash_attack":r})
+		var met = dummy(3.0)
+		var spared = dummy(3.0,90.0)
+		var cost: float = 25.0 if r==1 else 15.0
+		game.run.energy = cost-1; game.dash()
+		check(game.run.energy==cost-1 and game.dash_time<=0,"Dash Attack rank %d raises the dash to %d energy" % [r,cost])
+		game.run.energy = 100; game.dash()
+		game.dash_direction = forward; game.dash_speed = 41.0; game.player.face(origin+forward)
+		check(game.run.energy==100-cost and game.dash_attack,"and the dash will strike")
+		var before: Vector3 = met.position
+		play(.5)
+		dealt_by_rank.append(lost(met))
+		check(lost(met)>0 and lost(spared)==0,"Rank %d's dash hits the enemy it passes through (%.1f), not one off its path" % [r,lost(met)])
+		check(met.position.distance_to(before)>.4,"and pushes it back (%.2fm)" % met.position.distance_to(before))
+		check(game.dash_struck.size()==1 and not game.dash_attack,"each enemy once, and the striking ends with the dash")
+		clear()
+	check(dealt_by_rank[1]>dealt_by_rank[0]*3.5,"Rank 5 hits for 50 to rank 1's 10")
+	check(Book.values("dash_attack",1)==({"x":10.0,"y":15.0,"z":0.0}) and Book.values("dash_attack",3)==({"x":20.0,"y":11.0,"z":0.0}),"Dash Attack's damage and extra cost run 10/15/20/30/50 and 15/13/11/8/5")
 
 	# Offensive Rhythm: every hit raises the next.
 	hero({"offensive_rhythm":5})

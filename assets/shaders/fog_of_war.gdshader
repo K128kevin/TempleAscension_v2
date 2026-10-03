@@ -17,6 +17,24 @@ uniform bool outdoors = false;
 // Wall cells are not walkable and never marked seen. A raised face borrows the
 // cell in front of it; a raised top borrows the brightest neighbouring cell.
 const float FACE_REACH = 0.9;
+// The braziers on the parapets (xyz the bowl's foot, w its reach): a brazier
+// is drawn only while the cell in front of it is seen, so nothing within it
+// (bowl, coals, the flame over them) is ever fogged. Judged as wall cells, its
+// bumpy coals and outward-facing side borrowed cells off the map, and fogged
+// in black specks.
+const int MAX_BRAZIERS = 64;
+uniform vec4 braziers[64];
+uniform int brazier_count = 0;
+const float BRAZIER_HEIGHT = 0.75;
+
+bool in_brazier(vec3 world) {
+	for (int i = 0; i < MAX_BRAZIERS; i++) {
+		if (i >= brazier_count) break;
+		vec4 b = braziers[i];
+		if (world.y > b.y + 0.03 && world.y < b.y + BRAZIER_HEIGHT && distance(world.xz, b.xz) < b.w) return true;
+	}
+	return false;
+}
 
 float walkable_at(vec2 xz) {
 	vec2 uv = (xz - map_world_origin + vec2(0.5)) / map_dimensions;
@@ -45,7 +63,9 @@ void fragment() {
 	vec3 world = (INV_VIEW_MATRIX * vec4(view.xyz / view.w, 1.0)).xyz;
 	vec3 forward = -INV_VIEW_MATRIX[2].xyz;
 	float seen;
-	if (world.y < -0.3) {
+	if (brazier_count > 0 && world.y > 0.9 && world.y < 2.0 && in_brazier(world)) {
+		seen = 1.0;
+	} else if (world.y < -0.3) {
 		// Below floor level: outdoors it is all visible scenery; indoors keep the
 		// original ground-plane projection of the pixel's view ray.
 		seen = outdoors ? 1.0 : mask_at((world - forward * (world.y / forward.y)).xz);

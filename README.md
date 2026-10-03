@@ -298,7 +298,7 @@ Percentages of damage are of a normal attack.
 | | 5 | Vampiric Strike | 25 | 80% → 125% plus 3% → 12% of the target's total health, healing the same share of your own |
 | | 5 | Shadow Strike | 25 | 25% → 70%, then 100% → 220% over 5 seconds; refreshes Cursed Blade on the target |
 | | 10 | Execute | 45 | 200% → 450%, only on an enemy below 20% → 40% health |
-| Passive | 0 | Dash Attack | | The dash ends in a Cleave (at your Cleave's rank, at least 1) and costs 20 → 0 extra energy |
+| Passive | 0 | Dash Attack | | Enemies the dash passes through take 10 → 50 damage and are pushed back; the dash costs 15 → 5 extra energy |
 | | 0 | Shield Expertise | | 5% → 50% chance to block any attack with the shield, for 25% → 80% less damage |
 | | 0 | Endurance | | Energy recovers 10% → 75% faster |
 | | 5 | Quick Strikes | | Normal attacks 20% → 170% faster |

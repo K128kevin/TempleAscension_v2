@@ -23,7 +23,7 @@ const WARRIOR = [
 	["vampiric_strike", "Vampiric Strike", "single", 5, "vampiric", "melee", 25, "Hit the target for {x}% damage and drain {y}% of its total health, healing you for {y}% of your own.", [[80,3],[90,5],[100,7],[110,9],[125,12]]],
 	["shadow_strike", "Shadow Strike", "single", 5, "shadow", "melee", 25, "Deal {x}% damage, and {y}% more over 5 seconds. Refreshes Cursed Blade on the target.", [[25,100],[30,120],[40,150],[50,180],[70,220]]],
 	["execute", "Execute", "single", 10, "execute", "melee", 45, "Deal {x}% damage to an enemy. Only usable on enemies below {y}% health.", [[200,20],[250,25],[300,30],[380,35],[450,40]]],
-	["dash_attack", "Dash Attack", "passive", 0, "passive", "any", 0, "You Cleave at the end of your dash, but the dash costs {x} extra energy.", [[20],[15],[10],[5],[0]]],
+	["dash_attack", "Dash Attack", "passive", 0, "passive", "any", 0, "Enemies you dash through take {x} damage and are pushed back, but the dash costs {y} extra energy.", [[10,15],[15,13],[20,11],[30,8],[50,5]]],
 	["shield_expertise", "Shield Expertise", "passive", 0, "passive", "any", 0, "{x}% chance to block any attack with your shield: melee attacks, arrows and spells. Blocked attacks deal {y}% less damage.", [[5,25],[10,35],[20,45],[30,60],[50,80]]],
 	["endurance", "Endurance", "passive", 0, "passive", "any", 0, "Energy recovers {x}% faster.", [[10],[20],[30],[50],[75]]],
 	["quick_strikes", "Quick Strikes", "passive", 5, "passive", "any", 0, "Normal attacks are {x}% faster.", [[20],[40],[70],[110],[170]]],

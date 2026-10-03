@@ -28,8 +28,11 @@ uniform sampler2D kit_height : filter_linear_mipmap, repeat_enable;
 // the cells of a pattern fixed to the body, crack loose and fall away above
 // a front sweeping down it (a world height). Each chunk goes when the front
 // is within `shatter_band` metres of it, at its own moment.
-instance uniform float shatter_front = 0.0;
-instance uniform float shatter_band = 0.0;
+// (Set on the breaking statue's own copy of the material: as per-instance
+// values, every statue standing took a place in the renderer's small table
+// of them, and a full temple overran it.)
+uniform float shatter_front = 0.0;
+uniform float shatter_band = 0.0;
 varying vec3 world_position;
 varying float body_uv;
 // Stone cloth (a cape): carved in drapery folds, its marble finer grained.
@@ -139,17 +142,22 @@ void fragment() {
 	float gray = dot(stone, vec3(0.2126, 0.7152, 0.0722));
 	float footprint = max(length(dFdx(stone_position)), length(dFdy(stone_position)));
 	float fine_detail = 1.0 - smoothstep(0.006, 0.02, footprint);
-	float grain = mix(grain_noise(stone_position * 45.0), grain_noise(stone_position * 110.0), fine_detail * 0.35);
+	// (Each noise costs: the finest grain is worked out only close enough
+	// to show, and the cracks only where the slow noise lets any show.)
+	float grain = grain_noise(stone_position * 45.0);
+	if (fine_detail > 0.0) grain = mix(grain, grain_noise(stone_position * 110.0), fine_detail * 0.35);
 	float wear = grain_noise(stone_position * 11.0);
 	float pits = smoothstep(0.62, 0.76, grain_noise(stone_position * 28.0));
 	// A few fine cracks: the borders of large, wandering cells, shown only
 	// where a slow noise allows, so most of the surface stays whole. Lines
 	// narrower than a pixel are widened and faded instead of flickering.
-	vec3 warp = vec3(grain_noise(stone_position * 9.0), grain_noise(stone_position * 9.0 + 17.0), grain_noise(stone_position * 9.0 + 31.0)) - 0.5;
-	float border = cell_border(stone_position * 5.0 + warp * 0.7);
-	float width = max(0.03, footprint * 5.0 * 1.5);
-	float crack = (1.0 - smoothstep(width * 0.35, width, border)) * (0.03 / width);
-	crack *= smoothstep(0.55, 0.68, grain_noise(stone_position * 2.6 + 5.0));
+	float crack = smoothstep(0.55, 0.68, grain_noise(stone_position * 2.6 + 5.0));
+	if (crack > 0.0) {
+		vec3 warp = vec3(grain_noise(stone_position * 9.0), grain_noise(stone_position * 9.0 + 17.0), grain_noise(stone_position * 9.0 + 31.0)) - 0.5;
+		float border = cell_border(stone_position * 5.0 + warp * 0.7);
+		float width = max(0.03, footprint * 5.0 * 1.5);
+		crack *= (1.0 - smoothstep(width * 0.35, width, border)) * (0.03 / width);
+	}
 	float shade = 0.17 + gray * 0.20 + (grain - 0.5) * 0.05 + (wear - 0.5) * 0.07 - pits * 0.025 - crack * 0.075;
 	// Millimeter-scale grain and pits affect the light, not just the color.
 	float height = (grain - 0.5) * 0.0007 + (wear - 0.5) * 0.006 - pits * 0.0012 - crack * 0.0025;

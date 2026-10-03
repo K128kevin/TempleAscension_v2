@@ -46,7 +46,17 @@ const TORCH_HEIGHT = 2.22
 const LOW_WALL_HEIGHT = 1.0
 const BRAZIER_SIZE = Vector3(.5,.42,.48)
 const BRAZIER_INSET = .36
-const BRAZIER_FIRE_LIFT = .06
+# The brazier's light hangs above its fire, over the rim: lit from inside,
+# the bowl's bronze glared.
+const BRAZIER_FIRE_LIFT = .3
+# Its flame is broader than a torch's.
+const BRAZIER_FLAME_SCALE = 1.25
+static var coal_finish: ShaderMaterial
+static func coal_material() -> ShaderMaterial:
+	if coal_finish == null:
+		coal_finish = ShaderMaterial.new()
+		coal_finish.shader = preload("res://assets/shaders/embers.gdshader")
+	return coal_finish
 # Estimated floor light, with Godot's omni falloff and floor incidence, that
 # still reads clearly in the dark temple: one torch at about three metres.
 const LIT_LEVEL = .12
@@ -72,6 +82,11 @@ const FADED_ALPHA = .45
 # Only walls this close to someone can hide them from the camera.
 const OCCLUSION_REACH = 7.0
 var visibility_timer = 0.0
+var visibility_rest = 0.0
+# The sight being worked out (its next row, or -1), a band of rows a frame.
+const VISIBILITY_ROWS = 9
+var visibility_row = -1
+var visibility_next: Image
 var visibility_player_position = Vector3(INF,INF,INF)
 var fog_material: ShaderMaterial
 
@@ -303,10 +318,15 @@ func setup_walkable_mask() -> void:
 		if pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y:
 			image.set_pixel(pixel.x,pixel.y,Color.WHITE)
 	fog_material.set_shader_parameter("walkable_mask",ImageTexture.create_from_image(image))
+	var bowls = PackedVector4Array()
+	for bowl in braziers.slice(0,64): bowls.append(Vector4(bowl.position.x,bowl.position.y,bowl.position.z,BRAZIER_SIZE.x*.7))
+	fog_material.set_shader_parameter("braziers",bowls)
+	fog_material.set_shader_parameter("brazier_count",bowls.size())
 
 func setup_visibility_fog() -> void:
 	visibility_grid_size = Vector2i(layout.size+10,layout.size+10)
 	visibility_image = Image.create(visibility_grid_size.x,visibility_grid_size.y,false,Image.FORMAT_R8)
+	visibility_next = Image.create(visibility_grid_size.x,visibility_grid_size.y,false,Image.FORMAT_R8)
 	visibility_image.fill(Color.BLACK)
 	visibility_texture = ImageTexture.create_from_image(visibility_image)
 	fog_material = ShaderMaterial.new()
@@ -689,13 +709,27 @@ func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
 		var bowl_at = at+wall*BRAZIER_INSET+Vector3.UP*LOW_WALL_HEIGHT
 		var bowl = place("fire_bowl",bowl_at,BRAZIER_SIZE,Art.bronze())
 		braziers.append(bowl)
-		# The fire lights the bowl from within: the bowl casts no shadow, so
-		# its inside is never shaded from its own flame.
+		# The bowl casts no shadow, so its own fire never shades it.
 		for mesh in bowl.find_children("*","MeshInstance3D",true,false):
 			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# It is heaped nearly to the rim with burning coals, so the polished
+		# bronze inside (which glared white, or mirrored the dark sky) is
+		# never seen, and the flame rises from them.
+		var coals = MeshInstance3D.new()
+		coals.mesh = SphereMesh.new()
+		coals.mesh.radial_segments = 32
+		coals.mesh.rings = 16
+		coals.material_override = coal_material()
+		coals.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		coals.scale = Vector3(BRAZIER_SIZE.x*.88,.16,BRAZIER_SIZE.z*.88)
+		coals.position = Vector3.UP*BRAZIER_SIZE.y*.8
+		bowl.add_child(coals)
+		coals.scale /= bowl.scale
+		coals.position /= bowl.scale
+		coals.layers = bowl.find_children("*","MeshInstance3D",true,false)[0].layers
 		# It stands on the wall; it is seen from the floor in front of it.
 		visibility_cells[bowl] = [cell]
-		flame_at = bowl_at+Vector3.UP*BRAZIER_SIZE.y*.82
+		flame_at = bowl_at+Vector3.UP*BRAZIER_SIZE.y*.9
 	else:
 		var fixture = place("brazier",at,Vector3(.6,1.6,.6),Art.material("gold"))
 		# The fixture's back plate is on its local -Z side; turn it flat to the wall.
@@ -717,8 +751,7 @@ func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
 		# The flame rises from the torch's wick.
 		flame_at = at+Vector3.UP*1.96
 	var light = OmniLight3D.new()
-	# A torch's light hangs just above its wick; a brazier's sits in the fire,
-	# just inside the bowl's rim, so it lights the whole inside of the bowl.
+	# A torch's light hangs just above its wick; a brazier's above its fire.
 	light.position = flame_at+Vector3.UP*(BRAZIER_FIRE_LIFT if brazier else TORCH_HEIGHT-1.96)
 	light.light_color = Color(1,.60,.28)
 	torch_lights.append(at)
@@ -737,6 +770,7 @@ func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
 	visibility_nodes.append(light)
 	var fire = preload("res://scripts/torch_flame.gd").new()
 	fire.position = flame_at
+	if brazier: fire.scale = Vector3.ONE*BRAZIER_FLAME_SCALE
 	# Stable spatial phases keep neighboring torches from pulsing in unison.
 	fire.setup(light,fposmod(at.x*12.9898+at.z*78.233,100.0))
 	add_child(fire)
@@ -778,6 +812,7 @@ func place(id: String, pos: Vector3, size: Vector3, mat: Material = null) -> Nod
 
 func ensure_debris_collision() -> void:
 	if is_instance_valid(debris_collision): return
+	StoneFragment.prepare()
 	debris_collision = StaticBody3D.new()
 	debris_collision.name = "DebrisCollision"
 	debris_collision.collision_layer = StoneFragment.WORLD_LAYER
@@ -799,11 +834,15 @@ func ensure_debris_collision() -> void:
 				debris_slab(slab)
 				slab = box
 		debris_slab(slab)
+	# Each prop's hull is its model's outermost points (worked out once a
+	# model), not its every vertex.
+	var outlines: Dictionary = {}
 	for prop in debris_props:
 		for mesh in prop.find_children("*","MeshInstance3D",true,false):
+			if not outlines.has(mesh.mesh): outlines[mesh.mesh] = StoneFragment.outline(mesh.mesh.get_faces())
 			var points = PackedVector3Array()
 			var local: Transform3D = global_transform.affine_inverse()*mesh.global_transform
-			for point in mesh.mesh.get_faces(): points.append(local*point)
+			for point in outlines[mesh.mesh]: points.append(local*point)
 			var hull = ConvexPolygonShape3D.new()
 			hull.points = points
 			hull.margin = .005
@@ -871,13 +910,55 @@ func move(from: Vector3, step: Vector3, radius: float = .4) -> Vector3:
 			if fits(p+Vector3(0,0,s.z),radius): p.z += s.z
 	return p
 
+# Every cell sight passes over (floor, the stairwells' solid floor, the
+# fountain's footprint), as a grid of bytes laid as the visibility image is:
+# looked up far faster than the cells' dictionaries, by every line of sight.
+var sight_grid = PackedByteArray()
+var sight_grid_cells = -1
+func ensure_sight_grid() -> void:
+	if sight_grid_cells == layout.cells.size()+solid_floor.size(): return
+	sight_grid_cells = layout.cells.size()+solid_floor.size()
+	var w: int = visibility_grid_size.x
+	sight_grid.resize(w*visibility_grid_size.y)
+	sight_grid.fill(0)
+	var open: Array = layout.cells.keys()+solid_floor.keys()
+	if level==2:
+		for y in range(layout.court_obstacle.position.y,layout.court_obstacle.end.y):
+			for x in range(layout.court_obstacle.position.x,layout.court_obstacle.end.x): open.append(Vector2i(x,y))
+	for cell in open:
+		var pixel: Vector2i = cell-VISIBILITY_GRID_ORIGIN
+		if pixel.x>=0 and pixel.y>=0 and pixel.x<w and pixel.y<visibility_grid_size.y: sight_grid[pixel.y*w+pixel.x] = 1
+
 func clear_line(a: Vector3, b: Vector3) -> bool:
 	# The level 3 fountain occupies blocked navigation tiles, but does not hide
 	# the rest of the court. Keep the obstacle solid for movement while letting
 	# visibility rays pass through its footprint.
 	var steps = maxi(1,ceili(a.distance_to(b)/.2))
+	if visibility_grid_size.x <= 0:
+		for i in range(steps+1):
+			if not fits_for_visibility(a.lerp(b,float(i)/steps),.04): return false
+		return true
+	# (As fits_for_visibility at each step, on the grid of bytes.)
+	ensure_sight_grid()
+	var w: int = visibility_grid_size.x
+	var h: int = visibility_grid_size.y
+	var kx: float = layout.start.x-VISIBILITY_GRID_ORIGIN.x+.5
+	var ky: float = layout.start.y-9-VISIBILITY_GRID_ORIGIN.y+.5
+	var px: float = a.x+kx
+	var py: float = a.z+ky
+	var dx: float = (b.x-a.x)/steps
+	var dy: float = (b.z-a.z)/steps
 	for i in range(steps+1):
-		if not fits_for_visibility(a.lerp(b,float(i)/steps),.04): return false
+		var x0: int = floori(px-.04)
+		var x1: int = floori(px+.04)
+		var y0: int = floori(py-.04)
+		var y1: int = floori(py+.04)
+		if x0<0 or y0<0 or x1>=w or y1>=h: return false
+		if sight_grid[y0*w+x0]==0: return false
+		if x1!=x0 or y1!=y0:
+			if sight_grid[y0*w+x1]==0 or sight_grid[y1*w+x0]==0 or sight_grid[y1*w+x1]==0: return false
+		px += dx
+		py += dy
 	return true
 
 func fits_for_visibility(p: Vector3, radius: float) -> bool:
@@ -982,9 +1063,20 @@ func follow(pos: Vector3, delta: float) -> void:
 		occlusion_tick = .1
 		# Restrict expensive animated shadows to the two torches nearest play.
 		# Every torch still contributes its local pool of light.
-		shadow_torches.sort_custom(func(a,b): return a.position.distance_squared_to(pos)<b.position.distance_squared_to(pos))
-		for i in shadow_torches.size():
-			shadow_torches[i].shadow_enabled = i<2 and shadow_torches[i].position.distance_squared_to(pos)<100
+		var nearest = null
+		var second = null
+		var nearest_d = 100.0
+		var second_d = 100.0
+		for torch in shadow_torches:
+			var d: float = torch.position.distance_squared_to(pos)
+			if d < nearest_d:
+				second = nearest; second_d = nearest_d
+				nearest = torch; nearest_d = d
+			elif d < second_d:
+				second = torch; second_d = d
+		for torch in shadow_torches:
+			var lit: bool = torch == nearest or torch == second
+			if torch.shadow_enabled != lit: torch.shadow_enabled = lit
 
 		var targets: Array = [{"position":pos,"height":1.8}]+occlusion_targets
 		for group in occluders:
@@ -992,8 +1084,12 @@ func follow(pos: Vector3, delta: float) -> void:
 			var blocked = false
 			for target in targets:
 				if Vector2(group.root.position.x-target.position.x,group.root.position.z-target.position.z).length()>OCCLUSION_REACH: continue
-				for mesh in group.meshes:
-					var box: AABB = mesh.global_transform * mesh.get_aabb()
+				# (The temple's stone stays where it stands: each mesh's box is
+				# worked out once.)
+				if not group.has("boxes"):
+					group.boxes = []
+					for mesh in group.meshes: group.boxes.append(mesh.global_transform * mesh.get_aabb())
+				for box in group.boxes:
 					# Fade anything hiding someone's feet, body or head.
 					for share in [.08,.55,1.0]:
 						if box.intersects_segment(camera.position,target.position+Vector3.UP*target.height*share): blocked = true; break
@@ -1005,18 +1101,46 @@ func follow(pos: Vector3, delta: float) -> void:
 
 func update_visibility(pos: Vector3, delta: float) -> void:
 	visibility_timer -= delta
-	if visibility_timer>0 and pos.distance_squared_to(visibility_player_position)<.09: return
-	visibility_timer = .10
-	visibility_player_position = pos
-	visibility_image.fill(Color.BLACK)
-	for cell in layout.cells: mark_visibility_cell(cell,pos)
-	# Fountain cells are intentionally removed from layout.cells so they remain
-	# blocked for movement, but their surface should still receive the clear LOS mask.
-	if level==2:
-		for y in range(layout.court_obstacle.position.y,layout.court_obstacle.end.y):
-			for x in range(layout.court_obstacle.position.x,layout.court_obstacle.end.x):
-				mark_visibility_cell(Vector2i(x,y),pos)
-	for cell in solid_floor: mark_visibility_cell(cell,pos)
+	visibility_rest -= delta
+	if visibility_row < 0:
+		var moved = pos.distance_squared_to(visibility_player_position)
+		if visibility_timer>0 and moved<.09: return
+		# Standing where he was, he sees what he saw: nothing to work out again
+		# (but for a look round now and then, should the temple itself change).
+		visibility_timer = .10
+		if moved<.0004 and visibility_rest>0: return
+		visibility_rest = 1.0
+		visibility_player_position = pos
+		visibility_next.fill(Color.BLACK)
+		visibility_row = 0
+	# Only the cells within sight's reach of him are looked at: floor, the
+	# stairwells' solid floor and the fountain's footprint (which stays blocked
+	# for movement, but whose surface still receives the clear LOS mask). The
+	# work is spread over a few frames, a band of rows in each (all at once
+	# when asked for at once: `delta` of a tenth of a second or more), and
+	# what he sees changes when the last is done.
+	ensure_sight_grid()
+	var from = visibility_player_position
+	var w: int = visibility_grid_size.x
+	var centre: Vector2i = layout.to_cell(from)-VISIBILITY_GRID_ORIGIN
+	var reach = ceili(VISION_RANGE)+1
+	var first = maxi(0,centre.y-reach)
+	var last = mini(visibility_grid_size.y,centre.y+reach+1)
+	var rows = last-first if delta>=.1 else VISIBILITY_ROWS
+	var y = first+visibility_row
+	while y < last and rows > 0:
+		for x in range(maxi(0,centre.x-reach),mini(w,centre.x+reach+1)):
+			if sight_grid[y*w+x]==0: continue
+			var at = layout.to_world(Vector2i(x,y)+VISIBILITY_GRID_ORIGIN)
+			if at.distance_squared_to(from)>VISION_RANGE*VISION_RANGE or not clear_line(from,at): continue
+			visibility_next.set_pixel(x,y,Color.WHITE)
+		y += 1
+		rows -= 1
+	if y < last:
+		visibility_row = y-first
+		return
+	visibility_row = -1
+	visibility_image.copy_from(visibility_next)
 	visibility_texture.update(visibility_image)
 	for batch in visibility_floor_batches:
 		var seen = false
@@ -1031,13 +1155,6 @@ func update_visibility(pos: Vector3, delta: float) -> void:
 				if cell_is_visible(cell): seen = true; break
 			node.visible = seen
 		else: node.visible = can_see(node.position)
-
-func mark_visibility_cell(cell: Vector2i, pos: Vector3) -> void:
-	var at = layout.to_world(cell)
-	if at.distance_squared_to(pos)>VISION_RANGE*VISION_RANGE or not clear_line(pos,at): return
-	var pixel = cell-VISIBILITY_GRID_ORIGIN
-	if pixel.x>=0 and pixel.y>=0 and pixel.x<visibility_grid_size.x and pixel.y<visibility_grid_size.y:
-		visibility_image.set_pixel(pixel.x,pixel.y,Color.WHITE)
 
 func cell_is_visible(cell: Vector2i) -> bool:
 	if level==Layout.PLAYGROUND: return true
