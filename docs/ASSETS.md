@@ -640,6 +640,12 @@ throw them farther outward and upward. The body collapse and dust follow the com
 clock; the chips use Godot's physics clock, pause with the world, and expire after
 eight seconds. Collision slabs and prop hulls are built when the first statue falls.
 
+`assets/audio/fire-whoosh.mp3` is ZapSplat's "fire whoosh, fast burst, flames"
+(zapsplat_sound_design_fire_whoosh_fast_burst_flames_112136.mp3, from its fire
+whooshes pack), unedited: a 3.8 s burst of flame with a burning tail. It plays as
+the Oracle's fireball leaves its staff and as the wizard casts Firebolt. It is
+credited to www.zapsplat.com under ZapSplat's license, like the other effects.
+
 `assets/audio/fountain-trickle.wav` is the original game's
 `public/sfx-fountain-trickle.m4a`, decoded without normalization or editing to
 48 kHz stereo 16-bit PCM. macOS `afconvert` performed the decode; its extensible

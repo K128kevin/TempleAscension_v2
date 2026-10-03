@@ -113,15 +113,15 @@ func test():
 
 	# Ground Slam: an arc out to its listed distance.
 	hero({"cleave":5,"ground_slam":1})
-	var near = dummy(9.0); var beyond = dummy(11.5); var off = dummy(9.0,45)
+	var near = dummy(6.5); var beyond = dummy(8.5); var off = dummy(6.5,45)
 	check(game.skills.cast("ground_slam",origin+forward*5) and game.run.energy==60,"Ground Slam costs 40 energy")
 	wait(.6)
-	check(lost(near)>=10 and lost(near)<=15 and lost(beyond)==0 and lost(off)==0,"Ground Slam rank 1: 100% damage in a 70° arc out to 10 metres")
+	check(lost(near)>=10 and lost(near)<=15 and lost(beyond)==0 and lost(off)==0,"Ground Slam rank 1: 100% damage in a 70° arc out to 7 metres")
 	check(game.effects.any(func(e): return e.has("velocity")),"The slam sends a shockwave out along the arc")
 	hero({"cleave":5,"ground_slam":5})
-	var distant = dummy(20.5)
+	var distant = dummy(14.5); var past_reach = dummy(16.5)
 	game.skills.cast("ground_slam",origin+forward*5); wait(.6)
-	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(off)>0,"Ground Slam rank 5: 250% damage in a 120° arc out to 21 metres")
+	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(past_reach)==0 and lost(off)>0,"Ground Slam rank 5: 250% damage in a 120° arc out to 15 metres")
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillSlam","The slam sends out a shockwave of dust, shakes the screen, and has its own swing")
 	var wave = game.skills.waves[0]
 	var puffs = wave.get_children().filter(func(c): return c is CPUParticles3D)
@@ -182,7 +182,7 @@ func test():
 	play(.5)
 	check(game.player.position.distance_to(origin+forward*6.5)<.6 and game.player.visual.position.y==0,"He lands at the target (%.2f m off)" % game.player.position.distance_to(origin+forward*6.5))
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillLeap","The landing sends out a shockwave all round and shakes the screen")
-	check(lost(landing)>=10 and lost(landing)<=15 and lost(beside)>0 and lost(start)==0,"Leap rank 1 deals 100% to everyone around the landing")
+	check(lost(landing)>=12.5 and lost(landing)<=18.75 and lost(beside)>0 and lost(start)==0,"Leap rank 1 deals 125% to everyone around the landing")
 	check(game.skills.LEAP_RADIUS==4.5 and lost(reached)>0 and lost(past)==0,"Its blast reaches 4.5 metres from the landing")
 	hero({"cleave":5,"leap":5})
 	game.skills.cast("leap",origin+forward*20)

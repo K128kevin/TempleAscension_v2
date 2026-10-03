@@ -595,6 +595,17 @@ var shield_box = AABB()
 # A strapped scutum: its size, and how far up the board the forearm crosses.
 var strapped = false
 var strap_size = Vector3.ONE
+# Which way a strapped board faces out from the arm (set as it is strapped).
+var strap_out = Vector3.ZERO
+# Which way the shield arm reaches: out along the board, but eased toward
+# it rather than following it frame by frame, as the board is turned by the
+# arm, and reaching along it as it was turned it back and forth (a share of
+# the way a second).
+var reach_dir = Vector3.ZERO
+const REACH_TURN = 10.0
+# For a shield held in the hand: which way along the board's thin axis its
+# face is, out from the body (+1 or -1; 0 until judged).
+var shield_face_sign = 0.0
 var strap_hold = .5
 
 # The shield bearers' scutum is strapped flat along the left forearm, which
@@ -643,6 +654,7 @@ func strap_scutum() -> void:
 	var out: Vector3 = facing.z-forearm*facing.z.dot(forearm)
 	if out.length() < .35: out = facing.x-forearm*facing.x.dot(forearm)
 	out = out.normalized()
+	strap_out = out
 	var up: Vector3 = facing.y-out*facing.y.dot(out)
 	if up.length() < .2: up = facing.y
 	var side: Vector3 = up.normalized().cross(out).normalized()
@@ -688,7 +700,16 @@ const BOARD_OFF_SPEED = 3.0
 # The shield arm's own parts (which move with the board).
 const SHIELD_ARM_BONES = ["clavicle_l","upperarm_l","lowerarm_l","hand_l"]
 
+# Once the skeleton has shown a pose, the shield is placed only from the
+# shown pose: placed between updates (a unit turning to face its target,
+# frame after frame as it runs at it), it went to the bare animation's
+# forearm without the shield arm's reach, and was drawn there, jumping back
+# and forth between the two from one frame to the next.
+var shield_shown = false
+
 func keep_shield_off_legs() -> void:
+	if shield_shown and not in_shown_pose: return
+	if in_shown_pose: shield_shown = true
 	if shield_arm != null and not strapped: shield_arm.reach = Vector3.ZERO
 	if not is_instance_valid(shield_item) or not shield_item.is_inside_tree(): return
 	if strapped: strap_scutum()
@@ -708,8 +729,17 @@ func keep_shield_off_legs() -> void:
 	var across = [(thin+1)%3,(thin+2)%3]
 	var centre: Vector3 = t*shield_box.get_center()
 	var normal: Vector3 = t.basis[thin].normalized()
-	# Outward: away from the body behind it.
-	if normal.dot(centre-bone_position("spine_02")) < 0: normal = -normal
+	# Outward: away from the body behind it. A strapped board faces the way it
+	# was strapped. A held one is judged by the body, but only while the body
+	# is plainly behind it, and then kept: carried at the side, the spine is
+	# nearly level with the board, and judged every frame the answer flipped
+	# with each nudge, pushing the board off one face and then the other.
+	if strapped and strap_out != Vector3.ZERO:
+		if normal.dot(strap_out) < 0: normal = -normal
+	else:
+		var behind: float = normal.dot(centre-bone_position("spine_02"))
+		if shield_face_sign == 0.0 or absf(behind) > .08*rig.scale.x: shield_face_sign = signf(behind) if behind != 0.0 else 1.0
+		normal *= shield_face_sign
 	var half_thick = shield_box.size[thin]*t.basis[thin].length()*.5
 	var k = rig.scale.x
 	var push = 0.0
@@ -741,13 +771,16 @@ func keep_shield_off_legs() -> void:
 	if strapped and shield_arm != null and in_shown_pose:
 		var wanted = clampf(arm_out+body_push if body_push > 0.0 else arm_out-room,0.0,ARM_OUT_MAX*k)
 		if not state in LOCOMOTION: wanted = 0.0
-		if anim_clock <= 0.0: arm_out = wanted
+		if anim_clock <= 0.0 or reach_dir == Vector3.ZERO:
+			arm_out = wanted
+			reach_dir = normal
 		else:
 			var elapsed = clampf(anim_clock-arm_out_clock,0.0,.05)
 			var step = (wanted-arm_out)*(1.0-exp(-elapsed*(ARM_OUT_REACH if wanted > arm_out else ARM_OUT_EASE)))
 			arm_out += clampf(step,-ARM_OUT_SPEED*k*elapsed,ARM_OUT_SPEED*k*elapsed)
+			reach_dir = reach_dir.lerp(normal,1.0-exp(-elapsed*REACH_TURN)).normalized()
 		arm_out_clock = anim_clock
-		shield_arm.reach = normal*arm_out if not dead else Vector3.ZERO
+		shield_arm.reach = reach_dir*arm_out if not dead else Vector3.ZERO
 	var off = minf(push,.3*k)
 	if in_shown_pose:
 		if anim_clock <= 0.0: board_off = off

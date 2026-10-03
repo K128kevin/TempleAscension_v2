@@ -13,8 +13,8 @@ const TREE_TITLES = {"aoe":"Area of Effect","single":"Single Target","passive":"
 # cost, description, and each rank's [x, y, z].
 const WARRIOR = [
 	["cleave", "Cleave", "aoe", 0, "cleave", "melee", 25, "Swipe at all enemies in a {x}° arc for {y}% damage.", [[140,125],[150,135],[160,145],[170,155],[180,165]]],
-	["leap", "Leap", "aoe", 5, "leap", "melee", 40, "Leap into the air and land at a target in line of sight, dealing {x}% damage to all enemies in the area.", [[100],[120],[150],[190],[250]]],
-	["ground_slam", "Ground Slam", "aoe", 5, "slam", "melee", 40, "Smash the ground, dealing {x}% damage to all enemies in front of you in a {y}° arc, up to {z} meters away.", [[100,70,10],[120,80,12],[150,90,15],[190,100,18],[250,120,21]]],
+	["leap", "Leap", "aoe", 5, "leap", "melee", 40, "Leap into the air and land at a target in line of sight, dealing {x}% damage to all enemies in the area.", [[125],[165],[205],[245],[300]]],
+	["ground_slam", "Ground Slam", "aoe", 5, "slam", "melee", 40, "Smash the ground, dealing {x}% damage to all enemies in front of you in a {y}° arc, up to {z} meters away.", [[100,70,7],[120,80,8],[150,90,10],[190,100,12],[250,120,15]]],
 	["war_cry", "War Cry", "aoe", 0, "cry", "melee", 30, "A shout that makes every enemy within {x} meters take {y}% more damage for {z} seconds.", [[6,20,6],[7,40,7],[8,60,8],[9,80,9],[10,100,10]]],
 	["shield_charge", "Shield Charge", "aoe", 10, "charge", "shield", 35, "Charge up to {x} meters behind your shield, dealing {y}% damage to every enemy in your path and knocking them aside; the first one hit is stunned for {z} seconds.", [[8,100,1],[9.5,125,1.25],[11,150,1.5],[12.5,175,1.75],[14,200,2]]],
 	["shockwave", "Shockwave", "aoe", 10, "shockwave", "melee", 40, "Hammer the ground: a ring races out, dealing {x}% damage to all enemies within {y} meters and throwing them back. {z}-second cooldown.", [[180,4,10],[225,4.75,10],[270,5.5,10],[315,6.25,10],[360,7,10]]],

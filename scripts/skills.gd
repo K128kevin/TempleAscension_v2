@@ -352,6 +352,7 @@ func execute(job: Dictionary) -> void:
 			for angle in angles:
 				var aim = direction.rotated(Vector3.UP,angle)
 				game.projectile(origin,origin+aim*13,damage,true,"fire" if s.effect=="firebolt" else ("arcane" if spell else "arrow"),s.effect in ["pierce","lance"])
+			if s.effect=="firebolt": game.sound.play("fire-whoosh",-12)
 			if s.effect=="retreat": game.player.position = game.world.move(origin,-direction*3)
 		"nova": pulse(origin,s.radius,damage,"frost",s.duration)
 		"chain":

@@ -108,6 +108,12 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 		if kind == "boss": visual.crown()
 		visual.animator.pause()
 
+# Closing in on the hero (until well within reach), or standing within reach
+# until the hero is out of it: with one line for both, a hero drifting away
+# had the statue step and stop on alternate frames, its stance and its run,
+# shield and all, swapping every frame.
+var closing = true
+
 func tick(dt: float) -> void:
 	if kind!="player" and not dead:
 		visible = game.world.can_see(position)
@@ -225,7 +231,8 @@ func tick(dt: float) -> void:
 	var reach: float = config.range
 	if distance <= reach and game.world.clear_line(position,player.position) and cooldown <= 0:
 		start_attack(player.position)
-	elif distance > reach * .85:
+	elif distance > reach * (.85 if closing else 1.0):
+		closing = true
 		walk_to(player.position,dt)
 	elif kind == "wizard" and distance < 5:
 		var direction: Vector3 = (position-player.position).normalized()
@@ -235,7 +242,9 @@ func tick(dt: float) -> void:
 		face(player.position)
 		# Backing away while facing the hero: the stride runs backward.
 		visual.locomotion(position.distance_to(before)>.005,false,false,1.0,-pace)
-	else: visual.locomotion(false,false)
+	else:
+		closing = false
+		visual.locomotion(false,false)
 
 # Begin this statue's attack at `point`: face it, wind up and play the clip.
 func start_attack(point: Vector3) -> void:

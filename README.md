@@ -294,8 +294,8 @@ Percentages of damage are of a normal attack.
 | Tree | Points | Skill | Energy | Rank 1 → 5 |
 |---|---|---|---|---|
 | Area of Effect | 0 | Cleave | 25 | A 140° → 180° arc for 125% → 165% damage |
-| | 5 | Leap | 40 | Leap to a target in sight (up to 10 m): 100% → 250% to everyone around the landing |
-| | 5 | Ground Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 10 → 21 m; a shockwave of dust and a shake of the screen |
+| | 5 | Leap | 40 | Leap to a target in sight (up to 10 m): 125% → 300% to everyone around the landing (4.5 m) |
+| | 5 | Ground Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 7 → 15 m; a shockwave of dust and a shake of the screen |
 | | 0 | War Cry | 30 | Every enemy within 6 → 10 m takes 20% → 100% more damage for 6 → 10 seconds |
 | | 10 | Shield Charge | 35 | Sword and shield only: a charge of 8 → 14 m behind the shield, 100% → 200% to everyone in the path, thrown aside; the first one hit stunned for 1 → 2 seconds |
 | | 10 | Shockwave | 40 | 180% → 360% to everyone within 4 → 7 m, thrown back; 10-second cooldown; a shockwave of dust and a shake of the screen |

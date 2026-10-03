@@ -44,7 +44,7 @@ func test():
 	var cleave = Book.values("cleave",1); var cleave_top = Book.values("cleave",5)
 	check(cleave.x==140 and cleave.y==125 and cleave_top.x==180 and cleave_top.y==165 and Book.all().cleave.cost==25,"Cleave's listed ranks and cost")
 	var slam = Book.values("ground_slam",5)
-	check(slam.x==250 and slam.y==120 and slam.z==21 and Book.all().ground_slam.cost==40 and Book.all().ground_slam.points==5,"Ground Slam's listed ranks, cost and requirement")
+	check(slam.x==250 and slam.y==120 and slam.z==15 and Book.values("ground_slam",1).z==7 and Book.values("leap",1).x==125 and Book.values("leap",5).x==300 and Book.all().ground_slam.cost==40 and Book.all().ground_slam.points==5,"Ground Slam's listed ranks, cost and requirement")
 	var bash = Book.values("shield_bash",1); var bash_top = Book.values("shield_bash",5)
 	check(bash.x==25 and bash.y==5 and bash.z==32 and bash_top.x==50 and bash_top.y==10 and bash_top.z==20 and Book.all().shield_bash.cost==35,"Shield Bash's listed ranks and cost")
 	check(Book.values("execute",5).x==450 and Book.values("execute",5).y==40 and Book.all().execute.cost==45 and Book.all().execute.points==10,"Execute's listed ranks, cost and requirement")
