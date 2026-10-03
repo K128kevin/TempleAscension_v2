@@ -106,14 +106,14 @@ func build_world() -> void:
 # active ones on the hotbar.
 func hero_run(class_id: String) -> Dictionary:
 	var run = Data.new_run(class_id)
-	run.level = 30
+	run.level = Data.MAX_LEVEL
 	var actives: Array = []
 	for id in Book.all():
 		var s: Dictionary = Book.all()[id]
 		if s.class_id != class_id: continue
 		run.skills[id] = 1
 		if s.effect != "passive" and Book.compatible(id,int(run.weapon)): actives.append(id)
-	actives.sort_custom(func(a,b): return Book.all()[a].unlock < Book.all()[b].unlock)
+	actives.sort_custom(func(a,b): return Book.all()[a].points+Book.all()[a].unlock < Book.all()[b].points+Book.all()[b].unlock)
 	run.hotbar = [actives[0] if actives.size()>0 else "",actives[1] if actives.size()>1 else "",actives[2] if actives.size()>2 else ""]
 	return run
 
@@ -196,9 +196,10 @@ func toggle_death() -> void:
 	refresh()
 
 func tick(dt: float) -> void:
-	# Nothing runs out: energy stays full and cooldowns are short.
+	# Nothing runs out: energy stays full and nothing recharges.
 	game.run.energy = Data.max_energy(game.run)
 	game.heal_cd = 0
+	game.skills.cooldowns.clear()
 	for hero in heroes:
 		hero.hp = hero.max_hp
 		if hero != game.player: hero.tick(dt)

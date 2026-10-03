@@ -36,7 +36,7 @@ func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
 	victim.position=game.world.move(game.world.spawn,Vector3(0,0,-1.4))
 	game.player.position=game.world.spawn
 	var starts=0; var contacts=0; var clock=0.0; var last_start=-100.0
-	var profile=Motion.profile(weapon,false,Data.passive(game.run,"quick_draw") if weapon==2 else 0,Data.cooldown(game.run))
+	var profile=game.attack_profile()
 	var context="%s %s at %d FPS" % [class_id,Data.WEAPONS[weapon],roundi(1/dt)]
 	while starts<4 or not game.scheduled.is_empty():
 		game.player.tick(dt)
@@ -131,8 +131,10 @@ func test():
 		var skill: Dictionary=Book.all()[id]
 		if skill.effect=="passive": continue
 		game.run=Data.new_run(skill.class_id); game.run.skills[id]=1
-		game.player.busy=0; game.player.cooldown=0; game.skills.reset()
+		game.player.busy=0; game.player.cooldown=0; game.skills.reset(); game.leap_left=0
 		game.player.position=game.world.spawn
+		# Execute needs a wounded enemy in reach.
+		victim.dead=skill.effect!="execute"; victim.hp=victim.max_hp*.1
 		game.player.visual.equip(Data.WEAPONS[game.run.weapon])
 		check(game.skills.cast(id,victim.position),"Skill enters timed playback: "+id)
 		var duration: float=game.player.busy
@@ -142,6 +144,7 @@ func test():
 		var jobs=game.scheduled.size()
 		game.attack(false,victim.position)
 		check(game.scheduled.size()==jobs,"Basic cannot interrupt a skill recovery: "+id)
+	victim.dead=true; game.leap_left=0; game.skills.reset()
 	# Actual AI attacks use the same timed clip on each enemy rig.
 	game.run=Data.new_run(); game.invincible_test=true
 	# The Oracle's frost nova: cast when the hero comes close, blasting frost
@@ -321,8 +324,12 @@ func test():
 		enemy.windup=0; enemy.busy=0
 		enemy.hit(0)
 		check(enemy.visual.state.trim_prefix("Shield").trim_prefix("Scutum") in ["Hit","HitHead"] and enemy.visual.reaction_time>0,"Idle enemy flinches when hit: "+kind)
-		for bash in (3 if kind=="boss" else 1): enemy.stagger(1.5)
-		check(enemy.visual.state.trim_prefix("Shield").trim_prefix("Scutum")==("HitStagger" if kind=="boss" else "HitKnockdown"),"Bashed enemy is knocked down, boss staggers: "+kind)
+		enemy.stun(4.0)
+		var held: Vector3=enemy.position
+		for step in 30: enemy.tick(1.0/60)
+		check(enemy.stunned and absf(enemy.stagger_time-3.5)<.001 and enemy.windup<=0 and enemy.position.distance_to(held)<.001 and is_instance_valid(enemy.stun_mark),"A stunned enemy stands dazed under its mark: "+kind)
+		enemy.hit(1)
+		check(not enemy.stunned and enemy.stagger_time==0 and not is_instance_valid(enemy.stun_mark),"Damage breaks the stun: "+kind)
 		enemy.dead=true
 	game.player.visual.play("SwordSwing",1.0)
 	game.player.visual.animator.active=false; game.player.visual.advance(.4)

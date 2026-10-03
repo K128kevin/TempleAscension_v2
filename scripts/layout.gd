@@ -21,6 +21,13 @@ var stairs_dir = Vector2i.UP
 # an opening in the entrance room, its deep end against a wall. Its cells are
 # removed from `cells` like the ascent's.
 var arrival = Rect2i()
+# The first floor's way out to the desert: a short passage through a wall of
+# the entrance room, ending at the temple's door. Its cells are open floor;
+# `entry_dir` points out through the door.
+var entry = Rect2i()
+var entry_dir = Vector2i.LEFT
+const ENTRY_WIDTH = 3
+const ENTRY_DEPTH = 2
 var level_index = 0
 const PLAYGROUND = -1
 var arrival_dir = Vector2i.UP
@@ -92,7 +99,7 @@ func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 
 func generate(run_seed: int, floor_index: int) -> void:
 	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear()
-	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i()
+	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i()
 	rng_state = floor_seed(run_seed,floor_index+1)
 	level_index = floor_index
 	# The debug playground: one open, flat square.
@@ -218,8 +225,75 @@ func stays_connected(rect: Rect2i) -> bool:
 
 func place_stairs() -> void:
 	place_ascent()
-	# The first floor is the temple's ground level: nothing leads up into it.
+	# The first floor is the temple's ground level: nothing leads up into it,
+	# and its door opens on the desert.
 	if level_index > 0: place_arrival()
+	else: place_entry()
+
+# The door passage leaves the entrance room through solid wall, as near the
+# middle of a side as it can, on a side the camera sees if one is free. If
+# hallways open on every side of that room, it leaves the nearest stretch of
+# wall anywhere else.
+func place_entry() -> void:
+	var room: Rect2i = rooms[0]
+	var sides = [Vector2i.LEFT,Vector2i.UP,Vector2i.RIGHT,Vector2i.DOWN]
+	for dir in sides:
+		var span = room.size.y if dir.x!=0 else room.size.x
+		var offsets: Array = range(0,span-ENTRY_WIDTH+1)
+		offsets.sort_custom(func(a,b): return absi(a*2+ENTRY_WIDTH-span)<absi(b*2+ENTRY_WIDTH-span))
+		for offset in offsets:
+			var mouth: Vector2i
+			if dir==Vector2i.LEFT: mouth = Vector2i(room.position.x,room.position.y+offset)
+			elif dir==Vector2i.RIGHT: mouth = Vector2i(room.end.x-1,room.position.y+offset)
+			elif dir==Vector2i.UP: mouth = Vector2i(room.position.x+offset,room.position.y)
+			else: mouth = Vector2i(room.position.x+offset,room.end.y-1)
+			if try_entry(mouth,dir): return
+	var floor_cells: Array = cells.keys()
+	floor_cells.sort_custom(func(a,b):
+		var da = a.distance_squared_to(start)
+		var db = b.distance_squared_to(start)
+		return da<db or (da==db and (a.x<b.x or (a.x==b.x and a.y<b.y))))
+	for mouth in floor_cells:
+		for dir in sides:
+			if try_entry(mouth,dir): return
+
+# Carves the passage out through the wall beyond `mouth` (the first of the
+# floor cells across its opening) if solid rock surrounds it and there is
+# floor to arrive on.
+func try_entry(mouth: Vector2i, dir: Vector2i) -> bool:
+	var side = Vector2i(absi(dir.y),absi(dir.x))
+	var first = mouth+dir
+	var last = mouth+side*(ENTRY_WIDTH-1)+dir*ENTRY_DEPTH
+	var rect = Rect2i(Vector2i(mini(first.x,last.x),mini(first.y,last.y)),(first-last).abs()+Vector2i.ONE)
+	if rect.position.x<1 or rect.position.y<1 or rect.end.x>size-1 or rect.end.y>size-1: return false
+	var around: Rect2i = rect.grow(1)
+	for y in range(around.position.y,around.end.y):
+		for x in range(around.position.x,around.end.x):
+			var cell = Vector2i(x,y)
+			var across = (cell-mouth).x*side.x+(cell-mouth).y*side.y
+			var behind = (cell-mouth).x*dir.x+(cell-mouth).y*dir.y
+			# The opening itself is floor; beyond that line everything round the
+			# passage is rock.
+			if behind==0:
+				if across>=0 and across<ENTRY_WIDTH and not cells.has(cell): return false
+			elif is_open(cell): return false
+	# Two more cells of floor inside the opening, to arrive on.
+	for back in range(1,3):
+		for across in ENTRY_WIDTH:
+			if not cells.has(mouth+side*across-dir*back): return false
+	entry = rect
+	entry_dir = dir
+	carve(entry)
+	return true
+
+# Whether a cell is the passage's last, against the door.
+func at_door(cell: Vector2i) -> bool:
+	return entry.has_area() and entry.has_point(cell) and not entry.has_point(cell+entry_dir)
+
+# The floor just inside the room from the passage, where the hero arrives.
+func entry_position() -> Vector3:
+	var middle = to_world(entry.position)+Vector3(entry.size.x-1,0,entry.size.y-1)*.5
+	return middle-Vector3(entry_dir.x,0,entry_dir.y)*(ENTRY_DEPTH*.5+2.0)
 
 # The arrival stairwell, in the entrance room clear of the spawn tile, or, if
 # it has no room for one, in the nearest room other than the ascent's.

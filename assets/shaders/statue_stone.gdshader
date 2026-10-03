@@ -17,6 +17,11 @@ uniform bool rest_pose = false;
 // (scales, straps, bracers, boots; a height map from tools/paint_kits.py),
 // laid through the body's UVs where the mask's blue channel is 0.
 uniform float body_detail = 0.0;
+// A statue larger than life (the temple's guardians, three times a man) is
+// the same carving enlarged: the stone's grain, wear and cracks grow with it.
+uniform float figure_scale = 1.0;
+// White marble rather than the temple's dark stone: the same carving, pale.
+uniform float pale = 0.0;
 uniform sampler2D body_normal : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D kit_height : filter_linear_mipmap, repeat_enable;
 varying float body_uv;
@@ -72,8 +77,8 @@ void vertex() {
 	vec3 scale = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
 	if (COLOR.g < 0.5) VERTEX = fold_cloth(VERTEX);
 	stone_cloth = 1.0 - step(0.5, COLOR.g);
-	stone_scale = scale.y;
-	stone_position = (rest_pose ? CUSTOM0.xyz : VERTEX) * scale;
+	stone_scale = scale.y / figure_scale;
+	stone_position = (rest_pose ? CUSTOM0.xyz : VERTEX) * scale / figure_scale;
 	stone_normal = rest_pose ? CUSTOM1.xyz : NORMAL;
 	// Meshes without vertex colors read white: no scales, nor the body's UVs.
 	scale_mask = 1.0 - COLOR.r;
@@ -136,7 +141,7 @@ void fragment() {
 		shade *= mix(1.0, 0.72 + 0.4 * relief, scale_mask);
 		height += (relief - 0.5) * 0.004 * scale_mask;
 	}
-	ALBEDO = vec3(clamp(shade, 0.06, 0.42));
+	ALBEDO = mix(vec3(clamp(shade, 0.06, 0.42)), clamp(vec3(0.47, 0.46, 0.44) + (shade - 0.25) * 1.5, 0.16, 0.7), pale);
 	vec3 surface_x = dFdx(VERTEX);
 	vec3 surface_y = dFdy(VERTEX);
 	vec3 r1 = cross(surface_y, NORMAL);

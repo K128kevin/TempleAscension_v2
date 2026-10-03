@@ -118,10 +118,8 @@ func verify():
 		enemy.dead=true; game.update_enemy_hover()
 		check(not game.hover_ring.visible and not bar.visible,"Enemy death immediately clears hover feedback")
 		enemy.dead=false
-		# Put a projected target behind the Character button to verify UI priority.
-		var pause: Button
-		for node in game.hud.root.get_children():
-			if node is Button and node.text=="C · Character": pause=node
+		# Put a projected target behind an ability slot to verify UI priority.
+		var pause: Button=game.hud.weapon_slots[0]
 		var button_center: Vector2=pause.get_global_rect().get_center()
 		enemy.position=game.world.camera.project_position(button_center,10)-Vector3.UP*enemy.config.size
 		await mouse(button_center)
@@ -132,8 +130,7 @@ func verify():
 	game.mode="playing"
 	var names: Array=game.hud.root.get_children().filter(func(n): return n is Button).map(func(n): return n.text)
 	check(not "ESC · Pause" in names,"No Pause button")
-	var menu: Array=game.hud.root.get_children().filter(func(n): return n is Button and n.text=="C · Character")
-	check(menu.size()==1 and menu[0].size.y<=20,"Character, skills and equipment buttons are small")
+	check(names.all(func(n): return n=="+"),"No character, skills or equipment buttons: only the + buttons for unspent points")
 	for e in game.enemies: e.dead=false
 	game.hud.tick(0)
 	check(game.remaining()>5 and not game.hud.enemy_arrow.visible and game.hud.direction.text=="","No arrow or statue text while many statues remain")

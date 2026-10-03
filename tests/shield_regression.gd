@@ -14,6 +14,96 @@ func pose(actor, clip: String, phase: float):
 	actor.state=clip; actor.animator.play(actor.clips[clip],0)
 	actor.animator.seek(actor.animator.current_animation_length*phase,true)
 	actor.animator.advance(0); actor.skeleton.force_update_all_bone_transforms(); actor.align_weapon()
+# Running with a strapped scutum, the shield forearm must stay out before the
+# body (it was once left at the stance's place as the body leaned into the
+# run, sunk in the chest), with the board laid close along it rather than
+# pushed out in front of it: how far the forearm stays clear of the torso
+# (as capsules), and how far the board's back stands off it.
+const TORSO = [["pelvis","spine_02",.15],["spine_02","spine_03",.15],["spine_03","neck_01",.16]]
+func bone(actor, name: String) -> Vector3:
+	return (actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone(name))).origin
+func forearm_clear(actor) -> float:
+	var k: float = actor.rig.scale.x
+	var worst = INF
+	for i in 7:
+		var p: Vector3 = bone(actor,"lowerarm_l").lerp(bone(actor,"hand_l"),i/6.0)
+		for s in TORSO:
+			worst = minf(worst,Geometry3D.get_closest_point_to_segment(p,bone(actor,s[0]),bone(actor,s[1])).distance_to(p)-(s[2]+.045)*k)
+	return worst
+func board_off_forearm(actor) -> float:
+	var t: Transform3D = actor.shield_item.global_transform
+	var box: AABB = actor.shield_box
+	var thin = 0
+	for axis in 3: if box.size[axis]*t.basis[axis].length() < box.size[thin]*t.basis[thin].length(): thin = axis
+	var centre: Vector3 = t*box.get_center()
+	var normal: Vector3 = t.basis[thin].normalized()
+	if normal.dot(centre-bone(actor,"spine_02")) < 0: normal = -normal
+	var back: float = -box.size[thin]*t.basis[thin].length()*.5
+	var nearest = INF
+	for i in 5:
+		var p: Vector3 = bone(actor,"lowerarm_l").lerp(bone(actor,"hand_l"),i/4.0)
+		nearest = minf(nearest,(centre-p).dot(normal)+back)
+	return nearest/actor.rig.scale.x
+# Runs a fresh statue on the spot for a while (its skeleton modifiers and
+# all, as in the game): the least its forearm clears the torso by, the most
+# the board stands off the forearm, and the least upright the board stands.
+func run_check(kind: String) -> Array:
+	var Data = load("res://scripts/data.gd")
+	var holder = Node3D.new(); root.add_child(holder)
+	var v = Visual.new(); holder.add_child(v)
+	v.setup(true,Color.WHITE,Data.ENEMIES[kind].weapon,Data.ENEMIES[kind].size,kind)
+	var result = [INF,0.0,1.0]
+	var running = [false]
+	v.skeleton.skeleton_updated.connect(func():
+		if not running[0] or v.shield_box.size == Vector3.ZERO: return
+		result[0] = minf(result[0],forearm_clear(v)); result[1] = maxf(result[1],board_off_forearm(v))
+		result[2] = minf(result[2],v.shield_item.global_basis.y.normalized().dot(Vector3.UP)))
+	for i in 150:
+		running[0] = i > 60
+		v.locomotion(i >= 30,false,false,1.0,3.56 if i >= 30 else 0.0)
+		v.advance(1.0/60)
+		await process_frame
+	holder.queue_free()
+	return result
+
+# A gladiator standing, then striking as in the game (its stance between the
+# frames re-aligned the way facing a target does it): the most the shield
+# moves and turns from one frame to the next (relative to the body), the
+# least far in front of the body it gets, and the most the shield arm reaches
+# out (which it should only do running).
+func swing_check() -> Array:
+	var Data = load("res://scripts/data.gd")
+	var holder = Node3D.new(); root.add_child(holder)
+	var v = Visual.new(); holder.add_child(v)
+	v.setup(true,Color.WHITE,"sword",Data.ENEMIES.gladiator.size,"gladiator")
+	var result = [0.0,0.0,INF,0.0]
+	var last = []
+	var watching = [false]
+	v.skeleton.skeleton_updated.connect(func():
+		if not watching[0]: return
+		var t: Transform3D = v.global_transform.affine_inverse()*v.shield_item.global_transform
+		var centre: Vector3 = t*v.shield_box.get_center()
+		if not last.is_empty():
+			var a: Transform3D = last[0]
+			result[0] = maxf(result[0],(t.origin-a.origin).length())
+			result[1] = maxf(result[1],(t.basis.orthonormalized()*a.basis.orthonormalized().inverse()).get_rotation_quaternion().get_angle())
+		result[2] = minf(result[2],centre.z)
+		result[3] = maxf(result[3],v.arm_out)
+		last.assign([t]))
+	for i in 40:
+		v.locomotion(false,false); v.advance(1.0/60); v.align_weapon(); await process_frame
+	watching[0] = true
+	var duration = .67
+	v.play("ScutumSwordSwing",duration)
+	var t = 0.0
+	while t < duration+.5:
+		v.locomotion(false,t < duration); v.advance(1.0/60)
+		v.align_weapon(); v.align_weapon()
+		await process_frame
+		t += 1.0/60
+	holder.queue_free()
+	return result
+
 func snapshot(name: String):
 	if not render: return
 	await frames(2); await RenderingServer.frame_post_draw
@@ -68,23 +158,40 @@ func verify():
 		check(tower.global_basis.y.normalized().dot(Vector3.UP)>.85,"Tower shield stays upright: "+clip)
 	check(centurion.idle_action()=="SpearShieldIdle","Centurion stands in the shield-and-spear stance")
 	centurion.queue_free()
+	# Running, a shield bearer's forearm stays out before the body, carrying
+	# the board out in front of the rising knees and the leaning chest rather
+	# than the board leaving the arm.
+	# Striking, the gladiator's scutum stays before him, moving smoothly: it
+	# is not swung round behind him and back by a whole-body spin, nor
+	# carried about by the arm reach meant for running.
+	var swing = await swing_check()
+	check(swing[0] < .12 and swing[1] < .2,"The gladiator's scutum moves smoothly through his swing (at most %.3fm and %.3f rad a frame)" % [swing[0],swing[1]])
+	check(swing[2] > .15,"The gladiator's scutum stays before him through his swing (at least %.2fm in front)" % swing[2])
+	check(swing[3] < .01,"Standing and striking, the gladiator's shield arm holds its guard (reaches out %.3fm)" % swing[3])
+	for kind in ["gladiator","centurion"]:
+		var r = await run_check(kind)
+		check(r[0] > .02 and r[1] < .12,"Running, the %s's shield forearm stays out before his body (clear by %.3fm) with the shield along it (off it by %.3fm)" % [kind,r[0],r[1]])
+		check(r[2] > .85,"Running, the %s's shield stays upright (%.3f)" % [kind,r[2]])
 	for i in [2,3]:
-		for step in 10:
-			pose(actors[i],"ScutumRun",step/10.0); await frames(1)
-			check(actors[i].shield_item.global_basis.y.normalized().dot(Vector3.UP)>.85,"Scutum stays upright while running: %d %d" % [i,step])
 		actors[i].state=actors[i].idle_action(); actors[i].locomotion(true,false)
 		check(actors[i].state=="ScutumRun","Shield bearers run holding the shield: %d" % i)
+	# (The arm as shown, with the skeleton's modifiers applied, and the board
+	# laid on it: taken as the skeleton updates.)
+	var shown = {}
+	for i in [2,3]:
+		var actor = actors[i]
+		actor.skeleton.skeleton_updated.connect(func(): shown[i] = [bone(actor,"lowerarm_l"),bone(actor,"hand_l"),actor.shield_item.global_transform])
 	for clip in ["ScutumSwordIdle","ScutumRun","SwordSwing","Hit","HitHead"]:
 		for phase in [0.0,.25,.5,.75]:
 			for i in [2,3]: pose(actors[i],clip,phase)
 			await frames(1)
 			for i in [2,3]:
-				var actor=actors[i]
-				var forearm: Vector3=(actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("lowerarm_l"))).origin
-				check((actor.shield_item.global_transform*Vector3(0,.5,0)).distance_to(forearm)<.5,"Scutum stays strapped to the forearm: %s %.2f / %d" % [clip,phase,i])
+				var forearm: Vector3 = shown[i][0]
+				var wrist: Vector3 = shown[i][1]
+				var board: Transform3D = shown[i][2]
+				check((board*Vector3(0,.5,0)).distance_to(forearm)<.5,"Scutum stays strapped to the forearm: %s %.2f / %d" % [clip,phase,i])
 				# Strapped, not gripped: the board lies flat along the forearm.
-				var wrist: Vector3=(actor.skeleton.global_transform*actor.skeleton.get_bone_global_pose(actor.skeleton.find_bone("hand_l"))).origin
-				check(absf(actor.shield_item.global_basis.z.normalized().dot((wrist-forearm).normalized()))<.2,"Scutum lies flat along the forearm: %s %.2f / %d" % [clip,phase,i])
+				check(absf(board.basis.z.normalized().dot((wrist-forearm).normalized()))<.2,"Scutum lies flat along the forearm: %s %.2f / %d" % [clip,phase,i])
 	# A hit must not flip the shield: each shield reaction starts with the shield
 	# facing where the sword-and-shield stance holds it.
 	for i in [0,1]:

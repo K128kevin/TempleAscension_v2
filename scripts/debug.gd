@@ -14,10 +14,12 @@ const ACTIONS = [
 	[KEY_H,"axe","H · Grant battle axe"],
 	[KEY_J,"bow","J · Grant bow"],
 	[KEY_N,"next","N · Next floor"],
-	[KEY_B,"boss","B · Boss + level 25"],
+	[KEY_B,"boss","B · Boss + level 20"],
 	[KEY_L,"first","L · Return to floor 1"],
+	[KEY_O,"desert","O · Desert (start)"],
+	[KEY_U,"town","U · Town"],
 	[KEY_T,"restart","T · Restart floor"],
-	[KEY_R,"reset","R · Reset run"],
+	[KEY_F8,"reset","F8 · Reset run"],
 	[KEY_F10,"ending","F10 · Jump to ending"]]
 
 func configure(args: PackedStringArray) -> void:
@@ -83,7 +85,7 @@ func refresh() -> void:
 	panel.reset_size()
 
 func available(action: String) -> bool:
-	return enabled and (game.mode=="playing" or action in ["panel","reset","restart","first","floor","boss"])
+	return enabled and (game.mode=="playing" or action in ["panel","reset","restart","first","floor","boss","desert","town"])
 
 func handle_key(event: InputEventKey) -> bool:
 	if not enabled or not event.pressed or event.echo: return false
@@ -110,6 +112,7 @@ func handle_key(event: InputEventKey) -> bool:
 
 func prepare_floor(index: int) -> void:
 	game.run.floor = index
+	game.run.place = "temple"
 	game.run.dead = []
 	game.run.drops = []
 	game.run.phase = "playing"
@@ -119,11 +122,11 @@ func prepare_floor(index: int) -> void:
 	game.run.energy = Data.max_energy(game.run)
 
 func jump(index: int) -> void:
-	if index<0 or index>=Data.FLOORS.size(): return
+	if index<0 or index>=Data.FLOORS: return
 	prepare_floor(index)
 	game.load_floor()
 	game.save_run()
-	game.toast("[Debug] %s" % Data.FLOORS[index])
+	game.toast("[Debug] %s" % ("Summit" if index==5 else "Floor %d" % (index+1)))
 
 func execute(action: String, floor_index: int = 0) -> void:
 	if not available(action): return
@@ -148,10 +151,18 @@ func execute(action: String, floor_index: int = 0) -> void:
 			if game.run.floor<5: jump(game.run.floor+1)
 			else: execute("kill")
 		"boss":
-			Data.gain_xp(game.run,maxi(0,Data.xp_at_level(25)-int(game.run.xp)))
+			Data.gain_xp(game.run,maxi(0,Data.xp_at_level(Data.MAX_LEVEL)-int(game.run.xp)))
 			prepare_floor(5)
 			game.load_floor()
 		"first": jump(0)
+		"desert", "town":
+			# The outdoor world: where a character starts, or inside the town gate.
+			game.run.place = "world"
+			game.run.completed = false
+			game.run.phase = "playing"
+			game.run.position = [-52,-15] if action=="desert" else [-186,0]
+			game.load_floor()
+			game.toast("[Debug] %s" % ("Desert" if action=="desert" else "Town"))
 		"floor": jump(floor_index)
 		"restart": jump(int(game.run.floor))
 		"reset":

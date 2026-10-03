@@ -20,9 +20,14 @@ const ARCHER_SHOT = {"clip":"ArcherShot","contacts":[.78]}
 const ORACLE_CAST = {"clip":"OracleCast","contacts":[.8]}
 # The centurion's stepping, full-body thrust past its tower shield.
 const SHIELD_STAB = {"clip":"ShieldStab","contacts":[.5]}
-static func profile(weapon: int, special: bool, attack_speed_percent: float, minimum_duration: float = 0.0) -> Dictionary:
+# The Lion Guardian's swipe: it rears, a forepaw cocked wide, and rakes it across.
+const LION_SWIPE = {"clip":"Attack","contacts":[.5]}
+# `speed_floor` is the readability floor: the shortest share of the clip's
+# normal time that attack speed can bring it to. Melee swings pass 0 and are
+# held only to `minimum_duration`.
+static func profile(weapon: int, special: bool, attack_speed_percent: float, minimum_duration: float = 0.0, speed_floor: float = .65) -> Dictionary:
 	var result: Dictionary = (SPECIAL if special else NORMAL)[weapon].duplicate(true)
-	result.duration = maxf(minimum_duration,result.seconds * maxf(.65,1.0/(1.0+attack_speed_percent*.01)))
+	result.duration = maxf(minimum_duration,result.seconds * maxf(speed_floor,1.0/(1.0+attack_speed_percent*.01)))
 	result.times = []
 	for fraction in result.contacts: result.times.append(fraction*result.duration)
 	return result

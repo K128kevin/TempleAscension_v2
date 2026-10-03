@@ -126,6 +126,229 @@ from `scripts/assets.gd`, plus a 72×8 HUD health bar projected above the head.
 The ring scales with the enemy's stature. Both indicators ignore mouse input.
 This UI effect adds no external bitmap or solid geometry.
 
+## The outdoor world
+
+`scripts/overworld.gd` and its three builders (`world_desert.gd`, `world_town.gd`,
+`world_temple_front.gd`) place imported meshes only, as the temple does; collision,
+paths and the ground's control map are data, not geometry. Its look is meant to be
+gritty and down to earth: photographed sand, scanned rock and shrubs, weathered
+masonry. (A first version used the stylized kits' flat-coloured palms, rocks and
+bushes; they were replaced.)
+
+- **Ground.** One slab (the KayKit paving mesh, as under the temple's terraces) carries
+  `assets/shaders/desert_ground.gdshader`. Its sand is two Poly Haven photographs
+  (CC0): [Dense Sand](https://polyhaven.com/a/dense_sand) where it lies deep and
+  [Gravelly Sand](https://polyhaven.com/a/gravelly_sand) in patches, along the track,
+  in the arena and at the foot of rocks (`assets/textures/sand_fine.jpg`,
+  `sand_gravel.jpg` and their normal maps, 1024 px). The fine sand is laid twice,
+  turned against itself and mixed in patches, and tinted by a much larger laying of
+  itself, so it never reads as a grid. Dune relief and wind ripples are shading only
+  (the ground is flat to walk on). Where the control map marks paving the existing
+  `limestone.png` flags show, dirtied by the sand photograph with sand drifted into
+  them; the map also marks the track, the oasis pool, and shade at the foot of walls
+  and rocks. The control map is a one-texel-per-metre image painted by the builders at
+  load; the shader's noise is read from a small tiling noise texture generated at load.
+- **Rocks.** Poly Haven photo scans (CC0), cut down and normalised by
+  `tools/prepare_scans.py`: boulders [03](https://polyhaven.com/a/namaqualand_boulder_03),
+  [04](https://polyhaven.com/a/namaqualand_boulder_04),
+  [05](https://polyhaven.com/a/namaqualand_boulder_05) and
+  [06](https://polyhaven.com/a/namaqualand_boulder_06) (`boulder_a`–`boulder_d`, about
+  2,000 triangles each), a twenty-metre run of
+  [cliff](https://polyhaven.com/a/namaqualand_cliff_02) (`crag`, 7,000 triangles) and
+  three loose [stones](https://polyhaven.com/a/namaqualand_stones_01) (`stone_a`–`stone_c`).
+  Each scan is welded, cut in two passes with the surface relaxed after each (one hard
+  cut leaves folds that throw hard little shadows), and exported bare; its colour and
+  normal maps are `assets/textures/scan_*_diff.jpg` and `scan_*_nor_gl.jpg` (512 px;
+  the cliff 1024). `assets/shaders/desert_rock.gdshaderinc` adds rock grain at one
+  size in the world (`assets/textures/rock_detail.jpg`, from Poly Haven's
+  [Rock Face 03](https://polyhaven.com/a/rock_face_03)), level beds of slightly
+  different stone, and sand lying on ledges and piled at the foot. About 1,400 of them
+  make the rim, drawn in batches: cliff faces along the far walls, boulders rising
+  away from the camera on the near ones.
+- **Buildings, arena, town wall and temple front.** KayKit Dungeon Remastered wall
+  modules: `wall`, `wall_arched`, `wall_window` (closed shutters), `wall_archwindow`,
+  `wall_door`, `arch`, `wall_broken`, `wall_half`, `pillar`, `pillar_decorated`,
+  `stairs` (the arena's seating), `floor` (roofs, terraces and the walls of the arena's
+  gateways), and the Kenney Mini Dungeon `column`. `assets/shaders/masonry.gdshaderinc`
+  repaints them: the kit's grey stone becomes the existing `limestone.png`, projected
+  at one size in the world and tinted per building (limewash, cream, ochre, rose),
+  while its orange timber (doors, shutters) is repainted blue, teal, brown or rust.
+  It then weathers them with the rock grain photograph: pitting, broad stains, patches
+  where limewash has gone, streaks run down from the top, dust and splashed sand a
+  metre up from the ground and thick on ledges and roofs, and flaking paint. A twin
+  shader draws the same masonry see-through for whatever hides the hero.
+- **Upkeep.** The masonry shader takes a `wear` from 0 to 1. The arena and the palace
+  are built at .06: clean dressed stone with a little dust at the foot. Houses run from
+  .3 to 1: heavier pitting and stains, streaks, limewash gone in sheets (down to dark
+  mud brick on the worst), cracks traced from the grain photograph's own contours,
+  dirt climbing two metres up the wall, and flaking woodwork. The worst houses also
+  use the kit's `wall_broken` module, and three are roofless shells with rubble inside.
+  Doors and shutters everywhere are one of six browns.
+- **Statues and sculpture.** `Overworld.statue` stands one of the temple's figures
+  still, at any size, in the temple's own statue shader: `figure_scale` enlarges the
+  stone's grain, wear and cracks with the figure, so a colossus is the same carving
+  grown, and `pale` renders it as white marble rather than dark stone. The temple's
+  two guardians are the centurion (its stone, armor relief and all) at three times
+  life size, both facing west. The town's statues are marble: four seated lions
+  (two on the palace road, two great ones at the palace steps) and two centurions
+  at the palace gate.
+- **The lion.** `tools/make_lion.py` builds `assets/models/character/lion.glb`, used
+  for the temple's Lion Guardian and the town's marble lions. Its body is sculpted
+  by the script, volume by volume, as a lion is built: the trunk in sections from
+  breast to rump (a deep ribcage, the belly tucked up behind it, loins and croup),
+  shoulder blades and the muscle under them, thick forelegs with elbow, forearm and
+  wrist, the hind leg's great thigh, hamstring and flank fold, the stifle, the shin
+  running back to a high hock with its tendon, the long foot below, broad paws with
+  four toes and claws, a hanging tail and its tuft, and a mane of some 290 long
+  locks lying over the head, the neck, the shoulders and the breast, each a tapered
+  tongue following the surface and lying over the next. The clay is fused into one
+  surface twice. The fine one (about 330,000 faces at a 5.5 mm grain) has the detail
+  cut into it: every lock combed into strands, the ribs, and the lines between the
+  muscles of the shoulder, flank and thigh. The coarse one, cut to 17,000 triangles,
+  is the mesh the game draws; the bare body's masses are melted into one another
+  (the hair and the toes keep their edges), and the fine surface's relief is baked
+  onto it as a tangent-space normal map. Its face is Poly Haven's sculpted
+  [Lion Head](https://polyhaven.com/a/lion_head) (CC0), a mask of a lion's face and
+  the mane round it (7,000 triangles), with its own normal map; both maps share
+  `assets/textures/lion_normal.png` (the body's on the left half, the face's on the
+  right), read by the statue shader through the UVs (vertex colour blue 0). The
+  script builds the skeleton (30 bones: hips, spine, chest, neck, head, a five-bone
+  tail, and four legs of upper leg, lower leg, paw and toes), skins the mesh to it
+  by nearness to each bone (a leg holds only its own side; the mane goes with the
+  head, neck and chest), and keys seven clips frame by frame, the legs by two-bone
+  IK and the motion carried smoothly through its key poses: Idle (four seconds:
+  breathing, shifting its weight, the head turning, the tail swaying), Run (a trot:
+  each fore paw lands with the opposite hind paw, the two pairs half a stride apart,
+  the paws folding up behind and reaching out to land; `LION_STRIDE_SPEED` in
+  `scripts/visual.gd` is the ground it covers a second as authored), Attack (it sinks
+  back, rears onto its haunches with the right forepaw drawn up and out wide, then
+  uncoils behind the paw as it rakes forward and across and drops back onto its
+  forefeet; the blow lands half way through, `LION_SWIPE` in
+  `scripts/combat_animation.gd`), Hit, HitHead, HitStagger (driven back onto its
+  haunches, a forepaw thrown out to catch itself), and Sit (on its haunches,
+  forelegs straight, hind feet flat, tail curled round on the ground: the held pose
+  of the town's statues). `LION_QUICK=1` skips the fine sculpt and the bake, to try
+  a shape or a pose. `scripts/visual.gd` treats it as a quadruped: no hand grips,
+  shield arm or equipment, and its feet are planted by `scripts/paw_planter.gd`,
+  the foot planter for four legs: each paw the animation sets down is pinned and
+  its leg bent to it by IK, and when the lion is driven over the ground by a blow
+  the diagonal pairs of paws step in turn, landing ahead of the body the way it is
+  carried.
+- **The townspeople.** `tools/make_townsfolk.py` builds `townsman.glb` and
+  `townswoman.glb` (`assets/models/character/`) from the base character pack's two
+  bodies (its "superhero" male and female, which come unclothed, cut to 7,000
+  triangles each), with the pack's hairstyles and eyebrows, and thirteen clips from
+  the two animation libraries retargeted as the hero's are (standing, talking,
+  walking, jogging, sitting down and getting up, sitting, sitting and talking,
+  drinking, reaching, carrying, dancing, arms folded); the seated drink is made in
+  the game from the sitting and drinking clips. The packs have no clothes, so a
+  wardrobe is fitted by the script from each body's own shape: a garment is a tube
+  lofted down the body (at each height, the outline of the body there, its convex
+  hull with the arms left out, eased outward by the cloth's looseness and joined to
+  the next; sleeves lofted along the arms), skinned from the flesh nearest it. Men
+  have a knee-length tunic, a short sleeveless sack and a mid-calf robe; women a
+  gown, a shift, and Anya's long-sleeved blouse and square-necked dress (the tube
+  with its neck cut out, leaving straps over the shoulders); there is a belt, and
+  Anya's braid is laid down her back lobe over lobe. Each mesh carries extra data
+  in its second UV set: on the body, every point's height at rest and how far
+  along the arm it is, so `assets/shaders/townsfolk_skin.gdshader` leaves out the
+  flesh under a garment (and dirties the poor); on a garment, how near its hem or
+  cuff a point is and how far down its length. `assets/shaders/cloth.gdshader`
+  dyes Poly Haven's photographed rough linen or hessian (CC0,
+  `assets/textures/cloth_*.jpg`) and wears it out as far as `wear` says: fading,
+  grime toward the hem, sewn-on patches, frayed hems and cuffs, holes. The
+  renderer lights two-sided cloth from the wrong side, so the inside is a second
+  pass (`cloth_inside.gdshader`). `scripts/wardrobe.gd`, written by the script,
+  records what each garment covers. A mug is held by its handle in the left fist
+  (`scripts/arm_reach.gd`, a two-bone IK on the arm that carries the hand to a point,
+  turns the fist to keep the mug upright and curls the fingers): Anya's hand holds
+  the mug under the tap, carries it at her side and sets it on the table; a
+  drinker's goes from his lap to the mug on the table, lifts it to his mouth and
+  sets it down again. `scripts/townsperson.gd` dresses a figure and
+  `scripts/townsfolk.gd` runs the town: its own A* grid of the streets (the arena,
+  palace hill, smithy and the inn's loft closed), the seats at the inn's tables,
+  the inn's occupancy rules, Anya's rounds and the children's games.
+- **Walk-in buildings.** `scripts/world_interiors.gd` builds the inn and the smithy
+  as halls of the town's wall modules on all four sides, with an open doorway.
+  `Overworld.rooms` holds each hall's footprint, its roof and its front (the south
+  and west walls, the camera's side), hidden while the hero stands inside; its far
+  walls never fade over him there. `Overworld.decks` holds floors above the ground
+  (the inn's loft, and the ramp of its stair): `height_at` adds a deck's height, so
+  the hero, the camera, clicks and anything set down there stand on it, as on the
+  palace hill. Floors are the dungeon kit's wood and stone floor tiles; the stair,
+  the bar (two long tables), the loft's rail and the wall shelves are that kit's
+  shapes in sawn timber (`Kit.planks`, the plank texture at one size in the world).
+  Beds, tables, benches, stools, mugs, plates, bottles, candlesticks, cabinets,
+  chests, workbenches, the grindstone, anvils, pegs and the rest are the props kit's
+  models in its own trim materials. The forge is built of the town's masonry in
+  blackened stone (a hearth, an arched firebox, a hood and a chimney), with a bed
+  of coals (`Kit.embers`, burnt stone that glows), the torches' flame, and a warm
+  light that reaches the room. The arms on the smithy's walls are the game's own
+  weapon models; the adventurers kit's, which come painted in its heroes' colours,
+  are given bare iron (`Kit.iron`) or timber.
+- **Gold and marble.** Gold is the rock grain photograph tinted to gold with a little
+  metal and its own faint glow (the outdoor scene has no sky to reflect); marble is
+  `statue_marble.png` laid at one size in the world (plinths, kerbs, columns, the
+  Elders' Box), so its veins keep their shape on blocks of any proportion; the box's
+  walls are built of wall modules near the kit's own four metres square rather than
+  one module stretched to the wall's length. Thrones are the props kit's `chair`, gilded;
+  rails, cornices, column heads and feet are the paving mesh, gilded.
+- **The palace hill.** The world's ground is one flat slab; the hill is
+  `assets/models/props/hill.glb`, a two-metre grid raised to the hill's height by
+  `tools/make_hill.py` (like the palms, built for this game rather than taken from a
+  kit) and drawn with the slab's own ground shader, which tilts its shading with the
+  slope. `Overworld.height_at` reports the same height, from the same numbers, and
+  the test suite compares the two. Everything is still walked on one plane: what
+  stands on the hill, the hero's figure and the camera are raised to its height.
+- **Litter.** `urn_broken` (the props kit's `Vase_Rubble_Medium`) and the existing
+  `rubble`, in each house's own masonry.
+- **Town and camp dressing.** Quaternius Fantasy Props MegaKit: `barrel`, `barrel_rack`,
+  `crate`, `farm_crate`, `stall`, `cart`, `bench`, `table`, `stool`, `urn`, `bag`,
+  `bucket`, `cloth_red`, `cloth_blue`, `weapon_stand`, `dummy`, `anvil`, `lantern`.
+  They are exported without the kit's trim sheets; the game gives each surface a
+  shared material by its name, from one 1024-pixel copy of each sheet
+  (`assets/textures/trim_furniture.png`, `trim_metal.png`). Cloth and pottery, which
+  the kit colours through a second texture layer, are a dye or clay colour broken up
+  by the rock grain photograph.
+- **Palms.** No kit offered a palm that was not a toy, so the date palms are modelled
+  for this game by `tools/make_palm.py` (the one exception to using only authored
+  meshes): a ringed, leaning trunk that swells at its foot and under its crown, and
+  thirty arching feather fronds in tiers, the oldest hanging dry against the trunk,
+  about 1,100 triangles a tree in three variants. The bark is Poly Haven's
+  [Palm Bark](https://polyhaven.com/a/palm_bark) photograph (CC0;
+  `assets/textures/palm_bark.jpg` and its normal map); the fronds
+  (`palm_frond.png`, `palm_frond_dry.png`) are painted leaflet by leaflet by
+  `tools/paint_flora.py`.
+- **Shrubs.** Poly Haven scans (CC0): [Shrub 02](https://polyhaven.com/a/shrub_02)
+  (`shrub_a`, `shrub_b`) and the [Wild Rooibos Bush](https://polyhaven.com/a/wild_rooibos_bush)
+  (`scrub`), with their colour and alpha maps combined into
+  `assets/textures/scan_shrub_02.png` and `scan_wild_rooibos_bush.png`.
+- **Other plants and stones.** Stylized Nature MegaKit: `dead_tree`, `olive_a`, `olive_b`
+  (the twisted tree; `tools/paint_flora.py` repaints its leaf cards with clusters of
+  narrow grey-green olive leaves, inside the kit texture's own shapes, as
+  `assets/textures/olive_leaves.png`), `dry_grass`, `agave`
+  (`assets/textures/desert_leaves.png`, darkened). These are
+  exported bare and share one copy of each texture.
+- **The well.** A CC0 model by Quaternius from [Poly Pizza](https://poly.pizza/m/QlqncKYxXb)
+  (`source_art/poly_pizza/`). It comes in flat colours; the game gives its stone, roof
+  tiles and bag the rock grain photograph and its timber the existing plank texture.
+- **The temple door's glow.** A dull amber (close to the torches' own light), unshaded
+  end wall to the passage; sheets of the same amber (sprites with generated gradient
+  textures) on the passage's floor and walls, clear at the threshold and full a few
+  metres in; a soft round pool of it over the court before the door; and a light of
+  the torches' colour. No image asset.
+- **Fire.** Bowls outdoors reuse the `fire_bowl` mesh and the torches' particle flame;
+  in daylight their light is kept off every surface.
+
+The Poly Haven downloads are in `source_art/polyhaven/`. This renderer does not
+convert texture colours to linear light, so the shaders' tints are tuned by eye
+against the photographs' own brightness.
+
+The kit models are normalised by `tools/prepare_models.py` (`--only` now takes a
+comma-separated list). The first floor's door, seen from inside, is the existing open
+`arch` at the end of a short passage, with an unshaded sand-coloured slab (the paving
+mesh) beyond it as the daylight outside.
+
 ## Requested local assets
 
 Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
@@ -156,6 +379,12 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   `tools/import_combat.py` authors and bakes BowIdle, BowShot, BowRapid, BowRun, BowCrouch,
   SpearIdle, SpearStab and SpearJab on the supplied skeleton. These animate
   existing bones and meshes; no replacement geometry is generated.
+- The hero's walk (the R key) is the animation library's `Walk_Loop`, retargeted as
+  the clip `Walk` by `tools/import_walk.py`. The walks that carry a weapon
+  (SwordWalk, RangerWalk, WizardWalk) are made from it when the figure is set up
+  (`Visual.derive_walks`): the walk's stride, with each arm held most of the way to
+  where the matching stance holds it, so the sword stays low, the bow at his side
+  and the staff in his hand.
 - Quaternius Stylized Nature MegaKit [Standard]: rocks, dead tree, grass, fern and
   pebble geometry. The pebble is reused with jewel materials for gem drops.
 
@@ -165,7 +394,9 @@ animation licenses sit beside it. Rebuild with Blender:
 ```sh
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_character.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_combat.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_walk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
 ```
 
 ## Additional authored geometry (CC0)

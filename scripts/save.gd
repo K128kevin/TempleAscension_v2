@@ -3,14 +3,36 @@ const Data = preload("res://scripts/data.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=5: return d
+	if int(d.get("version",0))>=7: return d
+	if int(d.get("version",0))==6:
+		# Saves from before the outdoor world were all made inside the temple.
+		var updated = d.duplicate(true)
+		updated.version = 7
+		updated.place = "temple"
+		return updated
+	if int(d.get("version",0))==5:
+		# The level cap fell to 20, each level now grants five attribute points,
+		# and the skill trees changed: everything spent is refunded.
+		for key in ["level","xp"]:
+			if not (d.get(key) is int or d.get(key) is float) or not is_finite(float(d[key])) or d[key]<0: return {}
+		var updated = d.duplicate(true)
+		updated.version = 6
+		updated.level = clampi(int(d.level),1,Data.MAX_LEVEL)
+		updated.xp = clampi(int(d.xp),Data.xp_at_level(updated.level),Data.xp_at_level(Data.MAX_LEVEL) if updated.level==Data.MAX_LEVEL else Data.xp_at_level(updated.level+1)-1)
+		updated.stats = [5,5,5,5,5]
+		updated.points = (updated.level-1)*Data.STAT_POINTS
+		updated.skills = {}
+		updated.skill_points = updated.level
+		updated.hotbar = ["","",""]
+		updated["migration_notice"] = true
+		return migrate(updated)
 	if int(d.get("version",0))==4:
 		var updated = d.duplicate(true)
 		updated.version = 5
 		updated.erase("flasks")
 		updated.erase("flask_cooldown")
 		updated.heal_cooldown = 0.0
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==3:
 		if not d.get("hotbar") is Array or d.hotbar.size()!=5: return {}
 		var updated = d.duplicate(true)
@@ -29,7 +51,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 	for stat in d.stats:
 		if not (stat is int or stat is float) or stat<0: return {}
 		previous_points += stat
-	var level = clampi(maxi(Data.ENEMY_LEVELS[old_floor],1+ceili(previous_points/3.0)),1,30)
+	var level = clampi(maxi(Data.ENEMY_LEVELS[old_floor],1+ceili(previous_points/3.0)),1,Data.MAX_LEVEL)
 	Data.gain_xp(fresh,Data.xp_at_level(level))
 	fresh.xp_claimed = fresh.dead.duplicate()
 	fresh.drops = fresh.drops.filter(func(drop): return drop is Dictionary and drop.get("kind","")=="weapon" and drop.get("value",-1) not in [2,3])
@@ -40,7 +62,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<5:
+	if int(d.get("version",0))<7:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -49,7 +71,7 @@ static func valid(d) -> bool:
 		if not (d[key] is int or d[key] is float) or not is_finite(float(d[key])) or d[key]<0: return false
 	for key in ["version","floor","weapon","difficulty","level","xp","points","skill_points","deaths"]:
 		if d[key]!=int(d[key]): return false
-	if not d.class_id in Data.CLASSES: return false
+	if not d.class_id in Data.CLASSES or not d.place in Data.PLACES: return false
 	if not d.stats is Array or d.stats.size()!=5 or not d.owned is Array or d.owned.size()!=5: return false
 	if not d.position is Array or d.position.size()!=2: return false
 	for value in d.position:
@@ -59,14 +81,14 @@ static func valid(d) -> bool:
 	if int(d.floor)<0 or int(d.floor)>5 or int(d.difficulty)<0 or int(d.difficulty)>2: return false
 	if int(d.weapon)<0 or int(d.weapon)>4 or not d.owned[int(d.weapon)]: return false
 	if not d.level is float and not d.level is int: return false
-	if d.level<1 or d.level>30 or d.level!=int(d.level): return false
-	if d.xp<Data.xp_at_level(int(d.level)) or d.xp>Data.xp_at_level(30): return false
-	if d.level<30 and d.xp>=Data.xp_at_level(int(d.level)+1): return false
+	if d.level<1 or d.level>Data.MAX_LEVEL or d.level!=int(d.level): return false
+	if d.xp<Data.xp_at_level(int(d.level)) or d.xp>Data.xp_at_level(Data.MAX_LEVEL): return false
+	if d.level<Data.MAX_LEVEL and d.xp>=Data.xp_at_level(int(d.level)+1): return false
 	var spent = 0
 	for stat in d.stats:
-		if not (stat is float or stat is int) or stat<5 or stat>92 or stat!=int(stat): return false
+		if not (stat is float or stat is int) or stat<5 or stat>5+(Data.MAX_LEVEL-1)*Data.STAT_POINTS or stat!=int(stat): return false
 		spent += int(stat)-5
-	if d.points<0 or spent+d.points!=(d.level-1)*3: return false
+	if d.points<0 or spent+d.points!=(d.level-1)*Data.STAT_POINTS: return false
 	if not d.skills is Dictionary or not d.hotbar is Array or d.hotbar.size()!=3: return false
 	var ranks = 0
 	for id in d.skills:
@@ -76,7 +98,7 @@ static func valid(d) -> bool:
 		var rank = int(d.skills[id])
 		if skill.class_id!=d.class_id or rank<1 or rank>Data.Skills.rank_cap(id,int(d.level)): return false
 		ranks += rank
-	if d.skill_points<0 or ranks+d.skill_points!=d.level: return false
+	if d.skill_points<0 or ranks+d.skill_points!=d.level or not Data.Skills.reachable(d.skills): return false
 	var assigned = []
 	for id in d.hotbar:
 		if not id is String: return false

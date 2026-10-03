@@ -136,6 +136,8 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			if layout.is_open(cell+direction): continue
 			# The court's solid centerpiece is the fountain, not a wall.
 			if layout.court_obstacle.has_point(cell+direction): continue
+			# The temple's door stands at the end of the first floor's passage.
+			if layout.at_door(cell) and direction==layout.entry_dir: continue
 			var horizontal_edge: bool = direction.y!=0
 			var line: float = (at.z+direction.y*.5) if horizontal_edge else (at.x+direction.x*.5)
 			var low = low_wall(cell,direction)
@@ -191,8 +193,6 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		# Imported columns occupy solid wall corners, never a corridor tile.
 		if not layout.cells.has(room.position+Vector2i(-1,-1)):
 			place("column",corner+Vector3(-.65,0,-.65),Vector3(.7,3.8,.7),stone)
-		if i%3==1 and not layout.cells.has(room.position+Vector2i(0,-1)):
-			place("banner",corner+Vector3(0,1,-.55),Vector3(.7,1.7,.1))
 		if level==2 and i%2==1 and not layout.cells.has(room.position+Vector2i(-1,0)):
 			var shelf = place("bookcase",corner+Vector3(-.65,0,0),Vector3(.9,2.4,.25),stone)
 			shelf.rotation.y = PI/2
@@ -203,6 +203,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	if floor_index in [3,4,5]: setup_desert(stone)
 	# The stairwell up from the floor below; the ascent is in the furthest room.
 	if layout.arrival.has_area(): build_arrival(stone)
+	if layout.entry.has_area(): build_entry(stone)
 	if layout.stairs.has_area():
 		# The imported flight climbs toward its local -Z from a base at its origin.
 		# Scaled to wall height, its top step meets the top of the wall it climbs into.
@@ -487,6 +488,55 @@ func build_arrival(stone: Material) -> void:
 		visibility_nodes.append(lip)
 		visibility_cells[lip] = cells
 
+# The temple's door, from inside: an open portal at the end of the first
+# floor's passage, with the desert's daylight beyond it.
+func build_entry(stone: Material) -> void:
+	var rect: Rect2i = layout.entry
+	var out = Vector3(layout.entry_dir.x,0,layout.entry_dir.y)
+	var middle = layout.to_world(rect.position)+Vector3(rect.size.x-1,0,rect.size.y-1)*.5
+	var threshold = middle+out*(Layout.ENTRY_DEPTH*.5+.14)
+	var cells: Array[Vector2i] = []
+	for y in range(rect.position.y,rect.end.y):
+		for x in range(rect.position.x,rect.end.x): cells.append(Vector2i(x,y))
+	var portal = place("arch",threshold,Vector3(Layout.ENTRY_WIDTH+.28,WALL_HEIGHT,.5),stone)
+	portal.name = "TempleDoor"
+	if layout.entry_dir.x!=0: portal.rotation.y = PI/2
+	visibility_cells[portal] = cells
+	# Sunlit sand fills the opening: a bright, unshaded slab just outside.
+	var daylight = StandardMaterial3D.new()
+	daylight.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	daylight.albedo_color = Color(.86,.70,.48)
+	var across = Vector3(absf(out.z),0,absf(out.x))
+	var beyond = Art.model("floor",Vector3(.3,.3,.3)+across*(Layout.ENTRY_WIDTH-.2)+Vector3.UP*(WALL_HEIGHT-.5),daylight)
+	beyond.name = "TempleDoorDaylight"
+	add_child(beyond)
+	beyond.position = threshold+out*.5
+	visibility_nodes.append(beyond)
+	visibility_cells[beyond] = cells
+	var spill = OmniLight3D.new()
+	spill.name = "TempleDoorSunlight"
+	spill.light_color = Color(1.0,.90,.72)
+	spill.light_energy = 1.0
+	spill.omni_range = 6.5
+	spill.omni_attenuation = 1.2
+	spill.shadow_enabled = false
+	spill.position = threshold-out*.9+Vector3.UP*1.7
+	add_child(spill)
+	visibility_nodes.append(spill)
+	visibility_cells[spill] = cells
+
+# A temple floor is level. (Outdoors the ground can rise: Overworld.lift.)
+func lift(_at: Vector3) -> float:
+	return 0.0
+
+# Walking through the first floor's door leaves for the desert.
+func leaving_temple(at: Vector3) -> bool:
+	return level==0 and layout.at_door(layout.to_cell(at))
+
+# Whether the hero is in, or at the mouth of, the door's passage.
+func leaving_soon(at: Vector3) -> bool:
+	return level==0 and layout.entry.has_area() and layout.entry.grow(2).has_point(layout.to_cell(at))
+
 # A low scenery parapet from `a` to `b` (along X or Z), in pieces about a
 # metre and a quarter long, so its carved stones keep their shape.
 func parapet_run(a: Vector3, b: Vector3, mat: Material) -> void:
@@ -521,6 +571,8 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	var candidates: Array[Dictionary] = []
 	for cell in layout.cells:
 		if layout.court.has_area() and layout.court.has_point(cell): continue
+		# No statue stands in the doorway.
+		if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): continue
 		var at = layout.to_world(cell)
 		if at.distance_to(spawn)<9 or at.distance_to(exit_point)<2.5 or not fits(at,.45): continue
 		var backs: Array[Vector2i] = []
@@ -542,6 +594,7 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	# Small/pathological layouts may use unoccupied interior floor positions.
 	for cell in layout.cells:
 		if layout.court.has_area() and layout.court.has_point(cell): continue
+		if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): continue
 		var at = layout.to_world(cell)
 		if at.distance_to(spawn)<9 or at.distance_to(exit_point)<2.5 or not fits(at,.45): continue
 		var crowded = false

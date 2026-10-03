@@ -661,9 +661,11 @@ for f in range(61):
   if side=='r':m=blend(m,sword_pose[0][b.name],.75)
   b.matrix_basis=m
  bpy.context.view_layer.update()
- # Reach the shield arm to its stance position after the run's lean, so the
- # shield stays upright rather than tipping with the torso.
- shield_arm()
+ # The shield arm keeps its guard relative to the chest as the body leans
+ # into the run (held at the stance's place in the model, the fist was left
+ # behind in the leaning chest, the forearm sunk into it); the game keeps the
+ # shield itself upright on the forearm.
+ shield_guard()
  keys(length*30*f/60)
 finish('ScutumRun',a,length)
 
@@ -953,7 +955,25 @@ tidy_clip('SwordSlash',ease_in=.2,ease_out=.15)
 tidy_clip('AxeChop',ease_in=.22,ease_out=.15)
 tidy_clip('ArcherShot')
 tidy_clip('ShieldStab')
-# The gladiator's swing: the warrior's lunge, his scutum held in its guard.
+# The gladiator's swing: the warrior's lunge, his scutum held in its guard,
+# but compact, as a man fights behind a tall shield: the warrior throws his
+# whole body round through the cut (his hips half a turn, his chest further)
+# and unwinds back to his stance at its end, which carried a scutum strapped
+# to the arm round behind him and back in a moment. The gladiator's hips,
+# spine and head turn only SCUTUM_TWIST as far (the sword arm cutting as the
+# warrior's does from the chest), and his feet stay where the warrior's step.
+# Through the last part of the swing (from SCUTUM_SETTLE) he settles back
+# square gradually, rather than unwinding in its closing moment: his upper
+# body and arms ease into his own stance (ScutumSwordIdle, which he starts
+# from too, the warrior's swing beginning and ending in the warrior's), so the
+# shield comes back up into its guard over the recovery, not at its end.
+SCUTUM_TWIST=.3
+SCUTUM_SETTLE=.62
+TWIST_BONES=['pelvis','spine_01','spine_02','spine_03','neck_01','Head']
+SCUTUM_EASE_IN=.12
+stance=clip_poses('ScutumSwordIdle',2)[0][0]
+def leg_bone(name):
+ return name.startswith(('thigh','calf','foot','ball'))
 original=bpy.data.actions['SwordSwing']
 rig.animation_data.action=original
 poses=[]
@@ -964,7 +984,29 @@ a=action('ScutumSwordSwing')
 for f,pose in enumerate(poses):
  for b in rig.pose.bones:b.matrix_basis=pose[b.name]
  bpy.context.view_layer.update()
+ # Where the warrior's feet and knees are, to set the gladiator's there.
+ planted={s:(rig.pose.bones['foot_'+s].matrix.copy(),rig.pose.bones['calf_'+s].matrix.translation.copy()) for s in 'lr'}
+ for name in TWIST_BONES:
+  bone=rig.pose.bones[name]
+  settle=min(1.0,max(0.0,(f/60-SCUTUM_SETTLE)/(1-SCUTUM_SETTLE)))
+  bone.matrix_basis=blend(base[name],pose[name],SCUTUM_TWIST*(1-settle*settle*(3-2*settle)))
+  # (Its place as the warrior's: only the turn is lessened.)
+  bone.location=pose[name].to_translation()
+ bpy.context.view_layer.update()
  shield_guard()
+ u=f/60
+ into=1-min(1.0,u/SCUTUM_EASE_IN)
+ out=min(1.0,max(0.0,(u-SCUTUM_SETTLE)/(1-SCUTUM_SETTLE)))
+ w=max(into*into*(3-2*into),out*out*(3-2*out))
+ if w>0:
+  for b in rig.pose.bones:
+   if not leg_bone(b.name):b.matrix_basis=blend(b.matrix_basis,stance[b.name],w)
+  bpy.context.view_layer.update()
+ for s in 'lr':
+  foot,knee=planted[s]
+  leg(s,foot.translation,knee+(knee-foot.translation)*.2)
+  rig.pose.bones['foot_'+s].matrix=foot
+  bpy.context.view_layer.update()
  keys(f)
 finish('ScutumSwordSwing',a,2.0)
 rig.animation_data.action=None

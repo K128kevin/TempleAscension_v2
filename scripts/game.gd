@@ -3,6 +3,7 @@ const Data = preload("res://scripts/data.gd")
 const CombatAnimation = preload("res://scripts/combat_animation.gd")
 const Art = preload("res://scripts/assets.gd")
 const Temple = preload("res://scripts/temple.gd")
+const Overworld = preload("res://scripts/overworld.gd")
 const Actor = preload("res://scripts/actor.gd")
 const Hud = preload("res://scripts/hud.gd")
 const ProgressionUI = preload("res://scripts/progression_ui.gd")
@@ -26,6 +27,9 @@ var target
 var hover_ring: Sprite3D
 const ENEMY_CLICK_RADIUS = 64.0
 const PLAYER_RUN_SPEED = 5.94 # Player movement speed before the walk-cycle change.
+# The hero's pace at a walk (R toggles between walking and running).
+const PLAYER_WALK_SPEED = 1.5
+var walking = false
 var route = PackedVector3Array()
 var left_held = false
 var right_held = false
@@ -33,6 +37,10 @@ var hold_timer = 0.0
 var pursuit_timer = 0.0
 var order_pending = false
 var ordered_special = false
+# The skill slot a special order casts (RMB is 0; the 1 and 2 keys, 1 and 2).
+var ordered_slot = 0
+# Dash Attack: a Cleave follows the dash under way.
+var dash_cleave = false
 var dash_speed = 41.0
 var leap_left = 0.0
 var leap_duration = .26
@@ -56,6 +64,9 @@ var skills
 var creating_character = false
 # The debug playground, while it is open (Shift+P in debug mode).
 var playground = null
+# Set as the hero walks in through the temple's door: the first floor then
+# loads with him standing just inside it.
+var arriving_by_door = false
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
@@ -68,6 +79,8 @@ func _ready() -> void:
 	if debug.enabled: Save.directory = Save.directory.path_join("debug")
 	run = Data.new_run()
 	creating_character = not test_mode and not debug.enabled
+	# A new character is made in the desert, where it will start.
+	if creating_character: run = Data.new_character()
 	if not test_mode:
 		var saved = Save.load_run()
 		if not saved.is_empty() and not saved.completed:
@@ -85,19 +98,25 @@ func _ready() -> void:
 	add_child(skills)
 	load_floor()
 	if creating_character: new_run_menu()
-	toast("The crown waits above. Defeat every statue to open the ascent.")
+	elif not outdoors(): toast("The crown waits above. Defeat every statue to open the ascent.")
 	if test_mode:
 		var tester = load("res://tests/campaign.gd").new()
 		add_child(tester)
 		tester.call_deferred("start",self)
 
+# Whether the run is in the world outside the temple (the town, the desert
+# and the temple's front) rather than on one of its floors.
+func outdoors() -> bool:
+	return run.get("place","temple")=="world"
+
+# Loads wherever the run is: the outdoor world, or its floor of the temple.
 func load_floor() -> void:
 	if test_mode: creating_character = false
 	run.erase("seconds") # Discard elapsed time from legacy saves.
 	run.erase("skill_cooldowns") # Ignore obsolete skill recharge timers in saved runs.
 	run.erase("evade_cooldown")
 	var migrating = int(run.version)<2
-	if int(run.version)<5: run = Save.migrate(run)
+	if int(run.version)<7: run = Save.migrate(run)
 	run.drops = run.drops.filter(func(drop): return drop.value not in [2,3])
 	if skills: skills.reset()
 	run_generation += 1
@@ -120,30 +139,39 @@ func load_floor() -> void:
 	right_held = false
 	crown_available = false
 	dash_time = 0
+	dash_cleave = false
 	leap_left = 0
 	heal_cd = run.heal_cooldown
 	regen_recovery_time = 3.0
 	combat_age = 10
 	slowed = 0
-	world = Temple.new()
+	world = Overworld.new() if outdoors() else Temple.new()
 	add_child(world)
 	world.setup(int(run.floor),int(run.seed))
 	hover_ring = Art.target_ring()
 	world.add_child(hover_ring)
 	hud.show_enemy_hover(null)
-	sound.track(int(run.floor))
+	# The approach's music plays outdoors, as on the first floor.
+	sound.track(0 if outdoors() else int(run.floor))
 	player = Actor.new()
 	world.add_child(player)
 	var at = Vector3(run.position[0],0,run.position[1])
+	# Come in from the desert, the hero stands just inside the temple's door.
+	if arriving_by_door and not outdoors() and world.layout.entry.has_area(): at = world.layout.entry_position()
+	arriving_by_door = false
 	if not world.fits(at): at = world.spawn
 	player.setup(self,"player","hero",at)
 	player.hp = clampf(run.health,1,Data.max_health(run))
-	player.rotation.y = PI
+	player.visual.position.y = world.lift(at)
+	# Outdoors he faces the temple, in the east.
+	player.rotation.y = PI/2 if outdoors() else PI
 	world.update_visibility(player.position,.1)
 	world.follow(player.position,1)
 	var rng = RandomNumberGenerator.new()
 	rng.seed = int(run.seed)+int(run.floor)*193
-	if run.floor < 5:
+	# No statue stands outside the temple.
+	if outdoors(): pass
+	elif run.floor < 5:
 		var types: Array[String] = []
 		for kind in Data.COUNTS[run.floor]:
 			for i in Data.COUNTS[run.floor][kind]: types.append(kind)
@@ -199,13 +227,37 @@ func load_floor() -> void:
 				run.drops.append(reward.duplicate(true))
 		for drop in run.drops: drop.position = [world.spawn.x,world.spawn.z]
 	for drop in run.drops: create_pickup(drop)
-	world.exit_seal.visible = remaining()==0 and run.floor<5
+	world.exit_seal.visible = remaining()==0 and run.floor<5 and not outdoors()
 	mode = "playing"
 	hud.close_modal()
 	if run.get("migration_notice",false):
 		run.erase("migration_notice")
-		toast("Save upgraded: old bonuses refunded as level-earned points. Open C and K to rebuild your character.")
+		toast("Save upgraded: attribute and skill points refunded. Use the + buttons (or C and K) to rebuild your character.")
 	elif run.completed: summary_menu()
+
+# The temple's door, from either side: the hero walks through it into the
+# first floor, or out of the first floor into the desert. Returns whether he
+# went through.
+func pass_door() -> bool:
+	if player.dead or mode!="playing": return false
+	if outdoors():
+		if not world.entering_temple(player.position): return false
+		save_run()
+		run.place = "temple"
+		arriving_by_door = true
+		load_floor()
+		save_run()
+		return true
+	if not world.leaving_temple(player.position): return false
+	save_run()
+	run.place = "world"
+	var threshold: Vector3 = Overworld.TEMPLE_DOOR+Overworld.THRESHOLD
+	run.position = [threshold.x,threshold.z]
+	load_floor()
+	player.rotation.y = -PI/2
+	save_run()
+	toast("The town lies west, across the desert.")
+	return true
 
 func spawn_enemy(kind: String, id: String, at: Vector3):
 	var a = Actor.new()
@@ -226,6 +278,10 @@ func _process(dt: float) -> void:
 		if playground != null: playground.tick(dt)
 		if playground == null or playground.hero_selected(): player_control(dt)
 		elif playground.statue_selected(): playground.control(dt)
+		# On raised ground (the palace hill) the hero's figure stands at its height.
+		if leap_left<=0: player.visual.position.y = world.lift(player.position)
+		# Walking through the temple's door changes worlds; this frame ends there.
+		if playground == null and pass_door(): return
 		world.update_visibility(player.position,dt)
 		for enemy in enemies: enemy.tick(dt)
 		tick_projectiles(dt)
@@ -272,11 +328,25 @@ func _input(event: InputEvent) -> void:
 			elif mode in ["paused","character"] and not creating_character: resume_game()
 			get_viewport().set_input_as_handled()
 		if event.physical_keycode in [KEY_C,KEY_K,KEY_I] and mode in ["playing","character"] and not creating_character:
-			if mode=="character": resume_game()
-			elif event.physical_keycode==KEY_C: ProgressionUI.character(self)
-			elif event.physical_keycode==KEY_K: ProgressionUI.skills(self)
-			else: ProgressionUI.equipment(self)
+			toggle_screen(event.physical_keycode)
 			get_viewport().set_input_as_handled()
+		# Pointing at a learned skill in the skill panel, 1 and 2 assign it.
+		if event.physical_keycode in [KEY_1,KEY_2] and mode=="character" and not hud.panels.hovered.is_empty():
+			hud.panels.assign(hud.panels.hovered,1 if event.physical_keycode==KEY_1 else 2)
+			get_viewport().set_input_as_handled()
+
+# C and K open and close the attribute panel (left) and the skill panel (right);
+# I, the equipment screen. The game is paused while any of them is open.
+func toggle_screen(key: int) -> void:
+	if key==KEY_C:
+		if hud.panels.stats_open(): hud.panels.close_stats()
+		else: ProgressionUI.character(self)
+	elif key==KEY_K:
+		if hud.panels.skills_open(): hud.panels.close_skills()
+		else: ProgressionUI.skills(self)
+	elif is_instance_valid(hud.modal): hud.close_dialog()
+	else: ProgressionUI.equipment(self)
+	if mode=="character" and not hud.panels.any_open() and not is_instance_valid(hud.modal): resume_game()
 
 # Moves the camera in (negative) or out, within its limits; close in, the
 # wheel takes finer steps.
@@ -314,10 +384,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_SPACE: dash()
 			KEY_Q: heal()
 			KEY_E: interact()
-			KEY_1: skills.cast_slot(1,aim_point())
-			KEY_2: skills.cast_slot(2,aim_point())
+			KEY_R: toggle_walk()
+			KEY_1: cast_key(1)
+			KEY_2: cast_key(2)
 			KEY_F11:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+func toggle_walk() -> void:
+	walking = not walking
+	toast("Walking." if walking else "Running.")
+
+# How fast the hero goes over the ground: walking or running, halved when slowed.
+func player_pace() -> float:
+	return (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)
 
 # Everyone an attack can land on. Normally the statues; in the playground every
 # unit, heroes included, except the one attacking.
@@ -341,9 +420,10 @@ func enemy_at_screen(mouse: Vector2, exclude = null):
 	for a in targets(exclude if exclude != null else player):
 		if a.dead or not a.is_visible_in_tree() or a.dormant: continue
 		if world.camera.is_position_behind(a.position): continue
-		var screen: Vector2 = world.camera.unproject_position(a.position+Vector3.UP*a.config.size)
+		var tall: float = a.config.get("height",a.config.size*2.1)
+		var screen: Vector2 = world.camera.unproject_position(a.position+Vector3.UP*tall*.48)
 		var feet: Vector2 = world.camera.unproject_position(a.position)
-		var head: Vector2 = world.camera.unproject_position(a.position+Vector3.UP*a.config.size*2.1)
+		var head: Vector2 = world.camera.unproject_position(a.position+Vector3.UP*tall)
 		# A generous minimum target grows to cover tall models at close zoom.
 		var radius = maxf(ENEMY_CLICK_RADIUS,feet.distance_to(head)*.5+20)
 		var distance = screen.distance_to(mouse)
@@ -370,28 +450,36 @@ func update_enemy_hover() -> void:
 		hover_ring.position = hovered.position+Vector3.UP*.08
 		hover_ring.scale = Vector3.ONE*hovered.config.size
 	hud.show_enemy_hover(hovered)
+	hud.show_npc_name(world.townsfolk.named_at(world.pointer()) if outdoors() and mode=="playing" and get_viewport().gui_get_hovered_control()==null else {})
 
-func issue_click(special: bool) -> void:
+# The 1 and 2 keys: a skill used up close is walked to a unit under the cursor,
+# as a right click is; anything else is cast where the cursor points.
+func cast_key(slot: int) -> void:
+	if skills.reach(run.hotbar[slot])<13.0 and is_instance_valid(clicked_enemy()) and not Input.is_physical_key_pressed(KEY_SHIFT): issue_click(true,slot)
+	else: skills.cast_slot(slot,aim_point())
+
+func issue_click(special: bool, slot: int = 0) -> void:
 	order_pending = false
 	hold_timer = .08
 	pursuit_timer = .15
 	if Input.is_physical_key_pressed(KEY_SHIFT):
 		target = null
 		route.clear()
-		attack(special,aim_point())
+		attack(special,aim_point(),slot)
 		return
 	var clicked = clicked_enemy()
 	if clicked:
 		target = clicked
 		order_pending = true
 		ordered_special = special
+		ordered_slot = slot
 		route.clear()
-		if player.position.distance_to(target.position)<=attack_range(special) and world.clear_line(player.position,target.position): attack(special,target.position)
+		if player.position.distance_to(target.position)<=attack_range(special,slot) and world.clear_line(player.position,target.position): attack(special,target.position,slot)
 		else: route = world.path(player.position,target.position)
 	elif special:
 		target = null
 		route.clear()
-		attack(true,aim_point())
+		attack(true,aim_point(),slot)
 	else:
 		target = null
 		route = world.path(player.position,world.pointer())
@@ -402,12 +490,16 @@ func player_control(dt: float) -> void:
 		var step = minf(dt,leap_left)
 		leap_left = maxf(0,leap_left-dt)
 		player.position = world.move(player.position,leap_direction*leap_speed*step)
-		player.visual.position.y = sin((1.0-leap_left/leap_duration)*PI)*1.8
-		if leap_left<=0: player.visual.position.y = 0
+		player.visual.position.y = world.lift(player.position)+sin((1.0-leap_left/leap_duration)*PI)*1.8
+		if leap_left<=0: player.visual.position.y = world.lift(player.position)
 		return
 	if dash_time>0:
 		dash_time -= dt
 		player.position = world.move(player.position,dash_direction*dash_speed*dt)
+		if dash_time<=0 and dash_cleave:
+			# Dash Attack: he comes out of the dash into a Cleave.
+			dash_cleave = false
+			skills.cast("cleave",player.position+dash_direction*2.0,true)
 		return
 	# The original game's mouse orders are authoritative. Shift plants the hero;
 	# a tap keeps its destination, while a held ground order follows the cursor.
@@ -429,22 +521,21 @@ func player_control(dt: float) -> void:
 			issue_click(false)
 		if is_instance_valid(target):
 			var special: bool = ordered_special
-			if player.position.distance_to(target.position)<=attack_range(special) and world.clear_line(player.position,target.position):
+			if player.position.distance_to(target.position)<=attack_range(special,ordered_slot) and world.clear_line(player.position,target.position):
 				route.clear()
-				attack(special,target.position)
+				attack(special,target.position,ordered_slot)
 			elif pursuit_timer <= 0:
 				# A released click must also pursue a moving statue until its swing.
 				pursuit_timer = .15
 				route = world.path(player.position,target.position)
 	var moved = false
-	var pace = PLAYER_RUN_SPEED*(.5 if slowed>0 else 1.0)
+	var pace = player_pace()
 	if player.busy <= 0:
 		while not route.is_empty() and player.position.distance_to(route[0]) < .06:
 			route.remove_at(0)
 		if not route.is_empty():
 			var offset: Vector3 = route[0]-player.position
-			var speed_scale = .5 if slowed>0 else 1.0
-			var step: float = minf(offset.length(),PLAYER_RUN_SPEED*speed_scale*dt)
+			var step: float = minf(offset.length(),pace*dt)
 			var before: Vector3 = player.position
 			player.position = world.move(before,offset.normalized()*step)
 			var displacement: Vector3 = player.position-before
@@ -453,26 +544,35 @@ func player_control(dt: float) -> void:
 		elif not is_instance_valid(target):
 			var aim: Vector3 = world.pointer()
 			if player.position.distance_to(aim) > .6: player.face(aim)
+	player.visual.walking = walking
 	player.visual.locomotion(moved,player.busy>0,false,1.0,pace)
 
-func attack_range(special: bool) -> float:
-	if special: return 13.0
+func attack_range(special: bool, slot: int = 0) -> float:
+	if special: return skills.reach(run.hotbar[slot])
 	if run.weapon in [2,4]: return 12.5
 	return 1.9
 
-func attack(special: bool, point: Vector3) -> void:
+# The normal attack's clip and timing. Dexterity and Quick Strikes quicken a
+# melee swing (down to Data.MELEE_MINIMUM); Quick Draw, the bow.
+func attack_profile() -> Dictionary:
+	var weapon: int = run.weapon
+	if weapon in [2,4]: return CombatAnimation.profile(weapon,false,Data.passive(run,"quick_draw") if weapon==2 else 0,Data.cooldown(run))
+	return CombatAnimation.profile(weapon,false,Data.melee_attack_speed(run),Data.MELEE_MINIMUM,0.0)
+
+func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	if player.cooldown>0 or player.busy>0 or player.dead or mode!="playing": return
 	if special:
-		skills.cast_slot(0,point)
+		# A skill that cannot be cast (no energy, recharging) ends the order
+		# rather than leaving the hero waiting on it.
+		if not skills.cast_slot(slot,point): order_pending = false
 		return
 	order_pending = false
-	var animation = CombatAnimation.profile(run.weapon,false,Data.passive(run,"quick_draw") if run.weapon==2 else 0,Data.cooldown(run))
+	var animation = attack_profile()
 	player.cooldown = animation.duration
 	player.busy = animation.duration
 	player.face(point)
 	player.begin_strike(point)
 	var damage = Data.damage(run,randf_range(10,15))
-	if skills.war_cry>0: damage *= 1.25
 	var weapon: int = run.weapon
 	if weapon not in [2,4]: scheduled.append({"time":maxf(.01,animation.times[0]-.12),"type":"swing","sound":"swing-spear" if weapon==0 else "swing-blade"})
 	player.visual.play(animation.clip,animation.duration)
@@ -515,18 +615,31 @@ func tick_scheduled(dt: float) -> void:
 				hit_list.sort_custom(func(a,b): return player.position.distance_squared_to(a.position)<player.position.distance_squared_to(b.position))
 				if not (job.special and job.weapon==1) and hit_list.size()>1: hit_list.resize(1)
 				for enemy in hit_list:
-					enemy.hit(job.damage)
+					skills.strike(enemy,job.damage)
 					player.landed_on(enemy)
 					if job.special and job.weapon==0 and not enemy.dead: enemy.position = world.move(enemy.position,job.direction*6.5)
 				if job.special: effect(player.position,4.5,Color(1,.78,.35,.65),.25)
 
+# Carries the hero through the air to land `distance` away after `seconds`
+# (the Leap skill); he cannot be hurt on the way.
+func start_leap(direction: Vector3, distance: float, seconds: float) -> void:
+	leap_duration = seconds
+	leap_left = seconds
+	leap_direction = direction
+	leap_speed = distance/seconds
+	player.invulnerable = seconds
+
 func dash() -> void:
 	if leap_left>0: return
 	if mode!="playing" or player.dead: return
-	if run.energy<10:
-		toast("Evade needs 10 energy.")
+	# Dash Attack adds a Cleave to the dash, and to its cost.
+	var cleaves: bool = run.skills.has("dash_attack") and Book.compatible("cleave",int(run.weapon))
+	var price: float = 10.0+(Data.passive(run,"dash_attack") if cleaves else 0.0)
+	if run.energy<price:
+		toast("Evade needs %d energy." % price)
 		return
-	run.energy -= 10
+	run.energy -= price
+	dash_cleave = cleaves
 	scheduled.clear() # Evading cancels an unfinished wind-up or remaining volley.
 	sound.play("dash-whoosh")
 	skills.pending.clear()
@@ -562,7 +675,7 @@ func out_of_combat() -> bool:
 	return true
 
 func safe_checkpoint() -> bool:
-	return player.position.distance_to(world.spawn)<3 and out_of_combat()
+	return not outdoors() and player.position.distance_to(world.spawn)<3 and out_of_combat()
 
 func equip(index: int) -> void:
 	if index<0 or index>=5 or not run.owned[index]: toast("You do not own that weapon."); return
@@ -589,11 +702,7 @@ func hurt_player(damage: float, type: String = "physical", source = null) -> voi
 		return
 	if player.dead or player.invulnerable>0 or invincible_test or (debug.enabled and debug.invulnerable): return
 	damage = Data.mitigate(damage,10.0,0.0,Data.ENEMY_LEVELS[run.floor],type)
-	damage *= 1.0-Data.passive(run,"bulwark")*.01
-	if skills.guard>0: damage *= .4
-	var absorbed = minf(skills.barrier,damage)
-	skills.barrier -= absorbed
-	damage -= absorbed
+	damage = skills.defend(damage,source)
 	player.hp -= damage
 	combat_age = 0
 	if is_instance_valid(source): source.landed_attack()
@@ -627,7 +736,9 @@ func enemy_died(enemy) -> void:
 		var reward = Data.enemy_xp(run,enemy.kind)
 		var levels = Data.gain_xp(run,reward)
 		float_text(enemy.position,"+%d XP" % reward,Color(.55,.8,1))
-		run.energy = minf(Data.max_energy(run),run.energy+Data.passive(run,"battle_rhythm"))
+		if levels>0:
+			float_text(player.position+Vector3.UP*2.2,"LEVEL %d" % run.level,Color(1,.86,.45))
+			toast("Level %d: %d attribute points and %d skill point%s to spend." % [run.level,run.points,run.skill_points,"" if run.skill_points==1 else "s"])
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
 	if carriers.has(enemy.uid):
 		var drop: Dictionary = carriers[enemy.uid].duplicate()
@@ -642,7 +753,7 @@ func enemy_died(enemy) -> void:
 			if other!=enemy: other.die(false)
 		place_crown()
 		toast("The statue falls. The emperor's crown is yours to claim.")
-	elif remaining()==0 and run.floor<5:
+	elif remaining()==0 and run.floor<5 and not outdoors():
 		world.exit_seal.visible = true
 		toast("The floor is silent. Ascend at the jade stairway.")
 	save_run()
@@ -712,7 +823,10 @@ func tick_projectiles(dt: float) -> void:
 				var closest = Geometry3D.get_closest_point_to_segment(a.position+Vector3.UP,before,after)
 				if closest.distance_to(a.position+Vector3.UP) < (1.1 if a.kind=="boss" else (.9 if p.type=="ice" else .55)):
 					if friendly:
-						a.hit(p.damage,"physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type))
+						var kind: String = "physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type)
+						# The hero's own shots count as his hits.
+						if p.friendly: skills.strike(a,p.damage,kind)
+						else: a.hit(p.damage,kind)
 						p.hit.append(a.uid)
 					else:
 						hurt_player(p.damage,"frost" if p.type=="ice" else "physical",p.source)
@@ -790,6 +904,7 @@ func tick_effects(dt: float) -> void:
 		var e: Dictionary = effects[i]
 		e.life -= dt
 		if e.float: e.node.position.y += dt
+		if e.has("velocity"): e.node.position += e.velocity*dt
 		e.node.visible = world.can_see(e.node.position)
 		e.node.modulate.a = clampf(e.life/e.total,0,1)
 		if e.life<=0:
@@ -819,7 +934,7 @@ func remaining() -> int:
 func interact() -> void:
 	if crown_available and player.position.distance_to(crown_position)<3:
 		ending()
-	elif remaining()==0 and run.floor<5 and player.position.distance_to(world.exit_point)<4:
+	elif not outdoors() and remaining()==0 and run.floor<5 and player.position.distance_to(world.exit_point)<4:
 		next_floor()
 	elif safe_checkpoint():
 		save_run()

@@ -12,10 +12,13 @@ mkdir -p test-results
 "$godot_bin" --headless --path . --editor --import --quit
 run "$godot_bin" --headless --path . --script tests/progression_regression.gd --log-file "$PWD/test-results/progression-regression.log"
 run "$godot_bin" --headless --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-runtime.log"
+run "$godot_bin" --headless --path . --script tests/warrior_skills.gd --log-file "$PWD/test-results/warrior-skills.log"
+run "$godot_bin" --headless --path . --script tests/overworld.gd --log-file "$PWD/test-results/overworld.log"
 run "$godot_bin" --headless --path . --script tests/procedural_maps.gd --log-file "$PWD/test-results/procedural-maps.log"
 run "$godot_bin" --headless --path . --script tests/map_integration.gd --log-file "$PWD/test-results/map-integration.log"
 run "$godot_bin" --headless --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-regression.log"
 run "$godot_bin" --headless --path . --script tests/torch_regression.gd --log-file "$PWD/test-results/torch-regression.log"
+run "$godot_bin" --headless --path . --script tests/floor_tiles.gd --log-file "$PWD/test-results/floor-tiles.log"
 run "$godot_bin" --headless --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-regression.log"
 run "$godot_bin" --headless --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-visuals.log"
 run "$godot_bin" --headless --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-regression.log"
@@ -35,6 +38,7 @@ if [ "${RENDER_TEST:-0}" = "1" ]; then
   run "$godot_bin" --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-render.log" -- --render-bow
   run "$godot_bin" --path . --script tests/torch_regression.gd --log-file "$PWD/test-results/torch-render.log" -- --render-torches
   run "$godot_bin" --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-render.log" -- --render-scenery
+  run "$godot_bin" --path . --script tests/overworld.gd --log-file "$PWD/test-results/overworld-render.log" -- --render-world
   run "$godot_bin" --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-render.log" -- --debug-mode --render-debug-test
   run "$godot_bin" --path . --script tests/hud_regression.gd --log-file "$PWD/test-results/hud-regression.log"
   run "$godot_bin" --path . --script tests/attack_preview.gd --log-file "$PWD/test-results/attack-preview.log"
