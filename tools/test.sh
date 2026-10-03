@@ -25,6 +25,7 @@ run "$godot_bin" --headless --path . --script tests/shield_regression.gd --log-f
 run "$godot_bin" --headless --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover.log"
 run "$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log" -- --test
 run "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"
+run "$godot_bin" --headless --fixed-fps 60 --path . --script tests/statue_physics.gd --log-file "$PWD/test-results/statue-physics.log"
 run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-normal.log"
 run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-regression.log" -- --debug-mode --floor=3 --bow --axe
 run "$godot_bin" --headless --path . --script tests/playground.gd --log-file "$PWD/test-results/playground.log" -- --debug-mode

@@ -615,8 +615,12 @@ decoded with macOS `afconvert` to 48 kHz stereo 16-bit PCM (1.02 s) and its exte
 WAV header rewritten as standard PCM, samples unchanged. It plays when a statue dies:
 instead of falling over, the statue crumbles as in the original game. The body sinks
 and spreads over 0.7 s into a rubble pile (the KayKit rubble mesh in statue stone),
-twelve stone chips (the imported rock mesh) burst out and fall around it, and dust
-rises, all on the combat clock.
+twelve stone chips (the imported rock mesh) burst out as rigid bodies with convex
+collision hulls. They tumble, bounce against the paving and architecture, and settle
+with friction. Normal attacks push them away from the hit; Ground Slam and Leap
+throw them farther outward and upward. The body collapse and dust follow the combat
+clock; the chips use Godot's physics clock, pause with the world, and expire after
+eight seconds. Collision slabs and prop hulls are built when the first statue falls.
 
 `assets/audio/fountain-trickle.wav` is the original game's
 `public/sfx-fountain-trickle.m4a`, decoded without normalization or editing to

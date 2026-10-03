@@ -3,6 +3,7 @@ const Data = preload("res://scripts/data.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const Shockwave = preload("res://scripts/shockwave.gd")
 const Art = preload("res://scripts/assets.gd")
+const StoneFragment = preload("res://scripts/stone_fragment.gd")
 var game
 var pending: Array = []
 var zones: Array = []
@@ -196,11 +197,11 @@ func rhythm_boost() -> float:
 # Every hit the hero lands on an enemy: Offensive Rhythm raises it and gains a
 # stack, and Cursed Blade leaves its extra damage on the target. `bonus` is
 # added after armor (Vampiric Strike's drain).
-func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0) -> void:
+func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO) -> void:
 	if not is_instance_valid(enemy) or enemy.dead or enemy.dormant: return
 	var rhythm: Dictionary = Book.values("offensive_rhythm",rank("offensive_rhythm"))
 	amount *= rhythm_boost()
-	enemy.hit(amount,type,bonus)
+	enemy.hit(amount,type,bonus,death_impact)
 	if rhythm.y>0:
 		offense_stacks = mini(int(rhythm.y),offense_stacks+1)
 		offense_time = rhythm.z
@@ -275,11 +276,13 @@ func execute(job: Dictionary) -> void:
 				game.player.landed_on(enemy)
 			game.effect(origin+direction*1.3,CLEAVE_REACH*2,Color(1,.8,.4,.75),.3)
 		"slam":
-			for enemy in arc_targets(origin,direction,v.y,v.z): strike(enemy,attack_damage(v.x))
+			for enemy in arc_targets(origin,direction,v.y,v.z):
+				strike(enemy,attack_damage(v.x),"physical",0.0,StoneFragment.impact(enemy.position-origin,true))
 			shockwave(origin,direction,v.y,v.z)
 			ground_blow(origin+direction*.9,v.z,SHAKE_SLAM,direction,v.y)
 		"leap":
-			for enemy in targets(origin,LEAP_RADIUS): strike(enemy,attack_damage(v.x))
+			for enemy in targets(origin,LEAP_RADIUS):
+				strike(enemy,attack_damage(v.x),"physical",0.0,StoneFragment.impact(enemy.position-origin,true))
 			game.effect(origin,LEAP_RADIUS*2,Color(1,.55,.13,.95),.5)
 			ground_blow(origin,LEAP_RADIUS,SHAKE_LEAP)
 		"shockwave":

@@ -9,6 +9,7 @@ const Hud = preload("res://scripts/hud.gd")
 const ProgressionUI = preload("res://scripts/progression_ui.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const Save = preload("res://scripts/save.gd")
+const StoneFragment = preload("res://scripts/stone_fragment.gd")
 var run: Dictionary
 var world
 var player
@@ -845,8 +846,9 @@ func tick_projectiles(dt: float) -> void:
 					if friendly:
 						var kind: String = "physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type)
 						# The hero's own shots count as his hits.
-						if p.friendly: skills.strike(a,p.damage,kind)
-						else: a.hit(p.damage,kind)
+						var impact = StoneFragment.impact(p.direction)
+						if p.friendly: skills.strike(a,p.damage,kind,0.0,impact)
+						else: a.hit(p.damage,kind,0.0,impact)
 						p.hit.append(a.uid)
 					else:
 						hurt_player(p.damage,"frost" if p.type=="ice" else "physical",p.source)

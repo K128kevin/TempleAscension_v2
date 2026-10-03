@@ -1,6 +1,7 @@
 extends Node3D
 const Art = preload("res://scripts/assets.gd")
 const Layout = preload("res://scripts/layout.gd")
+const StoneFragment = preload("res://scripts/stone_fragment.gd")
 var layout = Layout.new()
 var boss_point = Vector3.ZERO
 var summon_points: Array[Vector3] = []
@@ -15,6 +16,11 @@ var level = 0
 var occluders: Array = []
 var occlusion_tick = 0.0
 var floor_nodes: Array = []
+# Built on the first death. Paving is batched away after setup, so retain its
+# bounds; solid props retain their final transforms, including turned stairs.
+var debris_floors: Array[AABB] = []
+var debris_props: Array[Node3D] = []
+var debris_collision: StaticBody3D
 var shadow_torches: Array[OmniLight3D] = []
 var torch_lights: Array[Vector3] = []
 # The wall each torch spot is mounted on, as a direction from the torch.
@@ -748,6 +754,8 @@ func place(id: String, pos: Vector3, size: Vector3, mat: Material = null) -> Nod
 	if turn_wall: n.rotation.y = PI/2
 	add_child(n)
 	n.position = pos
+	if id == "floor": debris_floors.append(AABB(pos-Vector3(size.x*.5,0,size.z*.5),size))
+	elif id in ["wall","column","stairs","bookcase"]: debris_props.append(n)
 	if id!="floor": visibility_nodes.append(n)
 	if id in ["column","arch","banner","bookcase"] and pos.y>-1:
 		# Corner architecture sits in solid cells; any seen neighbour reveals it.
@@ -767,6 +775,49 @@ func place(id: String, pos: Vector3, size: Vector3, mat: Material = null) -> Nod
 		faded.albedo_color.a = FADED_ALPHA
 		occluders.append({"root":n,"meshes":n.find_children("*","MeshInstance3D",true,false),"normal":mat,"faded":faded,"hidden":false})
 	return n
+
+func ensure_debris_collision() -> void:
+	if is_instance_valid(debris_collision): return
+	debris_collision = StaticBody3D.new()
+	debris_collision.name = "DebrisCollision"
+	debris_collision.collision_layer = StoneFragment.WORLD_LAYER
+	debris_collision.collision_mask = StoneFragment.DEBRIS_LAYER
+	add_child(debris_collision)
+	# Merge adjacent paving in each row into slabs, leaving stairwell openings
+	# and gaps between rooms intact. This also removes seams under small chips.
+	var rows: Dictionary = {}
+	for box in debris_floors:
+		var key = Vector4(box.position.y,box.position.z,box.size.y,box.size.z)
+		if not rows.has(key): rows[key] = []
+		rows[key].append(box)
+	for row in rows.values():
+		row.sort_custom(func(a,b): return a.position.x < b.position.x)
+		var slab: AABB = row[0]
+		for box in row.slice(1):
+			if box.position.x <= slab.end.x+.001: slab = slab.merge(box)
+			else:
+				debris_slab(slab)
+				slab = box
+		debris_slab(slab)
+	for prop in debris_props:
+		for mesh in prop.find_children("*","MeshInstance3D",true,false):
+			var points = PackedVector3Array()
+			var local: Transform3D = global_transform.affine_inverse()*mesh.global_transform
+			for point in mesh.mesh.get_faces(): points.append(local*point)
+			var hull = ConvexPolygonShape3D.new()
+			hull.points = points
+			hull.margin = .005
+			var collision = CollisionShape3D.new()
+			collision.shape = hull
+			debris_collision.add_child(collision)
+
+func debris_slab(bounds: AABB) -> void:
+	var shape = BoxShape3D.new()
+	shape.size = bounds.size
+	var collision = CollisionShape3D.new()
+	collision.shape = shape
+	collision.position = bounds.get_center()
+	debris_collision.add_child(collision)
 
 func batch_floors() -> void:
 	# GPU instancing reuses the imported paving mesh; no geometry is generated.

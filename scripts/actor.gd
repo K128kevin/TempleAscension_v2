@@ -3,6 +3,7 @@ const Data = preload("res://scripts/data.gd")
 const Motion = preload("res://scripts/combat_animation.gd")
 const Visual = preload("res://scripts/visual.gd")
 const Art = preload("res://scripts/assets.gd")
+const StoneFragment = preload("res://scripts/stone_fragment.gd")
 var game
 var visual
 var kind = "player"
@@ -603,7 +604,7 @@ func react_to_hit(heavy: bool = false) -> void:
 	else: visual.react("HitHead" if hit_reactions%2==0 else "Hit",.34)
 
 # `bonus` is damage added after armor.
-func hit(damage: float, type: String = "physical", bonus: float = 0.0) -> void:
+func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO) -> void:
 	if dead or dormant: return
 	if game.playground != null:
 		# The playground shows every hit, but nothing takes damage.
@@ -618,7 +619,10 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0) -> void:
 	if damage>0: end_stun()
 	game.sound.play("weapon-impact",-15)
 	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),Color(1,.83,.46))
-	if hp <= 0: die()
+	if hp <= 0:
+		if death_impact == Vector3.ZERO:
+			death_impact = StoneFragment.impact(position-game.player.position)
+		die(true,death_impact)
 	else:
 		if not awake: game.awaken(self)
 		react_to_hit()
@@ -662,7 +666,7 @@ func landed_attack() -> void:
 	# (A statue's blow landing on the hero.)
 	landed_on(game.player)
 
-func die(reward: bool = true) -> void:
+func die(reward: bool = true, death_impact: Vector3 = Vector3.ZERO) -> void:
 	if dead or game.playground != null: return
 	dead = true
 	hp = 0
@@ -671,6 +675,6 @@ func die(reward: bool = true) -> void:
 	end_stun()
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	# Statues crumble into a rubble pile, with the original game's crumble sound.
-	visual.crumble()
+	visual.crumble(false,death_impact)
 	game.sound.play("stone-crumble",-8)
 	if reward: game.enemy_died(self)

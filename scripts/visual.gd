@@ -5,6 +5,7 @@ const Vfx = preload("res://scripts/vfx.gd")
 const FootPlanter = preload("res://scripts/foot_planter.gd")
 const HandGrip = preload("res://scripts/hand_grip.gd")
 const ShieldArm = preload("res://scripts/shield_arm.gd")
+const StoneFragment = preload("res://scripts/stone_fragment.gd")
 # A slain statue crumbles, as in the original game: the body collapses into a
 # rubble pile while stone chips burst out and fall around it.
 const CRUMBLE_TIME = .7
@@ -1142,7 +1143,7 @@ func react(action: String, duration: float) -> void:
 	reaction_time = duration
 
 # `settled` shows the finished pile at once (a statue already slain on load).
-func crumble(settled: bool = false) -> void:
+func crumble(settled: bool = false, impact: Vector3 = Vector3.ZERO) -> void:
 	if crumbling >= 0.0: return
 	dead = true
 	state = "Crumble"
@@ -1154,14 +1155,18 @@ func crumble(settled: bool = false) -> void:
 	add_child(rubble)
 	rubble.rotation.y = fposmod(global_position.x*7.1+global_position.z*3.3,TAU)
 	if not settled:
+		var actor = get_parent()
+		if actor.get("game") != null and actor.game.world.has_method("ensure_debris_collision"):
+			actor.game.world.ensure_debris_collision()
 		var seed = global_position.x*12.9898+global_position.z*78.233
 		for i in CHIPS:
 			var angle = TAU*i/CHIPS+sin(seed+i)*.4
-			var chip = Art.model("rock",Vector3.ONE*(.14+.1*fposmod(seed*.37+i*.61,1.0))*size,Art.statue_material())
-			add_child(chip)
-			var reach = (.5+.6*fposmod(seed*.13+i*.29,1.0))*size
-			chip.position = Vector3(0,(.4+1.1*fposmod(i*.47,1.0))*size,0)
-			chips.append({"node":chip,"velocity":Vector3(sin(angle)*reach*2.2,1.6*size,cos(angle)*reach*2.2),"spin":Vector3(3,5,2)*(1+i%3)})
+			var outward = Vector3(sin(angle),0,cos(angle))
+			var diameter = (.18+.12*fposmod(seed*.37+i*.61,1.0))*size
+			var start = global_position+(outward*.28+Vector3.UP*(.4+1.1*fposmod(i*.47,1.0)))*size
+			var scatter = outward*(.55+.45*fposmod(seed*.13+i*.29,1.0))*sqrt(size)
+			var velocity = impact*(.85+.3*fposmod(i*.61,1.0))+scatter+Vector3.UP*.8*sqrt(size)
+			chips.append(StoneFragment.make(self,start,diameter,velocity,Vector3(cos(angle)*4,3,sin(angle)*4)*(1+i%3)))
 		dust = Vfx.particles(self,18,1.2,true,false)
 		dust.explosiveness = .9
 		dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -1188,15 +1193,6 @@ func crumble_step(dt: float) -> void:
 	if is_instance_valid(weapon_item): weapon_item.visible = u<.4
 	if is_instance_valid(nocked_arrow): nocked_arrow.visible = false
 	rubble.scale = Vector3(1.0,.5,1.0)*size*clampf(u*1.3,0.0,1.0)
-	for chip in chips:
-		var node: Node3D = chip.node
-		if node.position.y <= 0.0 and chip.velocity.y < 0.0: continue
-		chip.velocity.y -= 9.8*dt
-		node.position += chip.velocity*dt
-		node.rotation += chip.spin*dt
-		if node.position.y <= 0.0:
-			node.position.y = 0.0
-			chip.velocity = Vector3(0,-1,0)
 	if is_instance_valid(dust): dust.speed_scale = 1.0 if dt>0 else dust.speed_scale
 
 # The ranger's cloak below the waist hangs from chains of bones
