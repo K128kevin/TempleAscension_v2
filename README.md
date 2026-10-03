@@ -113,7 +113,11 @@ The temple stands in a larger world, one continuous outdoor map
   a forge against the north wall with a bed of glowing coals, a fire, a hood
   and a chimney up through the roof, anvils on their logs before it, a
   quenching barrel, two workbenches, a grindstone, racks, crates of iron, and
-  swords, axes and shields hung on pegs along its walls.
+  swords, axes and shields hung on pegs along its walls. Orion, the
+  blacksmith (bald, black-bearded, heavy and strong, in a sleeveless brown
+  tunic; named under the cursor), works there all day: hammering at the
+  anvil, drawing a blade along the grindstone, and stoking the forge with an
+  iron rod, walking from one to the next.
 - **The elders' palace.** From the arena's north gate a paved road runs north
   some fifty metres, through a towered gate in a white wall that shuts the
   hill off from the town (a marble centurion stands either side of it), and
@@ -283,12 +287,15 @@ Percentages of damage are of a normal attack.
 |---|---|---|---|---|
 | Area of Effect | 0 | Cleave | 25 | A 140° → 180° arc for 125% → 165% damage |
 | | 5 | Leap | 40 | Leap to a target in sight (up to 10 m): 100% → 250% to everyone around the landing |
-| | 5 | Ground Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 10 → 21 m |
+| | 5 | Ground Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 10 → 21 m; a shockwave of dust and a shake of the screen |
+| | 0 | War Cry | 30 | Every enemy within 6 → 10 m takes 20% → 100% more damage for 6 → 10 seconds |
+| | 10 | Shield Charge | 35 | Sword and shield only: a charge of 8 → 14 m behind the shield, 100% → 200% to everyone in the path, thrown aside; the first one hit stunned for 1 → 2 seconds |
+| | 10 | Shockwave | 40 | 180% → 360% to everyone within 4 → 7 m, thrown back; 10-second cooldown; a shockwave of dust and a shake of the screen |
 | Single Target | 0 | Powerful Strike | 25 | 200% → 300% to one enemy |
 | | 0 | Shield Bash | 35 | 25% → 50% and a 5 → 10 second stun, broken by damage; 32 → 20 second cooldown; half the stun each time the same target is bashed again within 30 seconds |
 | | 5 | Vampiric Strike | 25 | 80% → 125% plus 3% → 12% of the target's total health, healing the same share of your own |
 | | 5 | Shadow Strike | 25 | 25% → 70%, then 100% → 220% over 5 seconds; refreshes Cursed Blade on the target |
-| | 15 | Execute | 45 | 200% → 450%, only on an enemy below 20% → 40% health |
+| | 10 | Execute | 45 | 200% → 450%, only on an enemy below 20% → 40% health |
 | Passive | 0 | Dash Attack | | The dash ends in a Cleave (at your Cleave's rank, at least 1) and costs 20 → 0 extra energy |
 | | 0 | Shield Expertise | | 5% → 50% chance to block any attack with the shield, for 25% → 80% less damage |
 | | 0 | Endurance | | Energy recovers 10% → 75% faster |
@@ -297,6 +304,21 @@ Percentages of damage are of a normal attack.
 | | 10 | Offensive Rhythm | | Each hit: +5% → 30% damage, up to 5 → 10 stacks, lasting 4 → 12 seconds |
 | | 10 | Defensive Rhythm | | Each hit taken: 3% → 12% less damage, up to 2 → 6 stacks, lasting 4 → 12 seconds |
 | | 10 | Spiked Shield | | A blocked attacker takes 10% → 80% of a normal attack |
+
+With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):
+a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for
+Vampiric and Shadow Strike, the shield shoved out behind a step for Shield Bash, the
+blade wound far back and brought down with the whole body for Execute, driven
+point-first into the ground for Ground Slam, the pommel hammered down from a deep
+crouch for Shockwave, the blade thrust at the sky for War Cry, a braced run behind
+the shield for Shield Charge (the sprint, the shield held straight out before him),
+and for Leap a deep crouch, the spring, the body stretched in the air with the blade
+over the head, and the landing driven down with everything behind it. Leap's
+landing and Ground Slam send a shockwave over the ground: a puff of dust and
+smoke bursting from the point of impact and racing low across the whole area the
+blow reaches (all round the warrior under the leap, across the arc ahead for the
+slam), translucent, swelling as it spreads and thinning to nothing; and the screen
+shakes hard.
 
 Shield Bash is the one skill with a cooldown; energy is the others' only cost.
 Dexterity quickens every melee swing, skills included; Quick Strikes only the
