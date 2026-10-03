@@ -490,6 +490,16 @@ func test():
 		folk.tick(.05,Overworld.START)
 		tasks[folk.orion.state] = true
 	check(tasks.has("anvil") and tasks.has("wheel") and tasks.has("forge") and world.rooms[1].area.has_point(Vector2(folk.orion.at.x,folk.orion.at.z)),"Orion goes between the anvil, the grindstone and the forge, and stays in his smithy (%s)" % str(tasks.keys()))
+	# His tools are their own size in his hand, not stretched with his broad
+	# figure: the hammer a forearm long, the blade and the rod about a metre.
+	var tool_sizes = {}
+	for task in folk.smithy.tools:
+		var longest = 0.0
+		for m in folk.smithy.tools[task].find_children("*","MeshInstance3D",true,false):
+			var box: AABB = m.global_transform*m.get_aabb()
+			longest = maxf(longest,maxf(box.size.x,maxf(box.size.y,box.size.z)))
+		tool_sizes[task] = snappedf(longest,.01)
+	check(tool_sizes.anvil < .5 and tool_sizes.wheel < 1.0 and tool_sizes.forge < 1.15 and folk.smithy.grip.global_basis.get_scale().is_equal_approx(Vector3.ONE),"Orion's hammer, blade and rod are true to size, unskewed (%s)" % str(tool_sizes))
 	check(strayed==0 and kids_in==0 and walled==0,"No one enters the arena, the palace hill or the desert; the children keep out of the inn; none walk through walls (%d, %d, %d)" % [strayed,kids_in,walled])
 
 	# The save keeps the hero's place in the world.

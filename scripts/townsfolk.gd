@@ -152,32 +152,55 @@ func setup(overworld) -> void:
 	orion.body.rotation.y = atan2(smithy.anvil.face.x,smithy.anvil.face.z)
 	# His tools, in the right fist (through it, as the hero's weapons are):
 	# a hammer (an iron head on a wooden shaft), a blade, and an iron rod.
-	var fist = BoneAttachment3D.new()
-	fist.bone_name = "hand_r"
-	orion.body.skeleton.add_child(fist)
+	# They are carried on a grip that follows the fist's place and turn but
+	# not his figure's scale: he is drawn broader than he is tall (his bulk),
+	# and tools inheriting that came out skewed as his hand turned. Each is
+	# in metres, at its own size.
+	var hand = BoneAttachment3D.new()
+	hand.bone_name = "hand_r"
+	orion.body.skeleton.add_child(hand)
+	var fist = Node3D.new()
+	fist.name = "OrionGrip"
+	fist.top_level = true
+	hand.add_child(fist)
+	smithy.grip = fist
+	# (Set once the hand has followed his arm as it is shown, reach and all.)
+	var follow = func(): if fist.is_inside_tree(): fist.global_transform = hand.global_transform.orthonormalized()
+	orion.body.skeleton.skeleton_updated.connect(func(): follow.call_deferred())
+	# Laid out in metres from the fist, out along the tool (the models rise
+	# from their base): the hammer's shaft through the fist, a hand's
+	# breadth showing below it, its iron head across the far end; the blade
+	# held by its grip, the pommel just below the fist; the rod from the fist
+	# out to the coals.
 	var hammer = Node3D.new()
-	var shaft = Art.model("column",Vector3(.028,.36,.028),Kit.planks(Color(.45,.33,.2),2.0))
-	shaft.position = Vector3(0,.18,0)
+	var shaft = Art.model("column",Vector3(.034,.42,.034),Kit.planks(Color(.55,.41,.26),2.0))
+	shaft.position = Vector3(0,-.07,0)
 	hammer.add_child(shaft)
-	var head = Art.model("crate_metal",Vector3(.13,.06,.06),Kit.iron())
-	head.position = Vector3(0,.33,0)
+	var head = Art.model("crate_metal",Vector3(.15,.075,.075),Kit.iron())
+	head.position = Vector3(0,.29,0)
 	hammer.add_child(head)
-	var blade = Art.model("sword",Vector3(.27,1.13,.065),Art.sword_material())
-	blade.position = Vector3(0,-.1,0)
-	var rod = Art.model("column",Vector3(.022,1.1,.022),Kit.iron())
-	rod.position = Vector3(0,.4,0)
-	for tool in [hammer,blade,rod]:
-		fist.add_child(tool)
-		# (A tool's length runs out of the fist on the thumb's side.)
-		tool.rotation.x = PI/2
-		tool.position.y += .075
-		tool.scale = Vector3.ONE/orion.body.size
-		tool.visible = false
-	smithy.tools = {"anvil":hammer,"wheel":blade,"forge":rod}
+	var blade = Art.model("sword",Vector3(.16,.92,.05),Art.sword_material())
+	blade.position = Vector3(0,-.12,0)
+	var rod = Art.model("column",Vector3(.024,1.05,.024),Kit.iron())
+	rod.position = Vector3(0,-.12,0)
+	var held = {}
+	for name in {"anvil":hammer,"wheel":blade,"forge":rod}:
+		var tool: Node3D = {"anvil":hammer,"wheel":blade,"forge":rod}[name]
+		# (A tool's length runs out of the fist on the thumb's side.) Held
+		# by a mount of its own, so the tool keeps the scale that sizes it.
+		var mount = Node3D.new()
+		mount.position = tool.position+Vector3(0,.075,0)
+		mount.rotation.x = PI/2
+		tool.position = Vector3.ZERO
+		mount.add_child(tool)
+		fist.add_child(mount)
+		mount.visible = false
+		held[name] = mount
+	smithy.tools = held
 	smithy.swing = preload("res://scripts/arm_reach.gd").new()
 	smithy.swing.side = "r"
 	orion.body.skeleton.add_child(smithy.swing)
-	hammer.visible = true
+	held.anvil.visible = true
 	for i in ADULTS:
 		var look: Array = LOOKS[i]
 		var wear: float = look[3]
