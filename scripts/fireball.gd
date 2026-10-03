@@ -158,6 +158,9 @@ func explode() -> void:
 	shock = Art.seal(radius*2.2,Color(1,.6,.2,.9))
 	shock.position = Vector3.DOWN*.3
 	add_child(shock)
+	# No coloured ring on the ground marks the blast; the fire, smoke and
+	# scorch do.
+	shock.visible = false
 	scorch = Sprite3D.new()
 	var dark = GradientTexture2D.new()
 	dark.width = 128; dark.height = 128

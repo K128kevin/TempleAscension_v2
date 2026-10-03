@@ -7,6 +7,7 @@ const HandGrip = preload("res://scripts/hand_grip.gd")
 const ShieldArm = preload("res://scripts/shield_arm.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const SwordTrail = preload("res://scripts/sword_trail.gd")
+const BladeCharge = preload("res://scripts/blade_charge.gd")
 # A slain statue breaks apart into individual physics-driven stone fragments:
 # a front sweeps down the body, the stone above it cracking loose (the statue
 # shader's shatter) and each fragment let go as the front reaches it. A blast
@@ -372,10 +373,15 @@ func equip(weapon: String) -> void:
 	weapon_item = null
 	if is_instance_valid(sword_trail): sword_trail.queue_free()
 	sword_trail = null
-	# The hero's hard cuts leave a wake behind the blade.
+	if is_instance_valid(blade_charge): blade_charge.queue_free()
+	blade_charge = null
+	# The hero's hard cuts leave a wake behind the blade, and Ground Slam
+	# charges it.
 	if weapon == "sword" and not is_stone:
 		sword_trail = SwordTrail.new()
 		add_child(sword_trail)
+		# (Carried on the blade once there is one.)
+		blade_charge = BladeCharge.new()
 	if is_instance_valid(equipment):
 		equipment.queue_free()
 		equipment = null
@@ -1191,6 +1197,42 @@ func play_on(action: String, duration: float, start: float) -> void:
 
 # The wake behind the hero's blade as he cuts (scripts/sword_trail.gd).
 var sword_trail: MeshInstance3D
+# A skill's swing leaves the same wake where its blade cuts hard: moving
+# faster than this (metres a second, at life size, its point measured against
+# the body) in the stretch before the blow lands (SKILL_WAKE, shares of the
+# clip before and after its contact). Wind-ups, a leap's spring and thrusts
+# are slower or outside it, and leave none.
+const SKILL_WAKE_SPEED = 15.0
+const SKILL_WAKE = [.25,.05]
+var blade_tip_was = null
+# Ground Slam's charge on the blade (scripts/blade_charge.gd): how strong it
+# is over the swing, as shares of the clip (forming as he raises the sword,
+# surging as he drives it down, breaking off it as it meets the ground,
+# fading after the blow).
+var blade_charge: Node3D
+var slam_struck = false
+# How near the ground (metres, at life size) the blade's point is when it
+# strikes it.
+const SLAM_POINT_DOWN = .3
+const SLAM_RAISED = .36
+const SLAM_GROUND = .40
+const SLAM_BLOW = .52
+const SLAM_FADED = .72
+
+# How charged the blade is `u` of the way through Ground Slam's swing.
+static func slam_charge(u: float) -> float:
+	if u < 0.0: return 0.0
+	if u < SLAM_RAISED: return .55*smoothstep(0.0,SLAM_RAISED,u)
+	if u < SLAM_GROUND: return lerpf(.55,1.0,(u-SLAM_RAISED)/(SLAM_GROUND-SLAM_RAISED))
+	if u < SLAM_BLOW: return 1.0
+	return 1.0-smoothstep(SLAM_BLOW,SLAM_FADED,u)
+
+# Where a skill's blow lands in its swing, as a share of its clip.
+static var skill_contacts: Dictionary = {}
+static func skill_contact(clip: String) -> float:
+	if skill_contacts.is_empty():
+		for swing in preload("res://scripts/skills.gd").WARRIOR_CLIPS.values(): skill_contacts[swing[0]] = swing[2]
+	return skill_contacts.get(clip,-1.0)
 
 # The sword chain (Motion.SWORD_CHAIN): whether one of its swings is still
 # playing (its swing, or the recovery after it), and how far through the clip.
@@ -1510,7 +1552,28 @@ func advance(dt: float) -> void:
 		var swing = swing_phase()/Motion.SWORD_SWING_SHARE
 		var cutting = not dead and Motion.sword_cuts(state) and swing >= Motion.SWORD_WAKE[0] and swing <= Motion.SWORD_WAKE[1]
 		var blade: Transform3D = weapon_item.global_transform
+		var tip: Vector3 = global_transform.affine_inverse()*(blade*Vector3(0,1.02,0))
+		# A skill's swing: where its own clip is playing, how far through.
+		var contact = skill_contact(state)
+		var u = -1.0
+		if contact >= 0.0 and animator.current_animation == clips.get(state,"") and animator.current_animation_length > 0.0:
+			u = animator.current_animation_position/animator.current_animation_length
+		if not cutting and u >= 0.0 and blade_tip_was != null and dt > 0.0:
+			var speed: float = (tip-blade_tip_was).length()/dt/rig.scale.x
+			cutting = not dead and speed > SKILL_WAKE_SPEED and u >= contact-SKILL_WAKE[0] and u <= contact+SKILL_WAKE[1]
+		blade_tip_was = tip
 		sword_trail.step(dt,cutting,blade*Vector3(0,.42,0),blade*Vector3(0,1.02,0))
+		if is_instance_valid(blade_charge):
+			if blade_charge.get_parent() != weapon_item: blade_charge.attach(weapon_item,.42,1.02)
+			var slam_u: float = u if state == "SkillSlam" and not dead else -1.0
+			# The charge breaks off where the blade's point comes down to the
+			# ground, on its way down; its light goes out with it.
+			var point_at: Vector3 = blade_charge.tip()
+			if slam_u < 0.0: slam_struck = false
+			elif not slam_struck and slam_u >= SLAM_RAISED-.06 and slam_u <= SLAM_BLOW and point_at.y-global_position.y < SLAM_POINT_DOWN*rig.scale.x:
+				slam_struck = true
+				blade_charge.discharge(Vector3(point_at.x,global_position.y,point_at.z))
+			blade_charge.step(dt,slam_charge(slam_u),0.0 if slam_struck else slam_charge(slam_u))
 
 # The forward travel to move the unit by since last asked (Actor.tick).
 # How much further the current clip will carry the unit (not yet taken).

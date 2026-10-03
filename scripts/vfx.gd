@@ -2,6 +2,9 @@ extends RefCounted
 ## Shared particle helpers for spell effects. Particles are camera-facing soft
 ## dots; nothing here builds mesh geometry.
 static var soft_dot: GradientTexture2D
+# Additive dots draw with their own shader (assets/shaders/particle_glow.gdshader),
+# one material for all.
+static var glow_material: ShaderMaterial
 
 static func particles(parent: Node3D, count: int, lifetime: float, one_shot: bool, additive: bool) -> CPUParticles3D:
 	if soft_dot == null:
@@ -11,6 +14,9 @@ static func particles(parent: Node3D, count: int, lifetime: float, one_shot: boo
 		soft_dot.fill_from = Vector2(.5,.5); soft_dot.fill_to = Vector2(1,.5)
 		soft_dot.gradient = Gradient.new()
 		soft_dot.gradient.colors = PackedColorArray([Color(1,1,1,1),Color(1,1,1,0)])
+	if glow_material == null:
+		glow_material = ShaderMaterial.new()
+		glow_material.shader = preload("res://assets/shaders/particle_glow.gdshader")
 	var material = StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	# The particle billboard mode ignores each particle's scale in the
@@ -23,7 +29,7 @@ static func particles(parent: Node3D, count: int, lifetime: float, one_shot: boo
 	material.albedo_texture = soft_dot
 	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	var quad = QuadMesh.new()
-	quad.material = material
+	quad.material = glow_material if additive else material
 	var p = CPUParticles3D.new()
 	p.mesh = quad
 	p.amount = count

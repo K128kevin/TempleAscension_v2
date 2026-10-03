@@ -246,26 +246,20 @@ func status() -> String:
 	return " · ".join(parts)
 
 func pulse(at: Vector3, radius: float, damage: float, type: String, slow: float = 0) -> void:
-	game.effect(at,radius*2,Color(.35,.7,1,.8) if type=="frost" else Color(1,.6,.18,.8),.45)
 	for enemy in targets(at,radius):
 		strike(enemy,damage,type)
 		if slow>0: enemy.slow_time = maxf(enemy.slow_time,slow)
 
 # A blow on the ground: a shockwave of dust and smoke racing out across the
-# area it hits (scripts/shockwave.gd), and the screen shaken.
+# area it hits (scripts/shockwave.gd), the screen shaken and the impact heard.
 func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0) -> void:
 	var wave = Shockwave.make(at+Vector3.UP*game.world.lift(at),reach,direction,degrees)
 	game.world.add_child(wave)
 	waves.append(wave)
 	game.shake(shake)
-
-# Ground Slam's shockwave: seals racing out along the arc.
-func shockwave(origin: Vector3, direction: Vector3, degrees: float, distance: float) -> void:
-	var rays = maxi(3,roundi(degrees/18.0))
-	for i in rays:
-		var angle = deg_to_rad(degrees)*(float(i)/(rays-1)-.5)
-		var wave: Dictionary = game.effect(origin,2.6,Color(1,.62,.2,.85),.4)
-		wave.velocity = direction.rotated(Vector3.UP,angle)*distance/.4
+	# The original game's Whirl impact: the blow meeting the ground (Ground
+	# Slam and Shockwave), or the warrior landing (Leap).
+	game.sound.play("whirl-impact",-9)
 
 func execute(job: Dictionary) -> void:
 	var s: Dictionary = Book.all()[job.id]
@@ -280,16 +274,13 @@ func execute(job: Dictionary) -> void:
 			for enemy in arc_targets(origin,direction,v.x,CLEAVE_REACH):
 				strike(enemy,attack_damage(v.y))
 				game.player.landed_on(enemy)
-			game.effect(origin+direction*1.3,CLEAVE_REACH*2,Color(1,.8,.4,.75),.3)
 		"slam":
 			for enemy in arc_targets(origin,direction,v.y,v.z):
 				strike(enemy,attack_damage(v.x),"physical",0.0,StoneFragment.impact(enemy.position-origin,true))
-			shockwave(origin,direction,v.y,v.z)
 			ground_blow(origin+direction*.9,v.z,SHAKE_SLAM,direction,v.y)
 		"leap":
 			for enemy in targets(origin,LEAP_RADIUS):
 				strike(enemy,attack_damage(v.x),"physical",0.0,StoneFragment.impact(enemy.position-origin,true))
-			game.effect(origin,LEAP_RADIUS*2,Color(1,.55,.13,.95),.5)
 			ground_blow(origin,LEAP_RADIUS,SHAKE_LEAP)
 		"shockwave":
 			for enemy in targets(origin,v.y):
@@ -297,11 +288,9 @@ func execute(job: Dictionary) -> void:
 				var away: Vector3 = enemy.position-origin
 				away.y = 0
 				if away.length()>.05: enemy.shove(away.normalized(),SHOCKWAVE_THROW)
-			shockwave(origin,direction,360.0,v.y)
 			ground_blow(origin,v.y,SHAKE_SLAM)
 		"cry":
 			for enemy in targets(origin,v.x): enemy.rally(v.y,v.z)
-			game.effect(origin,v.x*2,Color(1,.75,.3,.6),.5)
 			game.float_text(game.player.position+Vector3.UP*2.3,"War Cry!",Color(1,.8,.4))
 		"charge":
 			# The blow at the end of the run: whoever is still before him.
@@ -315,18 +304,14 @@ func execute(job: Dictionary) -> void:
 			match s.effect:
 				"strike":
 					strike(victim,blow)
-					game.effect(victim.position,2.2,Color(1,.85,.45,.9),.3)
 				"bash":
 					strike(victim,blow)
 					victim.stun(v.y)
-					game.effect(victim.position,2.4,Color(.7,.8,1,.9),.35)
 				"vampiric":
 					strike(victim,blow,"physical",victim.max_hp*v.y*.01)
 					var healed: float = Data.max_health(game.run)*v.y*.01
 					game.player.hp = minf(Data.max_health(game.run),game.player.hp+healed)
 					game.float_text(game.player.position+Vector3.UP*1.8,"+%d" % roundi(healed),Color(.4,1,.55))
-					game.effect(victim.position,2.2,Color(.85,.1,.15,.9),.4)
-					game.effect(origin,2.2,Color(.3,1,.6,.7),.4)
 				"shadow":
 					# The lingering damage is raised by Offensive Rhythm as the blow is.
 					var lingering: float = attack_damage(v.y)*rhythm_boost()
@@ -334,18 +319,14 @@ func execute(job: Dictionary) -> void:
 					if not victim.dead:
 						victim.add_dot("shadow",lingering,SHADOW_SECONDS,1)
 						victim.refresh_dots("curse")
-					game.effect(victim.position,2.4,Color(.5,.25,.85,.9),.45)
 				"execute":
 					# The opening may have closed since the swing began.
 					if victim.hp/victim.max_hp>=v.y*.01: return
 					strike(victim,blow)
-					game.effect(victim.position,2.6,Color(1,.2,.12,.95),.4)
 			game.player.landed_on(victim)
-		"barrier": barrier = value; barrier_time = s.duration; game.effect(origin,3,Color(.4,.5,1),s.duration)
+		"barrier": barrier = value; barrier_time = s.duration
 		"blink":
-			game.effect(origin,2,Color(.6,.4,1),.4)
 			game.player.position = game.world.move(origin,direction*minf(value,origin.distance_to(at)))
-			game.effect(game.player.position,2,Color(.6,.4,1),.4)
 		"shot","multishot","retreat","pierce","firebolt","lance":
 			var spell: bool = s.tag=="spell"
 			var angles = [-.18,0.0,.18] if s.effect=="multishot" else [0.0]
@@ -366,7 +347,6 @@ func execute(job: Dictionary) -> void:
 				var enemy = choices[0]
 				used.append(enemy)
 				strike(enemy,damage,"arcane")
-				for i in 6: game.effect(current.lerp(enemy.position,i/5.0),.5,Color(.6,.7,1),.3)
 				current = enemy.position
 		"mark":
 			var victims = targets(origin,float(s.radius))
@@ -375,8 +355,6 @@ func execute(job: Dictionary) -> void:
 		"snare","trap","rain","blizzard","meteor":
 			var duration: float = s.duration
 			if s.effect in ["snare","trap"]: duration = 15.0*(1+Data.passive(game.run,"trapcraft")*.01)
-			var color = Color(.3,.65,1,.7) if s.effect in ["snare","blizzard"] else Color(1,.6,.2,.7)
-			game.effect(at,s.radius*2,color,duration)
 			zones.append({"effect":s.effect,"at":at,"radius":float(s.radius),"damage":damage,"value":value,"life":duration,"tick":float(s.duration) if s.effect=="meteor" else (1.0 if s.effect=="trap" else 0.0),"pulses":4 if s.effect=="rain" else (5 if s.effect=="blizzard" else 3)})
 
 # Shield Charge's blow on one unit: damage, thrown aside, the first stunned.
@@ -392,7 +370,6 @@ func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
 	if first_hit:
 		enemy.stun(v.z)
 		charge.stunned = true
-	game.effect(enemy.position,2.2,Color(.75,.85,1,.9),.3)
 
 # Dash Attack: an enemy the dash passes through takes the rank's damage and is
 # pushed back, out of the hero's path.
@@ -405,7 +382,6 @@ func dash_hit(enemy, direction: Vector3, struck: Array) -> void:
 	var side: Vector3 = direction.cross(Vector3.UP)
 	var push: Vector3 = (side if aside.dot(side)>=0 else -side)*.7+direction*.7
 	enemy.shove(push.normalized(),DASH_PUSH)
-	game.effect(enemy.position,1.6,Color(.6,.9,1,.7),.25)
 
 func tick(dt: float) -> void:
 	for i in range(waves.size()-1,-1,-1):

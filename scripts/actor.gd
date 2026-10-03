@@ -561,7 +561,6 @@ func rally(percent: float, seconds: float) -> void:
 	if dead or dormant: return
 	rally_bonus = maxf(rally_bonus,percent)
 	rally_time = maxf(rally_time,seconds)
-	game.effect(position,1.8,Color(1,.7,.25,.8),.4)
 
 func stun(seconds: float) -> void:
 	if dead or dormant or laser_time>0: return

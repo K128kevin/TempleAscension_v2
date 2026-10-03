@@ -52,6 +52,8 @@ func setup(owner_game, center: Vector3, blast_radius: float) -> void:
 	shock = Art.seal(radius*2.2,Color(.72,.9,1,.95))
 	shock.position = Vector3.UP*.06
 	add_child(shock)
+	# No coloured ring on the ground marks the blast; the frost and shards do.
+	shock.visible = false
 	var seed = fposmod(center.x*3.7+center.z*1.3,TAU)
 	for i in SHARDS:
 		var angle = seed+TAU*i/SHARDS+sin(i*12.9898)*.08

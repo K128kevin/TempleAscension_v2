@@ -715,7 +715,6 @@ func dash() -> void:
 	player.busy = .2
 	route.clear()
 	target = null
-	effect(player.position,1.8,Color(.6,.9,1,.6),.3)
 
 func heal() -> void:
 	if mode!="playing" or player.dead or heal_cd>0 or player.hp>=Data.max_health(run): return
@@ -726,7 +725,6 @@ func heal() -> void:
 	run.energy -= 60
 	player.hp = minf(Data.max_health(run),player.hp+Data.max_health(run)*.6)
 	heal_cd = 20
-	effect(player.position,3.5,Color(.3,1,.76,.9),2)
 	save_run()
 
 func out_of_combat() -> bool:
@@ -902,7 +900,6 @@ func tick_projectiles(dt: float) -> void:
 			projectiles.remove_at(i)
 
 func blast(at: Vector3, radius: float, damage: float, friendly: bool, skill: bool = false) -> void:
-	effect(at,radius*2,Color(1,.55,.13,.95),.6)
 	area_damage(at,radius,damage,friendly,null,skill)
 
 # The hero's own blasts are his hits (with their chance to crit); a puppet's

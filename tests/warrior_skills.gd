@@ -117,7 +117,7 @@ func test():
 	check(game.skills.cast("ground_slam",origin+forward*5) and game.run.energy==60,"Ground Slam costs 40 energy")
 	wait(.6)
 	check(lost(near)>=10 and lost(near)<=15 and lost(beyond)==0 and lost(off)==0,"Ground Slam rank 1: 100% damage in a 70° arc out to 7 metres")
-	check(game.effects.any(func(e): return e.has("velocity")),"The slam sends a shockwave out along the arc")
+	check(not game.effects.any(func(e): return not e.node is Label3D),"No coloured circles mark the ground it strikes")
 	hero({"cleave":5,"ground_slam":5})
 	var distant = dummy(14.5); var past_reach = dummy(16.5)
 	game.skills.cast("ground_slam",origin+forward*5); wait(.6)

@@ -66,9 +66,10 @@ wood material. Hit reactions for anyone holding a shield (ShieldHit, ShieldHitHe
 ShieldHitKnockdown) keep that 60° forearm turn, so a hit does not flip the shield.
 SwordRun is the sprint with both arms eased toward that carry, so the sword
 stays low and never swings through the head. Staff attacks reuse the Cast
-animation. Class projectiles reuse the arrow and gem meshes; traps, defensive
-effects and area warnings reuse the transparent seal sprite with distinct colors
-and timing. This update adds no externally sourced or generated image assets.
+animation. Class projectiles reuse the arrow and gem meshes. Abilities, the
+hero's and the statues', leave no coloured circles on the ground marking where
+they strike; the seal sprite is kept for the exit, the crown, dropped loot and
+the stun mark. This update adds no externally sourced or generated image assets.
 
 `scripts/visual.gd` scales imported clips to each attack's duration and restarts
 every attack at its wind-up. `scripts/actor.gd` advances animation manually on the
@@ -107,7 +108,7 @@ The Oracle's fire spell is a fireball shot in a straight line (`scripts/fireball
 card drawn by `assets/shaders/fireball.gdshader` renders procedural, flowing fire; an
 ember trail and a travelling light follow it. On impact it swells into an explosion
 that cools from white-hot through orange and red into smoke, with sparks, a light
-flash, a ground shockwave from the existing seal VFX and a fading scorch mark. Damage
+flash and a fading scorch mark (no coloured ring on the ground). Damage
 lands on impact. The Oracle casts it for two seconds, shown by an amber cast bar over
 its head; no ground marking shows where it will land. It adds no
 image asset or mesh geometry.
