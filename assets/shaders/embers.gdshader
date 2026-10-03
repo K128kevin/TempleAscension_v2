@@ -7,6 +7,10 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // a lump, the glow breathing slowly, each lump in its own time.
 uniform vec3 hot : source_color = vec3(1.0, 0.42, 0.08);
 uniform float glow = 2.0;
+// How many lumps across the bed's own breadth, height and depth (a brazier's
+// bowl is small; the smithy's forge is a broad bed of them).
+uniform vec3 grain = vec3(7.0, 3.0, 7.0);
+uniform float fine_grain = 26.0;
 varying vec3 coal_position;
 
 float hash3(vec3 p) {
@@ -46,15 +50,15 @@ void vertex() {
 	// Heaped lumps rather than a smooth dome; only upward, so none push out
 	// through the bowl's side.
 	float border;
-	float r = lump(VERTEX * vec3(7.0, 3.0, 7.0), border);
+	float r = lump(VERTEX * grain, border);
 	VERTEX.y += (smoothstep(0.0, 0.25, border) * 0.25 + r * 0.15) * max(NORMAL.y, 0.0);
 }
 
 void fragment() {
 	float border;
-	float r = lump(coal_position * vec3(7.0, 3.0, 7.0), border);
+	float r = lump(coal_position * grain, border);
 	float fine;
-	lump(coal_position * 26.0, fine);
+	lump(coal_position * fine_grain, fine);
 	// Charcoal: near black, ash grey on some lumps.
 	float ash = smoothstep(0.55, 0.95, r);
 	ALBEDO = mix(vec3(0.035, 0.03, 0.028), vec3(0.22, 0.2, 0.19), ash * 0.6);

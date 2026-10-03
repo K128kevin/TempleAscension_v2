@@ -115,9 +115,14 @@ The temple stands in a larger world, one continuous outdoor map
   quenching barrel, two workbenches, a grindstone, racks, crates of iron, and
   swords, axes and shields hung on pegs along its walls. Orion, the
   blacksmith (bald, black-bearded, heavy and strong, in a sleeveless brown
-  tunic; named under the cursor), works there all day: hammering at the
-  anvil, drawing a blade along the grindstone, and stoking the forge with an
-  iron rod, walking from one to the next.
+  tunic and leather shoes; named under the cursor), works there all day
+  (`scripts/smith.gd`): he takes a sword down from its peg on the north wall,
+  carries it to the anvil, picks up his hammer, lays the blade flat on the
+  anvil's face and beats it (the hammer's face meeting the steel at each
+  stroke, with a few sparks); hangs it back; works the forge's coals with an
+  iron rod; then takes the sword to the grindstone and holds its edge across
+  the turning stone, sparks flying. The arms on the walls are bright steel on
+  dark hafts, with swords and shields like the warrior's own.
 - **The elders' palace.** From the arena's north gate a paved road runs north
   some fifty metres, through a towered gate in a white wall that shuts the
   hill off from the town (a marble centurion stands either side of it), and

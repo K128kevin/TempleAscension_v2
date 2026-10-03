@@ -485,21 +485,47 @@ func test():
 	check(least>=3 and most<=8,"Between three and eight are in the inn at every moment (%d to %d)" % [least,most])
 	check(served>=6,"Anya has served drinks to those at the tables (%d)" % served)
 	check(chats>=2,"Townspeople who pass stop to talk (%d chats)" % (chats/2))
+	# Orion's day: he takes a sword down from the wall and beats it on the
+	# anvil, works the forge's coals, and grinds the sword on the turning stone.
+	var smith = folk.smith
 	var tasks = {}
-	for step in 2400:
+	var held = {}
+	var blade_low = INF
+	var head_low = INF
+	var turned = 0.0
+	var wheel_was: Basis = smith.wheel.basis
+	var anvil_top: float = smith.places.face.y
+	for step in 3600:
 		folk.tick(.05,Overworld.START)
-		tasks[folk.orion.state] = true
-	check(tasks.has("anvil") and tasks.has("wheel") and tasks.has("forge") and world.rooms[1].area.has_point(Vector2(folk.orion.at.x,folk.orion.at.z)),"Orion goes between the anvil, the grindstone and the forge, and stays in his smithy (%s)" % str(tasks.keys()))
+		if smith.plan.is_empty(): continue
+		var doing: Dictionary = smith.plan[0]
+		if not doing.has("work"): continue
+		tasks[doing.work] = true
+		for side in smith.hands: held[doing.work+":"+side] = smith.hands[side].tool
+		if doing.work == "hammer":
+			for m in smith.tools.sword.node.find_children("*","MeshInstance3D",true,false): blade_low = minf(blade_low,(m.global_transform*m.get_aabb()).position.y)
+			for m in smith.tools.hammer.node.find_children("*","MeshInstance3D",true,false):
+				if m.get_parent().position.y > .2: head_low = minf(head_low,(m.global_transform*m.get_aabb()).position.y)
+		if doing.work == "grind":
+			turned += wheel_was.x.normalized().angle_to(smith.wheel.basis.x.normalized())
+			wheel_was = smith.wheel.basis
+	check(tasks.has("hammer") and tasks.has("grind") and tasks.has("stoke") and world.rooms[1].area.has_point(Vector2(folk.orion.at.x,folk.orion.at.z)),"Orion goes between the anvil, the grindstone and the forge, and stays in his smithy (%s)" % str(tasks.keys()))
+	check(held.get("hammer:l","")=="sword" and held.get("hammer:r","")=="hammer" and held.get("grind:r","")=="sword" and held.get("stoke:r","")=="rod","He holds the sword he took down in his left hand and the hammer in his right at the anvil, the sword in his right at the grindstone, the rod at the forge (%s)" % str(held))
+	check(absf(blade_low-anvil_top)<.004,"The sword lies on the anvil's face, not in it (%.3fm above)" % (blade_low-anvil_top))
+	check(absf(head_low-(anvil_top+smith.SWORD.z))<.012,"The hammer's face comes down onto the blade, and no further (%.3fm above it)" % (head_low-anvil_top-smith.SWORD.z))
+	check(turned>20.0,"The grindstone turns while he grinds (%.0f radians)" % turned)
 	# His tools are their own size in his hand, not stretched with his broad
 	# figure: the hammer a forearm long, the blade and the rod about a metre.
 	var tool_sizes = {}
-	for task in folk.smithy.tools:
+	for tool in smith.tools:
 		var longest = 0.0
-		for m in folk.smithy.tools[task].find_children("*","MeshInstance3D",true,false):
+		for m in smith.tools[tool].node.find_children("*","MeshInstance3D",true,false):
 			var box: AABB = m.global_transform*m.get_aabb()
 			longest = maxf(longest,maxf(box.size.x,maxf(box.size.y,box.size.z)))
-		tool_sizes[task] = snappedf(longest,.01)
-	check(tool_sizes.anvil < .5 and tool_sizes.wheel < 1.0 and tool_sizes.forge < 1.15 and folk.smithy.grip.global_basis.get_scale().is_equal_approx(Vector3.ONE),"Orion's hammer, blade and rod are true to size, unskewed (%s)" % str(tool_sizes))
+		tool_sizes[tool] = snappedf(longest,.01)
+		check(smith.tools[tool].node.global_basis.get_scale().is_equal_approx(Vector3.ONE),"Orion's tool is unskewed: "+tool)
+	check(tool_sizes.hammer < .5 and tool_sizes.sword < 1.0 and tool_sizes.rod < 1.15,"Orion's hammer, blade and rod are true to size (%s)" % str(tool_sizes))
+	check(folk.orion.body.look.has("shoes") and folk.orion.body.figure.position.y > .05,"Orion wears shoes, and stands on the smithy's tiles rather than in them")
 	check(strayed==0 and kids_in==0 and walled==0,"No one enters the arena, the palace hill or the desert; the children keep out of the inn; none walk through walls (%d, %d, %d)" % [strayed,kids_in,walled])
 
 	# The save keeps the hero's place in the world.

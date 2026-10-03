@@ -323,6 +323,8 @@ func test():
 	check(foe.daze=="" and not foe.stunned,"Damage ends it")
 	check(game.skills.reason("throw_sand").begins_with("Recharging: 4"),"It recharges for 45 seconds")
 	hero({"throw_sand":5},5)
+	# (It has wandered: put back in reach.)
+	foe.position = origin+forward*2.4
 	game.skills.cast("throw_sand",foe.position)
 	check(game.player.visual.state=="SkillSandL","With the dagger in his right hand he throws with the left")
 	play(.6)

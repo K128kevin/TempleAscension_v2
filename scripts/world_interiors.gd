@@ -9,6 +9,7 @@ extends RefCounted
 ## its stair as he climbs the palace hill, and whatever is set down on a deck
 ## stands at its height.
 const Kit = preload("res://scripts/world_art.gd")
+const Art = preload("res://scripts/assets.gd")
 const BAY = 4.0
 const MODULES = {"w":"wall","d":"wall_door","s":"wall_window","a":"wall_arched","o":"wall_archwindow","p":"arch","b":"wall_broken"}
 # The inn's loft stands this far above its floor.
@@ -180,6 +181,30 @@ static func inn(world, tint: Color, wood: Color) -> Dictionary:
 
 # The smithy: the forge and its chimney against the north wall, anvils before
 # it, benches, a grindstone, and the smith's work hung on every wall.
+# Where Orion's work is, from the smithy's corner (scripts/smith.gd): his
+# anvil (from the forge), the grindstone and its axle (in the model's own
+# unit space, about which tools/prepare_whetstone.py cut the wheel free),
+# and the foot of the sword he takes down from the north wall.
+const ANVIL = Vector3(-1.5,0,3.3)
+const WHEEL = Vector3(12.6,0,9.0)
+const WHEEL_AXLE = Vector3(0,.70,0)
+# (The stone itself sits this far north of the frame's middle, in metres.)
+const WHEEL_STONE = -.077
+const WORK_SWORD = Vector3(4.6,1.3,1.17)
+# The smithy's finished arms: each kind's size (smaller than the heroes'
+# carry them), and how far up its length the steel begins (a sword and a
+# shield are finished as the warrior's own).
+const ARMS = {"sword":[Vector3(.15,.9,.06),0.0],"sword_long":[Vector3(.34,1.15,.1),.27],"axe":[Vector3(.66,1.0,.14),.6],
+	"hand_axe":[Vector3(.36,.64,.09),.55],"axe_bronze":[Vector3(.2,.58,.04),.62],"shield":[Vector3(.6,.6,.12),0.0],"scutum":[Vector3(.56,.78,.2),0.0]}
+
+# One of them, hung or leaning at `at`.
+static func arm(world, id: String, at: Vector3, yaw: float) -> Node3D:
+	var finish: Material = Art.arms_material(ARMS[id][1])
+	if id == "sword": finish = Art.sword_material()
+	elif id == "shield": finish = Art.gladiator_shield()
+	elif id == "scutum": finish = Art.metal()
+	return made(world,id,at,ARMS[id][0],finish,yaw)
+
 static func smithy(world, tint: Color, wood: Color) -> Dictionary:
 	var c = SMITHY
 	var size = Vector2(SMITHY_BAYS.x*BAY,SMITHY_BAYS.y*BAY)
@@ -197,16 +222,31 @@ static func smithy(world, tint: Color, wood: Color) -> Dictionary:
 	made(world,"pillar",forge+Vector3(0,2.45,.85),Vector3(2.9,.75,1.7),soot)
 	made(world,"pillar",forge+Vector3(0,3.0,.75),Vector3(1.3,3.6,1.3),soot)
 	world.block_rect(Rect2(forge.x-1.6,c.z+1.0,3.2,1.9),world.LOW,false)
-	var coals = made(world,"rubble",forge+Vector3(0,.93,1.0),Vector3(1.9,.22,1.0),Kit.embers())
-	for mesh in coals.find_children("*","MeshInstance3D",true,false): mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# A bed of burning coals in the hearth: lumps of charcoal, glowing in the
+	# cracks between them (the temple's braziers' coals, spread wide).
+	var coals = MeshInstance3D.new()
+	coals.mesh = SphereMesh.new()
+	coals.mesh.radial_segments = 64
+	coals.mesh.rings = 24
+	var burning = ShaderMaterial.new()
+	burning.shader = load("res://assets/shaders/embers.gdshader")
+	burning.set_shader_parameter("grain",Vector3(34,3,18))
+	burning.set_shader_parameter("fine_grain",90.0)
+	burning.set_shader_parameter("glow",1.1)
+	coals.material_override = burning
+	coals.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	coals.scale = Vector3(2.2,.13,1.15)
+	coals.position = forge+Vector3(0,.95,1.0)
+	world.add_child(coals)
 	var glow = lamp(world,forge+Vector3(0,1.5,1.3),2.2,9.0,Color(1.0,.52,.20))
 	var fire = preload("res://scripts/torch_flame.gd").new()
 	fire.position = forge+Vector3(0,1.05,1.0)
 	fire.scale = Vector3.ONE*1.5
 	world.add_child(fire)
 	fire.setup(glow,37.0)
-	# Anvils on their logs before it, the quenching barrel, water, coal.
-	put(world,"anvil_log",forge+Vector3(-1.5,0,3.3),1.07,.4,.55)
+	# Anvils on their logs before it, the quenching barrel, water, coal. (The
+	# first is Orion's: its face runs east and west before him.)
+	var anvil = put(world,"anvil_log",forge+ANVIL,1.07,0.0,.55)
 	put(world,"anvil_log",forge+Vector3(1.7,0,3.6),1.07,-.5,.55)
 	put(world,"anvil",forge+Vector3(.2,0,5.4),.56,1.2,.5)
 	put(world,"barrel",forge+Vector3(2.3,0,.9),1.0,0.0,.4)
@@ -219,40 +259,44 @@ static func smithy(world, tint: Color, wood: Color) -> Dictionary:
 		put(world,"workbench",Vector3(c.x+1.7,0,z),.9,PI/2)
 		world.block_rect(Rect2(c.x+1.0,z-1.0,1.3,2.0),world.LOW,false)
 	put(world,"workbench_drawers",Vector3(c.x+1.5,.9,c.z+2.7),.24,PI/2)
-	made(world,"hand_axe",Vector3(c.x+1.7,.93,c.z+3.6),Vector3(.5,.9,.12),iron,.4).rotation.x = PI/2
-	made(world,"sword",Vector3(c.x+1.7,.93,c.z+6.2),Vector3(.27,1.13,.065),null,-.3).rotation.x = PI/2
+	made(world,"hand_axe",Vector3(c.x+1.7,.93,c.z+3.6),ARMS.hand_axe[0],Art.arms_material(ARMS.hand_axe[1]),.4).rotation.x = PI/2
+	made(world,"sword",Vector3(c.x+1.7,.93,c.z+6.2),ARMS.sword[0],Art.sword_material(),-.3).rotation.x = PI/2
 	put(world,"mug",Vector3(c.x+1.5,.9,c.z+7.2),.17)
 	put(world,"crate_metal",Vector3(c.x+1.6,0,c.z+9.2),.85,.1,.5)
 	put(world,"crate_metal",Vector3(c.x+1.5,0,c.z+10.2),.7,.6,.4)
-	# The grindstone, racks of finished arms, a chest.
-	put(world,"whetstone",Vector3(c.x+12.6,0,c.z+9.0),1.17,-.5,.6)
+	# The grindstone (its wheel apart from its frame, to turn: its axle runs
+	# north and south), racks of finished arms, a chest.
+	var stone_size: Vector3 = Kit.sized("whetstone",1.17)
+	put(world,"whetstone",c+WHEEL,1.17,0.0,.6)
+	var wheel = world.place("whetstone_wheel",c+WHEEL+WHEEL_AXLE*stone_size,stone_size)
 	for z in [c.z+3.4,c.z+5.6]:
 		put(world,"weapon_stand",Vector3(c.x+14.3,0,z),1.25,-PI/2)
 		world.block_rect(Rect2(c.x+13.7,z-.7,1.3,1.4),world.LOW,false)
 	put(world,"chest",Vector3(c.x+14.2,0,c.z+7.6),.7,-PI/2,.5)
 	# Arms hang from pegs on the north wall, either side of the forge, and on
-	# the east wall.
+	# the east wall: swords and shields as the warrior's own, axes and long
+	# swords in bright steel on dark hafts.
 	var wall = c.z+1.12
-	for rack in [c.x+3.2,c.x+5.6,c.x+12.6]: put(world,"peg_rack",Vector3(rack,2.55,wall),.35)
-	var hung = [["sword",2.2,1.35,Vector3(.27,1.13,.065)],["sword_long",3.0,.95,Vector3(.58,1.65,.17)],["axe",4.0,.95,Vector3(1.05,1.5,.22)],
-		["hand_axe",5.2,1.45,Vector3(.52,.92,.13)],["axe_bronze",6.0,1.55,Vector3(.29,.83,.05)],["sword",6.7,1.35,Vector3(.27,1.13,.065)],
-		["shield_round",11.6,1.5,Vector3(.9,.9,.33)],["scutum",12.8,1.25,Vector3(.88,1.19,.30)],["shield",13.9,1.6,Vector3(.7,.7,.2)]]
-	# (The kit paints these in its heroes' colours; here they are bare iron and timber.)
-	var plain = {"sword_long":iron,"axe":iron,"hand_axe":iron,"shield_round":timber,"scutum":timber}
-	for piece in hung: made(world,piece[0],Vector3(c.x+piece[1],piece[2],wall),piece[3],plain.get(piece[0]))
+	for rack in [c.x+3.2,c.x+5.6,c.x+12.6]: put(world,"peg_rack",Vector3(rack,2.4,wall),.35)
+	var hung = [["sword",2.3,1.45],["sword_long",3.0,1.15],["axe",3.8,1.3],["hand_axe",5.4,1.7],["axe_bronze",6.0,1.72],["sword",6.6,1.45],
+		["shield",11.6,1.6],["scutum",12.7,1.45],["shield",13.8,1.6]]
+	for piece in hung: arm(world,piece[0],Vector3(c.x+piece[1],piece[2],wall),0.0)
+	# (The sword Orion works on hangs by itself, low enough to take down:
+	# scripts/smith.gd hangs it at WORK_SWORD.)
+	put(world,"peg_rack",c+Vector3(WORK_SWORD.x,WORK_SWORD.y+.95,1.12),.3)
 	var east = c.x+size.x-1.12
-	for rack in [c.z+2.2,c.z+4.6,c.z+6.8]: put(world,"peg_rack",Vector3(east,2.55,rack),.35,-PI/2)
-	var more = [["sword",1.6,1.35,Vector3(.27,1.13,.065)],["hand_axe",2.3,1.45,Vector3(.52,.92,.13)],["sword",2.9,1.35,Vector3(.27,1.13,.065)],
-		["axe",4.1,.95,Vector3(1.05,1.5,.22)],["sword_long",5.1,.95,Vector3(.58,1.65,.17)],["scutum",6.3,1.25,Vector3(.88,1.19,.30)],
-		["axe_bronze",7.2,1.55,Vector3(.29,.83,.05)],["sword",7.8,1.35,Vector3(.27,1.13,.065)]]
-	for piece in more: made(world,piece[0],Vector3(east,piece[2],c.z+piece[1]),piece[3],plain.get(piece[0]),-PI/2)
+	for rack in [c.z+2.2,c.z+4.6,c.z+6.8]: put(world,"peg_rack",Vector3(east,2.4,rack),.35,-PI/2)
+	var more = [["sword",1.6,1.45],["hand_axe",2.3,1.7],["sword",2.9,1.45],["axe",4.1,1.3],["sword_long",5.1,1.15],["shield",6.3,1.6],
+		["axe_bronze",7.2,1.72],["sword",7.8,1.45]]
+	for piece in more: arm(world,piece[0],Vector3(east,piece[2],c.z+piece[1]),-PI/2)
 	# More lean on the racks and in the corner by the forge.
 	for spot in [[14.0,3.0,.25,"sword_long"],[14.05,3.8,-.2,"sword"],[14.0,5.2,.3,"axe"],[14.05,6.0,-.25,"sword"],[10.9,1.35,.2,"sword_long"],[11.25,1.3,-.3,"hand_axe"]]:
-		var leaning = made(world,spot[3],Vector3(c.x+spot[0],.05,c.z+spot[1]),{"sword":Vector3(.27,1.13,.065),"sword_long":Vector3(.58,1.65,.17),"axe":Vector3(1.05,1.5,.22),"hand_axe":Vector3(.52,.92,.13)}[spot[3]],plain.get(spot[3]),-PI/2 if spot[0]>13.0 else 0.0)
-		leaning.rotation.z = spot[2]
-	put(world,"peg_rack",Vector3(east,2.55,c.z+9.4),.35,-PI/2)
-	made(world,"sword_long",Vector3(east,.95,c.z+8.9),Vector3(.58,1.65,.17),iron,-PI/2)
-	made(world,"pickaxe",Vector3(east,1.3,c.z+9.8),Vector3(.81,1.2,.14),null,-PI/2)
-	made(world,"shield_round",Vector3(east,1.5,c.z+10.6),Vector3(.9,.9,.33),timber,-PI/2)
+		arm(world,spot[3],Vector3(c.x+spot[0],.05,c.z+spot[1]),-PI/2 if spot[0]>13.0 else 0.0).rotation.z = spot[2]
+	put(world,"peg_rack",Vector3(east,2.4,c.z+9.4),.35,-PI/2)
+	arm(world,"sword_long",Vector3(east,1.15,c.z+8.9),-PI/2)
+	made(world,"pickaxe",Vector3(east,1.4,c.z+9.8),Vector3(.6,.9,.1),null,-PI/2)
+	arm(world,"shield",Vector3(east,1.6,c.z+10.6),-PI/2)
+	room["anvil"] = anvil
+	room["wheel"] = wheel
 	put(world,"lantern",Vector3(c.x+2.0,1.9,c.z+1.1),.8)
 	return room

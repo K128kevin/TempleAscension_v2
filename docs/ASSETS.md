@@ -269,11 +269,15 @@ bushes; they were replaced.)
   handle and wrapped round its bar, the thumb resting on top, the body off the
   palm's side (the mug prop's handle is on its +X side, its body off-centre the
   other way, as the prop was centred on its bounds). Orion the blacksmith is a
-  townsman given a heavy build (the figure broadened across and through) and
-  tools in his right fist: a hammer assembled from the column and metal-crate
-  props, the game's sword, and the column as an iron rod; a second arm reach drives
-  that arm through his hammer strokes, the blade's draw along the grindstone and the
-  rod's stirring in the coals. `scripts/townsperson.gd` dresses a figure and
+  townsman given a heavy build (the figure broadened across and through), shoes
+  (a shell of leather drawn over his feet: `assets/shaders/shoes.gdshader`) and
+  tools: a hammer assembled from the column and metal-crate props, the game's
+  sword, and the column as an iron rod. `scripts/smith.gd` runs his work: each
+  tool is put exactly where the work needs it and the hand holding it follows by
+  IK (`scripts/arm_reach.gd`, which turns the fist to lie round the tool with the
+  wrist straight), while he bends over it from the waist (`scripts/body_lean.gd`).
+  The grindstone's wheel is cut from its frame by `tools/prepare_whetstone.py`
+  (`whetstone_wheel.glb`) so that it can turn. `scripts/townsperson.gd` dresses a figure and
   `scripts/townsfolk.gd` runs the town: its own A* grid of the streets (the arena,
   palace hill, smithy and the inn's loft closed), the seats at the inn's tables,
   the inn's occupancy rules, Anya's rounds and the children's games.
@@ -291,10 +295,11 @@ bushes; they were replaced.)
   chests, workbenches, the grindstone, anvils, pegs and the rest are the props kit's
   models in its own trim materials. The forge is built of the town's masonry in
   blackened stone (a hearth, an arched firebox, a hood and a chimney), with a bed
-  of coals (`Kit.embers`, burnt stone that glows), the torches' flame, and a warm
-  light that reaches the room. The arms on the smithy's walls are the game's own
-  weapon models; the adventurers kit's, which come painted in its heroes' colours,
-  are given bare iron (`Kit.iron`) or timber.
+  of coals (the temple braziers' burning charcoal, `assets/shaders/embers.gdshader`,
+  spread wide), the torches' flame, and a warm light that reaches the room. The arms
+  on the smithy's walls are the game's own weapon models, smaller than the heroes'
+  carry them: swords and round shields finished as the warrior's own, the rest in
+  bright steel on dark wood (`assets/shaders/arms.gdshader`).
 - **Gold and marble.** Gold is the rock grain photograph tinted to gold with a little
   metal and its own faint glow (the outdoor scene has no sky to reflect); marble is
   `statue_marble.png` laid at one size in the world (plinths, kerbs, columns, the

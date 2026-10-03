@@ -41,6 +41,16 @@ static func dagger_material() -> ShaderMaterial:
 	materials.dagger = m
 	return m
 
+# Arms hung in the smithy: steel from `metal_from` of their length up, wood below.
+static func arms_material(metal_from: float) -> ShaderMaterial:
+	var key = "arms%.2f" % metal_from
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/arms.gdshader")
+	m.set_shader_parameter("metal_from",metal_from)
+	materials[key] = m
+	return m
+
 static var rest_meshes: Dictionary = {}
 
 # A copy of a skinned mesh carrying its rest-pose positions in CUSTOM0 and

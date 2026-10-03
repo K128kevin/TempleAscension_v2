@@ -8,6 +8,7 @@ extends Node3D
 ##   skin      "light" or "dark", and `tone`, a tint over it; `dirt` 0…1
 ##   hair      a hairstyle of that body's, or ""; `hair_colour`; `beard`; `braid`
 ##   belt      a colour, or null for none
+##   shoes     a colour of leather, or none: most go barefoot
 ##   size      its height against the body's own (a child is about .6)
 ##   bulk      0 as the body comes; 1 broad and heavy (thick trunk, arms and neck)
 const Kit = preload("res://scripts/world_art.gd")
@@ -84,6 +85,13 @@ func setup(appearance: Dictionary) -> void:
 			mesh.free()
 			continue
 		mesh.material_override = material
+		# Shoes are drawn over the feet (assets/shaders/shoes.gdshader).
+		if part == "Body" and look.get("shoes") != null:
+			var shoes = ShaderMaterial.new()
+			shoes.shader = load("res://assets/shaders/shoes.gdshader")
+			shoes.set_shader_parameter("leather",look.shoes)
+			shoes.set_shader_parameter("grit",load("res://assets/textures/rock_detail.jpg"))
+			mesh.material_overlay = shoes
 		# (A figure's bounds follow its skeleton; a seated or reaching one
 		# must not be culled by where it stood at rest.)
 		mesh.extra_cull_margin = 1.0
