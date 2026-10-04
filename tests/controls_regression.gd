@@ -201,6 +201,27 @@ func run_tests():
 	victim.hp = 10000
 	advance(1.1)
 	check(victim.hp<10000,"Released enemy click repaths to a moving target and lands its attack")
+	# A held move order dragged over a statue keeps walking; it does not attack.
+	reset()
+	victim.position = origin+right*2.5
+	victim.hp = 10000
+	await point_at(origin-right*2)
+	button(MOUSE_BUTTON_LEFT,true)
+	advance(.15)
+	await point_at(victim.position+Vector3.UP*victim.config.size)
+	check(game.clicked_enemy()==victim,"Held move cursor is over the statue")
+	advance(1.5)
+	check(victim.hp==10000 and not is_instance_valid(game.target),"Held move order dragged over a statue does not attack it")
+	check(game.player.position.distance_to(victim.position)<1.6,"Held move order walks on toward the cursor over the statue")
+	button(MOUSE_BUTTON_LEFT,false)
+	# A hold begun on a statue still attacks it.
+	reset()
+	victim.hp = 10000
+	await point_at(victim.position+Vector3.UP*victim.config.size)
+	button(MOUSE_BUTTON_LEFT,true)
+	advance(1.5)
+	button(MOUSE_BUTTON_LEFT,false)
+	check(victim.hp<10000,"Hold begun on a statue attacks it")
 	var report = {"passed":passed.size(),"failed":failed,"checks":passed}
 	var file = FileAccess.open("res://test-results/controls-regression.json",FileAccess.WRITE)
 	file.store_string(JSON.stringify(report,"  "))

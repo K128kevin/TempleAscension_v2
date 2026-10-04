@@ -54,6 +54,8 @@ const VOLLEY_STAGGER = .05/3.0
 const VOLLEY_HIT = 1.1
 const VOLLEY_FALL = .45
 const LIGHTNING_LEAP = 10.0
+# How much of the last strike's damage Lightning Shot carries to the next.
+const LIGHTNING_FADE = .8
 const POISON_SECONDS = 5.0
 const FRENZY_COOLDOWN = 30.0
 const SAND_COOLDOWN = 45.0
@@ -381,7 +383,8 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 			weaken(enemy,extra.percent,extra.cap)
 		"lightning":
 			strike(enemy,p.damage,"lightning",0.0,impact,true,2)
-			# It leaps on from one to the next, never to the same twice.
+			# It leaps on from one to the next, never to the same twice, each
+			# leap 20% weaker than the one before (LIGHTNING_FADE).
 			var struck: Array = [enemy]
 			var from = enemy
 			for leap in int(extra.leaps):
@@ -390,7 +393,7 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 				choices.sort_custom(func(a,b): return a.position.distance_squared_to(from.position)<b.position.distance_squared_to(from.position))
 				var next = choices[0]
 				passing.append([RangerFx.bolt(game.world,from.position+Vector3.UP*1.1,next.position+Vector3.UP*1.1),.22])
-				strike(next,attack_damage(extra.percent,"ranged"),"lightning",0.0,Vector3.ZERO,true,2)
+				strike(next,attack_damage(extra.percent,"ranged")*pow(LIGHTNING_FADE,leap+1),"lightning",0.0,Vector3.ZERO,true,2)
 				struck.append(next)
 				from = next
 		_: strike(enemy,p.damage,"physical",0.0,impact,p.skill,2)

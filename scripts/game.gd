@@ -35,6 +35,9 @@ var walking = false
 var route = PackedVector3Array()
 var left_held = false
 var right_held = false
+# A left hold that began on open ground is a move order: dragging it over a
+# statue keeps walking rather than turning into an attack.
+var move_hold = false
 var hold_timer = 0.0
 var pursuit_timer = 0.0
 var order_pending = false
@@ -490,7 +493,7 @@ func cast_key(slot: int) -> void:
 	if skills.reach(run.hotbar[slot])<13.0 and is_instance_valid(clicked_enemy()) and not Input.is_physical_key_pressed(KEY_SHIFT): issue_click(true,slot)
 	else: skills.cast_slot(slot,aim_point())
 
-func issue_click(special: bool, slot: int = 0) -> void:
+func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
 	order_pending = false
 	hold_timer = .08
 	pursuit_timer = .15
@@ -499,7 +502,8 @@ func issue_click(special: bool, slot: int = 0) -> void:
 		route.clear()
 		attack(special,aim_point(),slot)
 		return
-	var clicked = clicked_enemy()
+	var clicked = null if held and move_hold and not special else clicked_enemy()
+	if not held and not special: move_hold = clicked == null
 	if clicked:
 		target = clicked
 		order_pending = true
@@ -553,7 +557,7 @@ func player_control(dt: float) -> void:
 		if right_held and hold_timer <= 0:
 			issue_click(true)
 		elif left_held and not is_instance_valid(target) and hold_timer <= 0:
-			issue_click(false)
+			issue_click(false,0,true)
 		if is_instance_valid(target):
 			var special: bool = ordered_special
 			if player.position.distance_to(target.position)<=attack_range(special,ordered_slot) and world.clear_line(player.position,target.position):
@@ -892,6 +896,9 @@ func tick_pickups(dt: float) -> void:
 # Metres per second: arrows, and the casters' bolts and ice.
 const ARROW_SPEED = 20.6
 const BOLT_SPEED = 10.3
+# How far the hero's arrows fly (the bow's reach, as Skills.reach): an arrow
+# carried on through its targets by Penetrating Arrows stops there all the same.
+const ARROW_REACH = 13.0
 
 # `skill`: a skill's shot rather than the normal attack's.
 # `extra`: what one of the ranger's arrows carries besides its damage
@@ -919,7 +926,9 @@ func tick_projectiles(dt: float) -> void:
 		var after: Vector3 = before+p.direction*(ARROW_SPEED if p.type=="arrow" else BOLT_SPEED)*dt
 		p.node.visible = world.can_see(after)
 		# Arrows fly twice as fast, over the same range.
-		var remove: bool = p.age>(BOLT_SPEED*4.0/ARROW_SPEED if p.type=="arrow" else 4.0) or not world.clear_line(Vector3(before.x,0,before.z),Vector3(after.x,0,after.z))
+		var lifetime: float = 4.0
+		if p.type=="arrow": lifetime = ARROW_REACH/ARROW_SPEED if p.friendly else BOLT_SPEED*4.0/ARROW_SPEED
+		var remove: bool = p.age>lifetime or not world.clear_line(Vector3(before.x,0,before.z),Vector3(after.x,0,after.z))
 		p.node.position = after
 		if not remove:
 			var friendly: bool = p.friendly or puppet_attack(p.source)

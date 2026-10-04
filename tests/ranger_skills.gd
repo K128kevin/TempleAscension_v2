@@ -218,12 +218,12 @@ func test():
 	check(game.skills.cast("lightning_shot",at) and is_equal_approx(game.run.energy,65.0),"Lightning Shot costs 35 energy")
 	play(1.2)
 	var leapt = line.filter(func(e): return lost(e)>0).size()
-	check(leapt==6 and within(line[0],1,250) and within(line[5],1,250) and lost(line[6])==0 and lost(outside)==0,"Rank 5 strikes for 250%% and leaps to five more, each within 10 meters of the last (%d struck)" % leapt)
+	check(leapt==6 and within(line[0],1,250) and within(line[1],1,200) and within(line[5],1,250*pow(.8,5)) and lost(line[6])==0 and lost(outside)==0,"Rank 5 strikes for 250%% and leaps to five more, each within 10 meters of the last and 20%% weaker than the strike before (%d struck)" % leapt)
 	hero({"lightning_shot":1})
 	for e in line: e.hp = e.max_hp
 	game.skills.cast("lightning_shot",at)
 	play(1.2)
-	check(line.filter(func(e): return lost(e)>0).size()==2 and within(line[1],1,100),"Rank 1 leaps once, for 100%")
+	check(line.filter(func(e): return lost(e)>0).size()==2 and within(line[1],1,80),"Rank 1 leaps once, for 80%")
 	clear()
 
 	# Frenzy.
@@ -424,6 +424,13 @@ func test():
 	game.attack(false,at)
 	play(1.6)
 	check(within(foe,1,100) and within(behind,1,100),"Penetrating Arrows: the arrow carries on through its target to the one behind")
+	clear()
+	hero({"penetrating_arrows":1})
+	foe = dummy(5)
+	var past_reach = dummy(game.ARROW_REACH+2.0)
+	game.attack(false,at)
+	play(2.5)
+	check(within(foe,1,100) and lost(past_reach)==0,"Penetrating Arrows do not carry an arrow past the bow's reach")
 	clear()
 	hero({})
 	foe = dummy(5)

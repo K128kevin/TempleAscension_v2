@@ -37,6 +37,8 @@ var kill_button: Button
 var statue_target = null
 var statue_order_pending = false
 var statue_hold = 0.0
+# A left hold begun on open ground walks on over units rather than attacking.
+var statue_move_hold = false
 var statue_pursuit = 0.0
 
 func enter(owner_game) -> void:
@@ -262,11 +264,12 @@ func statue_attack(at: Vector3) -> void:
 # A click (or a held button's renewed order), as Game.issue_click: Shift or
 # the right button attacks in place; a unit under the cursor is pursued and
 # attacked; the ground is walked to.
-func statue_click(special: bool) -> void:
+func statue_click(special: bool, held: bool = false) -> void:
 	statue_order_pending = false
 	statue_hold = .08
 	statue_pursuit = .15
-	var other = game.enemy_at_screen(game.get_viewport().get_mouse_position(),selected)
+	var other = null if held and statue_move_hold and not special else game.enemy_at_screen(game.get_viewport().get_mouse_position(),selected)
+	if not held and not special: statue_move_hold = other == null
 	if Input.is_physical_key_pressed(KEY_SHIFT) or special:
 		statue_target = null
 		statue_attack(other.position if other != null else game.world.pointer())
@@ -293,7 +296,7 @@ func control(dt: float) -> void:
 			statue_target = null
 			selected.puppet_goal = null
 		if game.right_held and statue_hold <= 0: statue_click(true)
-		elif game.left_held and not is_instance_valid(statue_target) and statue_hold <= 0: statue_click(false)
+		elif game.left_held and not is_instance_valid(statue_target) and statue_hold <= 0: statue_click(false,true)
 		if is_instance_valid(statue_target):
 			var reach: float = selected.config.range+statue_target.config.size*.3 if statue_target.kind != "player" else selected.config.range
 			if selected.position.distance_to(statue_target.position) <= reach and game.world.clear_line(selected.position,statue_target.position):

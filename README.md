@@ -21,7 +21,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Left click statue | Approach and attack; hold to repeat |
 | Shift + left click | Attack toward cursor without moving |
 | Right click | Cast active skill slot 1 |
-| Hold left mouse | Continuously repath toward the cursor |
+| Hold left mouse | Continuously repath toward the cursor (a hold begun on the ground keeps walking when dragged over a statue) |
 | Space | Dash: spend 10 energy |
 | R | Toggle between running and walking (a slower pace) |
 | Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
@@ -370,7 +370,7 @@ as the warrior's do.
 | | 0 | Power Shot (bow) | 30 | 200% → 400%, after 3 → 1 seconds of aiming (a bar over his head fills as he aims) |
 | | 0 | Flurry (dagger) | 25 | 2 → 4 stabs of 100% → 275% |
 | | 5 | Volley (bow) | 40 | 15 → 30 arrows falling at random in the area aimed at (4.25 m radius), 80% → 150% each |
-| | 5 | Lightning Shot (bow) | 35 | 100% → 250%, leaping to 1 → 5 more enemies within 10 m of the last |
+| | 5 | Lightning Shot (bow) | 35 | 100% → 250%, leaping to 1 → 5 more enemies within 10 m of the last, each leap 20% weaker than the one before |
 | | 5 | Frenzy | 0 | Attacks 10% → 35% faster for 6 → 15 seconds; 30-second cooldown |
 | | 10 | Triple Slash (dagger) | 25 | Three cuts of 130% → 250% on the target and on 2 → 4 more enemies around him (within 2.6 m, on any side) |
 | Utility | 0 | Slow Shot (bow) | 20 | The target moves 30% → 75% slower for 3 → 6 seconds |
@@ -385,7 +385,7 @@ as the warrior's do.
 | | 0 | Dagger Specialization | | The same, with the dagger |
 | | 5 | Element of Surprise | | 40% → 100% more damage for 4 → 10 seconds after leaving the shadows |
 | | 5 | Poisons | | Arrow and dagger hits deal 10% → 65% more over 5 seconds, in 1 → 8 stacks |
-| | 10 | Penetrating Arrows (1 rank) | | Arrows carry on through their targets |
+| | 10 | Penetrating Arrows (1 rank) | | Arrows carry on through their targets, out to the bow's usual 13 m reach |
 
 Each has its own motion (`tools/import_ranger.py`) and effect
 (`scripts/ranger_fx.gd`): the dagger's stab and slash, Flurry's stabs high and low,
