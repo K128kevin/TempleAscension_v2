@@ -754,8 +754,9 @@ and Shockwave's blows meet the ground. Its licence follows the user's PMSFX term
 
 `assets/audio/lightning-zap.wav` and `assets/audio/power-whoosh.wav` are
 synthesised by `tools/make_sounds.py` (noise, tones and filters; no recording):
-the snap, softly wavering arc and crackling sparks of Lightning Shot striking
-(each leap of it crackles again, fainter), and the deep punch of Power Shot
+the falling "zzzt" of Lightning Shot striking, buzzing over the arc's hum,
+with a soft snap and a few muffled crackles (heard once a shot, however many
+it strikes), and the deep punch of Power Shot
 striking, a quick rush of air swelling into it that stops with the blow. They are original to this project.
 
 `assets/audio/fountain-trickle.wav` is the original game's

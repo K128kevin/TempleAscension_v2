@@ -1,9 +1,9 @@
 """Synthesises two of the ranger's sounds, written to assets/audio as 48 kHz
 mono 16-bit WAV (no recordings: noise, tones and filters only).
 
-  lightning-zap.wav   Lightning Shot striking: the snap of the discharge, the
-                      wavering hum of the arc, and a sizzle of sparks that
-                      crackles away; struck again twice as it settles.
+  lightning-zap.wav   Lightning Shot striking: the falling "zzzt" of the
+                      discharge, buzzing as the current pulses, over the
+                      arc's hum, with a soft snap and a few muffled crackles.
   power-whoosh.wav    Power Shot striking: a quick rush of air that swells
                       into the blow and stops with it, and a deep punch.
 
@@ -69,43 +69,54 @@ def write(name, signal):
 
 
 def zap():
-    t = times(.8)
+    t = times(.7)
     n = len(t)
-    noise = rng.standard_normal(n)
-    out = np.zeros(n)
-    # The discharge's snap, and two smaller strikes as the arc settles.
-    for at, size in ((0.0, 1.0), (.065, .55), (.15, .35)):
-        k = t >= at
-        snap = noise*np.exp(-(t-at)/.0045)*k
-        out += biquad(snap, 'band', 2600.0, .8)*1.5*size
-    # The arc: a wavering hum near 100 Hz, rounded (mostly its fundamental,
-    # a little of a square's edge), that flickers in and out.
-    wobble = 96+9*np.sin(2*math.pi*7.3*t)+rng.standard_normal(n).cumsum()*.002
-    phase = 2*math.pi*np.cumsum(wobble)/RATE
-    buzz = .7*np.sin(phase)+.2*np.sign(np.sin(phase))+.1*((phase/(2*math.pi)) % 1.0*2-1)
-    buzz = biquad(buzz, 'low', 1400.0, .6)
-    gate = np.zeros(n)
+    # (Its own noise, so the blow below keeps the noise it was first made of.)
+    own = np.random.default_rng(2207)
+    noise = own.standard_normal(n)
+    # The discharge: a falling tone, "zzzt", from a bright whine down to a
+    # low hum, buzzing as the current pulses through it.
+    sweep = 120+780*np.exp(-t/.07)
+    phase = 2*math.pi*np.cumsum(sweep)/RATE
+    pulse = .6+.4*np.sin(2*math.pi*100*t)**2
+    tone = (np.sin(phase)+.35*np.sin(2*phase)+.12*np.sin(3*phase))*pulse
+    out = tone*np.exp(-t/.22)*.9
+    # The arc's hum beneath it, wavering a little.
+    hum_phase = 2*math.pi*np.cumsum(100+4*np.sin(2*math.pi*6*t))/RATE
+    hum = (np.sin(hum_phase)+.3*np.sin(2*hum_phase))*np.exp(-t/.3)
+    swell = np.convolve((own.random(n) < .002).astype(float)*own.uniform(.5, 1.0, n), np.ones(1400)/40, mode='same')
+    out += hum*(.25+np.clip(swell, 0, .5))*.5
+    # A soft snap as it strikes, and a few muffled crackles after.
+    out += biquad(noise*np.exp(-t/.003), 'low', 3000.0, .7)*.9
+    clicks = np.zeros(n)
+    for k in np.nonzero(own.random(n) < 120/RATE*np.exp(-t/.2))[0]: clicks[k] = own.uniform(.4, 1.0)
+    clicks = np.convolve(clicks, np.exp(-np.arange(240)/40.0))[:n]
+    out += biquad(clicks*noise, 'low', 2400.0, .7)*.35
+    # (Rolled well off above: a hum and a zap, not static.)
+    return finish(biquad(out, 'low', 4500.0, .7), drive=.7)
+
+
+def drawn_before():
+    """The draws the first lightning sound made of the shared generator, made
+    again (and thrown away), so the blow below keeps the noise it was first
+    heard and kept with."""
+    n = int(.8*RATE)
+    t = times(.8)
+    rng.standard_normal(n)
+    rng.standard_normal(n)
     i = 0
     while i < n:
         span = int(rng.uniform(.003, .022)*RATE)
-        gate[i:i+span] = 0.0 if rng.random() < .3 else rng.uniform(.4, 1.0)
+        if rng.random() >= .3: rng.uniform(.4, 1.0)
         i += span
-    gate = np.convolve(gate, np.ones(240)/240, mode='same')
-    out += buzz*gate*np.exp(-t/.2)*.55
-    # The sizzle: sparks of bright noise, thick at first and thinning out.
-    sparks = np.zeros(n)
-    for k in np.nonzero(rng.random(n) < 900/RATE*np.exp(-t/.3))[0]: sparks[k] = rng.uniform(.3, 1.0)*(1 if rng.random() < .5 else -1)
-    tail = np.exp(-np.arange(int(.003*RATE))/(.0006*RATE))
-    sparks = np.convolve(sparks, tail)[:n]*rng.standard_normal(n)
-    out += biquad(sparks, 'band', 3000.0, .9)*1.0
-    hiss = biquad(noise, 'band', 5000.0, .7)*np.exp(-t/.12)*.12
-    out += hiss
-    # (Rolled off above, and barely saturated, so it crackles softly rather
-    # than rasps.)
-    return finish(biquad(out, 'low', 6000.0, .7), drive=.9)
+    for k in np.nonzero(rng.random(n) < 900/RATE*np.exp(-t/.3))[0]:
+        rng.uniform(.3, 1.0)
+        rng.random()
+    rng.standard_normal(n)
 
 
 def whoosh():
+    drawn_before()
     t = times(.62)
     n = len(t)
     # (The blow comes early: it is heard as the arrow strikes.)

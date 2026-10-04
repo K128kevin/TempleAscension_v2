@@ -41,6 +41,9 @@ var charge_glow: Node3D
 # HUD shows it as a bar over his head).
 var aim_total = 0.0
 var aim_left = 0.0
+# Busy with Power Shot (aiming, or loosing it): another press of a skill then
+# is let go, not kept to fire once it is done.
+var powering = false
 # How long each timed effect on the hero lasted when it was last begun or
 # refreshed (for the HUD's bars, which run down from it): by effect.
 var lasting: Dictionary = {}
@@ -314,6 +317,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		charge_glow = RangerFx.charge(game.player.visual,contact)
 		aim_total = contact
 		aim_left = contact
+		powering = true
 	elif clip==Motion.SWORD_OPENER:
 		game.swing_sword(duration)
 		game.player.visual.tint_blade(SWORD_CHAIN_SKILLS[s.effect],duration)
@@ -334,6 +338,19 @@ func cancel_aim() -> void:
 	aim_total = 0.0
 	aim_left = 0.0
 	if is_instance_valid(charge_glow): charge_glow.queue_free()
+
+# Power Shot given up while it is aimed (he moved off, or Escape): no shot,
+# and he is free at once. (Its energy is spent, as when a dash lets it go.)
+# False if he was not aiming.
+func abandon_aim() -> bool:
+	if aim_total <= 0.0: return false
+	cancel_aim()
+	pending = pending.filter(func(job): return Book.all()[job.id].effect != "power")
+	powering = false
+	game.player.busy = 0.0
+	game.player.cooldown = 0.0
+	game.player.visual.play(game.player.visual.idle_action())
+	return true
 
 # What is on the hero now, buffs first, for the HUD's row over the hotbar:
 # each its "id" (its icon's), "name", "stacks" (0 for none), the seconds
@@ -419,7 +436,10 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 			weaken(enemy,extra.percent,extra.cap)
 		"lightning":
 			strike(enemy,p.damage,"lightning",0.0,impact,true,2)
-			game.sound.play("lightning-zap",-8)
+			# Heard once a shot, however many it strikes (an arrow driven on
+			# through its first, and every leap).
+			if not extra.get("zapped",false): game.sound.play("lightning-zap",-8)
+			extra.zapped = true
 			# It leaps on from one to the next, never to the same twice, each
 			# leap 20% weaker than the one before (LIGHTNING_FADE).
 			var struck: Array = [enemy]
@@ -431,8 +451,6 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 				var next = choices[0]
 				passing.append([RangerFx.bolt(game.world,from.position+Vector3.UP*1.1,next.position+Vector3.UP*1.1),.22])
 				strike(next,attack_damage(extra.percent,"ranged")*pow(LIGHTNING_FADE,leap+1),"lightning",0.0,Vector3.ZERO,true,2)
-				# (Each leap crackles, fainter as it fades.)
-				game.sound.play("lightning-zap",-12-leap*2)
 				struck.append(next)
 				from = next
 		_: strike(enemy,p.damage,"physical",0.0,impact,p.skill,2)
@@ -824,6 +842,7 @@ func tick(dt: float) -> void:
 	surprise_time = maxf(0,surprise_time-dt)
 	aim_left = maxf(0,aim_left-dt)
 	if aim_left<=0 or game.player.dead: aim_total = 0.0
+	if aim_total <= 0.0 and game.player.busy <= 0.0: powering = false
 	frenzy_time = maxf(0,frenzy_time-dt)
 	# Frenzy shows on him while it lasts.
 	if frenzy_time>0 and not is_instance_valid(frenzy_aura): frenzy_aura = RangerFx.aura(game.player.visual)

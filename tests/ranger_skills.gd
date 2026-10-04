@@ -163,6 +163,28 @@ func test():
 	game.dash(); play(3.5)
 	game.hud.show_cast_bars()
 	check(lost(foe)==0 and game.skills.aim_total==0 and not game.hud.aim_bar.visible,"Dashing lets the aim go: no shot, and no bar")
+	# Walking off, or Escape, gives the aim up too: no shot, and he is free at
+	# once; Escape then does not pause.
+	game.player.busy = 0; game.run.energy = 100; foe.hp = foe.max_hp
+	game.skills.cast("power_shot",at); play(.5)
+	game.issue_click(false)
+	check(game.skills.aim_total==0 and game.player.busy==0,"Walking off gives up the aim at once")
+	play(3.0)
+	check(lost(foe)==0,"and no shot follows")
+	game.route.clear(); game.run.energy = 100; game.player.position = origin
+	game.skills.cast("power_shot",at); play(.5)
+	var escape = InputEventKey.new(); escape.physical_keycode = KEY_ESCAPE; escape.pressed = true
+	game._input(escape)
+	check(game.mode=="playing" and game.skills.aim_total==0 and game.player.busy==0,"Escape gives up the aim, rather than pausing")
+	play(3.0)
+	check(lost(foe)==0,"and no shot follows that either")
+	# A double tap fires once: the second press, while he aims, is let go.
+	game.run.energy = 100
+	game.skills.cast("power_shot",at); play(.3)
+	game.order_attack(foe,true,0)
+	check(not game.order_pending,"A second press while aiming is let go, not kept")
+	play(4.0)
+	check(within(foe,1,200),"so a double tap looses one shot (%.1f)" % lost(foe))
 	ready()
 	hero({"power_shot":5}); foe.hp = foe.max_hp
 	game.skills.cast("power_shot",at)

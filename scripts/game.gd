@@ -403,7 +403,9 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if event.physical_keycode==KEY_ESCAPE:
-			if mode=="playing": pause_game()
+			# Escape gives up an aimed Power Shot before it pauses the game.
+			if mode=="playing" and skills.abandon_aim(): pass
+			elif mode=="playing": pause_game()
 			elif mode in ["paused","character"] and not creating_character: resume_game()
 			get_viewport().set_input_as_handled()
 		if event.physical_keycode in [KEY_C,KEY_K,KEY_I] and mode in ["playing","character"] and not creating_character:
@@ -554,6 +556,9 @@ func cast_key(slot: int) -> void:
 	else: skills.cast_slot(slot,aim_point())
 
 func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
+	# (A skill pressed again while Power Shot is aimed or loosed is let go: a
+	# double tap fires once.)
+	if special and skills.powering: return
 	order_pending = false
 	hold_timer = .08
 	pursuit_timer = .15
@@ -564,21 +569,28 @@ func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
 		return
 	var clicked = null if held and move_hold and not special else clicked_enemy()
 	if not held and not special: move_hold = clicked == null
-	if clicked:
-		target = clicked
-		order_pending = true
-		ordered_special = special
-		ordered_slot = slot
-		route.clear()
-		if player.position.distance_to(target.position)<=attack_range(special,slot) and world.clear_line(player.position,target.position): attack(special,target.position,slot)
-		else: route = world.path(player.position,target.position)
+	if clicked: order_attack(clicked,special,slot)
 	elif special:
 		target = null
 		route.clear()
 		attack(true,aim_point(),slot)
 	else:
+		# Walking off gives up an aimed Power Shot.
+		skills.abandon_aim()
 		target = null
 		route = world.path(player.position,world.pointer())
+
+# An attack (or a skill, `special`) on `clicked`: at once if it is within
+# reach, or once he has walked there.
+func order_attack(clicked, special: bool, slot: int = 0) -> void:
+	if special and skills.powering: return
+	target = clicked
+	order_pending = true
+	ordered_special = special
+	ordered_slot = slot
+	route.clear()
+	if player.position.distance_to(target.position)<=attack_range(special,slot) and world.clear_line(player.position,target.position): attack(special,target.position,slot)
+	else: route = world.path(player.position,target.position)
 
 func player_control(dt: float) -> void:
 	if player.dead: return
