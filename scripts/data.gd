@@ -3,10 +3,12 @@ extends RefCounted
 # The temple's floors: five and the summit. (No place in the game has a name.)
 const FLOORS = 6
 # (Three quarters more statues on every floor than the original's 24, 32, 54,
-# 57 and 80, most of the added ones gladiators, centurions and lions.)
+# 57 and 80, most of the added ones gladiators, centurions and lions. No
+# centurions guard the first two floors: their places went to gladiators
+# and, on the second, lions too.)
 const COUNTS = [
-	{"gladiator":23,"archer":13,"lion":4,"centurion":2},
-	{"gladiator":21,"archer":15,"lion":16,"centurion":4},
+	{"gladiator":25,"archer":13,"lion":4},
+	{"gladiator":23,"archer":15,"lion":18},
 	{"gladiator":32,"archer":20,"lion":22,"wizard":14,"centurion":7},
 	{"gladiator":28,"archer":17,"lion":22,"wizard":17,"centurion":16},
 	{"gladiator":42,"archer":18,"lion":30,"wizard":24,"centurion":26}]
@@ -31,7 +33,7 @@ const WEAPONS = ["spear","sword","bow","axe","staff","dagger"]
 const SPECIALS = ["Jab","Slash","Rapid Fire","Whirl","Arcane Bolt","Stab"]
 const COSTS = [15.0,20.0,18.0,35.0,12.0,15.0]
 const STATS = ["Strength","Dexterity","Intelligence","Vitality","Willpower"]
-const STAT_HELP = ["+2% melee damage","+2% bow and dagger damage; +1% melee attack speed","+2% spell damage","+10 maximum health","+3 maximum energy; +0.1 energy/sec"]
+const STAT_HELP = ["+2% melee damage (dagger too)","+2% bow damage; +0.3% attack speed; +0.25% critical strike chance","+2% spell damage","+10 maximum health","+3 maximum energy; +0.1 energy/sec"]
 const GEM_COLORS = [Color(1,.20,.24),Color(.2,1,.63),Color(.2,.58,1),Color(.8,.9,1)]
 const DIFFICULTIES = ["Easy","Moderate","Hard"]
 const HEALTH_SCALE = [.9,1.1,1.4]
@@ -142,8 +144,13 @@ static func mitigate(damage_value: float, armor: float, resistance: float, attac
 static func respec(run: Dictionary) -> void:
 	run.stats = [5,5,5,5,5]
 	run.points = (int(run.level)-1)*STAT_POINTS
+	reset_skills(run)
+	run.health = minf(run.health,max_health(run))
+	run.energy = minf(run.energy,max_energy(run))
+
+# Every skill unlearned and its points given back (one for each level, the
+# first skill's among them), with the hotbar emptied.
+static func reset_skills(run: Dictionary) -> void:
 	run.skills = {}
 	run.skill_points = int(run.level)
 	run.hotbar = ["","","","",""]
-	run.health = minf(run.health,max_health(run))
-	run.energy = minf(run.energy,max_energy(run))

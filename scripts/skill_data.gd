@@ -116,9 +116,13 @@ static func describe(id: String, rank: int) -> String:
 	rank = clampi(rank,1,s.max_rank)
 	if s.has("ranks"):
 		var v = values(id,rank)
-		return s.description.format({"x":String.num(v.x,2),"y":String.num(v.y,2),"z":String.num(v.z,2)})
+		return s.description.format({"x":figure(v.x),"y":figure(v.y),"z":figure(v.z)})
 	var amount = "%.0f%% damage" % (value(id,rank)*100) if not s.tag.is_empty() and s.effect!="passive" else ("%.1f" % value(id,rank)).trim_suffix(".0")
 	return "%s (%s)" % [s.description,amount]
+
+# A number as few figures as it needs: 15, 1.25, 0.5.
+static func figure(amount: float) -> String:
+	return String.num(snappedf(amount,.01)).trim_suffix(".0")
 
 static func compatible(id: String, weapon: int) -> bool:
 	match all()[id].requirement:

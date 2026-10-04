@@ -68,6 +68,12 @@ func test():
 		check(game.run.floor==5 and game.run.level==20 and game.run.points==95,"Boss playtest shortcut grants the level cap through XP")
 		key(KEY_B)
 		check(game.run.points==95,"Repeated boss shortcut cannot duplicate level awards")
+		game.run.skills = {"cleave":3,"war_cry":2}
+		game.run.skill_points = 15
+		game.run.hotbar = ["cleave","war_cry","","",""]
+		var stats_before: Array = game.run.stats.duplicate()
+		key(KEY_Y)
+		check(game.run.skills.is_empty() and game.run.skill_points==20 and game.run.hotbar==["","","","",""] and game.run.stats==stats_before and game.run.points==95,"Y resets skills, refunding every point, and leaves attributes alone")
 		key(KEY_K)
 		check(game.mode=="character" and game.hud.panels.skills_open(),"K remains skills in debug mode")
 		key(KEY_ESCAPE)

@@ -119,7 +119,8 @@ func generate(run_seed: int, floor_index: int) -> void:
 		return
 	# Larger rooms and hallways need proportionally more floor area.
 	size = roundi((44+TARGET_MINUTES[floor_index]*6)*1.2)
-	if floor_index==2: court = Rect2i((size-28)/2,(size-15)/2,28,15)
+	# The fountain court, on the second and third floors.
+	if floor_index in [1,2]: court = Rect2i((size-28)/2,(size-15)/2,28,15)
 	for attempt in 40+TARGET_MINUTES[floor_index]*8:
 		var w = integer(ROOM_MIN,ROOM_MAX)
 		var h = integer(ROOM_MIN,ROOM_MAX)

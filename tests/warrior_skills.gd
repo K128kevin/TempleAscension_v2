@@ -310,6 +310,28 @@ func test():
 	check(390-doomed.hp>=45 and 390-doomed.hp<=67.5,"and deals 450%")
 	clear()
 
+	# A skill's tip tells what it hits for now, and its critical strikes.
+	hero({"powerful_strike":1})
+	game.run.stats[0] = 15; game.run.stats[1] = 25
+	var tip: Dictionary = game.skills.damage_summary("powerful_strike",1)
+	check(tip.damage=="Damage: 24–36" and tip.crit=="Critical strike: 25% chance for 200% damage","Powerful Strike's tip shows its damage by Strength and its crits by Dexterity")
+	check(tip.speed=="Attack speed: +6%" and game.skills.speed_words(game.skills.basic_speed(1))=="Attack speed: +6%","Its tip and the basic attack's show the attack speed Dexterity gives")
+	game.run.skills["quick_strikes"] = 1
+	check(is_equal_approx(game.skills.basic_speed(1),26.0),"Quick Strikes quickens the basic attack's shown speed, not a skill's")
+	check(game.skills.damage_summary("war_cry",1).is_empty() and game.skills.damage_summary("endurance",1).is_empty(),"Skills that deal no damage show none")
+
+	# Every number key casts the skill bound to it, 3 and 4 as well as 1 and 2.
+	for key in [KEY_1,KEY_2,KEY_3,KEY_4]:
+		hero({"war_cry":1})
+		var slot: int = key-KEY_1+1
+		game.run.hotbar = ["","","","",""]
+		game.run.hotbar[slot] = "war_cry"
+		var press = InputEventKey.new()
+		press.physical_keycode = key; press.pressed = true
+		game._unhandled_input(press)
+		check(game.run.energy==70,"The %d key casts the skill bound to it" % (slot))
+		wait(.8)
+
 	# Dash Attack: the dash strikes and pushes back whoever it passes through,
 	# for extra energy.
 	hero({"cleave":1})

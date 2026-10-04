@@ -13,6 +13,7 @@ const ACTIONS = [
 	[KEY_F,"refill","F · Refill health / energy"],
 	[KEY_H,"axe","H · Grant battle axe"],
 	[KEY_J,"bow","J · Grant bow"],
+	[KEY_Y,"skills","Y · Reset skills"],
 	[KEY_N,"next","N · Next floor"],
 	[KEY_B,"boss","B · Boss + level 20"],
 	[KEY_L,"first","L · Return to floor 1"],
@@ -143,6 +144,12 @@ func execute(action: String, floor_index: int = 0) -> void:
 			var index = 3 if action=="axe" else 2
 			game.run.owned[index] = true
 			game.toast("[Debug] %s granted · I: equipment" % Data.WEAPONS[index].capitalize())
+		"skills":
+			Data.reset_skills(game.run)
+			game.run.energy = minf(game.run.energy,Data.max_energy(game.run))
+			game.skills.reset()
+			if is_instance_valid(game.hud.panels): game.hud.panels.refresh()
+			game.toast("[Debug] Skills reset · %d points to spend" % int(game.run.skill_points))
 		"kill":
 			# Normal death handling retains loot, opens stairs and unlocks the crown.
 			for enemy in game.enemies: enemy.die()

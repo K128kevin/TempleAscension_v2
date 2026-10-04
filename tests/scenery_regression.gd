@@ -40,8 +40,8 @@ func test():
 		game.load_floor()
 		await frames()
 		var world = game.world
-		check(is_instance_valid(world.fountain)==(index==2),"Fountain exists only on floor 3 (%d)" % (index+1))
-		check(is_instance_valid(world.desert_backdrop)==(index in [3,4]),"Desert backdrop exists only on terrace floors (%d)" % (index+1))
+		check(is_instance_valid(world.fountain)==(index in [1,2]),"Fountain exists only on floors 2 and 3 (%d)" % (index+1))
+		check(is_instance_valid(world.desert_backdrop)==(index in [3,4,5]),"Desert backdrop exists only on the terrace floors and the summit (%d)" % (index+1))
 		# Low parapets (terraces, summit) carry braziers on their tops, not wall
 		# torches, and are built of short pieces so their carved stones keep
 		# their shape.
@@ -70,7 +70,7 @@ func test():
 		if index<5:
 			var dark = 0
 			for cell in world.layout.cells:
-				if index==2 and world.layout.court.grow(1).has_point(cell): continue
+				if index in [1,2] and world.layout.court.grow(1).has_point(cell): continue
 				var lit = 0.0
 				for at in world.torch_lights: lit += world.torch_light(at,world.layout.to_world(cell))
 				if lit<world.LIT_LEVEL and not world.ambient_only.has(cell): dark += 1
@@ -108,7 +108,7 @@ func test():
 		check(not wall.hidden,"The wall returns when no one stands behind it (%d)" % (index+1))
 		check(world.fog_material.get_shader_parameter("walkable_mask")!=null,"Fog knows which cells are temple floor (%d)" % (index+1))
 		check(world.fog_material.render_priority==Material.RENDER_PRIORITY_MAX and world.fog_material.shader.get_mode()==Shader.MODE_SPATIAL,"Line-of-sight fog uses scene depth (%d)" % (index+1))
-		if index==2:
+		if index in [1,2]:
 			var fountain = world.fountain
 			check(fountain.pool_bounds.size==Vector2(25,12),"Pool retains original room size and 1.5-tile inset")
 			var start: Vector3 = fountain.center+Vector3(-9,0,3)

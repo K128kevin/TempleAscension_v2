@@ -197,6 +197,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | F9 | Kill every enemy, award ordinary kill XP, drop loot, and unlock stairs/crown |
 | F | Refill health and energy |
 | H / J | Grant battle axe / bow; equip through I |
+| Y | Reset skills: unlearn every skill, refund all skill points and empty the hotbar; attributes stay |
 | Ctrl + 1–5 | Jump directly to that floor, retaining stats and weapons |
 | N | Jump to the next floor without progression awards; on summit, defeat boss |
 | B | Jump to summit and grant enough XP for level 20, the cap; repeated use grants nothing extra |
@@ -221,7 +222,8 @@ ascent. Invulnerability is a session toggle and starts off on each launch.
 
 Each floor holds three quarters more statues than the original's 24 / 32 / 54 / 57 /
 80: 42 / 56 / 95 / 100 / 140, most of the added ones gladiators, centurions and lions
-(which now stand on every floor). Gladiators,
+(lions now stand on every floor; centurions only from the third up, their places
+on the first two taken by gladiators and lions). Gladiators,
 archers, fast Lion Guardians, spellcasting oracles and centurions activate as
 statues and alert nearby allies. Hitting an enemy pushes back its next attack by 50% of its normal
 time between attacks and roots it for that time; further hits add 30%, then 15%,
@@ -509,8 +511,8 @@ enemy skeleton and retain the current combat animations.
 
 The room placement, seeded random generator, corridor
 connections, court footprint and galleries are adapted from the browser game's generator. Existing imported
-3D floor, wall and prop meshes populate that layout. The third-floor court has
-the original broad, shallow pool and a three-tier stone fountain. The player can
+3D floor, wall and prop meshes populate that layout. The second- and third-floor
+courts have the original broad, shallow pool and a three-tier stone fountain. The player can
 wade through the water, leaving ripples, while the solid centerpiece remains an
 obstacle. The original bubbling water loop grows louder near the fountain and is
 silent outside the room. The ending

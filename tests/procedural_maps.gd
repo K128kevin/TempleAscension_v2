@@ -65,7 +65,7 @@ func test():
 			for post in posts: safe = safe and world.fits(post.at,.45) and post.at.distance_to(world.spawn)>=9
 			check(safe,"Complete reachable roster, safe entrance: "+label)
 			world.free()
-			if floor_index==2:
+			if floor_index in [1,2]:
 				var door_tiles = 0
 				var court: Rect2i = layout.court
 				for y in range(court.position.y,court.end.y):

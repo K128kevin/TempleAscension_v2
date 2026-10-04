@@ -40,8 +40,8 @@ func test():
 		check(right.end.x>area.size.x*.85 and right.position.y>area.size.y*.65,"Energy anchored bottom-right at "+str(size))
 		check(area.encloses(left) and area.encloses(right),"Orbs fit the viewport at "+str(size))
 		var first: Rect2 = hud.weapon_slots[0].get_global_rect()
-		var last: Rect2 = hud.weapon_slots[3].get_global_rect()
-		check(absf((first.position.x+last.end.x)*.5-area.size.x*.5)<2 and left.end.x<first.position.x and last.end.x<right.position.x,"Four compact ability panels centered without overlap at "+str(size))
+		var last: Rect2 = hud.weapon_slots[-1].get_global_rect()
+		check(absf((first.position.x+last.end.x)*.5-area.size.x*.5)<2 and left.end.x<first.position.x and last.end.x<right.position.x,"Six compact ability panels (LMB, RMB, 1–4) centered without overlap at "+str(size))
 		check(hud.objective.get_global_rect().end.x>area.size.x*.9 and hud.objective.position.y<100,"Floor information anchored top-right at "+str(size))
 		for ratio in [0.0,.5,1.0]:
 			game.player.hp = Data.max_health(game.run)*ratio
@@ -81,8 +81,8 @@ func test():
 	var ids = ["cleave","powerful_strike","shield_bash"]
 	for id in ids:
 		if not game.run.skills.has(id): Data.Skills.learn(game.run,id)
-	game.run.hotbar = ids
-	check(hud.weapon_slots.size()==4 and hud.weapon_icons[0].size==Vector2(34,34) and hud.weapon_slots[0].size==Vector2(56,56),"Exactly four significantly smaller ability icons")
+	game.run.hotbar = ids+["",""]
+	check(hud.weapon_slots.size()==6 and hud.weapon_icons[0].size==Vector2(34,34) and hud.weapon_slots[0].size==Vector2(56,56),"Exactly six significantly smaller ability icons")
 	game.player.busy=0; game.player.cooldown=0
 	await click(hud.weapon_slots[0])
 	check(game.player.busy>0 and not game.left_held and game.route.is_empty(),"LMB icon performs the basic attack and consumes movement input")
@@ -104,8 +104,9 @@ func test():
 	game.hud.modal_body.get_child(4).pressed.emit()
 	check(game.run.class_id=="wizard" and game.run.weapon==4 and game.run.skills.firebolt==1 and not game.creating_character,"Wizard creation grants staff and starter Firebolt")
 	check(not Save.load_run().is_empty(),"New class creation writes a valid character save")
-	game.run.difficulty=2; game.run.floor=4; hud.tick(0)
-	check("FLOOR 5" in hud.objective.text and "Hard" in hud.difficulty.text and "statues" in hud.status.text,"Floor, difficulty and remaining statues update")
+	# A new character wakes in the desert: the corner tells the way, not a floor.
+	game.run.difficulty=2; hud.tick(0)
+	check(hud.objective.text=="" and "Hard" in hud.difficulty.text and "Temple" in hud.direction.text,"Outdoors the corner shows the difficulty and the way to the temple")
 	await capture("hud-unlocked")
 	game._process(.1)
 	check(not game.run.has("seconds"),"Gameplay does not accumulate elapsed run time")

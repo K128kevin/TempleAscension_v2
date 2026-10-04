@@ -241,7 +241,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 	exit_seal.position = exit_point+Vector3.UP*.05
 	add_child(exit_seal)
 	exit_seal.visible = false
-	if floor_index==2: setup_court_torches()
+	if layout.court.has_area(): setup_court_torches()
 	if level!=Layout.PLAYGROUND: light_floor(torch_candidates)
 	if floor_index==5:
 		boss_point = layout.to_world(Vector2i(14,10))
@@ -310,7 +310,7 @@ func setup_walkable_mask() -> void:
 	var image = Image.create(visibility_grid_size.x,visibility_grid_size.y,false,Image.FORMAT_R8)
 	image.fill(Color.BLACK)
 	var interior: Array = layout.cells.keys()+solid_floor.keys()
-	if level==2:
+	if layout.court.has_area():
 		for y in range(layout.court_obstacle.position.y,layout.court_obstacle.end.y):
 			for x in range(layout.court_obstacle.position.x,layout.court_obstacle.end.x): interior.append(Vector2i(x,y))
 	for cell in interior:
@@ -653,14 +653,14 @@ func add_light(levels: Dictionary, at: Vector3) -> void:
 func light_floor(candidates: Array[Vector3]) -> void:
 	var levels: Dictionary = {}
 	for cell in layout.cells:
-		# The court on floor 3 keeps its authored torches around the pool.
-		if level==2 and layout.court.grow(1).has_point(cell): continue
+		# A fountain court keeps its authored torches around the pool.
+		if layout.court.has_area() and layout.court.grow(1).has_point(cell): continue
 		levels[cell] = 0.0
 	var placed: Array[Vector3] = []
 	for at in torch_lights: placed.append(at)
 	for at in placed: add_light(levels,at)
 	for at in candidates:
-		if level==2 and layout.court.grow(1).has_point(layout.to_cell(at)): continue
+		if layout.court.has_area() and layout.court.grow(1).has_point(layout.to_cell(at)): continue
 		if nearest_torch(placed,at)<5.5: continue
 		torch(at,true,torch_walls[at])
 		placed.append(at)
@@ -922,7 +922,7 @@ func ensure_sight_grid() -> void:
 	sight_grid.resize(w*visibility_grid_size.y)
 	sight_grid.fill(0)
 	var open: Array = layout.cells.keys()+solid_floor.keys()
-	if level==2:
+	if layout.court.has_area():
 		for y in range(layout.court_obstacle.position.y,layout.court_obstacle.end.y):
 			for x in range(layout.court_obstacle.position.x,layout.court_obstacle.end.x): open.append(Vector2i(x,y))
 	for cell in open:
@@ -930,7 +930,7 @@ func ensure_sight_grid() -> void:
 		if pixel.x>=0 and pixel.y>=0 and pixel.x<w and pixel.y<visibility_grid_size.y: sight_grid[pixel.y*w+pixel.x] = 1
 
 func clear_line(a: Vector3, b: Vector3) -> bool:
-	# The level 3 fountain occupies blocked navigation tiles, but does not hide
+	# A fountain (floors 2 and 3) occupies blocked navigation tiles, but does not hide
 	# the rest of the court. Keep the obstacle solid for movement while letting
 	# visibility rays pass through its footprint.
 	var steps = maxi(1,ceili(a.distance_to(b)/.2))
@@ -968,7 +968,7 @@ func fits_for_visibility(p: Vector3, radius: float) -> bool:
 		for y in range(lo.y,hi.y+1):
 			var cell = Vector2i(x,y)
 			if layout.cells.has(cell): continue
-			if level==2 and layout.court_obstacle.has_point(cell): continue
+			if layout.court.has_area() and layout.court_obstacle.has_point(cell): continue
 			if solid_floor.has(cell): continue
 			return false
 	return true

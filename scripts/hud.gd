@@ -265,7 +265,7 @@ func tick(dt: float) -> void:
 	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<Data.MAX_LEVEL else 1
 	experience.value = r.xp-Data.xp_at_level(r.level) if r.level<Data.MAX_LEVEL else 1
 	weapon_slots[0].disabled = game.player.dead
-	weapon_slots[0].tooltip_text = "LMB · %s basic attack · no energy cost" % Data.WEAPONS[r.weapon].capitalize()
+	weapon_slots[0].tooltip_text = "LMB · %s basic attack · no energy cost\nDamage: %s\n%s\n%s" % [Data.WEAPONS[r.weapon].capitalize(),game.skills.span(100.0,Data.scaling_tag(int(r.weapon))),game.skills.crit_words(int(r.weapon)),game.skills.speed_words(game.skills.basic_speed(int(r.weapon)))]
 	weapon_slots[0].add_theme_stylebox_override("normal",idle_style)
 	var weapon_icon_path = "res://assets/ui/weapon-%s.png" % Data.WEAPONS[r.weapon]
 	weapon_icons[0].texture = load(weapon_icon_path) if ResourceLoader.exists(weapon_icon_path) else load("res://assets/textures/seal.png")

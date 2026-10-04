@@ -287,7 +287,7 @@ func refresh() -> void:
 		for i in 5:
 			stat_values[i].text = str(r.stats[i])
 			stat_buttons[i].disabled = r.points<=0
-		stat_summary.text = "Health %d · Energy %d · +%.1f energy/s" % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r)]
+		stat_summary.text = "Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%" % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(Data.attack_haste(r)),game.skills.figure(Data.crit_chance(r))]
 		stat_reset.disabled = not game.safe_checkpoint()
 	if skills_open():
 		var right: float = hud.root.size.x-24-(200 if game.playground != null else 0)
@@ -322,7 +322,7 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 		var body = VBoxContainer.new()
 		body.add_theme_constant_override("separation",3)
 		tip.add_child(body)
-		for line in [["title",15,hud.gold],["kind",11,dim],["now",12,hud.cream],["next",12,dim],["lock",12,Color(1,.5,.4)],["hint",11,green]]:
+		for line in [["title",15,hud.gold],["kind",11,dim],["now",12,hud.cream],["damage",12,Color(1,.78,.45)],["crit",12,Color(1,.78,.45)],["speed",12,Color(1,.78,.45)],["next",12,dim],["lock",12,Color(1,.5,.4)],["hint",11,green]]:
 			var l = text("",line[1],line[2],body)
 			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			l.custom_minimum_size.x = 250
@@ -335,6 +335,11 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 	lines.kind = "Passive" if not active else "Active · %d energy" % game.skills.cost(id)
 	if active and s.requirement!="any": lines.kind += " · needs %s" % {"melee":"a melee weapon","shield":"sword and shield","bow":"a bow","staff":"a staff","dagger":"a dagger","bow_dagger":"a bow or dagger"}[s.requirement]
 	lines.now = Book.describe(id,maxi(1,rank))
+	# What it hits for now, by his attributes and passives.
+	var hits: Dictionary = game.skills.damage_summary(id,rank)
+	lines.damage = hits.get("damage","")+(" (at rank 1)" if rank==0 and hits.has("damage") else "")
+	lines.crit = hits.get("crit","")
+	lines.speed = hits.get("speed","")
 	lines.next = "Next rank: "+Book.describe(id,rank+1) if rank>0 and rank<s.max_rank else ""
 	lines.lock = Book.locked(r,id)
 	if lines.lock.is_empty() and rank<s.max_rank and rank>=Book.rank_cap(id,int(r.level)): lines.lock = "Next rank requires level %d." % (s.unlock+rank*3)

@@ -39,7 +39,7 @@ var hold_timer = 0.0
 var pursuit_timer = 0.0
 var order_pending = false
 var ordered_special = false
-# The skill slot a special order casts (RMB is 0; the 1 and 2 keys, 1 and 2).
+# The skill slot a special order casts (RMB is 0; the 1 to 4 keys, 1 to 4).
 var ordered_slot = 0
 # Dash Attack: the dash under way strikes whoever it passes through, each once.
 var dash_attack = false
