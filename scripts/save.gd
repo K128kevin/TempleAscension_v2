@@ -154,6 +154,21 @@ static func valid(d) -> bool:
 		if not drop.get("position") is Array or drop.position.size()!=2: return false
 	return true
 
+# The player's own settings, kept apart from the run (settings.cfg): whether
+# the game fills the screen.
+static func setting(key: String, default):
+	var config = ConfigFile.new()
+	if config.load(directory.path_join("settings.cfg")) != OK: return default
+	return config.get_value("settings",key,default)
+
+static func keep_setting(key: String, value) -> void:
+	var config = ConfigFile.new()
+	var path = directory.path_join("settings.cfg")
+	config.load(path)
+	config.set_value("settings",key,value)
+	DirAccess.make_dir_recursive_absolute(directory)
+	config.save(path)
+
 static func load_run() -> Dictionary:
 	for file in ["run.json","run.backup.json"]:
 		var path = directory.path_join(file)

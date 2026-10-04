@@ -99,6 +99,8 @@ func _ready() -> void:
 			run = saved
 			creating_character = false
 	debug.apply_start(OS.get_cmdline_user_args())
+	# The game opens full screen if it was left that way.
+	if not test_mode and Save.setting("fullscreen",false): DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	sound = preload("res://scripts/audio.gd").new()
 	add_child(sound)
 	hud = Hud.new()
@@ -402,6 +404,13 @@ func _input(event: InputEvent) -> void:
 			show_ui(ui_hidden)
 			get_viewport().set_input_as_handled()
 			return
+		# Fullscreen: F11, Alt+Enter, or Ctrl+Cmd+F as on a Mac (where F11 is
+		# usually taken by the system).
+		var key = event.physical_keycode
+		if key==KEY_F11 or (key in [KEY_ENTER,KEY_KP_ENTER] and event.alt_pressed) or (key==KEY_F and event.ctrl_pressed and event.meta_pressed):
+			set_fullscreen(not fullscreen())
+			get_viewport().set_input_as_handled()
+			return
 		if debug.handle_key(event):
 			get_viewport().set_input_as_handled()
 			return
@@ -486,8 +495,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_2: cast_key(2)
 			KEY_3: cast_key(3)
 			KEY_4: cast_key(4)
-			KEY_F11:
-				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode()==DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+func fullscreen() -> bool:
+	return DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN,DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
+
+# Fills the screen or goes back to a window, and remembers which for the next
+# time the game starts.
+func set_fullscreen(on: bool) -> void:
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+	Save.keep_setting("fullscreen",on)
 
 func toggle_walk() -> void:
 	walking = not walking
@@ -1219,11 +1235,12 @@ func pause_game() -> void:
 	left_held = false
 	right_held = false
 	save_run()
-	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1–4 skills · Space evade · Q healing spell\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 fullscreen")
+	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1–4 skills · Space evade · Q healing spell\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 or Alt+Enter fullscreen (Ctrl+Cmd+F on a Mac)")
 	hud.button("Resume",resume_game)
 	hud.button("Continue saved ascent",continue_run)
 	hud.button("New ascent / Difficulty",new_run_menu)
 	hud.button("Sound: %s" % ("off" if sound.muted else "on"),func(): sound.toggle(); mode="playing"; pause_game())
+	hud.button("Fullscreen: %s" % ("on" if fullscreen() else "off"),func(): set_fullscreen(not fullscreen()); mode="playing"; pause_game())
 	hud.button("Save and quit",quit_game)
 
 func resume_game() -> void:

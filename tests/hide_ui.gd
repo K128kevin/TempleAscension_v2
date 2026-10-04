@@ -53,5 +53,27 @@ func verify():
 	plain.physical_keycode = KEY_Z; plain.keycode = KEY_Z; plain.pressed = true
 	game._input(plain)
 	check(not game.ui_hidden,"Z without Alt does nothing to it")
+	# Fullscreen: its keys and the Escape menu's option, remembered for the
+	# next start. (Headless there is no window to fill: what is kept is checked.)
+	var f11 = InputEventKey.new()
+	f11.physical_keycode = KEY_F11; f11.keycode = KEY_F11; f11.pressed = true
+	game._input(f11)
+	check(Save.setting("fullscreen",false),"F11 turns fullscreen on, and it is remembered")
+	game.set_fullscreen(false)
+	var mac = InputEventKey.new()
+	mac.physical_keycode = KEY_F; mac.keycode = KEY_F; mac.ctrl_pressed = true; mac.meta_pressed = true; mac.pressed = true
+	game._input(mac)
+	check(Save.setting("fullscreen",false),"So does Ctrl+Cmd+F, as on a Mac")
+	game.set_fullscreen(false)
+	var enter = InputEventKey.new()
+	enter.physical_keycode = KEY_ENTER; enter.keycode = KEY_ENTER; enter.alt_pressed = true; enter.pressed = true
+	game._input(enter)
+	check(Save.setting("fullscreen",false),"and Alt+Enter")
+	game.set_fullscreen(false)
+	check(not Save.setting("fullscreen",true),"Turned off, that is remembered too")
+	game.pause_game()
+	var options: Array = game.hud.modal_body.get_children().filter(func(b): return b is Button).map(func(b): return b.text)
+	check("Fullscreen: off" in options,"The Escape menu has a Fullscreen option (%s)" % [options])
+	game.resume_game()
 	print("HIDE_UI ",passed," passed; ",failures)
 	quit(0 if failures.is_empty() else 1)
