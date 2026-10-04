@@ -23,26 +23,27 @@ const AREAS = {
 		{"level":23,"counts":{}}]}
 # The temple's own, as lists (tests and the debug tools read them).
 const COUNTS = [{"gladiator":27,"archer":15,"lion":12},{"gladiator":28,"archer":18,"lion":20,"wizard":12},{"archer":18,"lion":28,"wizard":22,"centurion":58}]
+# (Every enemy's health and damage were raised by half again.)
 const ENEMIES = {
-	"gladiator":{"title":"Gladiator","hp":33.0,"damage":7.5,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"sword","shield":"scutum","size":1.0,"color":Color(.70,.73,.69)},
-	"archer":{"title":"Archer","hp":18.0,"damage":12.5,"speed":3.56,"range":10.6,"interval":1.22,"weapon":"bow","size":.94,"color":Color(.59,.73,.68)},
+	"gladiator":{"title":"Gladiator","hp":49.5,"damage":11.25,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"sword","shield":"scutum","size":1.0,"color":Color(.70,.73,.69)},
+	"archer":{"title":"Archer","hp":27.0,"damage":18.75,"speed":3.56,"range":10.6,"interval":1.22,"weapon":"bow","size":.94,"color":Color(.59,.73,.68)},
 	# A stone lion the size of a living one. It swipes from where its raised
 	# forepaw reaches (its head is a metre ahead of its middle); `height` is
 	# where its health bar sits, for a figure that is not a standing man.
-	"lion":{"title":"Lion Guardian","hp":28.0,"damage":9.0,"speed":7.12,"range":2.3,"interval":.5,"weapon":"","size":1.0,"height":1.5,"color":Color(.79,.64,.42)},
-	"wizard":{"title":"Oracle","hp":33.0,"damage":22.5,"speed":4.75,"range":11.8,"interval":3.0,"weapon":"staff","size":1.06,"color":Color(.54,.57,.78)},
+	"lion":{"title":"Lion Guardian","hp":42.0,"damage":13.5,"speed":7.12,"range":2.3,"interval":.5,"weapon":"","size":1.0,"height":1.5,"color":Color(.79,.64,.42)},
+	"wizard":{"title":"Oracle","hp":49.5,"damage":33.75,"speed":4.75,"range":11.8,"interval":3.0,"weapon":"staff","size":1.06,"color":Color(.54,.57,.78)},
 	# The centurion's long spear: he thrusts from about where its point, driven
 	# home with his step in, ends at his target, and it strikes whoever stands
 	# within its point's reach as the blow lands ("strike", centre to centre,
 	# from where his step has carried him).
-	"centurion":{"title":"Centurion","hp":65.0,"damage":27.5,"speed":3.56,"range":3.0,"strike":3.1,"interval":1.0,"weapon":"spear","shield":"tower","size":1.2,"color":Color(.64,.68,.76)},
+	"centurion":{"title":"Centurion","hp":97.5,"damage":41.25,"speed":3.56,"range":3.0,"strike":3.1,"interval":1.0,"weapon":"spear","shield":"tower","size":1.2,"color":Color(.64,.68,.76)},
 	# Bandits are people, not statues: they fall rather than crumble. Each fights
 	# `as` one of the temple's guardians does (a swordsman as a gladiator, a
 	# bowman as an archer), in a raider's linen, leather and red cloth
 	# (scripts/bandit.gd), a man or a woman.
-	"bandit":{"title":"Bandit","as":"gladiator","human":"bandit","hp":30.0,"damage":7.0,"speed":3.7,"range":1.9,"interval":1.0,"weapon":"sword","size":1.0,"color":Color(.5,.4,.3)},
-	"bandit_archer":{"title":"Bandit Archer","as":"archer","human":"bandit","hp":18.0,"damage":10.0,"speed":3.6,"range":10.6,"interval":1.3,"weapon":"bow","size":1.0,"color":Color(.5,.4,.3)},
-	"boss":{"title":"The Crowned Statue","hp":1250.0,"damage":67.5,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
+	"bandit":{"title":"Bandit","as":"gladiator","human":"bandit","hp":45.0,"damage":10.5,"speed":3.7,"range":1.9,"interval":1.0,"weapon":"sword","size":1.0,"color":Color(.5,.4,.3)},
+	"bandit_archer":{"title":"Bandit Archer","as":"archer","human":"bandit","hp":27.0,"damage":15.0,"speed":3.6,"range":10.6,"interval":1.3,"weapon":"bow","size":1.0,"color":Color(.5,.4,.3)},
+	"boss":{"title":"The Crowned Statue","hp":1875.0,"damage":101.25,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
 const CLASSES = ["warrior","ranger","wizard"]
 # (The dagger is the ranger's second weapon, carried with his bow.)

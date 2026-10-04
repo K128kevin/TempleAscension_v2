@@ -161,11 +161,12 @@ func town_checks():
 	var chambers = world.places.filter(func(s): return s.kind=="chamber")
 	var furnished = chambers.all(func(c): return world.get_children().any(func(n): return n is Node3D and n.scene_file_path.ends_with("bed.glb") and Vector2(n.position.x-c.at.x,n.position.z-c.at.z).length()<12.0))
 	check(chambers.size()==5 and chambers.all(func(c): var way = world.path(hall.at,c.at); return not way.is_empty() and way[-1].distance_to(c.at)<.5) and furnished,"Five bedchambers open off it, each with a bed (%d)" % chambers.size())
-	# Guards at the foot of the road and at the palace's door, out of the way.
+	# Guards at the palace gate, before its towers hung with red, and at the
+	# palace's door, out of the way.
 	var watch = world.get_children().filter(func(n): return n.get_script()==Town.Guard)
-	var at_road = watch.filter(func(g): return absf(g.position.x-Town.ARENA.x)<8.0 and absf(g.position.z+53.0)<3.0)
+	var at_road = watch.filter(func(g): return absf(g.position.x-Town.ARENA.x)<8.0 and absf(g.position.z-Palace.WALL_Z)<3.0)
 	var at_door = watch.filter(func(g): return absf(g.position.x-Town.ARENA.x)<8.0 and absf(g.position.z-Palace.FRONT)<3.0)
-	check(at_road.size()==2 and at_door.size()==2 and at_door.all(func(g): return is_equal_approx(g.position.y,Overworld.HILL_HEIGHT+Palace.PODIUM)),"Two guards stand at the foot of the palace road and two at its door")
+	check(at_road.size()==2 and at_door.size()==2 and at_door.all(func(g): return is_equal_approx(g.position.y,Overworld.HILL_HEIGHT+Palace.PODIUM)),"Two guards stand at the palace gate and two at its door")
 	# The road up is short: about half what it first was (105 m from the gate).
 	var climb = length_of(road,north_gate)
 	check(climb>=46.0 and climb<=60.0,"The road from the arena's north gate to the palace is about 53 m (%.0f m)" % climb)
@@ -629,11 +630,16 @@ func test():
 	check(folk.anya.state=="asleep" and folk.anya.at.distance_to(folk.anya.bed.at)<.01 and folk.anya.body.state=="Lie","Anya lies asleep in her bed in the kitchen")
 	check(folk.orion.state=="indoors" and not folk.orion.body.visible and folk.orion.at.distance_to(folk.orion.bed.at)<.01 and folk.smith.tools.values().all(func(tool): return tool.hand==""),"Orion has put his tools away and gone into his house")
 	var grounded = everyone.filter(func(w): return w.bed.kind=="ground")
-	check(grounded.all(func(w): return w.state=="asleep" and w.body.visible and w.body.state==w.body.sleep_pose and absf(w.at.y)<.01 and folk.open_at(w.at)),"The homeless lie asleep on the ground in the open street")
-	# Each on a spread of rags, along a house's wall or under a tree, well
-	# away from the arena.
-	var on_rags = grounded.filter(func(w): return w.bed.rags.size()==2 and w.bed.rags.all(func(r): return Vector2(r.position.x-w.at.x,r.position.z-w.at.z).length()<.5 and r.position.y<.03))
-	check(on_rags.size()==grounded.size(),"Every one sleeping in the street lies on rags (%d of %d)" % [on_rags.size(),grounded.size()])
+	check(grounded.all(func(w): return w.state=="asleep" and w.body.visible and w.body.state==w.body.sleep_pose and absf(w.at.y-folk.PALLET)<.01 and folk.open_at(w.at)),"The homeless lie asleep in the open street")
+	# Each on a straw pallet with its pillow at his head, along a house's
+	# wall or under a tree, well away from the arena.
+	var on_pallets = grounded.filter(func(w):
+		var pad: Node3D = w.bed.pad
+		var pillow: Vector3 = pad.global_transform.basis*Vector3.FORWARD
+		return pad.visible and w.bed.bundle.visible and pad.scene_file_path.get_file()=="bedroll.glb" and Vector2(pad.position.x-w.at.x,pad.position.z-w.at.z).length()<.05 and absf(pad.position.y)<.03 and pillow.normalized().dot(-w.bed.along)>.9)
+	check(on_pallets.size()==grounded.size(),"Every one sleeping in the street lies on a straw pallet, its pillow at his head (%d of %d)" % [on_pallets.size(),grounded.size()])
+	var pallets = world.townsfolk.get_children().filter(func(n): return n is Node3D and n.scene_file_path.get_file()=="bedroll.glb")
+	check(pallets.size()==grounded.size(),"No pallet is laid out where no one sleeps (%d for %d)" % [pallets.size(),grounded.size()])
 	var arena_gap = INF
 	for w in grounded: arena_gap = minf(arena_gap,(Vector2(w.at.x-Town.ARENA.x,w.at.z-Town.ARENA.z)/Town.ARENA_RADII).length())
 	check(arena_gap>1.2,"None sleeps by the arena's wall (nearest at %.2f of its radius)" % arena_gap)
@@ -667,6 +673,7 @@ func test():
 	for w in everyone:
 		if w.state in folk.ABED: print("ABED ",w.body.name," ",w.state," ",w.at," ",w.route.size())
 	check(everyone.all(func(w): return not w.state in folk.ABED and w.body.visible),"By morning all are up and about again")
+	check(grounded.all(func(w): return not w.bed.pad.visible and not w.bed.bundle.visible),"Up and about, the street sleepers' pallets and bundles are put away")
 	check(folk.anya.state in ["post","to_tap","fill","carry","place","return"] and folk.inn.has_point(Vector2(folk.anya.at.x,folk.anya.at.z)) and not folk.kitchen.has_point(Vector2(folk.anya.at.x,folk.anya.at.z)),"Anya is back behind her bar")
 	check(folk.orion.state=="work" and not folk.smith.plan.is_empty(),"Orion is back at his work")
 	check(folk.people.all(func(w): return absf(w.at.y)<.01),"The lodgers are down from the loft")

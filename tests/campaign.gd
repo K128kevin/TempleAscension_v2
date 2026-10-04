@@ -75,7 +75,7 @@ func start(owner_game):
 		check(game.run.points==points and game.run.xp==xp,"Stairs grant neither XP nor attribute points")
 		await get_tree().process_frame
 	check(total==258 and game.run.level>=20 and game.run.level<=Data.MAX_LEVEL,"All temple enemies grant enough XP to near the level cap of 25 (level %d)" % game.run.level)
-	check(game.enemies.size()==21 and game.boss.max_hp==1125,"Summit holds the boss and its reserve")
+	check(game.enemies.size()==21 and is_equal_approx(game.boss.max_hp,Data.ENEMIES.boss.hp*Data.HEALTH_SCALE[game.run.difficulty]),"Summit holds the boss and its reserve")
 	var reserve: Array=game.enemies.filter(func(e): return e.uid.begins_with("summoned:"))
 	check(reserve.size()==20 and reserve.all(func(e): return e.kind=="centurion" and e.dormant),"The boss's reserve is twenty dormant centurions")
 	check(not "offering" in Data.ENEMIES,"There is no Crown's Offering unit")

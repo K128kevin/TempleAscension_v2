@@ -4,7 +4,7 @@ extends RefCounted
 ## through a walled gate at the foot of the hill guarded by marble centurions,
 ## and climbs between seated marble lions and fires to the palace on its top: white stone kept spotless, gilded,
 ## hung with crimson, with pools and palms before it. Everything the town
-## below is not. Guards stand at the foot of the road, and at the palace's
+## below is not. Guards stand at the gate at the foot of the hill, and at the palace's
 ## door; within are the throne room and the elders' bedchambers.
 const Kit = preload("res://scripts/world_art.gd")
 const Town = preload("res://scripts/world_town.gd")
@@ -61,9 +61,6 @@ static func road(world) -> void:
 	var top: float = world.HILL.z+world.HILL_HALF.y
 	world.dab_rect(world.PAVING,Rect2(x-ROAD,top,ROAD*2.0,-52.0-top))
 	world.add_place("palace road","road",Vector3(x,0,-66),8.0)
-	# Two guards where it leaves the ring street, either side of it (clear of
-	# the inn's corner), facing the town.
-	for side in [-1.0,1.0]: Town.guard(world,Vector3(x+side*(ROAD+1.7),0,-53.2),Vector3(side*.25,0,1),.5+side*.3)
 
 # A wall of clean white stone shuts the hill off from the town, with a
 # towered gate where the road goes through.
@@ -87,8 +84,11 @@ static func precinct(world) -> void:
 		world.block_rect(Rect2(tower.x-1.9,WALL_Z-1.8,3.8,3.6))
 		towers.append(fire(world,tower+Vector3.UP*10.0,1.4,0.0))
 		towers.append(Town.hanging(world,"cloth_red",Vector3(tower.x,3.2,WALL_Z+1.86),5.2,0.0,Town.CRIMSON))
-		# Marble centurions stand guard outside, facing the town.
+		# Marble centurions stand guard outside, facing the town; and before
+		# each tower a living guard, either side of the way through, as at the
+		# town's gates.
 		towers += sentry(world,Vector3(x+side*11.5,0,WALL_Z+4.0))
+		Town.guard(world,Vector3(x+side*6.1,0,WALL_Z+2.4),Vector3(side*.25,0,1),.5+side*.3)
 	towers.append(world.place("wall",Vector3(x,7.8,WALL_Z),Vector3(11.6,1.6,1.5),material))
 	towers.append(world.place("floor",Vector3(x,9.4,WALL_Z),Vector3(11.8,.25,1.8),gold))
 	world.screen(towers)

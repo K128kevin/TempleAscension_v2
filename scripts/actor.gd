@@ -354,7 +354,7 @@ func gaze_tick(dt: float) -> void:
 			for other in game.targets(self):
 				var along: Vector3 = other.position-position
 				if not other.dead and along.dot(forward)>0 and along.cross(forward).length()<.65 and game.world.clear_line(position,other.position): other.hit(0)
-		elif offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(10*.6*Data.DAMAGE_SCALE[game.run.difficulty],"physical",self)
+		elif offset.dot(forward)>0 and offset.cross(forward).length()<.65 and game.world.clear_line(position,player.position): game.hurt_player(15*.6*Data.DAMAGE_SCALE[game.run.difficulty],"physical",self)
 	if laser_time <= 0:
 		laser_model.queue_free()
 		busy = 0
@@ -442,7 +442,7 @@ func strike_reach(other) -> float:
 func cast_nova() -> void:
 	face(game.player.position)
 	nova_cooldown = NOVA_COOLDOWN
-	game.frost_nova(position,NOVA_RADIUS,7.5*.6*Data.DAMAGE_SCALE[game.run.difficulty],self)
+	game.frost_nova(position,NOVA_RADIUS,11.25*.6*Data.DAMAGE_SCALE[game.run.difficulty],self)
 	# Straight to the staff swing: the nova needs no flame.
 	var clip = "OracleCast" if visual.clips.has("OracleCast") else "Cast"
 	var contact: float = Motion.ORACLE_CAST.contacts[0] if clip=="OracleCast" else Motion.NORMAL[Data.WEAPONS.find("staff")].contacts[0]

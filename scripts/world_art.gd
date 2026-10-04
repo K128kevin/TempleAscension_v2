@@ -36,7 +36,9 @@ const SIZE = {
 	"axe_bronze":Vector3(.29,.83,.05),"pickaxe":Vector3(.81,1.2,.14),"nightstand":Vector3(.69,1.22,.39),"crate_metal":Vector3(.86,.87,.87),
 	"pot":Vector3(.54,.22,.49),
 	# The produce stalls' wares.
-	"carrot_crate":Vector3(.71,.41,.57),"apple_barrel":Vector3(.7,.9,.7),"crate_empty":Vector3(.71,.24,.41)}
+	"carrot_crate":Vector3(.71,.41,.57),
+	# The street sleepers' bedding (the props kit's bed, without its frame).
+	"bedroll":Vector3(1.34,.42,2.14),"apple_barrel":Vector3(.7,.9,.7),"crate_empty":Vector3(.71,.24,.41)}
 
 # The model's dimensions at its own proportions, `height` metres tall.
 static func sized(id: String, height: float) -> Vector3:

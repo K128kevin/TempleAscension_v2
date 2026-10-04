@@ -20,8 +20,9 @@ extends Node3D
 ## At night they sleep (scripts/daylight.gd keeps the hour). Through the
 ## sunset and the first of the night each goes to bed in turn: four who lodge
 ## at the inn climb to the beds in its loft; those in rags, who have no roof,
-## lie down on a spread of rags along the foot of a house's wall or under a
-## tree, a bundle of their things by their heads; the rest go home, each into a house of his own.
+## lie down on a straw pallet with its pillow and blanket along the foot of a
+## house's wall or under a tree, a bundle of their things by their heads (laid
+## out only while they sleep there); the rest go home, each into a house of his own.
 ## Orion finishes the job in hand and goes into the house nearest his smithy,
 ## the same every night. Anya, the inn emptied, goes into the kitchen behind
 ## her bar to her own bed. The children go early, together. Through the
@@ -457,6 +458,7 @@ func tick(delta: float, hero: Vector3) -> void:
 	last_time = now
 	for walker in people: tend(walker,delta)
 	for keeper in keepers: keep(keeper,delta)
+	bedding()
 	serve(delta)
 	# Orion goes to bed between jobs.
 	if orion.state in ABED: retire(orion,delta)
@@ -829,9 +831,18 @@ func lay_beds() -> void:
 		child.bedtime = CHILD_BEDTIME
 		child.rising = CHILD_RISING
 		child.bed = street.pop_front() if i in STREET_CHILDREN and not street.is_empty() else house_bed(homes.pop_front())
-	# A bundle lies just beyond each sleeper's head.
+	# Each street sleeper's pallet, and a bundle just beyond his head. (A spot
+	# no one sleeps at has nothing laid out there.)
 	for walker in people+children:
-		if walker.bed.kind == "ground": walker.bed.bundle.position = walker.bed.at-walker.bed.along*(.3+.92*walker.body.size)
+		if walker.bed.kind != "ground": continue
+		var bed: Dictionary = walker.bed
+		var ground: Vector3 = bed.at-Vector3.UP*PALLET
+		bed.pad = pallet(ground,bed.along,sleep)
+		bed.bundle = Kit.prop("bag",.36)
+		add_child(bed.bundle)
+		bed.bundle.rotation.y = sleep.randf_range(0,TAU)
+		bed.bundle.position = ground-bed.along*(.3+.92*walker.body.size)
+		bed.bundle.visible = false
 	# In the loft and in the street each sleeps as he will: on his back, or on
 	# his left side or his right.
 	var turns = RandomNumberGenerator.new()
@@ -851,7 +862,7 @@ func house_bed(place: Dictionary) -> Dictionary:
 	var door: Vector3 = place.at+inward*1.25
 	return {"kind":"house","at":door,"yaw":atan2(inward.x,inward.z),"side":door,"way":[step,door],"out":[step]}
 
-# Where those with no roof sleep: on the ground, on a spread of rags, a
+# Where those with no roof sleep: on the ground, on a straw pallet, a
 # bundle of their things by their heads. Each lies along the foot of a wall
 # of the town's houses and shops, or at the foot of a tree, well away from
 # the arena, clear of doors, gates and the market, and apart from the others.
@@ -926,10 +937,9 @@ func street_beds(sleep: RandomNumberGenerator) -> Array[Dictionary]:
 		var at: Vector3 = spot.at
 		# Head toward either end, as it falls.
 		var along: Vector3 = spot.along*(1.0 if sleep.randf() < .5 else -1.0)
-		var bundle = Kit.prop("bag",.36)
-		add_child(bundle)
-		bundle.rotation.y = sleep.randf_range(0,TAU)
-		beds.append({"kind":"ground","at":at,"yaw":atan2(along.x,along.z),"side":at,"way":[at],"out":[],"bundle":bundle,"along":along,"rags":rags(at,along,sleep)})
+		# (He lies on the pallet, just off the ground. Its pallet and bundle
+		# are made once someone is given the spot: lay_beds().)
+		beds.append({"kind":"ground","at":at+Vector3.UP*PALLET,"yaw":atan2(along.x,along.z),"side":at,"way":[at],"out":[],"along":along})
 	return beds
 
 # Somewhere one might lie down for the night: open street, away from the
@@ -944,7 +954,7 @@ func sheltered(at: Vector3) -> bool:
 	# Nor on the way up to the elders' palace.
 	if absf(at.x-world.HILL.x) < world.HILL_HALF.x+world.HILL_SLOPE and at.z < world.HILL.z+world.HILL_HALF.y+world.HILL_SLOPE+8.0: return false
 	if world.rooms.any(func(room): return room.area.grow(2.0).has_point(flat) or room.door.distance_to(at) < 6.0): return false
-	for market in [Town.MARKET,Rect2(-212,63,12,11)]:
+	for market in [Town.MARKET,Town.GREENGROCERS]:
 		if market.grow(2.0).has_point(flat): return false
 	return true
 
@@ -954,48 +964,52 @@ func walled(at: Vector3) -> bool:
 	var cell: Vector2i = world.to_cell(at)
 	return world.cells[world.index(cell.x,cell.y)] == world.SOLID and world.margin_at(at) > 2.0
 
-# Photographed sacking or linen (the townspeople's own cloth), dulled with
-# dirt to `tint`, its weave at one size wherever it lies.
-func rag_cloth(tint: Color, weave: String) -> StandardMaterial3D:
-	var key = "rag%s%s" % [weave,tint.to_html()]
-	if Kit.cache.has(key): return Kit.cache[key]
-	var m = Kit.textured("res://assets/textures/cloth_%s.jpg" % weave,tint*1.9,.95)
-	m.uv1_triplanar = true
-	m.uv1_world_triplanar = true
-	m.uv1_scale = Vector3.ONE*2.4
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	m.detail_enabled = true
-	m.detail_mask = load("res://assets/textures/rock_detail.jpg")
-	m.detail_albedo = load("res://assets/textures/rock_detail.jpg")
-	m.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
-	m.detail_uv_layer = BaseMaterial3D.DETAIL_UV_1
-	Kit.cache[key] = m
-	return m
-
-# What one sleeps on in the street: two old cloths, sacking and a worn
-# blanket, spread one over the other along `along`, dull with dirt.
+# What one sleeps on in the street (tools/make_bedroll.py): a sheet of old
+# sacking spread on the ground, creased and folded, a woollen blanket thrown
+# half over it and a stuffed sack for a pillow at its head (toward -`along`),
+# in the townspeople's photographed cloth (assets/shaders/cloth.gdshader),
+# faded, stained and grimed.
 const RAGS = [Color(.40,.37,.32),Color(.46,.40,.32),Color(.34,.33,.31),Color(.50,.45,.37),Color(.38,.38,.37),Color(.42,.33,.27)]
-func rags(at: Vector3, along: Vector3, sleep: RandomNumberGenerator) -> Array:
-	var spread: Array = []
-	for layer in 2:
-		var length = 2.0 if layer == 0 else 1.45
-		var cloth = Kit.prop("cloth_red" if layer == 0 else "cloth_blue",length)
-		# (Its rings and all: the banner's grommets are knots in the rag.)
-		var rag = rag_cloth(RAGS[sleep.randi_range(0,RAGS.size()-1)]*sleep.randf_range(.9,1.1),"hessian" if layer == 0 else "linen")
-		for mesh in cloth.find_children("*","MeshInstance3D",true,false): mesh.material_override = rag
-		# (Laid flat, the cloth's thickness is the fall of its folds.)
-		cloth.scale.z *= .35
-		var flat = Node3D.new()
-		add_child(flat)
-		flat.position = at+along*(sleep.randf_range(-.15,.15) if layer == 0 else sleep.randf_range(-.35,.1))+Vector3.UP*(.004+layer*.008)
-		# The blanket over it lies askew, kicked about in the night.
-		flat.rotation.y = atan2(along.x,along.z)+(sleep.randf_range(-.12,.12) if layer == 0 else sleep.randf_range(.35,.7)*(1.0 if sleep.randf() < .5 else -1.0))+(PI if sleep.randf() < .5 else 0.0)
-		flat.add_child(cloth)
-		cloth.rotation.x = PI/2
-		cloth.position.z = -length*.5
-		cloth.position.x = sleep.randf_range(-.08,.08)
-		spread.append(flat)
-	return spread
+const BLANKETS = [Color(.42,.20,.14),Color(.30,.32,.36),Color(.46,.38,.24),Color(.30,.34,.26),Color(.52,.47,.40)]
+# How far off the ground he lies on it.
+const PALLET = .03
+func pallet(at: Vector3, along: Vector3, sleep: RandomNumberGenerator) -> Node3D:
+	var pad = Art.model("bedroll",Vector3.ONE)
+	var sacking: Color = RAGS[sleep.randi_range(0,RAGS.size()-1)]*sleep.randf_range(.9,1.1)
+	var blanket: Color = BLANKETS[sleep.randi_range(0,BLANKETS.size()-1)]*sleep.randf_range(.85,1.1)
+	var seed = sleep.randf_range(0.0,10.0)
+	for mesh in pad.find_children("*","MeshInstance3D",true,false):
+		var woollen = mesh.name.begins_with("Blanket")
+		var m = ShaderMaterial.new()
+		m.shader = load("res://assets/shaders/cloth.gdshader")
+		m.set_shader_parameter("weave",load("res://assets/textures/cloth_%s.jpg" % ("linen" if woollen else "hessian")))
+		m.set_shader_parameter("grit",load("res://assets/textures/rock_detail.jpg"))
+		m.set_shader_parameter("weave_scale",4.0 if woollen else 5.0)
+		var dye: Color = blanket if woollen else sacking
+		m.set_shader_parameter("dye",Vector3(dye.r,dye.g,dye.b))
+		m.set_shader_parameter("wear",.45 if woollen else (.38 if mesh.name.begins_with("Pillow") else .55))
+		m.set_shader_parameter("seed",seed)
+		# The blanket is woven in a lozenge pattern of a paler thread.
+		if woollen:
+			m.set_shader_parameter("lattice",1.0)
+			m.set_shader_parameter("band_dye",Vector3(dye.r,dye.g,dye.b)*1.25)
+		var inside: ShaderMaterial = m.duplicate()
+		inside.shader = load("res://assets/shaders/cloth_inside.gdshader")
+		m.next_pass = inside
+		mesh.material_override = m
+	add_child(pad)
+	pad.position = at
+	pad.rotation.y = atan2(along.x,along.z)+sleep.randf_range(-.06,.06)
+	pad.visible = false
+	return pad
+
+# A street sleeper's pallet and bundle are laid out while he lies there.
+func bedding() -> void:
+	for walker in people+children:
+		if walker.bed.get("kind") != "ground": continue
+		var down = walker.state in ["lie_down","asleep","get_up"]
+		walker.bed.pad.visible = down
+		walker.bed.bundle.visible = down
 
 # Off to bed: by the streets to its bed's last steps, and along them.
 func go_to_bed(walker: Walker) -> void:

@@ -304,6 +304,15 @@ bushes; they were replaced.)
   `scripts/townsfolk.gd` runs the town: its own A* grid of the streets (the arena,
   palace hill, smithy and the inn's loft closed), the seats at the inn's tables,
   the inn's occupancy rules, Anya's rounds and the children's games.
+- **Street bedding.** `tools/make_bedroll.py` builds `assets/models/props/bedroll.glb`:
+  a sheet of sacking, a blanket and a stuffed sack for a pillow, from the props
+  kit's banner cloth (without its rings) and its bag, let fall and settle by
+  Blender's cloth simulation. The sacking is spread a little too large for the
+  ground it lies on, so it buckles into creases; the blanket is dropped on it
+  askew and crumples over the pillow and the sacking's ridges. (The ground the
+  cloth falls on is the simulation's only.) The game dresses each piece in the
+  townspeople's photographed cloth, the blanket woven in a pale lozenge
+  pattern, and lays a pallet out only while its sleeper lies on it.
 - **The greengrocers.** Three stalls below the market square, just inside the
   south gate (`scripts/world_town.gd` `greengrocers()`), are the props kit's
   stall with crates of its apples and carrots on the counter, a barrel of
@@ -383,7 +392,7 @@ bushes; they were replaced.)
   own colours: the kit's bed scaled up with dyed covers, its furniture in a dark
   polished wood, a rug, stands with candles, a chest, a cabinet, a gilded table with
   a marble top and gilded chairs, gilded urns, a fire, a hanging and a lamp. Two
-  gate guards (`scripts/town_guard.gd`) stand at the foot of the palace road and two
+  gate guards (`scripts/town_guard.gd`) stand at the palace gate, before its towers, and two
   at the palace's door.
 - **Litter.** `urn_broken` (the props kit's `Vase_Rubble_Medium`) and the existing
   `rubble`, in each house's own masonry.
@@ -527,6 +536,7 @@ animation licenses sit beside it. Rebuild with Blender:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_bandits.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_bedroll.py
 ```
 
 ## Additional authored geometry (CC0)
