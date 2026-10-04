@@ -752,12 +752,19 @@ Big Cinematic" (PMSFX_ROCKCrsh_Designed_Rock_Impact_Carsh_Big_Cinematic_41RI2_24
 unedited, supplied by the user: a 0.9 s crash of breaking rock. It plays as Thunder Slam's
 and Shockwave's blows meet the ground. Its licence follows the user's PMSFX terms.
 
-`assets/audio/lightning-zap.wav` and `assets/audio/power-whoosh.wav` are
-synthesised by `tools/make_sounds.py` (noise, tones and filters; no recording):
-the falling "zzzt" of Lightning Shot striking, buzzing over the arc's hum,
-with a soft snap and a few muffled crackles (heard once a shot, however many
-it strikes), and the deep punch of Power Shot
-striking, a quick rush of air swelling into it that stops with the blow. They are original to this project.
+`assets/audio/lightning-zap.wav` is a ZapSplat electric crackle supplied by the
+user (`source_art/audio/electric.m4a`, 2.19 s), decoded by `tools/make_sounds.py`
+with macOS `afconvert` to 48 kHz stereo 16-bit PCM, brought up to a 0.89 peak and
+faded out over its last 0.6 s rather than stopping short. It plays once as each
+Lightning Shot strikes, however many enemies it hits. It is credited to
+www.zapsplat.com under ZapSplat's license, like the other effects.
+
+`assets/audio/power-whoosh.wav` is synthesised by `tools/make_sounds.py` (noise,
+tones and filters; no recording) and is original to this project: the deep punch
+of Power Shot striking, a quick rush of air swelling into it that stops with the
+blow. The same punch is heard with every shockwave the warrior drives into the
+ground (Thunder Slam, Shockwave and Leap's landing), over its crash of rock or
+impact.
 
 `assets/audio/fountain-trickle.wav` is the original game's
 `public/sfx-fountain-trickle.m4a`, decoded without normalization or editing to

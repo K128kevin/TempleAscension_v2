@@ -1,16 +1,21 @@
-"""Synthesises two of the ranger's sounds, written to assets/audio as 48 kHz
-mono 16-bit WAV (no recordings: noise, tones and filters only).
+"""Makes two of the ranger's sounds, written to assets/audio as 48 kHz 16-bit
+WAV.
 
-  lightning-zap.wav   Lightning Shot striking: the falling "zzzt" of the
-                      discharge, buzzing as the current pulses, over the
-                      arc's hum, with a soft snap and a few muffled crackles.
-  power-whoosh.wav    Power Shot striking: a quick rush of air that swells
-                      into the blow and stops with it, and a deep punch.
+  lightning-zap.wav   Lightning Shot striking: ZapSplat's electric crackle
+                      (source_art/audio/electric.m4a, supplied by the user),
+                      decoded with macOS afconvert, brought up to the other
+                      effects' level and faded out over its last stretch
+                      rather than stopping short.
+  power-whoosh.wav    Power Shot striking (synthesised: noise, tones and
+                      filters only): a quick rush of air that swells into the
+                      blow and stops with it, and a deep punch.
 
   python3 tools/make_sounds.py
 """
 from pathlib import Path
 import math
+import subprocess
+import tempfile
 import wave
 import numpy as np
 
@@ -59,41 +64,32 @@ def finish(signal, peak=.89, drive=1.4, level=None):
 
 
 def write(name, signal):
+    """`signal` is mono, or (samples, channels)."""
     data = (np.clip(signal, -1, 1)*32767).astype('<i2')
     with wave.open(str(ROOT/'assets/audio'/name), 'wb') as w:
-        w.setnchannels(1)
+        w.setnchannels(1 if signal.ndim == 1 else signal.shape[1])
         w.setsampwidth(2)
         w.setframerate(RATE)
         w.writeframes(data.tobytes())
     print('SOUND', name, '%.2f s' % (len(signal)/RATE))
 
 
+# How long Lightning Shot's crackle takes to fade away at its end.
+ZAP_FADE = .6
+
+
 def zap():
-    t = times(.7)
-    n = len(t)
-    # (Its own noise, so the blow below keeps the noise it was first made of.)
-    own = np.random.default_rng(2207)
-    noise = own.standard_normal(n)
-    # The discharge: a falling tone, "zzzt", from a bright whine down to a
-    # low hum, buzzing as the current pulses through it.
-    sweep = 120+780*np.exp(-t/.07)
-    phase = 2*math.pi*np.cumsum(sweep)/RATE
-    pulse = .6+.4*np.sin(2*math.pi*100*t)**2
-    tone = (np.sin(phase)+.35*np.sin(2*phase)+.12*np.sin(3*phase))*pulse
-    out = tone*np.exp(-t/.22)*.9
-    # The arc's hum beneath it, wavering a little.
-    hum_phase = 2*math.pi*np.cumsum(100+4*np.sin(2*math.pi*6*t))/RATE
-    hum = (np.sin(hum_phase)+.3*np.sin(2*hum_phase))*np.exp(-t/.3)
-    swell = np.convolve((own.random(n) < .002).astype(float)*own.uniform(.5, 1.0, n), np.ones(1400)/40, mode='same')
-    out += hum*(.25+np.clip(swell, 0, .5))*.5
-    # A soft snap as it strikes, and a few muffled crackles after.
-    out += biquad(noise*np.exp(-t/.003), 'low', 3000.0, .7)*.9
-    clicks = np.zeros(n)
-    for k in np.nonzero(own.random(n) < 120/RATE*np.exp(-t/.2))[0]: clicks[k] = own.uniform(.4, 1.0)
-    clicks = np.convolve(clicks, np.exp(-np.arange(240)/40.0))[:n]
-    out += biquad(clicks*noise, 'low', 2400.0, .7)*.35
-    # (Rolled well off above: a hum and a zap, not static.)
-    return finish(biquad(out, 'low', 4500.0, .7), drive=.7)
+    """ZapSplat's crackle, decoded, levelled and faded out at its end."""
+    with tempfile.TemporaryDirectory() as folder:
+        decoded = Path(folder)/'electric.wav'
+        subprocess.run(['afconvert', '-f', 'WAVE', '-d', 'LEI16@48000', str(ROOT/'source_art/audio/electric.m4a'), str(decoded)], check=True)
+        with wave.open(str(decoded)) as w:
+            channels = w.getnchannels()
+            signal = np.frombuffer(w.readframes(w.getnframes()), '<i2').reshape(-1, channels)/32767
+    fade = int(ZAP_FADE*RATE)
+    # (An eased fall, gentle at first, so it dies away rather than dips.)
+    signal[-fade:] *= (np.cos(np.linspace(0, math.pi, fade))*.5+.5)[:, None]
+    return signal/np.max(np.abs(signal))*.89
 
 
 def drawn_before():

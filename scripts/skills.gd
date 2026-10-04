@@ -438,7 +438,7 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 			strike(enemy,p.damage,"lightning",0.0,impact,true,2)
 			# Heard once a shot, however many it strikes (an arrow driven on
 			# through its first, and every leap).
-			if not extra.get("zapped",false): game.sound.play("lightning-zap",-8)
+			if not extra.get("zapped",false): game.sound.play("lightning-zap",-4)
 			extra.zapped = true
 			# It leaps on from one to the next, never to the same twice, each
 			# leap 20% weaker than the one before (LIGHTNING_FADE).
@@ -630,8 +630,10 @@ func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = V
 	game.shake(shake)
 	# The blow meeting the ground: a crash of rock (Thunder Slam and
 	# Shockwave), or the original game's Whirl impact as the warrior lands
-	# (Leap).
+	# (Leap); and with it the force of the blow driving the air out, as
+	# Power Shot's is heard.
 	game.sound.play(sound,-9)
+	game.sound.play("power-whoosh",-7)
 
 func execute(job: Dictionary) -> void:
 	var s: Dictionary = Book.all()[job.id]
