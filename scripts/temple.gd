@@ -618,6 +618,19 @@ func furnish_dungeon(run_seed: int) -> void:
 				layout.cells.erase(cell)
 				solid_floor[cell] = true
 
+# The light beyond a door to the world outside follows the time of day there
+# (scripts/daylight.gd).
+func set_time(clock: float) -> void:
+	var beyond = get_node_or_null("TempleDoorDaylight")
+	if beyond == null: return
+	var sky: Dictionary = preload("res://scripts/daylight.gd").sky(clock)
+	var lit: Color = sky.sky.lerp(Color(.86,.70,.48),.5)*(1.0-sky.night*.55)
+	for mesh in beyond.find_children("*","MeshInstance3D",true,false): mesh.material_override.albedo_color = Color(lit.r,lit.g,lit.b)
+	var spill = get_node_or_null("TempleDoorSunlight")
+	if spill != null:
+		spill.light_color = sky.light.lerp(sky.ambient,.4)
+		spill.light_energy = lerpf(1.0,.3,sky.night)
+
 # The temple's door, from inside: an open portal at the end of the first
 # floor's passage, with the desert's daylight beyond it.
 func build_entry(stone: Material) -> void:

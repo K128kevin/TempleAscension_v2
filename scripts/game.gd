@@ -1,5 +1,6 @@
 extends Node3D
 const Data = preload("res://scripts/data.gd")
+const Daylight = preload("res://scripts/daylight.gd")
 const CombatAnimation = preload("res://scripts/combat_animation.gd")
 const Art = preload("res://scripts/assets.gd")
 const Temple = preload("res://scripts/temple.gd")
@@ -164,6 +165,7 @@ func load_floor() -> void:
 	hud.show_enemy_hover(null)
 	# The approach's music plays outdoors, as on the first floor.
 	sound.track(music_track())
+	if world.has_method("set_time"): world.set_time(float(run.get("clock",Daylight.MORNING)))
 	player = Actor.new()
 	world.add_child(player)
 	var at = Vector3(run.position[0],0,run.position[1])
@@ -328,6 +330,10 @@ func _process(dt: float) -> void:
 	if not is_instance_valid(player): return
 	if mode == "playing":
 		combat_age += dt
+		# The day goes by, wherever he is.
+		if playground == null:
+			run["clock"] = Daylight.of_day(float(run.get("clock",Daylight.MORNING))+dt)
+			if world.has_method("set_time"): world.set_time(run.clock)
 		player.tick(dt)
 		# Advance existing jobs before accepting this frame's input: a new
 		# attack and its animation both start at time zero on this clock.

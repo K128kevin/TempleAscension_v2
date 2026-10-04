@@ -64,17 +64,8 @@ static func camp(world) -> void:
 		world.place(id,fire_at+Vector3(cos(angle)*.62,-.04,sin(angle)*.62),Kit.sized(id,.2+.05*(i%2)),Kit.rock(id,Color(.5,.46,.42)),angle*2.3)
 	world.place("floor",fire_at+Vector3.UP*.012,Vector3(1.0,.02,1.0),Kit.gritty(Color(.07,.06,.06),1.0,true),.4)
 	for i in 4: log_of(world,fire_at+Vector3(0,.12+.05*(i%2),0),.82,.07,i*PI/4+.3,charred,.28)
-	var light = OmniLight3D.new()
-	light.light_energy = 1.0
-	light.light_cull_mask = 0
-	light.omni_range = 1.0
-	var fire = preload("res://scripts/torch_flame.gd").new()
-	fire.position = fire_at+Vector3.UP*(world.lift(fire_at)+.2)
-	fire.scale = Vector3.ONE*1.5
-	light.position = fire.position
-	world.add_child(light)
-	fire.setup(light,3.7)
-	world.add_child(fire)
+	# (By night it lights the camp and the dune's crown round it.)
+	world.fire(fire_at+Vector3.UP*(world.lift(fire_at)+.2),1.5,12.0,2.6,3.7).name = "CampFire"
 	world.block_disc(fire_at,.75,world.LOW,false)
 	world.dab_disc(world.SHADE,fire_at,1.0,1.2,.5)
 	# The sleeping pad: a woven mat with a blanket rolled at its head.

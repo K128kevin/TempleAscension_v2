@@ -16,6 +16,7 @@ const Palace = preload("res://scripts/world_palace.gd")
 const Front = preload("res://scripts/world_temple_front.gd")
 const Wilds = preload("res://scripts/world_wilds.gd")
 const Townsfolk = preload("res://scripts/townsfolk.gd")
+const Daylight = preload("res://scripts/daylight.gd")
 const GLOW_COLOUR = Front.GLOW
 # `level` of the outdoor world, where a temple floor has its index.
 const OUTDOORS = -2
@@ -90,6 +91,16 @@ var level = OUTDOORS
 var spawn = Vector3.ZERO
 var bounds = Rect2(WEST,NORTH,WIDTH,DEPTH)
 var sun: DirectionalLight3D
+var environment: Environment
+# The time of day shown (Daylight's clock), how far it is night, and the
+# fires: each {"light", "flame", "glow", "reach", "energy"}.
+var time = 0.0
+var night = -1.0
+var fires: Array[Dictionary] = []
+var glow_texture: GradientTexture2D
+# What a fire's light falls on: everything but the ground (layer 2).
+const FIRE_LAYERS = 1
+const GROUND_LAYER = 2
 var ground: Node3D
 var hill: Node3D
 # How many of this node's children are the world itself; whatever the game
@@ -200,8 +211,8 @@ func dune_height(x: float, z: float) -> float:
 func lift(at: Vector3) -> float:
 	return height_at(at.x,at.z)
 
-# Late afternoon: a low sun in the west-south-west lights the temple's front
-# and the faces the camera sees, and throws long shadows toward the east.
+# The sky's one light is the sun by day and the moon by night
+# (scripts/daylight.gd); `set_time` moves and colours it.
 func setup_sky() -> void:
 	var env = WorldEnvironment.new()
 	var e = Environment.new()
@@ -211,10 +222,13 @@ func setup_sky() -> void:
 	e.ambient_light_color = Color(.70,.78,.96)
 	e.ambient_light_energy = .4
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	e.fog_enabled = false
+	e.fog_sky_affect = 0.0
 	env.environment = e
+	environment = e
 	add_child(env)
 	sun = DirectionalLight3D.new()
-	sun.name = "AfternoonSun"
+	sun.name = "SkyLight"
 	sun.light_color = Color(1.0,.92,.80)
 	sun.light_energy = .95
 	sun.shadow_enabled = true
@@ -227,7 +241,81 @@ func setup_sky() -> void:
 	RenderingServer.directional_shadow_atlas_set_size(4096,true)
 	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
 	add_child(sun)
-	sun.look_at_from_position(Vector3(-.72,.58,.38)*100,Vector3.ZERO)
+	set_time(Daylight.MORNING+400.0)
+
+# Sets the sky to a time of the day's cycle: the sun's or the moon's place,
+# colour and strength, the ambient light, the sky's colour, the morning's
+# mist, and how far the fires light what is round them.
+func set_time(clock: float) -> void:
+	var sky: Dictionary = Daylight.sky(clock)
+	time = Daylight.of_day(clock)
+	sun.light_color = sky.light
+	sun.light_energy = sky.energy
+	sun.visible = sky.energy > .004
+	sun.look_at_from_position(sky.toward*100.0,Vector3.ZERO)
+	environment.background_color = sky.sky
+	environment.ambient_light_color = sky.ambient
+	environment.ambient_light_energy = sky.ambient_energy
+	environment.fog_enabled = sky.fog > .0002
+	environment.fog_density = sky.fog
+	environment.fog_light_color = sky.fog_colour
+	if absf(sky.night-night) < .01 and (sky.night > 0.0) == (night > 0.0): return
+	night = sky.night
+	for fire in fires:
+		fire.flame.base_energy = fire.energy*night
+		fire.light.omni_range = fire.reach if night > 0.0 else 1.0
+		fire.light.light_cull_mask = FIRE_LAYERS if night > 0.0 else 0
+		fire.glow.material_override.albedo_color = Color(1.0,.62,.30,.8*night)
+
+# A fire: its flame, the light it throws by night on whatever stands near
+# (never by day, when the fire is seen and not its light), and the glow it
+# lays on the ground then. `at` is where the flame burns, in the world;
+# `size` the flame's, and `reach` how far its light carries.
+func fire(at: Vector3, size: float, reach: float, energy: float, phase: float) -> Node3D:
+	var light = OmniLight3D.new()
+	light.light_energy = 0.0
+	light.light_cull_mask = 0
+	light.omni_range = 1.0
+	light.omni_attenuation = 1.2
+	var flame = preload("res://scripts/torch_flame.gd").new()
+	flame.position = at
+	flame.scale = Vector3.ONE*size
+	light.position = at+Vector3.UP*.4
+	add_child(light)
+	flame.setup(light,phase)
+	add_child(flame)
+	# The ground is one slab, lit by too few lights at once to take every
+	# fire's: each fire's glow is laid on it instead.
+	var glow = MeshInstance3D.new()
+	var sheet = PlaneMesh.new()
+	sheet.size = Vector2.ONE*reach*1.7
+	glow.mesh = sheet
+	var lit = StandardMaterial3D.new()
+	lit.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lit.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	lit.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	lit.albedo_texture = fire_glow()
+	lit.albedo_color = Color(1.0,.62,.30,0.0)
+	lit.disable_fog = true
+	glow.material_override = lit
+	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	glow.position = Vector3(at.x,height_at(at.x,at.z)+.05,at.z)
+	add_child(glow)
+	fires.append({"light":light,"flame":flame,"glow":glow,"reach":reach,"energy":energy})
+	night = -1.0
+	return flame
+
+func fire_glow() -> GradientTexture2D:
+	if glow_texture == null:
+		glow_texture = GradientTexture2D.new()
+		glow_texture.width = 128; glow_texture.height = 128
+		glow_texture.fill = GradientTexture2D.FILL_RADIAL
+		glow_texture.fill_from = Vector2(.5,.5); glow_texture.fill_to = Vector2(1,.5)
+		var fading = Gradient.new()
+		fading.offsets = PackedFloat32Array([0,.12,.4,1])
+		fading.colors = PackedColorArray([Color(1,1,1,1),Color(1,1,1,.75),Color(1,1,1,.25),Color(1,1,1,0)])
+		glow_texture.gradient = fading
+	return glow_texture
 
 func index(x: int, z: int) -> int:
 	return (z-NORTH)*WIDTH+(x-WEST)
@@ -327,7 +415,9 @@ func lay_ground() -> void:
 	ground = Art.model("floor",Vector3(WIDTH+240.0,.4,DEPTH+240.0),material)
 	ground.name = "DesertGround"
 	ground.position = Vector3((WEST+EAST)*.5,-.4,(NORTH+SOUTH)*.5)
-	for mesh in ground.find_children("*","MeshInstance3D",true,false): mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for mesh in ground.find_children("*","MeshInstance3D",true,false):
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh.layers = GROUND_LAYER
 	add_child(ground)
 	# The palace hill's ground lies over the slab, a finger's width proud of
 	# it where the two are level.
@@ -336,7 +426,9 @@ func lay_ground() -> void:
 	hill = Art.model("hill",Vector3.ONE,sloping)
 	hill.name = "PalaceHill"
 	hill.position = HILL+Vector3.UP*.02
-	for mesh in hill.find_children("*","MeshInstance3D",true,false): mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for mesh in hill.find_children("*","MeshInstance3D",true,false):
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh.layers = GROUND_LAYER
 	add_child(hill)
 	add_child(dune_ground(sloping))
 
@@ -365,6 +457,7 @@ func dune_ground(material: Material) -> MeshInstance3D:
 	sheet.mesh = tool.commit()
 	sheet.material_override = material
 	sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sheet.layers = GROUND_LAYER
 	return sheet
 
 # ---- Building ----
@@ -418,19 +511,7 @@ func brazier(at: Vector3, width: float, pedestal: float = 0.0) -> Node3D:
 	var bowl = place("fire_bowl",at+Vector3.UP*pedestal,Vector3(width,width*.84,width*.96),Art.bronze())
 	for mesh in bowl.find_children("*","MeshInstance3D",true,false): mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if at.y<.5: block_disc(Vector3(at.x,0,at.z),maxf(.5,width*.5),LOW)
-	# In daylight the fire is seen, not its light: the flame's own light is
-	# kept off every surface.
-	var light = OmniLight3D.new()
-	light.light_energy = 1.0
-	light.light_cull_mask = 0
-	light.omni_range = 1.0
-	var fire = preload("res://scripts/torch_flame.gd").new()
-	fire.position = bowl.position+Vector3.UP*width*.7
-	fire.scale = Vector3.ONE*width*1.9
-	light.position = fire.position
-	add_child(light)
-	fire.setup(light,fposmod(at.x*12.9898+at.z*78.233,100.0))
-	add_child(fire)
+	fire(bowl.position+Vector3.UP*width*.7,width*1.9,width*8.0,1.6,fposmod(at.x*12.9898+at.z*78.233,100.0))
 	return bowl
 
 # A statue: one of the temple's figures (`kind`, as in Data.ENEMIES, with its

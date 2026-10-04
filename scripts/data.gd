@@ -110,6 +110,8 @@ static func new_character(class_id: String = "warrior") -> Dictionary:
 	# Overworld.START, by the camp on the dune; he sits there until he moves.
 	run.position = [-262,144]
 	run["resting"] = true
+	# It is night (scripts/daylight.gd), some minutes before the dawn.
+	run["clock"] = 1440.0
 	return run
 
 static func passive(run: Dictionary, id: String) -> float:

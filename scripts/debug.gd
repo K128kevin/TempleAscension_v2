@@ -22,6 +22,7 @@ const ACTIONS = [
 	[KEY_M,"basement","M · Arena basement"],
 	[KEY_V,"cave","V · Bandit cave"],
 	[KEY_T,"restart","T · Restart floor"],
+	[KEY_F7,"time","F7 · Advance the day 3 min"],
 	[KEY_F8,"reset","F8 · Reset run"],
 	[KEY_F10,"ending","F10 · Jump to ending"]]
 
@@ -183,6 +184,10 @@ func execute(action: String, floor_index: int = 0) -> void:
 			game.run.position = [-262,144] if action=="desert" else [-186,0]
 			game.load_floor()
 			game.toast("[Debug] %s" % ("Desert" if action=="desert" else "Town"))
+		"time":
+			game.run["clock"] = fposmod(float(game.run.get("clock",420.0))+180.0,1800.0)
+			if game.world.has_method("set_time"): game.world.set_time(game.run.clock)
+			game.toast("[Debug] Time of day advanced")
 		"floor": jump(floor_index)
 		"restart":
 			if game.run.place in Data.DUNGEONS:

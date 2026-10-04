@@ -140,6 +140,17 @@ The temple stands in a larger world, one continuous outdoor map
   in four is kept up, and the inn and shops are shabby but sound. The alleys
   are trodden dirt with what is left of their paving. Every door and shutter
   in the world is bare or oiled wood, in one brown or another.
+- **Day and night** (`scripts/daylight.gd`): the outdoor world turns through a
+  thirty-minute day: a three-minute sunrise, fourteen minutes of day, a
+  three-minute sunset and ten minutes of night. The sun rises in the east,
+  stands in the south at noon and sets in the west, with red-gold light at
+  both ends of the day; at night the moon lights the world, much darker and
+  blue but easy to see by, and every fire lights what stands round it and
+  glows on the ground. Mist lies from the end of the night through the early
+  morning. A new character wakes at night, six minutes before the dawn, by
+  his campfire. The clock is kept in the save and runs indoors too (the
+  light beyond a door to the outside follows it). Debug: F7 advances the day
+  three minutes.
 - **The southern desert**, apart from the one the track crosses: a gap in the
   rocks at the end of the town's south-eastern alley opens on it. A great dune
   nine metres high looks down on the town from the south; on its crown is the
