@@ -15,7 +15,7 @@ const ACTIONS = [
 	[KEY_J,"bow","J · Grant bow"],
 	[KEY_Y,"skills","Y · Reset skills"],
 	[KEY_N,"next","N · Next floor"],
-	[KEY_B,"boss","B · Boss + level 20"],
+	[KEY_B,"boss","B · Boss + level 25"],
 	[KEY_L,"first","L · Return to floor 1"],
 	[KEY_O,"desert","O · Desert (start)"],
 	[KEY_U,"town","U · Town"],

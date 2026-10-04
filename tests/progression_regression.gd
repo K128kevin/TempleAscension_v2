@@ -28,12 +28,12 @@ func test():
 		check(run.level==15 and run.points==70 and run.skill_points==15 and Data.max_health(run)==100,"Level 15 awards 70 attributes and 15 total skills without implicit stats: "+class_id)
 		check(Save.valid(run),"Progression state validates: "+class_id)
 		Data.gain_xp(run,100000000)
-		check(run.level==20 and Data.MAX_LEVEL==20 and run.points==95 and run.skill_points==20,"Level cap of 20 and point budgets (five attributes and one skill a level): "+class_id)
+		check(run.level==25 and Data.MAX_LEVEL==25 and run.points==120 and run.skill_points==25,"Level cap of 25 and point budgets (five attributes and one skill a level): "+class_id)
 		var points = run.points
 		Data.gain_xp(run,100000)
 		check(run.points==points,"XP at cap cannot mint points: "+class_id)
 		Data.respec(run)
-		check(run.skill_points==20 and run.points==95 and run.hotbar==["","","","",""] and Save.valid(run),"Respec refunds exact budgets and clears slots: "+class_id)
+		check(run.skill_points==25 and run.points==120 and run.hotbar==["","","","",""] and Save.valid(run),"Respec refunds exact budgets and clears slots: "+class_id)
 		for tag in ["melee","ranged","spell"]:
 			var i: int = {"melee":0,"ranged":1,"spell":2}[tag]
 			run.stats[i] += 10
@@ -101,7 +101,7 @@ func test():
 	var eight = Data.new_run("warrior"); eight.version=8; eight.skills={"cleave":1}; eight.skill_points=0; eight.hotbar=["cleave","",""]
 	var nine = Save.migrate(eight)
 	check(Save.valid(eight) and nine.version==9 and nine.hotbar==["cleave","","","",""],"Version 8 saves keep their skills, the hotbar grown to RMB and 1 to 4")
-	check(Save.valid(capped) and capped.level==20 and capped.xp==Data.xp_at_level(20) and capped.stats==[5,5,5,5,5] and capped.points==95 and capped.skill_points==20 and capped.get("migration_notice",false),"Version 5 saves above the new cap come down to level 20 with every point refunded")
+	check(Save.valid(capped) and capped.level==25 and capped.xp==Data.xp_at_level(25) and capped.stats==[5,5,5,5,5] and capped.points==120 and capped.skill_points==25 and capped.get("migration_notice",false),"Version 5 saves above the cap come down to level 25 with every point refunded")
 	var old = {"version":2,"floor":3,"stats":[6,3,2,5],"owned":[true,true,true,true],"weapon":0,"difficulty":1,"dead":["3:0"],"gems":["gem:2:0"],"drops":[],"deaths":2,"seed":78,"position":[0,9],"health":140,"energy":120,"phase":"allocation","points":5,"completed":false}
 	var migrated = Save.migrate(old)
 	check(Save.valid(migrated) and migrated.stats==[5,5,5,5,5] and migrated.level==12 and migrated.points==55,"Legacy saves retain campaign progress and refund old bonuses into the new level budget")
@@ -115,8 +115,9 @@ func test():
 		simulated.floor = floor_index
 		for kind in Data.COUNTS[floor_index]:
 			for i in Data.COUNTS[floor_index][kind]: Data.gain_xp(simulated,Data.enemy_xp(simulated,kind))
+		print("TEMPLE_XP_SIMULATION after floor ",floor_index+1,": level ",simulated.level)
 	print("TEMPLE_XP_SIMULATION level=",simulated.level," xp=",simulated.xp)
-	check(simulated.level>=18 and simulated.level<=20,"The temple's enemies bring a character to the level cap by the summit")
+	check(simulated.level==Data.MAX_LEVEL,"The temple's enemies bring a character to the level cap by the summit")
 	FileAccess.open("res://test-results/progression-regression.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
 	print("PROGRESSION_REGRESSION ",passed.size()," passed; ",failed)
 	quit(0 if failed.is_empty() else 1)

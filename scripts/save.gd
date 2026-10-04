@@ -30,7 +30,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 		updated.place = "temple"
 		return migrate(updated)
 	if int(d.get("version",0))==5:
-		# The level cap fell to 20, each level now grants five attribute points,
+		# The level cap fell (to 20 then; it is 25 now), each level now grants five attribute points,
 		# and the skill trees changed: everything spent is refunded.
 		for key in ["level","xp"]:
 			if not (d.get(key) is int or d.get(key) is float) or not is_finite(float(d[key])) or d[key]<0: return {}

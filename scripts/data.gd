@@ -39,11 +39,12 @@ const DIFFICULTIES = ["Easy","Moderate","Hard"]
 const HEALTH_SCALE = [.9,1.1,1.4]
 const DAMAGE_SCALE = [.7,1.1,1.4]
 const ENEMY_LEVELS = [1,4,8,12,18,22]
-const MAX_LEVEL = 20
+const MAX_LEVEL = 25
 # Attribute points for each level gained; each level also grants a skill point.
 const STAT_POINTS = 5
-# XP needed to advance from levels 1 through 19; the cap is 20.
-const XP_STEPS = [100,150,220,300,400,520,650,800,960,1140,1340,1560,1800,2060,2340,2640,2960,3300,3660]
+# XP needed to advance from levels 1 through 24; the cap is 25. (Each step
+# grows by 20 more than the one before.)
+const XP_STEPS = [100,150,220,300,400,520,650,800,960,1140,1340,1560,1800,2060,2340,2640,2960,3300,3660,4040,4440,4860,5300,5760]
 # The fastest a melee swing can become, however much attack speed is stacked.
 const MELEE_MINIMUM = .2
 

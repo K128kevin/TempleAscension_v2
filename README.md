@@ -200,7 +200,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | Y | Reset skills: unlearn every skill, refund all skill points and empty the hotbar; attributes stay |
 | Ctrl + 1–5 | Jump directly to that floor, retaining stats and weapons |
 | N | Jump to the next floor without progression awards; on summit, defeat boss |
-| B | Jump to summit and grant enough XP for level 20, the cap; repeated use grants nothing extra |
+| B | Jump to summit and grant enough XP for level 25, the cap; repeated use grants nothing extra |
 | L | Return to floor 1 with stats and weapons intact |
 | O / U | Jump outside the temple: to the desert where a character starts / inside the town gate |
 | T | Restart the current floor with stats and weapons intact |
@@ -406,10 +406,11 @@ active skills have five ranks and passives three, with rank limited to
 
 Enemy kills award XP, with diminishing rewards from enemies well below the
 character's level. Each level after 1 grants five attribute points, to spend on
-any attribute, and one skill point, up to level 20. Level alone adds no health,
+any attribute, and one skill point, up to level 25. Level alone adds no health,
 damage or energy. XP thresholds
 and authored floor enemy levels are explicit tables in `scripts/data.gd`. The
-current 247-enemy temple route reaches level 20 before the summit; this
+temple route reaches level 20 by the end of floor 4 and the cap of 25 by the
+end of floor 5, before the summit; this
 balance is for the existing climb, not the plan's future pre-temple regions.
 
 Floor travel grants no points or XP. Permanent attribute gems have been removed.
@@ -449,9 +450,9 @@ persist. A save also records whether the hero is outside the temple or on one
 of its floors, and where; saves from before the outdoor world (version 6 and
 earlier) continue inside the temple. Autosaves run every eight seconds and on important progression events.
 Writes use a temporary file and a backup. A damaged current save falls back to its
-backup. Saves from before the level cap of 20 and the skill trees (version 5
+backup. Saves from before the level cap and the skill trees (version 5
 and earlier) keep their class, campaign progress, weapons and defeated enemies;
-a level above 20 comes down to 20, and every attribute and skill point is
+a level above the cap of 25 comes down to 25, and every attribute and skill point is
 refunded to spend again under the new rules. Saves from before the ranger's new
 skills (version 7) gain the dagger slot; a ranger's skill points are refunded and
 he is given his dagger. Version 1/2 saves migrate to a Warrior (or Ranger if a bow was equipped).
