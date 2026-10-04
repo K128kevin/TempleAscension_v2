@@ -14,7 +14,7 @@ func test():
 	game.set_process(false)
 	game.run = Data.new_run(); game.run.seed = 12345
 	game.load_floor()
-	for floor_index in 6:
+	for floor_index in Data.FLOORS:
 		game.run.floor = floor_index; game.run.position = [0,9]; game.run.dead = []; game.run.drops = []
 		game.load_floor()
 		var all_routes = true
@@ -35,7 +35,7 @@ func test():
 		var same = game.world.layout.cells==cells
 		for i in game.enemies.size(): same = same and game.enemies[i].position==positions[i]
 		check(same and game.run.stats==[7,6,5,6,5],"Retry preserves floor, roster and earned upgrades on floor %d" % [floor_index+1])
-		if floor_index<5:
+		if floor_index<Data.FLOORS-1:
 			var path: PackedVector3Array = game.world.path(game.world.spawn,game.world.exit_point)
 			var at: Vector3 = game.world.spawn
 			for point in path:

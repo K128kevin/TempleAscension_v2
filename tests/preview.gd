@@ -23,7 +23,7 @@ func capture() -> void:
 	for i in 15: await process_frame
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("res://test-results/character.png")
-	game.run.floor = 4
+	game.run.floor = 2
 	game.run.position = [0,-26]
 	game.run.dead = []
 	game.run.drops = []
@@ -33,7 +33,7 @@ func capture() -> void:
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("res://test-results/floor-five.png")
 	print("FLOOR_FIVE_METRICS ",JSON.stringify({"fps":Performance.get_monitor(Performance.TIME_FPS),"process_ms":Performance.get_monitor(Performance.TIME_PROCESS)*1000,"draw_calls":Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)}))
-	game.run.floor = 5
+	game.run.floor = 3
 	game.run.position = [0,-28]
 	game.run.dead = []
 	game.run.drops = []

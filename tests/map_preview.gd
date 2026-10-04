@@ -13,7 +13,7 @@ func capture():
 	game.set_process(false)
 	game.run = preload("res://scripts/data.gd").new_run()
 	game.run.seed = 0
-	for level in 6:
+	for level in 4:
 		game.run.floor = level
 		game.run.dead = []; game.run.drops = []; game.run.position = [0,9]
 		game.load_floor()

@@ -45,6 +45,9 @@ const ARENA_BAYS = 60
 const ARENA_GATES = [0,15,30,45]
 # The bays the royal box takes up, over the north gate.
 const BOX_BAYS = [44,45,46]
+# The doorway from each gateway into the space under the stands: how far in
+# from the outer wall it starts and ends.
+const UNDER_DOOR = Vector2(3.2,6.0)
 # Half the royal box's width, and the height of its floor.
 const BOX_HALF = 7.1
 const BOX_FLOOR = 6.6
@@ -215,22 +218,31 @@ static func arena(world) -> void:
 			for side in [-1.0,1.0]:
 				var edge = angle+side*step*.5
 				var along = (oval(edge)-oval(edge,podium+.5)).normalized()
-				for run in [[1.0,1.2+TIER.x,PODIUM+TIER.y*2.0+.5],[1.2+TIER.x,1.2+TIER.x*2.0,PODIUM+TIER.y+.5],[1.2+TIER.x*2.0,podium+.5,PODIUM+.9]]:
+				# (A doorway in each lets into the space under the stands; the
+				# royal box's walls close the north gate's.)
+				var tall = PODIUM+TIER.y*2.0+.5
+				var runs: Array = [[1.0,1.2+TIER.x,tall,0.0],[1.2+TIER.x,1.2+TIER.x*2.0,PODIUM+TIER.y+.5,0.0],[1.2+TIER.x*2.0,podium+.5,PODIUM+.9,0.0]]
+				if not i in BOX_BAYS: runs = [[1.0,UNDER_DOOR.x,tall,0.0],[UNDER_DOOR.x,UNDER_DOOR.y,tall-2.9,2.9],[UNDER_DOOR.y,1.2+TIER.x,tall,0.0]]+runs.slice(1)
+				for run in runs:
 					var wall_at = (oval(edge,run[0])+oval(edge,run[1]))*.5
-					nodes.append(world.place("floor",wall_at,Vector3(run[1]-run[0]+.1,run[2],.9),shaded,atan2(-along.z,along.x)))
+					nodes.append(world.place("floor",wall_at+Vector3.UP*run[3],Vector3(run[1]-run[0]+.1,run[2],.9),shaded,atan2(-along.z,along.x)))
 		else:
 			# The kit's flight climbs toward its own -Z: here, up to the wall.
 			var seats_yaw = atan2(-out.x,-out.z)
 			for bank in [[upper,PODIUM+TIER.y],[lower,PODIUM]]:
 				var width = oval(angle-step*.5,bank[0]).distance_to(oval(angle+step*.5,bank[0]))
 				var seat_at = (oval(angle-step*.5,bank[0])+oval(angle+step*.5,bank[0]))*.5
-				nodes.append(world.place("stairs",seat_at+Vector3.UP*bank[1],Vector3(width+.35,TIER.y,TIER.x),material,seats_yaw))
+				var seats = world.place("stairs",seat_at+Vector3.UP*bank[1],Vector3(width+.35,TIER.y,TIER.x),material,seats_yaw)
+				world.stand_seats.append(seats)
+				nodes.append(seats)
 			# The wall the seats stand on, with a parapet above the sand.
 			var foot = oval(angle-step*.5,podium).distance_to(oval(angle+step*.5,podium))
 			var foot_at = (oval(angle-step*.5,podium)+oval(angle+step*.5,podium))*.5
 			nodes.append(world.place("wall",foot_at,Vector3(foot+.3,PODIUM+.9,1.0),shaded,yaw))
 		world.screen(nodes)
-	# The ring is solid from its outer wall to the sand, but for the gateways.
+	# The ring's outer wall and the wall round the sand are solid. Between
+	# them, under the seats, runs a paved and shadowed undercroft, reached by
+	# a doorway in each side of the gateways.
 	for z in range(int(ARENA.z-ARENA_RADII.y)-1,int(ARENA.z+ARENA_RADII.y)+2):
 		for x in range(int(ARENA.x-ARENA_RADII.x)-1,int(ARENA.x+ARENA_RADII.x)+2):
 			var offset = Vector2(x-ARENA.x,z-ARENA.z)
@@ -239,11 +251,24 @@ static func arena(world) -> void:
 				world.dab(world.TRACK,x,z,.9)
 				continue
 			var in_gate = false
+			var in_door = false
+			var in_wall = false
 			for i in ARENA_GATES:
 				var along = Vector2(cos(i*step),sin(i*step))
-				if offset.dot(along)>0 and absf(offset.cross(along))<1.9: in_gate = true
+				var out = offset.dot(along)
+				var aside = absf(offset.cross(along))
+				if out<=0: continue
+				if aside<1.9: in_gate = true
+				elif aside<3.1:
+					var reach = ARENA_RADII.x if i%30==0 else ARENA_RADII.y
+					if not i in BOX_BAYS and out>reach-UNDER_DOOR.y+.3 and out<reach-UNDER_DOOR.x-.3: in_door = true
+					else: in_wall = true
 			if in_gate: world.dab(world.PAVING,x,z,.85)
+			elif in_door or (not in_wall and under_stands(Vector3(x,0,z))):
+				world.dab(world.PAVING,x,z,.8)
+				world.dab(world.SHADE,x,z,.55)
 			else: world.block_cell(x,z)
+	undercroft(world,material)
 	world.add_place("arena","arena",ARENA,ARENA_FLOOR.y)
 	# What the fighters train with stands round the edge of the sand.
 	for spot in [[-.9,"dummy",1.9],[.5,"weapon_stand",1.25],[2.3,"dummy",1.9],[2.75,"dummy",1.9],[3.6,"weapon_stand",1.25],[5.4,"weapon_stand",1.25]]:
@@ -256,6 +281,62 @@ static func arena(world) -> void:
 		for side in [-1.0,1.0]:
 			var bowl = world.brazier(oval(angle,-2.2)+across*side*3.9,1.0,1.1)
 			for mesh in bowl.find_children("*","MeshInstance3D",true,false): mesh.material_override = Kit.gold()
+
+# Whether a point is under the arena's stands: between its outer wall and the
+# wall round the sand, clear of the royal box.
+static func under_stands(at: Vector3) -> bool:
+	var offset = Vector2(at.x-ARENA.x,at.z-ARENA.z)
+	if (offset/(ARENA_RADII-Vector2(2.2,2.2))).length()>=1.0 or (offset/(ARENA_RADII-Vector2(13.7,13.7))).length()<=1.0: return false
+	return not (offset.y<0 and absf(offset.x)<BOX_HALF+1.0)
+
+# What stands under the stands: a pier under every other rib of the seating,
+# fires along the inner wall, the fighters' stores, and in the south-east the
+# stair down to the basement. (Seen only from inside: world.stand_fittings.)
+static func undercroft(world, material: Material) -> void:
+	var step = TAU/ARENA_BAYS
+	var before = world.get_child_count()
+	for i in ARENA_BAYS:
+		var angle = (i+.5)*step
+		var near_gate = false
+		for gate in ARENA_GATES:
+			if absi(i-gate) <= 1 or absi(i+1-gate) <= 1 or i == ARENA_BAYS-1 or i == ARENA_BAYS-2: near_gate = true
+		var at = oval(angle,7.9)
+		if near_gate or not under_stands(at) or at.distance_to(world.BASEMENT_STAIR)<6.0: continue
+		if i%2 == 0:
+			world.place("pillar",at,Vector3(1.2,PODIUM,1.2),material,-angle)
+			world.block_disc(at,.7,world.SOLID,false)
+		elif i%6 == 1:
+			var bowl = world.brazier(oval(angle,12.6),.8)
+			for mesh in bowl.find_children("*","MeshInstance3D",true,false): mesh.material_override = Kit.gold()
+		elif i%6 == 3:
+			var out = Vector3(cos(angle),0,sin(angle))
+			for item in [["crate",0.0,.85],["barrel",1.1,.9],["crate",-1.0,.7]]:
+				var spot = oval(angle+item[1]*.022,3.4)
+				world.prop(item[0],spot,item[2],angle+item[1])
+				world.block_disc(spot,.5,world.LOW,false)
+	# The stair to the basement: a kerbed well in the floor, its steps going
+	# down into the dark.
+	var stair: Vector3 = world.BASEMENT_STAIR
+	var dark = StandardMaterial3D.new()
+	dark.albedo_color = Color(.02,.02,.025)
+	dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	world.place("floor",stair+Vector3.UP*.05,Vector3(2.6,.04,3.6),dark,PI/4)
+	# (The ground is one slab: the steps are drawn on the dark, each dimmer
+	# than the one above it.)
+	for i in 5:
+		var tread = Kit.gritty(ARENA_STONE*Color(.8,.8,.8)*(.9-i*.19),1.6,true)
+		world.place("floor",stair+Vector3(0,.07,1.45-i*.62).rotated(Vector3.UP,PI/4),Vector3(2.5,.03,.56),tread,PI/4)
+	for side in [[Vector3(1.5,0,0),.4,3.9],[Vector3(-1.5,0,0),.4,3.9],[Vector3(0,0,-1.95),3.4,.4]]:
+		var offset: Vector3 = side[0].rotated(Vector3.UP,PI/4)
+		world.place("floor",stair+offset,Vector3(side[1],.5,side[2]),material,PI/4)
+	for side in [-1.0,1.0]:
+		world.brazier(stair+Vector3(side*2.4,0,-2.2).rotated(Vector3.UP,PI/4),.75,.6)
+	world.add_place("basement stair","basement",stair,5.0)
+	for index in range(before,world.get_child_count()):
+		var node = world.get_child(index)
+		if node is Node3D:
+			node.visible = false
+			world.stand_fittings.append(node)
 
 # The royal box, in the north stands over the gate the palace road comes in
 # by: a pavilion of white marble where the elders sit to watch the games,

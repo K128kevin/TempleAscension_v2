@@ -1,7 +1,7 @@
 # Temple Ascension 3D
 
 Native Godot adaptation of `/Users/ktabb/Documents/workspace/TempleAscension`.
-Choose Warrior, Ranger or Wizard when creating a character. A new character wakes in the middle of the desert, between the town in the west and the temple in the east; walking in through the temple's door begins the ascent. Progression follows the class, attribute and skill rules in the v2 plan.
+Choose Warrior, Ranger or Wizard when creating a character. A new character wakes sitting by a campfire on top of a great dune in the desert south of the town, with the temple far to the east. The campaign runs through two bandit dungeons of two levels each (the basement under the town's arena, reached from the space under its stands, and a cave in the northern rocks of the desert before the temple) and then the temple: three floors and the summit. The temple's door stays shut until both dungeons are cleared. Progression follows the class, attribute and skill rules in the v2 plan.
 
 ## Play
 
@@ -56,11 +56,11 @@ hallway and room stays readable, with
 animated flames, rising embers and subtle independent light flicker. On the
 low parapets of the terraces and the summit the light comes from bronze
 braziers standing on the wall tops, burning with the same flame. The
-terraces on floors four and five look down onto nearby moonlit dunes and ruins,
+terraces on the third floor (galleries round its west, north and east sides) look down onto nearby moonlit dunes and ruins,
 with mountains and a river farther away. The terraces are paved in grey
 cleft slate laid in an ashlar pattern of mixed-size slabs, unlike the halls'
-quartz. Below the summit, the building steps down: one storey lower, the stone roof of floor 5
-wraps its south and east sides, and a storey below that, floor 4's quartz-paved terrace.
+quartz. Below the summit, the building steps down: one storey lower, a stone roof
+wraps its south and east sides, and a storey below that, a quartz-paved terrace.
 The south and east sides of the building on the terrace floors, and of the summit, drop away
 as several storeys of stone wall, ledges and columns, so the galleries read as the roof
 of a tall building. The dark panorama appears only while the player is on a terrace,
@@ -140,10 +140,25 @@ The temple stands in a larger world, one continuous outdoor map
   in four is kept up, and the inn and shops are shabby but sound. The alleys
   are trodden dirt with what is left of their paving. Every door and shutter
   in the world is bare or oiled wood, in one brown or another.
+- **The southern desert**, apart from the one the track crosses: a gap in the
+  rocks at the end of the town's south-eastern alley opens on it. A great dune
+  nine metres high looks down on the town from the south; on its crown is the
+  camp a new character wakes at, seated on a log by his fire, with a sleeping
+  pad and his supplies beside it. He gets up the moment he moves.
+- **The dungeons' entrances**: under the arena's stands runs a paved, shadowed
+  undercroft (a doorway in each side of the east, south and west gateways lets
+  into it; the seats overhead are lifted away while the hero is inside), with
+  the kerbed stair down to the basement under the south-eastern stands; and a
+  defile in the desert's northern rocks leads to the black mouth of the
+  bandits' cave. Both dungeons are generated like the temple's floors, in
+  their own stone (dressed masonry and slate; living rock over bare earth),
+  are gone down into (E at the far stair descends, E at the arrival stair
+  climbs back, and the first level's door leads out), and hold bandits with
+  swords and with bows: men, who fall rather than crumble.
 - **The desert** between them: wind-rippled sand and low
   dunes, crossed by a worn track from the town gate to the temple. Running it
   from gate to door (about 250 m) takes some forty seconds. On the way are an abandoned caravan
-  (where a new character starts, in the middle), a palm-ringed pool, a ruined
+  (in the middle), a palm-ringed pool, a ruined
   colonnade, boundary stones along the track, rock outcrops, dead trees and
   dry scrub.
 - **The temple**, at the eastern end: the stepped building whose
@@ -186,7 +201,7 @@ sh tools/debug.sh --boss
 You can also pass `-- --debug-mode` to the game executable or to Godot after
 `--path .`. The separator matters: these are game arguments. Debug controls
 are available in packaged releases only when launched with this flag.
-Optional `--floor=1` through `--floor=5`, `--boss`, `--bow`, and `--axe` choose
+Optional `--floor=1` through `--floor=3`, `--boss`, `--bow`, and `--axe` choose
 the starting encounter and weapons; they require `--debug-mode`.
 
 The debug panel retains the original controls, with F9/F10 freeing K/C for character screens:
@@ -198,10 +213,12 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | F | Refill health and energy |
 | H / J | Grant battle axe / bow; equip through I |
 | Y | Reset skills: unlearn every skill, refund all skill points and empty the hotbar; attributes stay |
-| Ctrl + 1–5 | Jump directly to that floor, retaining stats and weapons |
+| Ctrl + 1–3 | Jump directly to that floor, retaining stats and weapons |
 | N | Jump to the next floor without progression awards; on summit, defeat boss |
 | B | Jump to summit and grant enough XP for level 25, the cap; repeated use grants nothing extra |
 | L | Return to floor 1 with stats and weapons intact |
+| M | Go to the arena basement's first level |
+| V | Go to the bandit cave's first level |
 | O / U | Jump outside the temple: to the desert where a character starts / inside the town gate |
 | T | Restart the current floor with stats and weapons intact |
 | F8 | Reset the run and turn off invulnerability |
@@ -230,7 +247,7 @@ time between attacks and roots it for that time; further hits add 30%, then 15%,
 then nothing, until it lands an attack. A hit during a wind-up breaks it off: the
 enemy flinches and starts the attack over once the delay ends. A hit during an Oracle's
 cast pushes the cast back by the same amount instead. Oracles cast two-second fireballs, shown by a cast
-bar, and answer a close approach with an instant frost nova that slows the hero. The five floors now use the original game's
+bar, and answer a close approach with an instant frost nova that slows the hero. The temple's three floors (gladiators and archers on the first; lions and Oracles added, with the fountain court, on the second; centurions added, with the terraces, on the third) and the dungeons' levels use the original game's
 seeded room-and-corridor format: 8–15 tile rooms, five-tile-wide passages,
 extra connections that form loops, and ascent stairs in the most distant room.
 Floors grow from 50×50 to 74×74 tiles. The third floor includes a large central
@@ -409,9 +426,8 @@ character's level. Each level after 1 grants five attribute points, to spend on
 any attribute, and one skill point, up to level 25. Level alone adds no health,
 damage or energy. XP thresholds
 and authored floor enemy levels are explicit tables in `scripts/data.gd`. The
-temple route reaches level 20 by the end of floor 4 and the cap of 25 by the
-end of floor 5, before the summit; this
-balance is for the existing climb, not the plan's future pre-temple regions.
+dungeons (enemy levels 1, 3, 5 and 8) bring a character to about level ten, and the
+temple's three floors (levels 11, 15 and 19) to the cap of 25 before the summit.
 
 Floor travel grants no points or XP. Permanent attribute gems have been removed.
 Each class starts with only its own weapon: sword for Warrior, bow and dagger for

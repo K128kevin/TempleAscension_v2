@@ -100,7 +100,7 @@ func test():
 	var capped = Save.migrate(veteran)
 	var eight = Data.new_run("warrior"); eight.version=8; eight.skills={"cleave":1}; eight.skill_points=0; eight.hotbar=["cleave","",""]
 	var nine = Save.migrate(eight)
-	check(Save.valid(eight) and nine.version==9 and nine.hotbar==["cleave","","","",""],"Version 8 saves keep their skills, the hotbar grown to RMB and 1 to 4")
+	check(Save.valid(eight) and nine.version==Data.new_run().version and nine.hotbar==["cleave","","","",""],"Version 8 saves keep their skills, the hotbar grown to RMB and 1 to 4")
 	check(Save.valid(capped) and capped.level==25 and capped.xp==Data.xp_at_level(25) and capped.stats==[5,5,5,5,5] and capped.points==120 and capped.skill_points==25 and capped.get("migration_notice",false),"Version 5 saves above the cap come down to level 25 with every point refunded")
 	var old = {"version":2,"floor":3,"stats":[6,3,2,5],"owned":[true,true,true,true],"weapon":0,"difficulty":1,"dead":["3:0"],"gems":["gem:2:0"],"drops":[],"deaths":2,"seed":78,"position":[0,9],"health":140,"energy":120,"phase":"allocation","points":5,"completed":false}
 	var migrated = Save.migrate(old)
@@ -111,13 +111,17 @@ func test():
 	var loaded = Save.load_run()
 	check(loaded.class_id==migrated.class_id and loaded.skills==migrated.skills and loaded.xp==migrated.xp,"Class, skills, XP and budgets survive save round-trip")
 	var simulated = Data.new_run()
-	for floor_index in 5:
-		simulated.floor = floor_index
-		for kind in Data.COUNTS[floor_index]:
-			for i in Data.COUNTS[floor_index][kind]: Data.gain_xp(simulated,Data.enemy_xp(simulated,kind))
-		print("TEMPLE_XP_SIMULATION after floor ",floor_index+1,": level ",simulated.level)
+	for place in ["basement","cave","temple"]:
+		simulated.place = place
+		for floor_index in Data.AREAS[place].size():
+			simulated.floor = floor_index
+			var counts: Dictionary = Data.AREAS[place][floor_index].counts
+			for kind in counts:
+				for i in counts[kind]: Data.gain_xp(simulated,Data.enemy_xp(simulated,kind))
+			print("TEMPLE_XP_SIMULATION after ",place," ",floor_index+1,": level ",simulated.level)
+		if place=="cave": check(simulated.level>=8 and simulated.level<=13,"The two dungeons bring a character to about level ten before the temple")
 	print("TEMPLE_XP_SIMULATION level=",simulated.level," xp=",simulated.xp)
-	check(simulated.level==Data.MAX_LEVEL,"The temple's enemies bring a character to the level cap by the summit")
+	check(simulated.level==Data.MAX_LEVEL,"The dungeons' and the temple's enemies bring a character to the level cap by the summit")
 	FileAccess.open("res://test-results/progression-regression.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
 	print("PROGRESSION_REGRESSION ",passed.size()," passed; ",failed)
 	quit(0 if failed.is_empty() else 1)

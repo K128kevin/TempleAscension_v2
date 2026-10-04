@@ -83,7 +83,7 @@ static func boulder(world, at: Vector3, width: float, height: float) -> Node3D:
 
 # Whether a spot on the open sand is free for a landmark `radius` across.
 static func clear_site(world, at: Vector3, radius: float) -> bool:
-	if world.margin_at(at)<radius+5.0 or at.distance_to(world.spawn)<radius+10.0: return false
+	if world.margin_at(at)<radius+5.0 or at.distance_to(world.CARAVAN)<radius+10.0: return false
 	if absf(at.z-world.track_z(at.x))<radius+7.0: return false
 	if at.x<world.TOWN_GATE.x+22.0 or at.x>world.TEMPLE_DOOR.x-58.0: return false
 	for spot in world.places:
@@ -108,7 +108,7 @@ static func outcrops(world) -> void:
 
 # Where a new character wakes: a caravan's cart and load, left by the track.
 static func caravan(world) -> void:
-	var at: Vector3 = world.spawn
+	var at: Vector3 = world.CARAVAN
 	world.add_place("caravan","camp",at,9.0)
 	var cart = world.prop("cart",at+Vector3(3.6,0,-3.2),2.5,.5)
 	world.block_disc(at+Vector3(3.6,0,-3.2),1.5,world.LOW)
@@ -240,9 +240,9 @@ static func scatter(world) -> void:
 		elif roll<.875:
 			if patch>.12: shrub(world,at)
 		elif roll<.945:
-			if patch>.0 and at.distance_to(world.spawn)>5.0:
+			if patch>.0 and at.distance_to(world.CARAVAN)>5.0:
 				world.batch("agave",world.stance(at,Kit.sized("agave",rng.randf_range(.6,1.2)),rng.randf_range(0,TAU)),leaves)
-		elif roll<.953 and at.distance_to(world.spawn)>8.0:
+		elif roll<.953 and at.distance_to(world.CARAVAN)>8.0:
 			var id = "tree" if rng.randf()<.5 else "dead_tree"
 			var tree = world.prop(id,at,rng.randf_range(3.2,5.2),rng.randf_range(0,TAU))
 			world.block_disc(at,.45)

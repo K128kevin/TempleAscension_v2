@@ -14,6 +14,7 @@ const Desert = preload("res://scripts/world_desert.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Palace = preload("res://scripts/world_palace.gd")
 const Front = preload("res://scripts/world_temple_front.gd")
+const Wilds = preload("res://scripts/world_wilds.gd")
 const Townsfolk = preload("res://scripts/townsfolk.gd")
 const GLOW_COLOUR = Front.GLOW
 # `level` of the outdoor world, where a temple floor has its index.
@@ -22,16 +23,36 @@ const OUTDOORS = -2
 const WEST = -396
 const EAST = 148
 const NORTH = -204
-const SOUTH = 128
+const SOUTH = 208
 const WIDTH = EAST-WEST
 const DEPTH = SOUTH-NORTH
 # The town's gate in its east wall, and the temple's door in its west front:
 # the two ends of the desert crossing.
 const TOWN_GATE = Vector3(-180,0,0)
 const TEMPLE_DOOR = Vector3(76,0,0)
-# Where a new character wakes, on the track in the middle of the desert
+# The lost caravan, on the track in the middle of the desert.
+const CARAVAN = Vector3(-52,0,-15)
+# South of the town, through a gap in the rocks at the end of an alley, lies
+# a second desert, apart from the one the track crosses: `SOUTH_REACH` is how
+# far it runs east and west of the dune's middle, and how far south. A great
+# dune stands in it and looks down on the town: its middle, its half-size
+# (east-west, north-south) and its height.
+const SOUTH_GAP = Vector3(-226,0,70)
+const SOUTH_REACH = Vector2(56,196)
+const DUNE = Vector3(-262,0,146)
+const DUNE_RADII = Vector2(46,31)
+const DUNE_HEIGHT = 9.0
+# Where a new character wakes: on top of the dune, by his campfire
 # (Data.new_character).
-const START = Vector3(-52,0,-15)
+const START = Vector3(-262,0,144)
+# The mouth of the bandits' cave, at the head of a defile in the desert's
+# northern rocks, before the temple.
+const CAVE = Vector3(20,0,-80)
+# The stair down to the arena's basement, under its south-eastern stands.
+const BASEMENT_STAIR = Vector3(-227.5,0,22.2)
+# Where the hero stands, and the way he faces, on coming back out of each
+# place.
+const OUTSIDE = {"temple":{"at":Vector3(72.5,0,0),"facing":-PI/2},"cave":{"at":Vector3(20,0,-72.5),"facing":0.0},"basement":{"at":Vector3(-230.1,0,25.1),"facing":2.4}}
 # Where the hero stands, from the door, on stepping back out of the temple.
 const THRESHOLD = Vector3(-3.5,0,0)
 # The palace hill: the middle of its level top, half that top's size
@@ -95,6 +116,11 @@ var screens: Array[Dictionary] = []
 # each stands on, and its "roof" and "front" (the walls on the camera's
 # side), lifted away while he is "inside".
 var rooms: Array[Dictionary] = []
+# The arena's seats, lifted away while the hero is under the stands; and what
+# stands under them, seen only then.
+var stand_seats: Array = []
+var stand_fittings: Array = []
+var under_stands = false
 # The town's people (scripts/townsfolk.gd).
 var townsfolk: Node3D
 # Floors above the ground indoors: over its "area" a deck stands "low" high
@@ -138,6 +164,7 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 	Palace.build(self)
 	Front.build(self)
 	Desert.build(self)
+	Wilds.build(self)
 	flush_batches()
 	lay_ground()
 	nav.region = Rect2i(WEST,NORTH,WIDTH,DEPTH)
@@ -160,10 +187,15 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 func height_at(x: float, z: float) -> float:
 	var outside = Vector2(maxf(absf(x-HILL.x)-HILL_HALF.x,0.0),maxf(absf(z-HILL.z)-HILL_HALF.y,0.0)).length()
 	var t = clampf(1.0-outside/HILL_SLOPE,0.0,1.0)
-	var height = HILL_HEIGHT*t*t*(3.0-2.0*t)
+	var height = HILL_HEIGHT*t*t*(3.0-2.0*t)+dune_height(x,z)
 	for deck in decks:
 		if deck.area.has_point(Vector2(x,z)): return height+lerpf(deck.low,deck.high,clampf((Vector2(x,z)-deck.start).dot(deck.along),0.0,1.0))
 	return height
+
+# The dune's own height: a long smooth mound with a broad crown.
+func dune_height(x: float, z: float) -> float:
+	var t = clampf((1.0-Vector2((x-DUNE.x)/DUNE_RADII.x,(z-DUNE.z)/DUNE_RADII.y).length())/.8,0.0,1.0)
+	return DUNE_HEIGHT*t*t*t*(t*(t*6.0-15.0)+10.0)
 
 func lift(at: Vector3) -> float:
 	return height_at(at.x,at.z)
@@ -221,7 +253,12 @@ func margin(x: float, z: float) -> float:
 	var basin = minf(half_width(x)-absf(z),minf(x-west,east-x))
 	# North of the town the ground runs on, round the palace hill.
 	var round_hill = minf(HILL_REACH.x+3.0*noise.get_noise_1d(z*4.0+17000.0)-absf(x-HILL.x),minf(z-HILL_REACH.y-3.0*noise.get_noise_1d(x*4.0+21000.0),-60.0-z))
-	return maxf(basin,round_hill)
+	# South of it, a gap at an alley's end opens on the southern desert.
+	var gap = minf(9.0+2.0*noise.get_noise_1d(z*5.0+25000.0)-absf(x-SOUTH_GAP.x),minf(z-SOUTH_GAP.z,106.0-z))
+	var south = minf(SOUTH_REACH.x+4.0*noise.get_noise_1d(z*4.0+29000.0)-absf(x-DUNE.x),minf(z-94.0,SOUTH_REACH.y+4.0*noise.get_noise_1d(x*4.0+33000.0)-z))
+	# And a defile in the northern rocks leads to the cave's mouth.
+	var defile = minf(7.5+1.5*noise.get_noise_1d(z*6.0+37000.0)-absf(x-CAVE.x),minf(z-CAVE.z,-40.0-z))
+	return maxf(maxf(basin,round_hill),maxf(maxf(gap,south),defile))
 
 func margin_at(p: Vector3) -> float:
 	var c = to_cell(p)
@@ -301,6 +338,34 @@ func lay_ground() -> void:
 	hill.position = HILL+Vector3.UP*.02
 	for mesh in hill.find_children("*","MeshInstance3D",true,false): mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(hill)
+	add_child(dune_ground(sloping))
+
+# The dune's ground, lying over the slab as the hill's does: a sheet of
+# two-metre squares raised to `dune_height`.
+func dune_ground(material: Material) -> MeshInstance3D:
+	var tool = SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var step = 2.0
+	var across = ceili(DUNE_RADII.x/step)+1
+	var down = ceili(DUNE_RADII.y/step)+1
+	for j in range(-down,down+1):
+		for i in range(-across,across+1):
+			var x = DUNE.x+i*step
+			var z = DUNE.z+j*step
+			tool.set_normal(Vector3(dune_height(x-.5,z)-dune_height(x+.5,z),1.0,dune_height(x,z-.5)-dune_height(x,z+.5)).normalized())
+			tool.set_uv(Vector2(x,z))
+			tool.add_vertex(Vector3(x,dune_height(x,z)+.02,z))
+	var wide = across*2+1
+	for j in down*2:
+		for i in across*2:
+			var a = j*wide+i
+			for corner in [a,a+1,a+wide+1,a,a+wide+1,a+wide]: tool.add_index(corner)
+	var sheet = MeshInstance3D.new()
+	sheet.name = "Dune"
+	sheet.mesh = tool.commit()
+	sheet.material_override = material
+	sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return sheet
 
 # ---- Building ----
 
@@ -591,6 +656,12 @@ func follow(pos: Vector3, delta: float) -> void:
 	camera.look_at(camera.position-VIEW)
 	camera.size = lerpf(camera.size,zoom,minf(1,delta*8))
 	# A building the hero is in stands open to the view.
+	# Under the arena's stands, the seats overhead are lifted away.
+	var under: bool = Town.under_stands(pos)
+	if under != under_stands:
+		under_stands = under
+		for node in stand_seats: node.visible = not under
+		for node in stand_fittings: node.visible = under
 	for room in rooms:
 		var inside: bool = room.area.has_point(Vector2(pos.x,pos.z))
 		if inside == room.inside: continue
@@ -628,6 +699,7 @@ func follow(pos: Vector3, delta: float) -> void:
 
 # The part of the world a point is in: "town", "desert" or "temple".
 func region(at: Vector3) -> String:
+	if at.z>SOUTH_GAP.z+8.0: return "desert"
 	if at.x<TOWN_GATE.x: return "town"
 	return "temple" if at.x>TEMPLE_DOOR.x-46.0 else "desert"
 
@@ -642,3 +714,12 @@ func place_at(at: Vector3) -> Dictionary:
 # Walking through the temple's door enters it.
 func entering_temple(at: Vector3) -> bool:
 	return at.x>=TEMPLE_DOOR.x+1.0 and absf(at.z-TEMPLE_DOOR.z)<4.0
+
+# The place the hero walks into at `at`: "temple" through its door, "cave" at
+# the cave's mouth, "basement" down the stair under the arena's stands; or
+# nowhere ("").
+func entrance(at: Vector3) -> String:
+	if entering_temple(at): return "temple"
+	if absf(at.x-CAVE.x)<3.2 and at.z<CAVE.z+3.4: return "cave"
+	if at.distance_to(BASEMENT_STAIR)<1.5: return "basement"
+	return ""

@@ -53,7 +53,7 @@ func test():
 		check(game.run.owned[3] and game.run.weapon==2,"Debug grants weapons usable through equipment")
 		Data.gain_xp(game.run,Data.xp_at_level(4))
 		var points=game.run.points
-		for i in 5:
+		for i in 3:
 			key(KEY_1+i,true)
 			check(game.run.floor==i and game.run.points==points and game.run.weapon==2,"Floor jump preserves character budget and equipment")
 		key(KEY_O)
@@ -65,7 +65,7 @@ func test():
 		key(KEY_L); key(KEY_N)
 		check(game.run.floor==1 and game.run.points==points and game.mode=="playing","Debug next floor grants no points")
 		key(KEY_B)
-		check(game.run.floor==5 and game.run.level==25 and game.run.points==120,"Boss playtest shortcut grants the level cap through XP")
+		check(game.run.floor==3 and game.run.level==25 and game.run.points==120,"Boss playtest shortcut grants the level cap through XP")
 		key(KEY_B)
 		check(game.run.points==120,"Repeated boss shortcut cannot duplicate level awards")
 		game.run.skills = {"cleave":3,"war_cry":2}

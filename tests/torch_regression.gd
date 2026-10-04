@@ -25,7 +25,7 @@ func test():
 	game.test_mode = true
 	game.set_process(false)
 	game.run = preload("res://scripts/data.gd").new_run()
-	game.run.floor = 3
+	game.run.floor = 2
 	game.load_floor()
 	var world = game.world
 	for child in world.get_children():

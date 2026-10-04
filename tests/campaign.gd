@@ -43,7 +43,7 @@ func start(owner_game):
 	game.pause_game(); check(game.mode=="paused","Pause stops campaign processing")
 	game.resume_game(); check(game.mode=="playing","Resume restores gameplay")
 	var total = 0
-	for floor_index in 5:
+	for floor_index in 3:
 		var expected=0
 		for count in Data.COUNTS[floor_index].values(): expected+=count
 		check(game.enemies.size()==expected,"Floor %d roster preserved" % (floor_index+1))
@@ -66,7 +66,7 @@ func start(owner_game):
 			game.tick_pickups(.016)
 		check(game.pickups.is_empty() and game.run.gems.is_empty(),"Weapon loot can be collected; no permanent gems")
 		check(not game.run.owned[2] and not game.run.owned[3],"Bow and axe do not drop")
-		if floor_index==2: check(game.run.owned[4],"Staff drop remains available")
+		if floor_index==1: check(game.run.owned[4],"Staff drop remains available")
 		var points: int = game.run.points
 		var xp: int = game.run.xp
 		game.player.position=game.world.exit_point
@@ -74,7 +74,7 @@ func start(owner_game):
 		check(game.run.floor==floor_index+1 and game.mode=="playing","Stairs advance immediately without allocation gate")
 		check(game.run.points==points and game.run.xp==xp,"Stairs grant neither XP nor attribute points")
 		await get_tree().process_frame
-	check(total==433 and game.run.level>=23 and game.run.level<=Data.MAX_LEVEL,"All temple enemies grant enough XP to near the level cap of 25")
+	check(total==246 and game.run.level>=20 and game.run.level<=Data.MAX_LEVEL,"All temple enemies grant enough XP to near the level cap of 25 (level %d)" % game.run.level)
 	check(game.enemies.size()==21 and game.boss.max_hp==1125,"Summit holds the boss and its reserve")
 	var reserve: Array=game.enemies.filter(func(e): return e.uid.begins_with("summoned:"))
 	check(reserve.size()==20 and reserve.all(func(e): return e.kind=="centurion" and e.dormant),"The boss's reserve is twenty dormant centurions")

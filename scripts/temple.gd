@@ -2,6 +2,7 @@ extends Node3D
 const Art = preload("res://scripts/assets.gd")
 const Layout = preload("res://scripts/layout.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
+const Kit = preload("res://scripts/world_art.gd")
 var layout = Layout.new()
 var boss_point = Vector3.ZERO
 var summon_points: Array[Vector3] = []
@@ -90,9 +91,12 @@ var visibility_next: Image
 var visibility_player_position = Vector3(INF,INF,INF)
 var fog_material: ShaderMaterial
 
-func setup(floor_index: int, run_seed: int = 1) -> void:
+# `place`: the temple, or one of the dungeons built as its floors are, in
+# their own stone: "basement" (under the town's arena: dressed masonry and
+# slate) and "cave" (the bandits': walls of living rock over packed earth).
+func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> void:
 	level = floor_index
-	layout.generate(run_seed,floor_index)
+	layout.generate(run_seed,floor_index,place)
 	spawn = layout.to_world(layout.start)
 	exit_point = layout.exit_position()
 	var env = WorldEnvironment.new()
@@ -125,10 +129,14 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		sun.light_energy = .8
 		sun.shadow_enabled = true
 		add_child(sun)
-	var stone = Art.material("stone", [Color(.91,.87,.77),Color(.74,.80,.77),Color(.73,.70,.66),Color(.70,.76,.82),Color(.75,.69,.61),Color(.94,.87,.70)][floor_index])
+	var tints: Array = {"temple":[Color(.91,.87,.77),Color(.73,.70,.66),Color(.75,.69,.61),Color(.94,.87,.70)],"basement":[Color(.62,.58,.52),Color(.55,.52,.48)],"cave":[Color(.52,.44,.36),Color(.46,.39,.33)]}[layout.kind]
+	var stone = Art.material("stone",tints[maxi(floor_index,0)])
 	# Pale quartz paving keeps the dark stone statues readable against the floor.
 	# The playground's floor is a mid grey, so every model reads against it.
-	var paving = Art.quartz_material(Color(.46,.47,.5) if floor_index==Layout.PLAYGROUND else Color(.70,.70,.72))
+	var paving: Material = Art.quartz_material(Color(.46,.47,.5) if floor_index==Layout.PLAYGROUND else Color(.70,.70,.72))
+	# A dungeon's floor: slate under the arena, packed earth in the cave.
+	if layout.kind == "basement": paving = Art.slate_material()
+	elif layout.kind == "cave": paving = earth_material()
 	var court_paving = Art.quartz_material(Color(.74,.64,.64))
 	var lower = Vector2i(10000,10000)
 	var upper = Vector2i(-10000,-10000)
@@ -150,7 +158,13 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		if not layout.arrival.has_point(cell):
 			# The open-air terraces are paved in grey slate, not the halls' quartz.
 			var tiles = court_paving if layout.court.has_point(cell) else (Art.slate_material() if layout.on_terrace(cell) else paving)
-			place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),tiles)
+			var tile = place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),tiles)
+			# (A cave's floor is bare ground, not the paving's cut tiles.)
+			if layout.kind == "cave":
+				for mesh in tile.find_children("*","MeshInstance3D",true,false):
+					var box: AABB = mesh.mesh.get_aabb()
+					mesh.position += mesh.basis*box.get_center()
+					mesh.mesh = bare_ground(box.size)
 		# The playground is an open plane, without walls.
 		if level==Layout.PLAYGROUND: continue
 		for direction in Layout.DIRS:
@@ -167,7 +181,8 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 			edges[key].along.append(int(at.x if horizontal_edge else at.z))
 			# Small wall torches sit inside the boundary, with no floor obstruction.
 			if not layout.stairs.has_point(cell) and not layout.arrival.has_point(cell) and not layout.arrival.has_point(cell+direction):
-				var spot = at+Vector3(direction.x,0,direction.y)*.28
+				# (A cave's torches stand clear of its rough rock.)
+				var spot = at+Vector3(direction.x,0,direction.y)*(-.1 if layout.kind == "cave" else .28)
 				torch_candidates.append(spot)
 				torch_walls[spot] = Vector3(direction.x,0,direction.y)
 	bounds = Rect2(Vector2(lower)-Vector2(.5,.5),Vector2(upper-lower)+Vector2.ONE)
@@ -199,7 +214,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 				var pos = Vector3(mid,0,edge.line+edge.direction.y*.14) if edge.horizontal else Vector3(edge.line+edge.direction.x*.14,0,mid)
 				var height = LOW_WALL_HEIGHT if edge.low else WALL_HEIGHT
 				var dimensions = Vector3(finish-start,height,.28) if edge.horizontal else Vector3(.28,height,finish-start)
-				var wall = place("wall",pos,dimensions,Art.world_stone(stone) if edge.low else stone)
+				var wall: Node3D = rock_wall(pos+Vector3(edge.direction.x,0,edge.direction.y)*.5,dimensions) if layout.kind == "cave" else place("wall",pos,dimensions,Art.world_stone(stone) if edge.low else stone)
 				# Walls stand in solid cells that are never seen themselves. Reveal
 				# each piece from the floor it faces, never from the far side.
 				var faces: Array[Vector2i] = []
@@ -212,38 +227,35 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 		var room: Rect2i = layout.rooms[i]
 		var corner = layout.to_world(room.position)
 		# Imported columns occupy solid wall corners, never a corridor tile.
-		if not layout.cells.has(room.position+Vector2i(-1,-1)):
+		if layout.kind != "cave" and not layout.cells.has(room.position+Vector2i(-1,-1)):
 			place("column",corner+Vector3(-.65,0,-.65),Vector3(.7,3.8,.7),stone)
-		if level==2 and i%2==1 and not layout.cells.has(room.position+Vector2i(-1,0)):
+		if layout.court.has_area() and i%2==1 and not layout.cells.has(room.position+Vector2i(-1,0)):
 			var shelf = place("bookcase",corner+Vector3(-.65,0,0),Vector3(.9,2.4,.25),stone)
 			shelf.rotation.y = PI/2
 	if layout.court.has_area():
 		fountain = preload("res://scripts/fountain.gd").new()
 		add_child(fountain)
 		fountain.setup(layout)
-	if floor_index in [3,4,5]: setup_desert(stone)
-	# The stairwell up from the floor below; the ascent is in the furthest room.
-	if layout.arrival.has_area(): build_arrival(stone)
+	if not layout.terrace.is_empty() or layout.summit: setup_desert(stone)
+	# In the temple the hero climbs: a stairwell up from the floor below where
+	# he arrives, and the flight up in the furthest room. In a dungeon he goes
+	# down: the flight he came down by where he arrives, and a stairwell on
+	# down in the furthest room.
+	if layout.arrival.has_area():
+		if layout.descending: build_flight(layout.arrival,layout.arrival_dir,layout.arrival_foot,stone)
+		else: build_well(layout.arrival,layout.arrival_dir,stone)
 	if layout.entry.has_area(): build_entry(stone)
 	if layout.stairs.has_area():
-		# The imported flight climbs toward its local -Z from a base at its origin.
-		# Scaled to wall height, its top step meets the top of the wall it climbs into.
-		var rect: Rect2i = layout.stairs
-		var middle = layout.to_world(rect.position)+Vector3(rect.size.x-1,0,rect.size.y-1)*.5
-		var flight = place("stairs",middle,Vector3(Layout.STAIR_WIDTH,WALL_HEIGHT,Layout.STAIR_DEPTH),stone)
-		flight.rotation.y = atan2(-layout.stairs_dir.x,-layout.stairs_dir.y)
-		var reveal: Array[Vector2i] = [layout.exit_cell]
-		for y in range(rect.position.y,rect.end.y):
-			for x in range(rect.position.x,rect.end.x): reveal.append(Vector2i(x,y))
-		visibility_cells[flight] = reveal
-		for cell in reveal.slice(1): solid_floor[cell] = true
+		if layout.descending: build_well(layout.stairs,layout.stairs_dir,stone)
+		else: build_flight(layout.stairs,layout.stairs_dir,layout.exit_cell,stone)
+	if layout.descending: furnish_dungeon(run_seed)
 	exit_seal = Art.seal(3,Color(.3,1,.85,.85))
 	exit_seal.position = exit_point+Vector3.UP*.05
 	add_child(exit_seal)
 	exit_seal.visible = false
 	if layout.court.has_area(): setup_court_torches()
 	if level!=Layout.PLAYGROUND: light_floor(torch_candidates)
-	if floor_index==5:
+	if layout.summit:
 		boss_point = layout.to_world(Vector2i(14,10))
 		setup_boss_moonlight()
 		setup_summit_understructure(facade_stone(stone))
@@ -266,7 +278,7 @@ func setup(floor_index: int, run_seed: int = 1) -> void:
 func setup_desert(stone: Material) -> void:
 	# The image lies far beyond/below the gallery. A dark imported foundation under
 	# the building keeps the desert out of interior gaps between generated rooms.
-	if level<5:
+	if not layout.summit:
 		var dark = StandardMaterial3D.new()
 		dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		dark.albedo_color = Color(.007,.009,.013)
@@ -280,7 +292,7 @@ func setup_desert(stone: Material) -> void:
 	for strip in layout.terrace:
 		var corner: Vector3 = layout.to_world(strip.position)-Vector3(.5,0,.5)
 		place_scenery("wall",corner+Vector3(strip.size.x*.5,-7,strip.size.y*.5),Vector3(strip.size.x,6.84,strip.size.y),masonry)
-	if level<5: setup_terrace_facades(facade_stone(stone))
+	if not layout.summit: setup_terrace_facades(facade_stone(stone))
 	desert_backdrop = Sprite3D.new()
 	desert_backdrop.name = "MoonlitDesertBelowTerrace"
 	desert_backdrop.texture = preload("res://assets/textures/desert_moonlit_ruins_v2.png")
@@ -441,8 +453,8 @@ func setup_terrace_facades(stone: Material) -> void:
 	for strip in layout.terrace: footprint = footprint.merge(strip)
 	var first: Vector3 = layout.to_world(footprint.position)
 	var last: Vector3 = layout.to_world(footprint.end-Vector2i.ONE)
-	# Floor 5 stands a storey higher above the desert than floor 4.
-	var storeys = FACADE_STOREYS+(1 if level==4 else 0)
+	# (The terraces are the temple's third floor, high above the desert.)
+	var storeys = FACADE_STOREYS+1
 	facade(last.z,Vector2i(0,1),Vector2(first.x-.5,last.x+.5),stone,0.0,storeys)
 	facade(last.x,Vector2i(1,0),Vector2(first.z-.5,last.z+.5),stone,0.0,storeys)
 
@@ -457,9 +469,7 @@ func facade_stone(stone: StandardMaterial3D) -> StandardMaterial3D:
 # A flight descending a full storey into an opening in the floor, its top step
 # level with the floor at the room side, lined with stone walls down to the
 # floor below. Its cells are solid; sight passes over them.
-func build_arrival(stone: Material) -> void:
-	var rect: Rect2i = layout.arrival
-	var dir: Vector2i = layout.arrival_dir
+func build_well(rect: Rect2i, dir: Vector2i, stone: Material) -> void:
 	var middle = layout.to_world(rect.position)+Vector3(rect.size.x-1,0,rect.size.y-1)*.5
 	var flight = place("stairs",middle+Vector3.DOWN*WALL_HEIGHT,Vector3(Layout.STAIR_WIDTH,WALL_HEIGHT,Layout.STAIR_DEPTH),stone)
 	# The imported flight climbs toward its local -Z; this one climbs away from the wall.
@@ -514,6 +524,100 @@ func build_arrival(stone: Material) -> void:
 		visibility_nodes.append(lip)
 		visibility_cells[lip] = cells
 
+# A flight climbing a full storey into the wall behind it, its foot on the
+# room's floor (`foot`, the tile before it). Its cells are solid; sight
+# passes over them.
+func build_flight(rect: Rect2i, dir: Vector2i, foot: Vector2i, stone: Material) -> void:
+	# The imported flight climbs toward its local -Z from a base at its origin.
+	# Scaled to wall height, its top step meets the top of the wall it climbs into.
+	var middle = layout.to_world(rect.position)+Vector3(rect.size.x-1,0,rect.size.y-1)*.5
+	var flight = place("stairs",middle,Vector3(Layout.STAIR_WIDTH,WALL_HEIGHT,Layout.STAIR_DEPTH),stone)
+	flight.rotation.y = atan2(-dir.x,-dir.y)
+	var reveal: Array[Vector2i] = [foot]
+	for y in range(rect.position.y,rect.end.y):
+		for x in range(rect.position.x,rect.end.x): reveal.append(Vector2i(x,y))
+	visibility_cells[flight] = reveal
+	for cell in reveal.slice(1): solid_floor[cell] = true
+
+# A plain slab the size of a paving tile, shared by every tile of a floor.
+var ground_slab: BoxMesh
+func bare_ground(size: Vector3) -> BoxMesh:
+	if ground_slab == null:
+		ground_slab = BoxMesh.new()
+		ground_slab.size = size
+	return ground_slab
+
+# A cave's floor: packed earth and grit.
+func earth_material() -> StandardMaterial3D:
+	var earth = StandardMaterial3D.new()
+	earth.albedo_color = Color(.66,.64,.62)
+	earth.albedo_texture = load("res://assets/textures/sand_gravel.jpg")
+	earth.normal_enabled = true
+	earth.normal_texture = load("res://assets/textures/sand_gravel_normal.jpg")
+	earth.roughness = .95
+	earth.uv1_world_triplanar = true
+	earth.uv1_triplanar = true
+	earth.uv1_scale = Vector3.ONE*.55
+	return earth
+
+# A cave's wall: living rock, a boulder to every two metres of it, each its
+# own shape and lean, in place of the temple's dressed stone.
+const CAVE_ROCKS = ["boulder_a","boulder_b","boulder_c","boulder_d"]
+func rock_wall(pos: Vector3, dimensions: Vector3) -> Node3D:
+	var along_x: bool = dimensions.x >= dimensions.z
+	var length: float = dimensions.x if along_x else dimensions.z
+	var run = Node3D.new()
+	add_child(run)
+	run.position = pos
+	visibility_nodes.append(run)
+	var count = maxi(1,roundi(length/1.6))
+	for i in count:
+		var seed = pos.x*12.9898+pos.z*78.233+i*37.7
+		var chance = func(k: float) -> float: return fposmod(sin(seed*k)*43758.5453,1.0)
+		var offset = (float(i)+.5)/count*length-length*.5
+		var id: String = CAVE_ROCKS[int(chance.call(1.0)*4.0)%4]
+		var rock = Art.model(id,Vector3(length/count*1.45,WALL_HEIGHT*(.95+.5*chance.call(2.0)),1.5+.5*chance.call(3.0)),Kit.rock(id,Color(.74,.70,.66),0.0))
+		run.add_child(rock)
+		rock.position = (Vector3(offset,-.4,0) if along_x else Vector3(0,-.4,offset))
+		rock.rotation.y = (0.0 if along_x else PI/2)+(chance.call(4.0)-.5)*.5+(PI if chance.call(5.0) > .5 else 0.0)
+	return run
+
+# What a dungeon's rooms hold: the bandits' stores stacked in corners (crates,
+# barrels, sacks), solid to walk round and low enough to see over. The same
+# for the same seed.
+func furnish_dungeon(run_seed: int) -> void:
+	var rng = RandomNumberGenerator.new()
+	rng.seed = Layout.floor_seed(run_seed,level+7+Layout.KINDS[layout.kind].salt)
+	var keep_clear: Array[Vector2i] = [layout.start,layout.exit_cell]
+	if layout.arrival.has_area(): keep_clear.append(layout.arrival_foot)
+	for room in layout.rooms:
+		for corner in [Vector2i(room.position.x,room.position.y),Vector2i(room.end.x-1,room.position.y),Vector2i(room.position.x,room.end.y-1),Vector2i(room.end.x-1,room.end.y-1)]:
+			if rng.randf() > .55: continue
+			var inward = Vector2i(1 if corner.x==room.position.x else -1,1 if corner.y==room.position.y else -1)
+			# A true corner: wall on both of its outer sides, floor all about it.
+			if layout.is_open(corner-Vector2i(inward.x,0)) or layout.is_open(corner-Vector2i(0,inward.y)): continue
+			var pile: Array[Vector2i] = [corner]
+			if rng.randf() < .6: pile.append(corner+Vector2i(inward.x,0))
+			if rng.randf() < .4: pile.append(corner+Vector2i(0,inward.y))
+			var free = true
+			for cell in pile:
+				if not layout.cells.has(cell) or layout.stairs.grow(2).has_point(cell) or layout.arrival.grow(2).has_point(cell) or layout.entry.grow(3).has_point(cell): free = false
+				for spot in keep_clear:
+					if (cell-spot).length() < 4.0: free = false
+			if not free: continue
+			for cell in pile:
+				var id: String = ["crate","barrel","bag","crate"][rng.randi_range(0,3)]
+				var height: float = {"crate":rng.randf_range(.7,.95),"barrel":.95,"bag":.7}[id]
+				var thing = Art.model(id,Kit.sized(id,height))
+				Kit.dress(thing)
+				add_child(thing)
+				thing.position = layout.to_world(cell)+Vector3(rng.randf_range(-.1,.1),0,rng.randf_range(-.1,.1))
+				thing.rotation.y = rng.randf_range(0,TAU)
+				visibility_nodes.append(thing)
+				# Solid to movement, open to sight, like a standing brazier.
+				layout.cells.erase(cell)
+				solid_floor[cell] = true
+
 # The temple's door, from inside: an open portal at the end of the first
 # floor's passage, with the desert's daylight beyond it.
 func build_entry(stone: Material) -> void:
@@ -557,11 +661,11 @@ func lift(_at: Vector3) -> float:
 
 # Walking through the first floor's door leaves for the desert.
 func leaving_temple(at: Vector3) -> bool:
-	return level==0 and layout.at_door(layout.to_cell(at))
+	return layout.at_door(layout.to_cell(at))
 
 # Whether the hero is in, or at the mouth of, the door's passage.
 func leaving_soon(at: Vector3) -> bool:
-	return level==0 and layout.entry.has_area() and layout.entry.grow(2).has_point(layout.to_cell(at))
+	return layout.entry.has_area() and layout.entry.grow(2).has_point(layout.to_cell(at))
 
 # A low scenery parapet from `a` to `b` (along X or Z), in pieces about a
 # metre and a quarter long, so its carved stones keep their shape.
@@ -696,7 +800,7 @@ func nearest_torch(placed: Array[Vector3], at: Vector3) -> float:
 # Whether the wall on `direction`'s side of `cell` is a low parapet: every wall
 # of the summit, and a terrace's outer edge.
 func low_wall(cell: Vector2i, direction: Vector2i) -> bool:
-	return level==5 or (layout.on_terrace(cell) and not Rect2i(0,0,layout.size,layout.size).has_point(cell+direction))
+	return layout.summit or (layout.on_terrace(cell) and not Rect2i(0,0,layout.size,layout.size).has_point(cell+direction))
 
 func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
 	torch_walls[at] = wall
@@ -1045,11 +1149,11 @@ func follow(pos: Vector3, delta: float) -> void:
 	var viewport_size = get_viewport().get_visible_rect().size
 	if is_instance_valid(desert_backdrop):
 		var outdoors = layout.on_terrace(layout.to_cell(pos))
-		desert_backdrop.visible = outdoors or level==5
+		desert_backdrop.visible = outdoors or layout.summit
 		fog_material.set_shader_parameter("outdoors",desert_backdrop.visible)
 		for n in outdoor_scenery: n.visible = desert_backdrop.visible
 		# The summit's lower roofs and terrace are always in view, in moonlight.
-		terrace_moonlight.visible = outdoors or level==5
+		terrace_moonlight.visible = outdoors or layout.summit
 		var width = camera.size*viewport_size.x/viewport_size.y
 		var texture_size = desert_backdrop.texture.get_size()
 		desert_backdrop.pixel_size = maxf(width/texture_size.x,camera.size/texture_size.y)*1.08

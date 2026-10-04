@@ -112,7 +112,7 @@ func town_checks():
 		z -= 1.0
 	check(paved,"The road is paved and open all the way")
 	check(climbing and world.height_at(north_gate.x,north_gate.z)==0.0 and is_equal_approx(world.lift(palace.at),Overworld.HILL_HEIGHT) and Overworld.HILL_HEIGHT>=5.0 and Overworld.HILL_HEIGHT<=10.0,"It climbs a small hill: the palace stands %.0f m above the town" % Overworld.HILL_HEIGHT)
-	check(world.height_at(Town.ARENA.x,Town.ARENA.z-Town.ARENA_RADII.y-Town.RING)==0.0 and world.height_at(Overworld.START.x,Overworld.START.z)==0.0,"The town and the desert stay level")
+	check(world.height_at(Town.ARENA.x,Town.ARENA.z-Town.ARENA_RADII.y-Town.RING)==0.0 and world.height_at(Overworld.CARAVAN.x,Overworld.CARAVAN.z)==0.0,"The town and the desert stay level")
 	# The hill's ground is the mesh tools/make_hill.py built from the same numbers.
 	var matches = true
 	var hill_mesh: MeshInstance3D = world.hill.find_children("*","MeshInstance3D",true,false)[0]
@@ -192,7 +192,7 @@ func town_checks():
 	check(world.ground_at(screen).distance_to(aim)<.2,"A click on the hill lands on the ground it points at")
 	game.hud.tick(0)
 	check(game.hud.prompt.text=="","Before the palace the HUD names nothing")
-	game.player.position = Overworld.START
+	game.player.position = Overworld.CARAVAN
 	game.set_process(true)
 	for i in 3: await process_frame
 	game.set_process(false)
@@ -250,9 +250,9 @@ func test():
 	game.set_process(false)
 	game.sound.muted = true
 
-	# A new character starts in the middle of the desert.
+	# A new character starts on the dune south of the town, by his campfire.
 	var fresh = Data.new_character("warrior")
-	check(fresh.place=="world" and Vector3(fresh.position[0],0,fresh.position[1])==Overworld.START and Save.valid(fresh),"A new character starts outside the temple, at the desert's middle")
+	check(fresh.place=="world" and Vector3(fresh.position[0],0,fresh.position[1])==Overworld.START and Save.valid(fresh),"A new character starts outside the temple, at the camp on the dune")
 	check(Data.new_run().place=="temple","A bare run still starts on the temple's first floor")
 	game.run = fresh
 	game.load_floor()
@@ -263,7 +263,21 @@ func test():
 	var gate: Vector3 = Overworld.TOWN_GATE
 	var door: Vector3 = Overworld.TEMPLE_DOOR
 	var middle = (gate.x+door.x)*.5
-	check(gate.x<Overworld.START.x and Overworld.START.x<door.x and absf(Overworld.START.x-middle)<(door.x-gate.x)*.1,"The start is midway between the town in the west and the temple in the east")
+	check(gate.x<Overworld.CARAVAN.x and Overworld.CARAVAN.x<door.x and absf(Overworld.CARAVAN.x-middle)<(door.x-gate.x)*.1,"The lost caravan lies midway between the town in the west and the temple in the east")
+	# The southern desert and its dune.
+	var crown: float = world.height_at(Overworld.START.x,Overworld.START.z)
+	check(crown>Overworld.DUNE_HEIGHT*.95 and Overworld.DUNE_HEIGHT>=6.0 and Overworld.START.z>Town.ARENA.z+Town.ARENA_RADII.y+Town.RING+20.0 and absf(Overworld.START.x-Town.ARENA.x)<20.0,"The start is on top of a great dune south of the town (%.1f m up)" % crown)
+	check(world.get_node_or_null("Dune") != null and world.height_at(Overworld.DUNE.x,Overworld.DUNE.z-Overworld.DUNE_RADII.y-1.0)==0.0 and is_equal_approx(game.player.visual.position.y,crown),"The dune's ground is drawn, and the hero stands on it")
+	check(game.player.visual.resting and game.player.visual.state=="Rest" and game.run.get("resting",false) and world.get_node_or_null("CampSeat") != null,"He sits by his campfire")
+	var camp: Dictionary = world.place_at(Overworld.START)
+	check(not camp.is_empty() and camp.kind=="camp","The camp is a place on the dune's crown")
+	var down = world.path(Overworld.START,gate+Vector3(-6,0,0))
+	check(not down.is_empty() and world.region(Overworld.START)=="desert" and world.margin_at(Vector3(Overworld.DUNE.x,0,Town.ARENA.z+Town.ARENA_RADII.y+Town.RING+26.0))<0.0,"The southern desert is walled off from the town by rock, but for the way through at an alley's end")
+	game.route = PackedVector3Array([Overworld.START+Vector3(0,0,3)])
+	play(func(): return not game.player.visual.resting,2.0)
+	check(not game.player.visual.resting and not game.run.has("resting"),"He gets up the moment he moves")
+	game.player.position = Overworld.START
+	game.route = PackedVector3Array()
 
 	# The desert: about a minute's run from the town gate to the temple door.
 	var from = gate+Vector3(2,0,0)
@@ -272,8 +286,8 @@ func test():
 	var seconds = length_of(crossing,from)/game.PLAYER_RUN_SPEED
 	check(not crossing.is_empty() and crossing[-1].distance_to(to)<.5,"The desert can be crossed from the town gate to the temple door")
 	check(seconds>=38.0 and seconds<=48.0,"Crossing the desert takes about three quarters of a minute (%.1f s)" % seconds)
-	var halfway = world.path(Overworld.START,to)
-	check(not halfway.is_empty() and absf(length_of(halfway,Overworld.START)/game.PLAYER_RUN_SPEED-seconds*.5)<8.0,"From the start the temple is half the crossing away")
+	var halfway = world.path(Overworld.CARAVAN,to)
+	check(not halfway.is_empty() and absf(length_of(halfway,Overworld.CARAVAN)/game.PLAYER_RUN_SPEED-seconds*.5)<8.0,"From the caravan the temple is half the crossing away")
 
 	# The rim: everything walkable is one connected basin, walled by rock.
 	var seen = {}
@@ -301,7 +315,7 @@ func test():
 	check(seen.size()>=open_cells-40,"The open ground is one connected basin (%d of %d cells)" % [seen.size(),open_cells])
 	var blocked_all_round = true
 	for probe in [Vector3(0,0,-200),Vector3(0,0,200),Vector3(-400,0,0),Vector3(300,0,30),Vector3(120,0,-150),Vector3(-250,0,160)]:
-		var reached: Vector3 = world.move(Overworld.START,probe-Overworld.START)
+		var reached: Vector3 = world.move(Overworld.CARAVAN,probe-Overworld.CARAVAN)
 		blocked_all_round = blocked_all_round and world.margin_at(reached)>=.5 and reached.distance_to(probe)>20.0
 	check(blocked_all_round,"Running at the rim from the start stops at it on every side")
 	var rocks: int = world.rim_rocks.size()
@@ -542,7 +556,14 @@ func test():
 	game.hud.tick(0)
 	game.player.position = door+Vector3(-3,0,0)
 	game.hud.tick(0)
-	check("Walk in" in game.hud.prompt.text,"Before the temple the HUD says to walk in")
+	check(not Data.temple_open(game.run) and "shut" in game.hud.prompt.text,"Until both dungeons are cleared the HUD says the temple's door is shut")
+	game.route = PackedVector3Array([door+Vector3(4,0,0)])
+	check(not play(func(): return not game.outdoors(),3.0) and world.entrance(game.player.position)=="temple","Walking at the shut door does not enter the temple")
+	game.run.cleared = Data.DUNGEONS.duplicate()
+	game.route = PackedVector3Array()
+	game.player.position = door+Vector3(-3,0,0)
+	game.hud.tick(0)
+	check("Walk in" in game.hud.prompt.text,"With the dungeons cleared the HUD says to walk in")
 	# A dull amber light comes from the door, the colour of the fires and the
 	# desert, in place of a black floor.
 	var ember = world.get_node_or_null("TempleDoorGlow")
@@ -598,7 +619,7 @@ func test():
 	var doorless = true
 	for sample in 40:
 		var run_seed: int = [0,1,42,123,12345,0x7fffffff,0xffffffff][sample] if sample<7 else Layout.floor_seed(sample,6)
-		for floor_index in 6:
+		for floor_index in Data.FLOORS:
 			var plan = Layout.new()
 			plan.generate(run_seed,floor_index)
 			if floor_index==0:
@@ -623,7 +644,7 @@ func test():
 	old.erase("place")
 	old.floor = 2
 	var moved = Save.migrate(old)
-	check(Save.valid(old) and moved.version==Data.new_run().version and moved.place=="temple" and moved.floor==2,"Earlier saves continue inside the temple")
+	check(Save.valid(old) and moved.version==Data.new_run().version and moved.place=="temple" and moved.floor==1 and Data.temple_open(moved),"Earlier saves continue inside the temple, on the floor their old one became")
 	var nowhere = Data.new_run(); nowhere.place = "moon"
 	check(not Save.valid(nowhere),"A save in an unknown place is rejected")
 

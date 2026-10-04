@@ -34,18 +34,18 @@ func test():
 	game.set_process(false)
 	game.run = Data.new_run()
 	game.run.seed = 0
-	for index in 6:
+	for index in Data.FLOORS:
 		game.run.floor = index
 		game.run.dead = []; game.run.drops = []; game.run.position = [0,9]
 		game.load_floor()
 		await frames()
 		var world = game.world
-		check(is_instance_valid(world.fountain)==(index in [1,2]),"Fountain exists only on floors 2 and 3 (%d)" % (index+1))
-		check(is_instance_valid(world.desert_backdrop)==(index in [3,4,5]),"Desert backdrop exists only on the terrace floors and the summit (%d)" % (index+1))
+		check(is_instance_valid(world.fountain)==(index==1),"Fountain exists only on floor 2 (%d)" % (index+1))
+		check(is_instance_valid(world.desert_backdrop)==(index in [2,3]),"Desert backdrop exists only on the terrace floors and the summit (%d)" % (index+1))
 		# Low parapets (terraces, summit) carry braziers on their tops, not wall
 		# torches, and are built of short pieces so their carved stones keep
 		# their shape.
-		var has_parapets = index==5 or not world.layout.terrace.is_empty()
+		var has_parapets = index==3 or not world.layout.terrace.is_empty()
 		check(world.braziers.is_empty()!=has_parapets,"Braziers stand only where there are low parapets (%d)" % (index+1))
 		var seated = true
 		for bowl in world.braziers:
@@ -70,7 +70,7 @@ func test():
 		if index<5:
 			var dark = 0
 			for cell in world.layout.cells:
-				if index in [1,2] and world.layout.court.grow(1).has_point(cell): continue
+				if index==1 and world.layout.court.grow(1).has_point(cell): continue
 				var lit = 0.0
 				for at in world.torch_lights: lit += world.torch_light(at,world.layout.to_world(cell))
 				if lit<world.LIT_LEVEL and not world.ambient_only.has(cell): dark += 1
@@ -108,7 +108,7 @@ func test():
 		check(not wall.hidden,"The wall returns when no one stands behind it (%d)" % (index+1))
 		check(world.fog_material.get_shader_parameter("walkable_mask")!=null,"Fog knows which cells are temple floor (%d)" % (index+1))
 		check(world.fog_material.render_priority==Material.RENDER_PRIORITY_MAX and world.fog_material.shader.get_mode()==Shader.MODE_SPATIAL,"Line-of-sight fog uses scene depth (%d)" % (index+1))
-		if index in [1,2]:
+		if index==1:
 			var fountain = world.fountain
 			check(fountain.pool_bounds.size==Vector2(25,12),"Pool retains original room size and 1.5-tile inset")
 			var start: Vector3 = fountain.center+Vector3(-9,0,3)
@@ -152,7 +152,7 @@ func test():
 			check(not loop.playing,"Leaving the court stops the old water loop immediately")
 			await frames()
 			check(not is_instance_valid(loop),"Floor changes release the fountain audio player")
-		if index in [3,4]:
+		if index==2:
 			check(world.desert_backdrop.global_position.y< -10 and world.desert_backdrop.texture.get_width()>=1024,"Generated desert is placed far below the terrace")
 			check(not world.desert_backdrop.visible and not world.terrace_moonlight.visible,"Interior spawn hides panorama and moonlight on floor %d" % (index+1))
 			var interior_batch = false
@@ -165,7 +165,8 @@ func test():
 			for i in world.layout.terrace_doors.size():
 				var door: Rect2i = world.layout.terrace_doors[i]
 				var inside: Vector3 = world.layout.to_world(world.layout.center(door))
-				var direction = Vector3(-1 if index==3 else 1,0,0) if i<2 else Vector3(0,0,-1)
+				# (Two doors each onto the west, north and east galleries.)
+				var direction = [Vector3(-1,0,0),Vector3(0,0,-1),Vector3(1,0,0)][i/2]
 				world.follow(inside,1)
 				check(not world.desert_backdrop.visible,"Landscape is hidden on the inside of doorway %d, floor %d" % [i,index+1])
 				world.follow(inside+direction,1)
@@ -181,7 +182,7 @@ func test():
 			game.player.position = world.layout.to_world(cell)
 			world.zoom = 24
 			world.follow(game.player.position,1)
-			check(world.fits(game.player.position) and not world.fits(world.layout.to_world(cell+Vector2i(-5 if index==3 else 5,0))),"Backdrop leaves terrace collision intact on floor %d" % (index+1))
+			check(world.fits(game.player.position) and not world.fits(world.layout.to_world(cell+Vector2i(-5,0))),"Backdrop leaves terrace collision intact on floor %d" % (index+1))
 			await capture("desert-terrace-%d" % (index+1))
 			for zoom in [15.0,36.0]:
 				for viewport_size in [Vector2i(1280,800),Vector2i(1280,720),Vector2i(1120,700)]:

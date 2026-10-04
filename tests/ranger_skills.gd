@@ -456,7 +456,7 @@ func test():
 	old.skills = {"power_shot":1}; old.skill_points = 0
 	old.level = 1
 	var migrated = Save.migrate(old)
-	check(Save.valid(old) and migrated.version==9 and migrated.owned.size()==6 and migrated.owned[5] and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
+	check(Save.valid(old) and migrated.version==Data.new_run().version and migrated.owned.size()==6 and migrated.owned[5] and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
 	game.run.skills = {"power_shot":1}; game.run.skill_points = 0
 	check(Save.valid(game.run),"The character is save-valid throughout")
 	FileAccess.open("res://test-results/ranger-skills.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))

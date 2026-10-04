@@ -19,6 +19,8 @@ const ACTIONS = [
 	[KEY_L,"first","L · Return to floor 1"],
 	[KEY_O,"desert","O · Desert (start)"],
 	[KEY_U,"town","U · Town"],
+	[KEY_M,"basement","M · Arena basement"],
+	[KEY_V,"cave","V · Bandit cave"],
 	[KEY_T,"restart","T · Restart floor"],
 	[KEY_F8,"reset","F8 · Reset run"],
 	[KEY_F10,"ending","F10 · Jump to ending"]]
@@ -32,9 +34,9 @@ func apply_start(args: PackedStringArray) -> void:
 	for arg in args:
 		if arg.begins_with("--floor="):
 			var value = arg.trim_prefix("--floor=")
-			if value.is_valid_int() and int(value)>=1 and int(value)<=5:
+			if value.is_valid_int() and int(value)>=1 and int(value)<Data.FLOORS:
 				destination = int(value)-1
-	if "--boss" in args: destination = 5
+	if "--boss" in args: destination = Data.FLOORS-1
 	if destination>=0: prepare_floor(destination)
 	if "--axe" in args: game.run.owned[3] = true
 	if "--bow" in args: game.run.owned[2] = true
@@ -59,9 +61,9 @@ func setup(owner_game) -> void:
 	hud.label("Jump to floor · Ctrl + 1–5",14,hud.cream,body)
 	var floors = HBoxContainer.new()
 	body.add_child(floors)
-	for i in 5:
+	for i in Data.FLOORS-1:
 		add_button(floors,str(i+1),func(): execute("floor",i))
-	add_button(floors,"Summit",func(): execute("floor",5))
+	add_button(floors,"Summit",func(): execute("floor",Data.FLOORS-1))
 	refresh()
 
 func add_button(parent: Control, text: String, callback: Callable) -> Button:
@@ -86,12 +88,12 @@ func refresh() -> void:
 	panel.reset_size()
 
 func available(action: String) -> bool:
-	return enabled and (game.mode=="playing" or action in ["panel","reset","restart","first","floor","boss","desert","town"])
+	return enabled and (game.mode=="playing" or action in ["panel","reset","restart","first","floor","boss","desert","town","basement","cave"])
 
 func handle_key(event: InputEventKey) -> bool:
 	if not enabled or not event.pressed or event.echo: return false
 	var key = event.physical_keycode if event.physical_keycode!=0 else event.keycode
-	if event.ctrl_pressed and not event.alt_pressed and not event.meta_pressed and key>=KEY_1 and key<=KEY_5:
+	if event.ctrl_pressed and not event.alt_pressed and not event.meta_pressed and key>=KEY_1 and key<KEY_1+Data.FLOORS-1:
 		execute("floor",key-KEY_1)
 		return true
 	if event.ctrl_pressed or event.alt_pressed or event.meta_pressed: return false
@@ -111,9 +113,9 @@ func handle_key(event: InputEventKey) -> bool:
 			return true
 	return false
 
-func prepare_floor(index: int) -> void:
+func prepare_floor(index: int, place: String = "temple") -> void:
 	game.run.floor = index
-	game.run.place = "temple"
+	game.run.place = place
 	game.run.dead = []
 	game.run.drops = []
 	game.run.phase = "playing"
@@ -127,7 +129,7 @@ func jump(index: int) -> void:
 	prepare_floor(index)
 	game.load_floor()
 	game.save_run()
-	game.toast("[Debug] %s" % ("Summit" if index==5 else "Floor %d" % (index+1)))
+	game.toast("[Debug] %s" % ("Summit" if index==Data.FLOORS-1 else "Floor %d" % (index+1)))
 
 func execute(action: String, floor_index: int = 0) -> void:
 	if not available(action): return
@@ -155,29 +157,45 @@ func execute(action: String, floor_index: int = 0) -> void:
 			for enemy in game.enemies: enemy.die()
 			game.toast("[Debug] Enemies cleared")
 		"next":
-			if game.run.floor<5: jump(game.run.floor+1)
+			if game.run.place in Data.DUNGEONS:
+				if game.has_way_on(): game.next_floor()
+				else: execute("kill")
+			elif game.run.floor<Data.FLOORS-1: jump(game.run.floor+1)
 			else: execute("kill")
 		"boss":
 			Data.gain_xp(game.run,maxi(0,Data.xp_at_level(Data.MAX_LEVEL)-int(game.run.xp)))
-			prepare_floor(5)
+			prepare_floor(Data.FLOORS-1)
 			game.load_floor()
 		"first": jump(0)
+		"basement", "cave":
+			# The top of a dungeon, as left: its dead stay dead.
+			var dead: Array = game.run.dead
+			prepare_floor(0,action)
+			game.run.dead = dead.filter(func(id): return Data.of_place(id,action))
+			game.load_floor()
+			game.toast("[Debug] %s" % ("Arena basement" if action=="basement" else "Bandit cave"))
 		"desert", "town":
 			# The outdoor world: where a character starts, or inside the town gate.
 			game.run.place = "world"
 			game.run.completed = false
 			game.run.phase = "playing"
-			game.run.position = [-52,-15] if action=="desert" else [-186,0]
+			game.run.floor = 0
+			game.run.position = [-262,144] if action=="desert" else [-186,0]
 			game.load_floor()
 			game.toast("[Debug] %s" % ("Desert" if action=="desert" else "Town"))
 		"floor": jump(floor_index)
-		"restart": jump(int(game.run.floor))
+		"restart":
+			if game.run.place in Data.DUNGEONS:
+				var place: String = game.run.place
+				prepare_floor(int(game.run.floor),place)
+				game.load_floor()
+			else: jump(int(game.run.floor))
 		"reset":
 			invulnerable = false
 			game.run = Data.new_run()
 			game.load_floor()
 		"ending":
-			prepare_floor(5)
+			prepare_floor(Data.FLOORS-1)
 			game.load_floor()
 			game.ending()
 		_: return

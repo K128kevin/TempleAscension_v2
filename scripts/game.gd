@@ -122,7 +122,7 @@ func load_floor() -> void:
 	run.erase("skill_cooldowns") # Ignore obsolete skill recharge timers in saved runs.
 	run.erase("evade_cooldown")
 	var migrating = int(run.version)<2
-	if int(run.version)<7: run = Save.migrate(run)
+	if int(run.version)<10: run = Save.migrate(run)
 	run.drops = run.drops.filter(func(drop): return drop.value not in [2,3])
 	if skills: skills.reset()
 	run_generation += 1
@@ -154,7 +154,8 @@ func load_floor() -> void:
 	slowed = 0
 	world = Overworld.new() if outdoors() else Temple.new()
 	add_child(world)
-	world.setup(int(run.floor),int(run.seed))
+	if outdoors(): world.setup(int(run.floor),int(run.seed))
+	else: world.setup(int(run.floor),int(run.seed),run.place)
 	# (The fallen stones' ground, laid with the floor rather than at the first
 	# statue's fall, which it held up.)
 	if world.has_method("ensure_debris_collision"): world.ensure_debris_collision()
@@ -162,34 +163,44 @@ func load_floor() -> void:
 	world.add_child(hover_ring)
 	hud.show_enemy_hover(null)
 	# The approach's music plays outdoors, as on the first floor.
-	sound.track(0 if outdoors() else int(run.floor))
+	sound.track(music_track())
 	player = Actor.new()
 	world.add_child(player)
 	var at = Vector3(run.position[0],0,run.position[1])
 	# Come in from the desert, the hero stands just inside the temple's door.
 	if arriving_by_door and not outdoors() and world.layout.entry.has_area(): at = world.layout.entry_position()
+	# Come back up a dungeon's stair, he stands at the head of the one he
+	# went down by.
+	if arriving_from_below and not outdoors(): at = world.exit_point
 	arriving_by_door = false
+	arriving_from_below = false
 	if not world.fits(at): at = world.spawn
 	player.setup(self,"player","hero",at)
 	player.hp = clampf(run.health,1,Data.max_health(run))
 	player.visual.position.y = world.lift(at)
 	# Outdoors he faces the temple, in the east.
 	player.rotation.y = PI/2 if outdoors() else PI
+	# A new character sits by his campfire on the dune, looking down at the
+	# town, until he first moves.
+	if outdoors() and run.get("resting",false):
+		player.rotation.y = PI
+		player.visual.rest(true)
 	world.update_visibility(player.position,.1)
 	world.follow(player.position,1)
 	var rng = RandomNumberGenerator.new()
 	rng.seed = int(run.seed)+int(run.floor)*193
 	# No statue stands outside the temple.
 	if outdoors(): pass
-	elif run.floor < 5:
+	elif not Data.summit(run):
 		var types: Array[String] = []
-		for kind in Data.COUNTS[run.floor]:
-			for i in Data.COUNTS[run.floor][kind]: types.append(kind)
+		var counts: Dictionary = Data.area(run).counts
+		for kind in counts:
+			for i in counts[kind]: types.append(kind)
 		var spawn_rng = RandomNumberGenerator.new()
-		spawn_rng.seed = Temple.Layout.floor_seed(int(run.seed),int(run.floor)+1)
+		spawn_rng.seed = Temple.Layout.floor_seed(int(run.seed),int(run.floor)+1+Temple.Layout.KINDS[run.place].salt)
 		var spots = world.statue_posts(types.size(),spawn_rng)
 		for i in types.size():
-			var id = "%d:%d" % [run.floor,i]
+			var id = Data.enemy_id(run,i)
 			var enemy = spawn_enemy(types[i],id,spots[i].at)
 			enemy.rotation.y = spots[i].facing
 			if id in run.dead:
@@ -203,7 +214,8 @@ func load_floor() -> void:
 			var swap = carrier_ids[i]
 			carrier_ids[i] = carrier_ids[j]
 			carrier_ids[j] = swap
-		if run.floor==2:
+		# (The staff is found on the fountain court's floor.)
+		if run.place=="temple" and run.floor==Temple.Layout.COURT_FLOOR:
 			carriers["%d:%d" % [run.floor,carrier_ids[-1]]] = {"kind":"weapon","value":4,"id":"weapon:%d" % run.floor}
 	else:
 		boss = spawn_enemy("boss","boss",world.boss_point)
@@ -237,7 +249,7 @@ func load_floor() -> void:
 				run.drops.append(reward.duplicate(true))
 		for drop in run.drops: drop.position = [world.spawn.x,world.spawn.z]
 	for drop in run.drops: create_pickup(drop)
-	world.exit_seal.visible = remaining()==0 and run.floor<5 and not outdoors()
+	world.exit_seal.visible = remaining()==0 and has_way_on()
 	mode = "playing"
 	hud.close_modal()
 	if run.get("migration_notice",false):
@@ -251,23 +263,46 @@ func load_floor() -> void:
 func pass_door() -> bool:
 	if player.dead or mode!="playing": return false
 	if outdoors():
-		if not world.entering_temple(player.position): return false
+		var into: String = world.entrance(player.position)
+		if into.is_empty():
+			sealed_told = false
+			return false
+		if into=="temple" and not Data.temple_open(run):
+			# The temple stays shut until both dungeons are fought through.
+			if not sealed_told: toast("The temple's door will not open. The bandits beneath the arena and in the northern cave must be dealt with first.")
+			sealed_told = true
+			return false
 		save_run()
-		run.place = "temple"
+		run.place = into
+		run.floor = 0
 		arriving_by_door = true
 		load_floor()
 		save_run()
 		return true
 	if not world.leaving_temple(player.position): return false
 	save_run()
+	var from: String = run.place
 	run.place = "world"
-	var threshold: Vector3 = Overworld.TEMPLE_DOOR+Overworld.THRESHOLD
-	run.position = [threshold.x,threshold.z]
+	run.floor = 0
+	var outside: Dictionary = Overworld.OUTSIDE[from]
+	run.position = [outside.at.x,outside.at.z]
 	load_floor()
-	player.rotation.y = -PI/2
+	player.rotation.y = outside.facing
 	save_run()
-	toast("The town lies west, across the desert.")
+	if from=="temple": toast("The town lies west, across the desert.")
 	return true
+
+# Whether the floor the hero is on has a way on from it: the temple's stair up
+# (not on the summit), a dungeon's stair down (not on its lowest level).
+func has_way_on() -> bool:
+	if outdoors() or Data.summit(run): return false
+	return not (run.place in Data.DUNGEONS and Data.last_floor(run))
+
+# Which of the game's music plays where the hero is.
+func music_track() -> int:
+	if outdoors(): return 0
+	if run.place in Data.DUNGEONS: return 1
+	return [1,2,3,5][clampi(int(run.floor),0,3)]
 
 # The statues awake and standing, listed once a frame: each keeps its
 # distance from the rest of these as it walks.
@@ -582,11 +617,16 @@ func player_control(dt: float) -> void:
 			if moved: player.face(player.position+displacement.normalized())
 		elif not is_instance_valid(target):
 			var aim: Vector3 = world.pointer()
-			if player.position.distance_to(aim) > .6: player.face(aim)
+			# (Sitting by his fire, he keeps looking at it.)
+			if player.position.distance_to(aim) > .6 and not player.visual.resting: player.face(aim)
 	player.visual.walking = walking
 	# Hidden in the shadows, the ranger goes crouched.
 	player.visual.sneaking = skills.hidden
 	# (Standing after a sword swing, its recovery to the stance plays out.)
+	# (He gets up from the campfire the moment he moves or acts.)
+	if player.visual.resting and (moved or player.busy>0):
+		run.erase("resting")
+		player.visual.rest(false)
 	player.visual.locomotion(moved,player.busy>0 or (not moved and player.visual.swing_phase() >= 0.0),skills.hidden,1.0,pace)
 
 func attack_range(special: bool, slot: int = 0) -> float:
@@ -605,6 +645,10 @@ func attack_profile() -> Dictionary:
 	return CombatAnimation.profile(weapon,false,(1.0+Data.melee_attack_speed(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.MELEE_MINIMUM,0.0)
 
 # Which swing of the sword's chain (CombatAnimation.SWORD_CHAIN) was last begun.
+# Coming back up a dungeon's stair; and whether the shut temple door has
+# been remarked on since he came to it.
+var arriving_from_below = false
+var sealed_told = false
 var sword_swing = 0
 # How many swings the chain has run to: each steps with the other foot.
 var sword_steps = 0
@@ -805,7 +849,7 @@ func hurt_player(damage: float, type: String = "physical", source = null) -> voi
 		if is_instance_valid(source): source.landed_attack()
 		return
 	if player.dead or player.invulnerable>0 or invincible_test or (debug.enabled and debug.invulnerable): return
-	damage = Data.mitigate(damage,10.0,0.0,Data.ENEMY_LEVELS[run.floor],type)
+	damage = Data.mitigate(damage,10.0,0.0,Data.enemy_level(run),type)
 	damage = skills.defend(damage,source)
 	# Struck, the ranger is hidden no longer.
 	skills.leave_shadows()
@@ -826,7 +870,7 @@ func hurt_player(damage: float, type: String = "physical", source = null) -> voi
 	elif damage>0: player.react_to_hit(damage>=player.max_hp*.2)
 
 func retry_floor() -> void:
-	run.dead = []
+	run.dead = run.dead.filter(func(id): return not Data.of_place(id,run.place))
 	run.drops = []
 	run.health = Data.max_health(run)
 	run.energy = Data.max_energy(run)
@@ -859,9 +903,13 @@ func enemy_died(enemy) -> void:
 			if other!=enemy: other.die(false)
 		place_crown()
 		toast("The statue falls. The emperor's crown is yours to claim.")
-	elif remaining()==0 and run.floor<5 and not outdoors():
+	elif remaining()==0 and has_way_on():
 		world.exit_seal.visible = true
-		toast("The floor is silent. Ascend at the jade stairway.")
+		toast("The floor is silent. Ascend at the jade stairway." if run.place=="temple" else "The level is silent. The way down is open.")
+	elif remaining()==0 and run.place in Data.DUNGEONS and not run.place in run.cleared:
+		# The dungeon's last level is cleared: one step nearer the temple.
+		run.cleared.append(run.place)
+		toast("The bandits are routed. %s" % ("The temple's door will open to you now." if Data.temple_open(run) else "Their fellows %s remain." % ("in the cave in the northern desert" if run.place=="basement" else "beneath the arena")))
 	save_run()
 
 func create_pickup(drop: Dictionary) -> void:
@@ -1064,8 +1112,10 @@ func remaining() -> int:
 func interact() -> void:
 	if crown_available and player.position.distance_to(crown_position)<3:
 		ending()
-	elif not outdoors() and remaining()==0 and run.floor<5 and player.position.distance_to(world.exit_point)<4:
+	elif remaining()==0 and has_way_on() and player.position.distance_to(world.exit_point)<4:
 		next_floor()
+	elif run.place in Data.DUNGEONS and run.floor>0 and out_of_combat() and player.position.distance_to(world.layout.arrival_position())<3.5:
+		previous_floor()
 	elif safe_checkpoint():
 		save_run()
 		ProgressionUI.character(self)
@@ -1073,9 +1123,18 @@ func interact() -> void:
 func allocation_menu() -> void:
 	ProgressionUI.character(self)
 
+# Back up a dungeon's stair to the level above, as he left it.
+func previous_floor() -> void:
+	run.floor = maxi(0,int(run.floor)-1)
+	run.drops = []
+	arriving_from_below = true
+	load_floor()
+	save_run()
+
 func next_floor() -> void:
-	run.floor = mini(run.floor+1,5)
-	run.dead = []
+	run.floor = int(run.floor)+1
+	# (A dungeon's levels are remembered: he may come back up through them.)
+	if run.place=="temple": run.dead = run.dead.filter(func(id): return not Data.of_place(id,"temple"))
 	run.drops = []
 	run.phase = "playing"
 	run.position = [0,9]
@@ -1163,7 +1222,7 @@ func save_run() -> void:
 	run.health = maxf(1,player.hp)
 	run.position = [player.position.x,player.position.z]
 	if mode=="dead":
-		run.dead = []
+		run.dead = run.dead.filter(func(id): return not Data.of_place(id,run.place))
 		run.drops = []
 		run.position = [0,9]
 		run.health = Data.max_health(run)

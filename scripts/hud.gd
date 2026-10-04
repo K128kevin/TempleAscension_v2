@@ -254,11 +254,12 @@ func tick(dt: float) -> void:
 	hp_text.text = "%d / %d" % [maxf(0,game.player.hp),maximum_health]
 	en_text.text = "%d / %d" % [r.energy,maximum_energy]
 	var outdoors: bool = game.outdoors() and game.playground == null
-	objective.text = "PLAYGROUND · Shift+P leaves" if game.playground != null else ("SUMMIT" if r.floor==5 else "FLOOR %d" % (r.floor+1))
+	objective.text = "PLAYGROUND · Shift+P leaves" if game.playground != null else place_title(r)
 	difficulty.text = "%s mode" % Data.DIFFICULTIES[r.difficulty]
 	var remaining: int = game.remaining()
-	status.text = "%d statues remain" % remaining if remaining>0 else ("The crown awaits" if r.floor==5 else "The way up is open")
-	direction.text = "" if r.floor<5 else "Defeat the Crowned Statue"
+	var dungeon: bool = r.place in Data.DUNGEONS
+	status.text = "%d %s remain" % [remaining,"bandits" if dungeon else "statues"] if remaining>0 else ("The crown awaits" if Data.summit(r) else ("The bandits are routed" if dungeon and Data.last_floor(r) else ("The way down is open" if dungeon else "The way up is open")))
+	direction.text = "Defeat the Crowned Statue" if Data.summit(r) and not outdoors else ""
 	if outdoors: show_outdoors()
 	point_to_nearest_enemy()
 	character_info.text = "%s · Level %d" % [r.class_id.capitalize(),r.level]
@@ -297,8 +298,9 @@ func tick(dt: float) -> void:
 	if game.mode == "playing":
 		if outdoors: prompt.text = outdoor_prompt()
 		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
-		elif remaining==0 and r.floor<5: prompt.text = "The stairway is open. %s" % ("Press E to ascend" if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
-		elif game.world.leaving_soon(game.player.position): prompt.text = "The door leads out to the desert"
+		elif remaining==0 and game.has_way_on(): prompt.text = "The stairway is open. %s" % ("Press E to %s" % ("descend" if r.place in Data.DUNGEONS else "ascend") if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
+		elif r.place in Data.DUNGEONS and r.floor>0 and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair"
+		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest · C attributes · K skills"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
 	boss_name.visible = boss_bar.visible
@@ -319,7 +321,9 @@ func show_outdoors() -> void:
 # What the hero is standing in front of, outdoors.
 func outdoor_prompt() -> String:
 	var spot: Dictionary = game.world.place_at(game.player.position)
-	if not spot.is_empty() and spot.kind == "temple": return "Walk in to begin the ascent"
+	if not spot.is_empty() and spot.kind == "temple": return "Walk in to begin the ascent" if Data.temple_open(game.run) else "The door is shut: rout the bandits beneath the arena and in the northern cave"
+	if not spot.is_empty() and spot.kind == "cave": return "Walk in to enter the cave"
+	if not spot.is_empty() and spot.kind == "basement": return "The stair leads down beneath the arena"
 	return ""
 
 func toast(value: String) -> void:
@@ -342,6 +346,12 @@ func cast_bar() -> ProgressBar:
 	return p
 
 var aim_bar: ProgressBar
+# Where the hero is, for the corner of the screen. (No place is named: a
+# dungeon's levels are numbered, as the temple's floors are.)
+func place_title(r: Dictionary) -> String:
+	if r.get("place","temple") in Data.DUNGEONS: return "LEVEL %d" % (r.floor+1)
+	return "SUMMIT" if Data.summit(r) else "FLOOR %d" % (r.floor+1)
+
 func show_cast_bars() -> void:
 	var casting: Array = game.enemies.filter(func(e): return e.kind=="wizard" and not e.dead and e.visible and e.cast_total>0 and e.windup>0)
 	while cast_bars.size()<casting.size(): cast_bars.append(cast_bar())
@@ -428,7 +438,7 @@ func point_to_nearest_enemy() -> void:
 	var remaining: int = game.remaining()
 	enemy_arrow.visible = false
 	# Not on the summit, where the only statue left is the Crowned Statue itself.
-	if game.playground != null or game.run.floor==5 or game.mode!="playing" or game.player.dead or remaining==0 or remaining>ARROW_SHOW_AT: return
+	if game.playground != null or Data.summit(game.run) or game.mode!="playing" or game.player.dead or remaining==0 or remaining>ARROW_SHOW_AT: return
 	var nearest = null
 	var best = INF
 	for e in game.enemies:

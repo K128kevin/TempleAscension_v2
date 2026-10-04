@@ -25,7 +25,7 @@ func test():
 	var signatures: Dictionary = {}
 	for sample in 40:
 		var run_seed: int = [0,1,42,123,12345,0x7fffffff,0xffffffff][sample] if sample<7 else Layout.floor_seed(sample,6)
-		for floor_index in 5:
+		for floor_index in 3:
 			var layout = Layout.new()
 			layout.generate(run_seed,floor_index)
 			var label = "seed %d / floor %d" % [run_seed,floor_index+1]
@@ -65,7 +65,7 @@ func test():
 			for post in posts: safe = safe and world.fits(post.at,.45) and post.at.distance_to(world.spawn)>=9
 			check(safe,"Complete reachable roster, safe entrance: "+label)
 			world.free()
-			if floor_index in [1,2]:
+			if floor_index==Layout.COURT_FLOOR:
 				var door_tiles = 0
 				var court: Rect2i = layout.court
 				for y in range(court.position.y,court.end.y):
@@ -75,12 +75,12 @@ func test():
 					for y in [court.position.y-1,court.end.y]:
 						if layout.cells.has(Vector2i(x,y)): door_tiles += 1
 				check(door_tiles==2*Layout.CORRIDOR,"Court has exactly two hallway-width doors: "+label)
-			if floor_index in [3,4]: check(layout.terrace.size()==2 and layout.terrace_doors.size()==4,"Wraparound gallery and four entrances: "+label)
+			if floor_index==Layout.TERRACE_FLOOR: check(layout.terrace.size()==3 and layout.terrace_doors.size()==6,"Gallery round three sides and six entrances: "+label)
 			var signature = hash(layout.cells)
 			check(not signatures.has(signature),"Different run/floor has distinct layout: "+label)
 			signatures[signature] = true
 			if run_seed==0: samples.append({"floor":floor_index+1,"rooms":layout.rooms.size(),"floor_tiles":layout.cells.size(),"map_size":layout.size,"statues":total})
-	var arena = Layout.new(); arena.generate(123,5)
+	var arena = Layout.new(); arena.generate(123,Layout.SUMMIT)
 	check(arena.rooms.size()==1 and reachable(arena).size()==arena.cells.size(),"Summit remains one connected original-sized arena")
 	FileAccess.open("res://test-results/procedural-maps.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed,"samples":samples},"  "))
 	print("PROCEDURAL_MAPS ",passed," passed; ",failed.size()," failed; samples ",samples)

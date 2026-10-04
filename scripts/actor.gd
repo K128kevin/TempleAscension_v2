@@ -7,6 +7,11 @@ const StoneFragment = preload("res://scripts/stone_fragment.gd")
 var game
 var visual
 var kind = "player"
+# How it fights: its own kind, or the kind it fights `as` (a bandit as a
+# gladiator or an archer). A `human` is a man, not a statue: he does not
+# stand frozen, and falls rather than crumbling.
+var role = "player"
+var human = false
 var uid = ""
 var hp = 100.0
 var max_hp = 100.0
@@ -109,6 +114,7 @@ var nova_cooldown = 0.0
 func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 	game = owner_game
 	kind = type
+	role = type
 	uid = id
 	position = at
 	visual = Visual.new()
@@ -119,11 +125,22 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 		visual.setup(false,Color.WHITE,Data.WEAPONS[game.run.weapon],1.0,"",game.run.class_id)
 	else:
 		config = Data.ENEMIES[kind]
+		role = config.get("as",kind)
+		human = config.has("human")
 		max_hp = config.hp * Data.HEALTH_SCALE[game.run.difficulty]
 		hp = max_hp
-		visual.setup(true,config.color,config.weapon,config.size,kind)
-		if kind == "boss": visual.crown()
-		visual.animator.pause()
+		dress()
+
+# An enemy's figure: a statue of its kind, still until it wakes; or a man in
+# a hero's kit, who stands at his ease.
+func dress() -> void:
+	if human:
+		visual.setup(false,Color.WHITE,config.weapon,config.size,"",config.human)
+		visual.play(visual.idle_action())
+		return
+	visual.setup(true,config.color,config.weapon,config.size,kind)
+	if role == "boss": visual.crown()
+	visual.animator.pause()
 
 # Closing in on the hero (until well within reach), or standing within reach
 # until the hero is out of it: with one line for both, a hero drifting away
@@ -212,7 +229,7 @@ func tick(dt: float) -> void:
 			position = game.world.move(position,wander_way*blunder*dt)
 			if position.distance_to(from) > .005: face(position+wander_way)
 			else: wander_time = 0.0
-			visual.locomotion(position.distance_to(from)>.005,false,kind=="lion",1.0,blunder)
+			visual.locomotion(position.distance_to(from)>.005,false,role=="lion",1.0,blunder)
 			return
 		# Stunned, it stands dazed once its flinch is over.
 		visual.locomotion(false,false)
@@ -242,7 +259,7 @@ func tick(dt: float) -> void:
 		# (A hero hidden in the shadows is not seen.)
 		if distance < 10 and not game.skills.hidden and game.world.clear_line(position,player.position): game.awaken(self)
 		else: return
-	if kind == "boss":
+	if role == "boss":
 		for i in range(thresholds,4):
 			if hp/max_hp <= .8 - i*.2:
 				thresholds = i+1
@@ -261,7 +278,7 @@ func tick(dt: float) -> void:
 			release_attack()
 		return
 	if busy > 0: return
-	if kind == "wizard" and nova_cooldown <= 0 and distance <= NOVA_RADIUS and game.world.clear_line(position,player.position):
+	if role == "wizard" and nova_cooldown <= 0 and distance <= NOVA_RADIUS and game.world.clear_line(position,player.position):
 		cast_nova()
 		return
 	var reach: float = config.range
@@ -270,7 +287,7 @@ func tick(dt: float) -> void:
 	elif distance > reach * (.85 if closing else 1.0):
 		closing = true
 		walk_to(player.position,dt)
-	elif kind == "wizard" and distance < 5:
+	elif role == "wizard" and distance < 5:
 		var direction: Vector3 = (position-player.position).normalized()
 		var before = position
 		var pace = config.speed*(slow_factor if slow_time>0 else 1.0)
@@ -287,17 +304,17 @@ func start_attack(point: Vector3) -> void:
 	face(point)
 	attack_point = point
 	begin_strike(point)
-	windup = 1.5 if kind == "wizard" else (.65 if kind == "boss" else (ARCHER_DRAW if kind == "archer" else .42))
-	if kind == "wizard":
+	windup = 1.5 if role == "wizard" else (.65 if role == "boss" else (ARCHER_DRAW if role == "archer" else .42))
+	if role == "wizard":
 		# Every ranged cast is the fireball; frost comes only as the nova.
 		fireball_flight = clampf(position.distance_to(point)/14.0,.4,.8)
 		windup = FIRE_CAST
 		cast_total = windup
 	cooldown = config.interval + windup
-	var clip = "Cast" if kind in ["wizard","archer"] else "Attack"
+	var clip = "Cast" if role in ["wizard","archer"] else "Attack"
 	var duration = windup+.25
 	var weapon_index = Data.WEAPONS.find(config.weapon)
-	var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT,"wizard":Motion.ORACLE_CAST,"lion":Motion.LION_SWIPE}.get(kind,{})
+	var signature = {"centurion":Motion.SHIELD_STAB,"archer":Motion.ARCHER_SHOT,"wizard":Motion.ORACLE_CAST,"lion":Motion.LION_SWIPE}.get(role,{})
 	if not signature.is_empty() and visual.clips.has(signature.clip):
 		clip = signature.clip
 		duration = windup/signature.contacts[0]
@@ -308,7 +325,7 @@ func start_attack(point: Vector3) -> void:
 		if is_instance_valid(visual.shield_item) and visual.clips.has("Scutum"+clip): clip = "Scutum"+clip
 	attack_recovery = maxf(.25,duration-windup)
 	# The long cast plays its wind-up slowly; the follow-through is brief.
-	if kind == "wizard": attack_recovery = FIRE_RECOVERY
+	if role == "wizard": attack_recovery = FIRE_RECOVERY
 	visual.play(clip,duration)
 
 # The Crowned Statue's gaze: a one-second wind-up, then the beam.
@@ -361,7 +378,7 @@ func playground_kill() -> void:
 	dead = true
 	windup = 0; busy = 0; cast_total = 0; laser_time = 0
 	if is_instance_valid(laser_model): laser_model.queue_free()
-	if kind == "player": visual.play("Death")
+	if kind == "player" or human: visual.play("Death")
 	else:
 		visual.crumble()
 		game.sound.play("stone-crumble",-8)
@@ -377,12 +394,10 @@ func playground_revive(weapon: String = "") -> void:
 	visual = Visual.new()
 	add_child(visual)
 	if kind == "player": visual.setup(false,Color.WHITE,weapon,1.0,"",game.run.class_id)
-	else:
-		visual.setup(true,config.color,config.weapon,config.size,kind)
-		if kind == "boss": visual.crown()
+	else: dress()
 
 func release_attack() -> void:
-	if kind == "boss" and cast_count == -1:
+	if role == "boss" and cast_count == -1:
 		cast_count = 0
 		laser_time = 5
 		laser_angle = atan2(attack_point.x-position.x,attack_point.z-position.z)
@@ -394,8 +409,8 @@ func release_attack() -> void:
 		return
 	busy = attack_recovery
 	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]
-	if kind == "archer": game.projectile(position,attack_point,damage,false,"arrow",false,self)
-	elif kind == "wizard":
+	if role == "archer": game.projectile(position,attack_point,damage,false,"arrow",false,self)
+	elif role == "wizard":
 		cast_total = 0
 		# The fireball leaves the crown of the staff, where the flame formed.
 		visual.align_weapon()
@@ -456,14 +471,14 @@ func walk_to(destination: Vector3, dt: float) -> void:
 		if other == self or not is_instance_valid(other) or other.dead: continue
 		var difference: Vector3 = position-other.position
 		# (A lion is two metres long: it keeps a body's length from the others.)
-		var room = 2.6 if kind == "lion" or other.kind == "lion" else .85
+		var room = 2.6 if role == "lion" or other.role == "lion" else .85
 		if difference.length_squared() < room and difference.length_squared() > .001: separation += difference.normalized()*.6
 	direction = (direction + separation).normalized()
 	var before = position
 	var pace = config.speed*(slow_factor if slow_time>0 else 1.0)
 	position = game.world.move(position,direction*pace*dt)
 	if position.distance_to(before) > .005: face(position+direction)
-	visual.locomotion(position.distance_to(before)>.005,false,kind=="lion",1.0,pace)
+	visual.locomotion(position.distance_to(before)>.005,false,role=="lion",1.0,pace)
 
 # Where the unit's current attack is aimed, and the unit it is aimed at.
 # Stepping in, it stops short of that unit; the step it is denied is held
@@ -640,7 +655,7 @@ func held(how: String, seconds: float) -> void:
 	daze = how
 	daze_bonus = 0.0
 	stagger_time = seconds
-	if kind == "boss" and cast_count == -1:
+	if role == "boss" and cast_count == -1:
 		# An interrupted gaze is tried again afterward, not lost to its cooldown.
 		cast_count = 0
 		laser_cooldown = seconds
@@ -745,7 +760,7 @@ func tick_dots(dt: float) -> void:
 	if hp<=0: die()
 
 func armor() -> float:
-	return 35.0 if kind=="boss" else (20.0 if kind=="centurion" else 0.0)
+	return 35.0 if role=="boss" else (20.0 if role=="centurion" else 0.0)
 
 # Light hits alternate chest and head flinches; heavy hits stagger. Wind-ups,
 # attack recoveries, the boss's gaze and running reactions are not interrupted.
@@ -789,7 +804,7 @@ func push_back() -> void:
 	if pushback_step >= PUSHBACK.size(): return
 	var delay: float = PUSHBACK[pushback_step]*attack_cycle()
 	pushback_step += 1
-	if windup > 0 and kind == "wizard" and cast_total > 0:
+	if windup > 0 and role == "wizard" and cast_total > 0:
 		# An Oracle's cast is not cancelled but pushed back: the cast bar loses
 		# ground and the casting pose holds.
 		windup += delay
@@ -800,7 +815,7 @@ func push_back() -> void:
 		windup = 0
 		cast_total = 0
 		busy = 0
-		if kind == "boss" and cast_count == -1:
+		if role == "boss" and cast_count == -1:
 			# The crown's gaze is retried after the delay, not lost to its cooldown.
 			cast_count = 0
 			laser_cooldown = delay
@@ -814,7 +829,7 @@ func push_back() -> void:
 
 # The unit's normal time between attacks: its interval plus its wind-up.
 func attack_cycle() -> float:
-	var typical = FIRE_CAST if kind == "wizard" else (.65 if kind == "boss" else (ARCHER_DRAW if kind == "archer" else .42))
+	var typical = FIRE_CAST if role == "wizard" else (.65 if role == "boss" else (ARCHER_DRAW if role == "archer" else .42))
 	return config.interval + typical
 
 # An attack of this enemy damaged the hero: its pushback starts over.
@@ -832,6 +847,10 @@ func die(reward: bool = true, death_impact: Vector3 = Vector3.ZERO) -> void:
 	end_stun()
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	# Statues crumble into physical fragments, with the original crumble sound.
-	visual.crumble(false,death_impact)
-	game.sound.play("stone-crumble",-8)
+	if human:
+		visual.play("Death")
+		game.sound.play("weapon-impact",-9)
+	else:
+		visual.crumble(false,death_impact)
+		game.sound.play("stone-crumble",-8)
 	if reward: game.enemy_died(self)

@@ -2,9 +2,27 @@ extends RefCounted
 ## Room/corridor topology adapted from the original game's LevelGen.ts.
 ## Coordinates are one-metre tiles; visible geometry is supplied by Temple.
 const DIRS = [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.DOWN,Vector2i.UP]
-const TARGET_MINUTES = [3,5,5,8,8]
-# Hallway width and room size range, in tiles.
+# What is generated: a floor of the temple (three, and the summit), or a
+# level of one of the dungeons the hero goes down into (two each). How large
+# each floor is (its target minutes), how wide its hallways are, and a salt
+# that keeps one place's floors unlike another's.
+const KINDS = {"temple":{"minutes":[3,5,8],"corridor":5,"salt":0},
+	"basement":{"minutes":[3,4],"corridor":4,"salt":40},
+	"cave":{"minutes":[3,5],"corridor":3,"salt":80}}
+# The temple's floors: the fountain court's, the terraces', and the summit.
+const COURT_FLOOR = 1
+const TERRACE_FLOOR = 2
+const SUMMIT = 3
+# Hallway width (the temple's; `corridor` is this floor's) and room size
+# range, in tiles.
 const CORRIDOR = 5
+var corridor = CORRIDOR
+var kind = "temple"
+var summit = false
+# A dungeon is gone down into: its far stair descends, and its lowest level
+# has none.
+var descending = false
+var last = false
 const ROOM_MIN = 8
 const ROOM_MAX = 15
 var cells: Dictionary = {}
@@ -21,6 +39,9 @@ var stairs_dir = Vector2i.UP
 # an opening in the entrance room, its deep end against a wall. Its cells are
 # removed from `cells` like the ascent's.
 var arrival = Rect2i()
+# The floor tile at the arrival flight's foot (in a dungeon, where the way
+# back up is taken).
+var arrival_foot = Vector2i.ZERO
 # The first floor's way out to the desert: a short passage through a wall of
 # the entrance room, ending at the temple's door. Its cells are open floor;
 # `entry_dir` points out through the door.
@@ -63,10 +84,10 @@ func carve(rect: Rect2i) -> void:
 		for x in range(rect.position.x,rect.end.x): cells[Vector2i(x,y)] = true
 
 func horizontal(a: Vector2i, b: Vector2i) -> void:
-	carve(Rect2i(mini(a.x,b.x),a.y,absi(a.x-b.x)+1,CORRIDOR))
+	carve(Rect2i(mini(a.x,b.x),a.y,absi(a.x-b.x)+1,corridor))
 
 func vertical(a: Vector2i, b: Vector2i) -> void:
-	carve(Rect2i(a.x,mini(a.y,b.y),CORRIDOR,absi(a.y-b.y)+1))
+	carve(Rect2i(a.x,mini(a.y,b.y),corridor,absi(a.y-b.y)+1))
 
 func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 	if court.has_area():
@@ -80,14 +101,14 @@ func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 			head += 1
 			for d in directions:
 				var next: Vector2i = p+d
-				if next.x<2 or next.y<2 or next.x+CORRIDOR>size-2 or next.y+CORRIDOR>size-2: continue
-				if court.grow(1).intersects(Rect2i(next,Vector2i(CORRIDOR,CORRIDOR))) or parents.has(next): continue
+				if next.x<2 or next.y<2 or next.x+corridor>size-2 or next.y+corridor>size-2: continue
+				if court.grow(1).intersects(Rect2i(next,Vector2i(corridor,corridor))) or parents.has(next): continue
 				parents[next] = p
 				frontier.append(next)
 		assert(parents.has(b),"Court bypass must connect")
 		var cursor = b
 		while true:
-			carve(Rect2i(cursor,Vector2i(CORRIDOR,CORRIDOR)))
+			carve(Rect2i(cursor,Vector2i(corridor,corridor)))
 			if cursor==a: break
 			cursor = parents[cursor]
 	elif random()<.5:
@@ -97,10 +118,16 @@ func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 		vertical(a,b)
 		horizontal(Vector2i(a.x,b.y),b)
 
-func generate(run_seed: int, floor_index: int) -> void:
+func generate(run_seed: int, floor_index: int, place: String = "temple") -> void:
 	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear()
 	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i()
-	rng_state = floor_seed(run_seed,floor_index+1)
+	kind = place
+	var plan: Dictionary = KINDS[kind]
+	corridor = plan.corridor
+	descending = kind != "temple"
+	summit = kind == "temple" and floor_index == SUMMIT
+	last = descending and floor_index == plan.minutes.size()-1
+	rng_state = floor_seed(run_seed,floor_index+1+plan.salt)
 	level_index = floor_index
 	# The debug playground: one open, flat square.
 	if floor_index==PLAYGROUND:
@@ -110,7 +137,7 @@ func generate(run_seed: int, floor_index: int) -> void:
 		start = Vector2i(17,20)
 		exit_cell = start
 		return
-	if floor_index==5:
+	if summit:
 		size = 30
 		rooms.append(Rect2i(1,1,26,18))
 		carve(rooms[0])
@@ -118,10 +145,11 @@ func generate(run_seed: int, floor_index: int) -> void:
 		exit_cell = Vector2i(14,3)
 		return
 	# Larger rooms and hallways need proportionally more floor area.
-	size = roundi((44+TARGET_MINUTES[floor_index]*6)*1.2)
-	# The fountain court, on the second and third floors.
-	if floor_index in [1,2]: court = Rect2i((size-28)/2,(size-15)/2,28,15)
-	for attempt in 40+TARGET_MINUTES[floor_index]*8:
+	var minutes: int = plan.minutes[floor_index]
+	size = roundi((44+minutes*6)*1.2)
+	# The fountain court, on the temple's second floor.
+	if kind == "temple" and floor_index == COURT_FLOOR: court = Rect2i((size-28)/2,(size-15)/2,28,15)
+	for attempt in 40+minutes*8:
 		var w = integer(ROOM_MIN,ROOM_MAX)
 		var h = integer(ROOM_MIN,ROOM_MAX)
 		var room = Rect2i(integer(2,size-w-3),integer(2,size-h-3),w,h)
@@ -153,9 +181,9 @@ func generate(run_seed: int, floor_index: int) -> void:
 			exit_cell = at
 	if court.has_area():
 		carve(court)
-		var door_y = court.position.y+(court.size.y-CORRIDOR)/2
+		var door_y = court.position.y+(court.size.y-corridor)/2
 		for side in 2:
-			var outside = Vector2i(court.position.x-CORRIDOR-1 if side==0 else court.end.x+1,door_y)
+			var outside = Vector2i(court.position.x-corridor-1 if side==0 else court.end.x+1,door_y)
 			var nearest = Vector2i.ZERO
 			var best = INF
 			for room in rooms:
@@ -163,12 +191,12 @@ func generate(run_seed: int, floor_index: int) -> void:
 				var d = absi(c.x-outside.x)+absi(c.y-outside.y)
 				if d<best: best=d; nearest=c
 			connect_rooms(outside,nearest)
-			carve(Rect2i(court.position.x-1 if side==0 else court.end.x,door_y,1,CORRIDOR))
+			carve(Rect2i(court.position.x-1 if side==0 else court.end.x,door_y,1,corridor))
 		court_obstacle = Rect2i(court.position+Vector2i((court.size.x-2)/2,(court.size.y-2)/2),Vector2i(2,2))
 		for y in range(court_obstacle.position.y,court_obstacle.end.y):
 			for x in range(court_obstacle.position.x,court_obstacle.end.x): cells.erase(Vector2i(x,y))
 		rooms.append(court)
-	if floor_index in [3,4]: add_terrace(floor_index==4)
+	if kind == "temple" and floor_index == TERRACE_FLOOR: add_terrace()
 	place_stairs()
 
 func is_open(cell: Vector2i) -> bool:
@@ -225,9 +253,10 @@ func stays_connected(rect: Rect2i) -> bool:
 	return seen.size()==open
 
 func place_stairs() -> void:
-	place_ascent()
-	# The first floor is the temple's ground level: nothing leads up into it,
-	# and its door opens on the desert.
+	# (A dungeon's lowest level has no way further down.)
+	if not last: place_ascent()
+	# The first floor is at ground level: no stair leads into it, and its
+	# door opens on the world outside.
 	if level_index > 0: place_arrival()
 	else: place_entry()
 
@@ -318,6 +347,7 @@ func try_arrival(room: Rect2i) -> bool:
 	if best.is_empty(): return false
 	arrival = best.rect
 	arrival_dir = best.dir
+	arrival_foot = best.foot
 	for y in range(arrival.position.y,arrival.end.y):
 		for x in range(arrival.position.x,arrival.end.x): cells.erase(Vector2i(x,y))
 	return true
@@ -348,16 +378,19 @@ func place_ascent() -> void:
 			for x in range(stairs.position.x,stairs.end.x): cells.erase(Vector2i(x,y))
 		return
 
-func add_terrace(east: bool) -> void:
-	# Five-tile galleries around north+west, mirrored to north+east on floor 5.
-	# Scenery beyond the galleries is rendered separately from walkable tiles.
-	var side_x = size if east else -5
-	terrace = [Rect2i(side_x,-5,5,size+5),Rect2i(0,-5,size,5)]
+func add_terrace() -> void:
+	# Five-tile galleries round three sides of the building: west, north and
+	# east. Scenery beyond them is rendered separately from walkable tiles.
+	terrace = [Rect2i(-5,-5,5,size+5),Rect2i(-5,-5,size+10,5),Rect2i(size,-5,5,size+5)]
 	for strip in terrace: carve(strip)
-	for side in 2:
+	# Two doors out onto each side.
+	for side in ["west","north","east"]:
 		for fraction in [.3,.7]:
 			var along = floori(size*fraction)
-			var door = Rect2i(size-1 if east else 0,along,1,CORRIDOR) if side==0 else Rect2i(along,0,CORRIDOR,1)
+			var door: Rect2i
+			if side == "west": door = Rect2i(0,along,1,corridor)
+			elif side == "east": door = Rect2i(size-1,along,1,corridor)
+			else: door = Rect2i(along,0,corridor,1)
 			terrace_doors.append(door)
 			var target = start
 			var best = INF
@@ -365,12 +398,17 @@ func add_terrace(east: bool) -> void:
 				var c = center(room)
 				var d = absi(c.x-door.position.x)+absi(c.y-door.position.y)
 				if d<best: best=d; target=c
-			if side==0:
+			if side != "north":
 				horizontal(door.position,target)
-				carve(Rect2i(target.x,mini(door.position.y,target.y),CORRIDOR,absi(target.y-door.position.y)+CORRIDOR))
+				carve(Rect2i(target.x,mini(door.position.y,target.y),corridor,absi(target.y-door.position.y)+corridor))
 			else:
 				vertical(door.position,target)
-				carve(Rect2i(mini(door.position.x,target.x),target.y,absi(target.x-door.position.x)+CORRIDOR,CORRIDOR))
+				carve(Rect2i(mini(door.position.x,target.x),target.y,absi(target.x-door.position.x)+corridor,corridor))
+
+# The world point at the middle of the arrival flight's foot.
+func arrival_position() -> Vector3:
+	var side = Vector2i(arrival_dir.y,arrival_dir.x).abs()
+	return to_world(arrival_foot)+Vector3(side.x,0,side.y)*.5
 
 func to_world(cell: Vector2i) -> Vector3:
 	return Vector3(cell.x-start.x,0,cell.y-start.y+9)

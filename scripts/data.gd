@@ -1,17 +1,27 @@
 extends RefCounted
 ## Balance translated from the original game's src/config/balance.ts.
-# The temple's floors: five and the summit. (No place in the game has a name.)
-const FLOORS = 6
-# (Three quarters more statues on every floor than the original's 24, 32, 54,
-# 57 and 80, most of the added ones gladiators, centurions and lions. No
-# centurions guard the first two floors: their places went to gladiators
-# and, on the second, lions too.)
-const COUNTS = [
-	{"gladiator":25,"archer":13,"lion":4},
-	{"gladiator":23,"archer":15,"lion":18},
-	{"gladiator":32,"archer":20,"lion":22,"wizard":14,"centurion":7},
-	{"gladiator":28,"archer":17,"lion":22,"wizard":17,"centurion":16},
-	{"gladiator":42,"archer":18,"lion":30,"wizard":24,"centurion":26}]
+# The temple's floors: three and the summit. (No place in the game has a name.)
+const FLOORS = 4
+# Where a run can be: in the world outside (the town, the deserts and the
+# temple's front; scripts/overworld.gd), on a floor of the temple, or on a
+# level of one of the two dungeons fought through before it: the basement
+# under the town's arena, and the bandits' cave in the north of the desert.
+const PLACES = ["temple","world","basement","cave"]
+const DUNGEONS = ["basement","cave"]
+# Each place's floors, in the order they are met: how strong what is there is
+# (its level), and who stands there. The dungeons hold bandits, with swords
+# and with bows. The temple's first floor holds gladiators and archers; its
+# second adds lions and Oracles (and has the fountain court); its third adds
+# centurions (and has the terraces); its summit, the Crowned Statue.
+const AREAS = {
+	"basement":[{"level":1,"counts":{"bandit":14,"bandit_archer":8}},{"level":3,"counts":{"bandit":20,"bandit_archer":12}}],
+	"cave":[{"level":5,"counts":{"bandit":22,"bandit_archer":14}},{"level":8,"counts":{"bandit":28,"bandit_archer":18}}],
+	"temple":[{"level":11,"counts":{"gladiator":27,"archer":15}},
+		{"level":15,"counts":{"gladiator":28,"archer":18,"lion":20,"wizard":12}},
+		{"level":19,"counts":{"gladiator":36,"archer":18,"lion":28,"wizard":22,"centurion":22}},
+		{"level":23,"counts":{}}]}
+# The temple's own, as lists (tests and the debug tools read them).
+const COUNTS = [{"gladiator":27,"archer":15},{"gladiator":28,"archer":18,"lion":20,"wizard":12},{"gladiator":36,"archer":18,"lion":28,"wizard":22,"centurion":22}]
 const ENEMIES = {
 	"gladiator":{"title":"Gladiator","hp":33.0,"damage":7.5,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"sword","shield":"scutum","size":1.0,"color":Color(.70,.73,.69)},
 	"archer":{"title":"Archer","hp":18.0,"damage":12.5,"speed":3.56,"range":10.6,"interval":1.22,"weapon":"bow","size":.94,"color":Color(.59,.73,.68)},
@@ -25,6 +35,11 @@ const ENEMIES = {
 	# within its point's reach as the blow lands ("strike", centre to centre,
 	# from where his step has carried him).
 	"centurion":{"title":"Centurion","hp":65.0,"damage":27.5,"speed":3.56,"range":3.0,"strike":3.1,"interval":1.0,"weapon":"spear","shield":"tower","size":1.2,"color":Color(.64,.68,.76)},
+	# Bandits are men, not statues: they fall rather than crumble. Each fights
+	# `as` one of the temple's guardians does (a swordsman as a gladiator, a
+	# bowman as an archer), in a ranger's hood and cloak.
+	"bandit":{"title":"Bandit","as":"gladiator","human":"ranger","hp":30.0,"damage":7.0,"speed":3.7,"range":1.9,"interval":1.0,"weapon":"sword","size":1.0,"color":Color(.5,.4,.3)},
+	"bandit_archer":{"title":"Bandit Archer","as":"archer","human":"ranger","hp":18.0,"damage":10.0,"speed":3.6,"range":10.6,"interval":1.3,"weapon":"bow","size":1.0,"color":Color(.5,.4,.3)},
 	"boss":{"title":"The Crowned Statue","hp":1250.0,"damage":67.5,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
 const CLASSES = ["warrior","ranger","wizard"]
@@ -38,7 +53,8 @@ const GEM_COLORS = [Color(1,.20,.24),Color(.2,1,.63),Color(.2,.58,1),Color(.8,.9
 const DIFFICULTIES = ["Easy","Moderate","Hard"]
 const HEALTH_SCALE = [.9,1.1,1.4]
 const DAMAGE_SCALE = [.7,1.1,1.4]
-const ENEMY_LEVELS = [1,4,8,12,18,22]
+# (The temple's floors' levels: AREAS has every place's.)
+const ENEMY_LEVELS = [11,15,19,23]
 const MAX_LEVEL = 25
 # Attribute points for each level gained; each level also grants a skill point.
 const STAT_POINTS = 5
@@ -51,19 +67,49 @@ const MELEE_MINIMUM = .2
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	return {"version":9,"place":"temple","class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	return {"version":10,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 
-# Where a run can be: on a floor of the temple, or in the world outside it
-# (the town, the desert and the temple's front; scripts/overworld.gd).
-const PLACES = ["temple","world"]
+# The floor the run is on (in the world outside, the temple's first).
+static func area(run: Dictionary) -> Dictionary:
+	var place: String = run.get("place","temple")
+	var floors: Array = AREAS[place if AREAS.has(place) else "temple"]
+	return floors[clampi(int(run.floor),0,floors.size()-1)]
 
-# A new character wakes in the middle of the desert, between the town and the
-# temple. (new_run alone starts at the temple's first floor.)
+static func enemy_level(run: Dictionary) -> int:
+	return area(run).level
+
+# Whether the run is on the temple's summit, or on its place's last floor.
+static func summit(run: Dictionary) -> bool:
+	return run.get("place","temple") in ["temple","world"] and int(run.floor)==FLOORS-1
+static func last_floor(run: Dictionary) -> bool:
+	var place: String = run.get("place","temple")
+	return int(run.floor)>=AREAS[place if AREAS.has(place) else "temple"].size()-1
+
+# The temple's door stays shut until both dungeons have been fought through.
+static func temple_open(run: Dictionary) -> bool:
+	for dungeon in DUNGEONS:
+		if not dungeon in run.get("cleared",[]): return false
+	return true
+
+# An enemy's name in the run's saved lists: its floor and its number there
+# (and, outside the temple, its place).
+static func enemy_id(run: Dictionary, number: int) -> String:
+	var place: String = run.get("place","temple")
+	return "%d:%d" % [run.floor,number] if place=="temple" else "%s:%d:%d" % [place,run.floor,number]
+
+# Whether a saved enemy's name belongs to `place`.
+static func of_place(id: String, place: String) -> bool:
+	if place=="temple": return not (id.begins_with("basement:") or id.begins_with("cave:"))
+	return id.begins_with(place+":")
+
+# A new character wakes on the great dune south of the town, by a campfire.
+# (new_run alone starts at the temple's first floor.)
 static func new_character(class_id: String = "warrior") -> Dictionary:
 	var run = new_run(class_id)
 	run.place = "world"
-	# Overworld.START, beside the lost caravan.
-	run.position = [-52,-15]
+	# Overworld.START, by the camp on the dune; he sits there until he moves.
+	run.position = [-262,144]
+	run["resting"] = true
 	return run
 
 static func passive(run: Dictionary, id: String) -> float:
@@ -133,8 +179,8 @@ static func gain_xp(run: Dictionary, amount: int) -> int:
 	return int(run.level)-before
 
 static func enemy_xp(run: Dictionary, kind: String) -> int:
-	var base: int = {"gladiator":65,"archer":55,"lion":60,"wizard":80,"centurion":120,"boss":1800}[kind]
-	var level: int = ENEMY_LEVELS[run.floor]
+	var base: int = {"bandit":26,"bandit_archer":22,"gladiator":65,"archer":55,"lion":60,"wizard":80,"centurion":120,"boss":1800}[kind]
+	var level: int = enemy_level(run)
 	var penalty = maxf(.1,1.0-maxi(0,int(run.level)-level-3)*.12)
 	return maxi(1,roundi(base*(1.0+(level-1)*.2)*penalty))
 

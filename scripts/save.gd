@@ -3,14 +3,29 @@ const Data = preload("res://scripts/data.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=9: return d
+	if int(d.get("version",0))>=10: return d
+	if int(d.get("version",0))==9:
+		# The temple became three floors and a summit, with two dungeons to
+		# fight through before it. A character from before keeps the temple
+		# open, and stands at the start of the floor his old one became.
+		var updated = d.duplicate(true)
+		updated.version = 10
+		updated.cleared = Data.DUNGEONS.duplicate()
+		var old_floor = clampi(int(d.get("floor",0)),0,5)
+		updated.floor = [0,1,1,2,2,3][old_floor]
+		if updated.get("place","temple")=="temple":
+			updated.dead = []
+			updated.drops = []
+			updated.position = [0,9]
+		elif updated.floor != old_floor: updated.dead = []
+		return updated
 	if int(d.get("version",0))==8:
 		# The hotbar grew from RMB, 1 and 2 to RMB and 1 to 4.
 		if not d.get("hotbar") is Array or d.hotbar.size()!=3: return {}
 		var updated = d.duplicate(true)
 		updated.version = 9
 		updated.hotbar = updated.hotbar+["",""]
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==7:
 		# The dagger joined the weapons (the ranger carries one with his bow),
 		# and the ranger's skills were replaced: his are refunded.
@@ -70,9 +85,13 @@ static func migrate(d: Dictionary) -> Dictionary:
 	for stat in d.stats:
 		if not (stat is int or stat is float) or stat<0: return {}
 		previous_points += stat
-	var level = clampi(maxi(Data.ENEMY_LEVELS[old_floor],1+ceili(previous_points/3.0)),1,Data.MAX_LEVEL)
+	var level = clampi(maxi([1,4,8,12,18,22][old_floor],1+ceili(previous_points/3.0)),1,Data.MAX_LEVEL)
 	Data.gain_xp(fresh,Data.xp_at_level(level))
 	fresh.xp_claimed = fresh.dead.duplicate()
+	# (The temple is three floors now; the dungeons before it are behind him.)
+	fresh.floor = [0,1,1,2,2,3][old_floor]
+	fresh.cleared = Data.DUNGEONS.duplicate()
+	if fresh.floor != old_floor: fresh.dead = []
 	fresh.drops = fresh.drops.filter(func(drop): return drop is Dictionary and drop.get("kind","")=="weapon" and drop.get("value",-1) not in [2,3])
 	fresh.health = 100.0
 	fresh.energy = 100.0
@@ -81,7 +100,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<9:
+	if int(d.get("version",0))<10:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -97,7 +116,10 @@ static func valid(d) -> bool:
 		if not (value is int or value is float) or not is_finite(float(value)): return false
 	for value in d.owned:
 		if not value is bool: return false
-	if int(d.floor)<0 or int(d.floor)>5 or int(d.difficulty)<0 or int(d.difficulty)>2: return false
+	if int(d.floor)<0 or int(d.floor)>=Data.AREAS[d.place if Data.AREAS.has(d.place) else "temple"].size() or int(d.difficulty)<0 or int(d.difficulty)>2: return false
+	if not d.cleared is Array: return false
+	for place in d.cleared:
+		if not place in Data.DUNGEONS: return false
 	if int(d.weapon)<0 or int(d.weapon)>5 or not d.owned[int(d.weapon)]: return false
 	if not d.level is float and not d.level is int: return false
 	if d.level<1 or d.level>Data.MAX_LEVEL or d.level!=int(d.level): return false

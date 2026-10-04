@@ -497,7 +497,61 @@ func ranger_carry() -> bool:
 # Hidden in the shadows (the game sets it): he waits and goes crouched.
 var sneaking = false
 
+# Sitting at his ease (by the campfire a new character wakes at), his gear
+# laid by: the clip "Rest", made from the standing idle with the legs folded
+# to sit on something knee high.
+var resting = false
+const REST_BEND = 1.43
+func rest(on: bool) -> void:
+	if on and not clips.has("Rest"): make_rest_clip()
+	resting = on and clips.has("Rest")
+	for item in [weapon_item,shield_item]:
+		if is_instance_valid(item): item.visible = not resting
+	play(idle_action())
+
+func make_rest_clip() -> void:
+	if not clips.has("Idle") or skeleton.find_bone("thigh_l") < 0: return
+	var source: String = clips["Idle"]
+	var made: Animation = animator.get_animation(source).duplicate(true)
+	var folded: Dictionary = {}
+	var pelvis = skeleton.find_bone("pelvis")
+	var hip_basis: Basis = skeleton.get_bone_global_rest(pelvis).basis
+	var knee_height = 0.0
+	for side in ["l","r"]:
+		var thigh = skeleton.find_bone("thigh_"+side)
+		var foot = skeleton.find_bone("foot_"+side)
+		var calf = skeleton.get_bone_parent(foot)
+		# The knees fall a little apart.
+		var splay = Basis(Vector3.UP,.16 if side=="l" else -.16)
+		var thigh_to: Basis = splay*Basis(Vector3.RIGHT,-REST_BEND)*skeleton.get_bone_global_rest(thigh).basis
+		var calf_to: Basis = splay*skeleton.get_bone_global_rest(calf).basis
+		folded[skeleton.get_bone_name(thigh)] = (hip_basis.inverse()*thigh_to).get_rotation_quaternion()
+		folded[skeleton.get_bone_name(calf)] = (thigh_to.inverse()*calf_to).get_rotation_quaternion()
+		knee_height = skeleton.get_bone_global_rest(calf).origin.y
+	var hip_height: float = skeleton.get_bone_global_rest(skeleton.find_bone("thigh_l")).origin.y
+	var drop = hip_height-knee_height-.06
+	var lowered: Vector3 = skeleton.get_bone_rest(pelvis).origin+skeleton.get_bone_global_rest(skeleton.get_bone_parent(pelvis)).basis.inverse()*Vector3(0,-drop,-.12)
+	var prefix = ""
+	for track in range(made.get_track_count()-1,-1,-1):
+		var path = String(made.track_get_path(track))
+		prefix = path.get_slice(":",0)
+		var bone = path.get_slice(":",1)
+		var kind = made.track_get_type(track)
+		if (kind == Animation.TYPE_ROTATION_3D and folded.has(bone)) or (kind == Animation.TYPE_POSITION_3D and bone == "pelvis"): made.remove_track(track)
+	for bone in folded:
+		var track = made.add_track(Animation.TYPE_ROTATION_3D)
+		made.track_set_path(track,"%s:%s" % [prefix,bone])
+		made.rotation_track_insert_key(track,0.0,folded[bone])
+	var seat = made.add_track(Animation.TYPE_POSITION_3D)
+	made.track_set_path(seat,"%s:pelvis" % prefix)
+	made.position_track_insert_key(seat,0.0,lowered)
+	made.loop_mode = Animation.LOOP_LINEAR
+	var library_name = source.get_slice("/",0) if "/" in source else ""
+	animator.get_animation_library(library_name).add_animation("Rest",made)
+	clips["Rest"] = "%s/Rest" % library_name if library_name != "" else "Rest"
+
 func idle_action() -> String:
+	if resting: return "Rest"
 	if sneaking and clips.has("SneakIdle"): return "SneakIdle"
 	if ranger_carry(): return "RangerIdle"
 	if not is_stone and weapon_kind == "staff": return "WizardIdle" if clips.has("WizardIdle") else "Idle"
