@@ -1,8 +1,8 @@
 extends Node3D
-## The shockwave of a blow on the ground (Leap's landing, Ground Slam,
+## The shockwave of a blow on the ground (Leap's landing, Thunder Slam,
 ## Shockwave): everything in the blow goes into the ground at once. A flash
 ## where it lands; the floor cracked about it, the cracks glowing and dying
-## away (blue with the blade's charge for Ground Slam: `plasma`); a column of
+## away (blue with the blade's charge for Thunder Slam: `plasma`); a column of
 ## dust thrown straight up; and one front of pressed air racing out across
 ## the whole area the blow reaches, like a sonic boom: a hard pale edge over
 ## the ground with a low wall of haze standing on it, all round for the leap
@@ -25,7 +25,7 @@ var wall: MeshInstance3D
 var flash: OmniLight3D
 var plasma = false
 
-# `plasma` (Ground Slam): the blade's charge is driven into the ground with
+# `plasma` (Thunder Slam): the blade's charge is driven into the ground with
 # the blow, and shows in the cracks and the flash.
 static func make(at: Vector3, reach: float, direction: Vector3 = Vector3.ZERO, degrees: float = 360.0, plasma: bool = false) -> Node3D:
 	var node = new()

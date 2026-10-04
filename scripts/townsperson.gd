@@ -38,6 +38,9 @@ var figure: Node3D
 var skeleton: Skeleton3D
 var animator: AnimationPlayer
 var state = ""
+# How it lies asleep: "Lie" on its back, "LieLeft" or "LieRight" on that side
+# (the game's "Lie" plays this).
+var sleep_pose = "Lie"
 var size = 1.0
 # What it holds in its left hand (a mug), if anything.
 var held: Node3D
@@ -150,6 +153,109 @@ func lying() -> void:
 	made.length = 1.0
 	made.loop_mode = Animation.LOOP_LINEAR
 	library.add_animation("Lie",made)
+	library.add_animation("LieLeft",on_side(made,"l"))
+	library.add_animation("LieRight",on_side(made,"r"))
+
+# Asleep on one side (`side` "l" or "r"), made from lying on the back: the
+# body rolled over onto that side about its length, the knees drawn up, the
+# arms brought forward (the under one bent up under the head), the back
+# curled a little and the head let down toward the ground; then let down
+# itself until its lowest point is as low as on its back, so it rests on the
+# ground or the bed as that does.
+const ROLL = 1.5
+func on_side(lie: Animation, side: String) -> Animation:
+	animator.play("Lie",0.0)
+	animator.seek(0.0,true)
+	skeleton.force_update_all_bone_transforms()
+	var resting = lowest()
+	var bone = func(name: String) -> int: return skeleton.find_bone(name)
+	var at = func(name: String) -> Vector3: return skeleton.get_bone_global_pose(bone.call(name)).origin
+	var pelvis: int = bone.call("pelvis")
+	var length: Vector3 = (at.call("neck_01")-at.call("pelvis")).normalized()
+	# Over onto the named side: its shoulder goes down.
+	var other = "r" if side == "l" else "l"
+	var roll = Basis(length,ROLL)
+	var under: Vector3 = roll*(at.call("upperarm_"+side)-at.call("pelvis"))
+	var over: Vector3 = roll*(at.call("upperarm_"+other)-at.call("pelvis"))
+	if under.y > over.y: roll = Basis(length,-ROLL)
+	turn(pelvis,roll)
+	var front: Vector3 = roll*Vector3.UP
+	var across: Vector3 = (at.call("thigh_l")-at.call("thigh_r")).normalized()
+	# Each joint bends about the line across the body, the way that carries
+	# its limb toward `toward`.
+	var bend = func(name: String, angle: float, toward: Vector3) -> void:
+		var i: int = bone.call(name)
+		var child: int = skeleton.get_bone_children(i)[0]
+		var reach: Vector3 = skeleton.get_bone_global_pose(child).origin-skeleton.get_bone_global_pose(i).origin
+		var turned = Basis(across,angle)
+		if (turned*reach-reach).dot(toward) < 0.0: turned = Basis(across,-angle)
+		turn(i,turned)
+	bend.call("spine_02",.18,front)
+	bend.call("thigh_"+side,.95,front)
+	bend.call("thigh_"+other,.75,front)
+	bend.call("calf_"+side,1.2,-front)
+	bend.call("calf_"+other,1.0,-front)
+	bend.call("upperarm_"+side,1.55,front)
+	bend.call("lowerarm_"+side,1.7,length)
+	bend.call("upperarm_"+other,.7,front)
+	bend.call("lowerarm_"+other,.9,front)
+	# The head let down toward the ground, onto the under arm.
+	var neck: int = bone.call("neck_01")
+	var head_way: Vector3 = at.call("Head")-at.call("neck_01")
+	var tilt = Basis(length,.3)
+	if (tilt*head_way-head_way).y > 0.0: tilt = Basis(length,-.3)
+	turn(neck,tilt)
+	# Down (or up) to rest where lying on the back rests.
+	var drop: float = lowest()-resting
+	var global: Transform3D = skeleton.get_bone_global_pose(pelvis)
+	global.origin.y -= drop
+	var parent = skeleton.get_bone_parent(pelvis)
+	var local: Transform3D = (skeleton.get_bone_global_pose(parent).affine_inverse() if parent >= 0 else Transform3D())*global
+	skeleton.set_bone_pose_position(pelvis,local.origin)
+	skeleton.force_update_all_bone_transforms()
+	var made: Animation = lie.duplicate(true)
+	for track in made.get_track_count():
+		var i = skeleton.find_bone(String(made.track_get_path(track)).get_slice(":",1))
+		if i < 0: continue
+		match made.track_get_type(track):
+			Animation.TYPE_ROTATION_3D: made.track_set_key_value(track,0,skeleton.get_bone_pose_rotation(i))
+			Animation.TYPE_POSITION_3D: made.track_set_key_value(track,0,skeleton.get_bone_pose_position(i))
+	return made
+
+# Turns bone `i` by `by` (in the skeleton's space) about its own joint.
+func turn(i: int, by: Basis) -> void:
+	var global: Basis = by*skeleton.get_bone_global_pose(i).basis
+	var parent = skeleton.get_bone_parent(i)
+	var local: Basis = (skeleton.get_bone_global_pose(parent).basis.inverse() if parent >= 0 else Basis())*global
+	skeleton.set_bone_pose_rotation(i,local.get_rotation_quaternion())
+	skeleton.force_update_all_bone_transforms()
+
+# The height of the lowest point of the body's flesh as it is posed (in the
+# skeleton's space), from every third point of it.
+func lowest() -> float:
+	var body: MeshInstance3D = null
+	for mesh in skeleton.find_children("*","MeshInstance3D",true,false):
+		if mesh.name == "Body": body = mesh
+	if body == null: return 0.0
+	var arrays = body.mesh.surface_get_arrays(0)
+	var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	var per: int = bones.size()/points.size()
+	var skin: Skin = body.skin
+	var binds: Array[Transform3D] = []
+	for b in skin.get_bind_count():
+		var i = skin.get_bind_bone(b)
+		if i < 0: i = skeleton.find_bone(skin.get_bind_name(b))
+		binds.append(skeleton.get_bone_global_pose(i)*skin.get_bind_pose(b))
+	var low = INF
+	for v in range(0,points.size(),3):
+		var placed = Vector3.ZERO
+		for k in per:
+			var w = weights[v*per+k]
+			if w > 0.0: placed += (binds[bones[v*per+k]]*points[v])*w
+		low = minf(low,placed.y)
+	return low
 
 func lie_down(rate: float, blend: float = .3) -> void:
 	state = "LieDown"
@@ -214,6 +320,10 @@ static func shared(kind: String) -> StandardMaterial3D:
 	return m
 
 func play(clip: String, blend: float = .25, rate: float = 1.0) -> void:
+	# Asleep as it sleeps; rolling over onto its side takes a moment.
+	if clip == "Lie" and sleep_pose != "Lie":
+		clip = sleep_pose
+		if blend > 0.0: blend = maxf(blend,.9)
 	if clip == state and animator.is_playing():
 		animator.speed_scale = rate
 		return

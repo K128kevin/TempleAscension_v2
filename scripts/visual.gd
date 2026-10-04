@@ -422,7 +422,7 @@ func equip(weapon: String) -> void:
 	blade_charge = null
 	if is_instance_valid(blade_glow): blade_glow.queue_free()
 	blade_glow = null
-	# The hero's hard cuts leave a wake behind the blade, and Ground Slam
+	# The hero's hard cuts leave a wake behind the blade, and Thunder Slam
 	# charges it.
 	if weapon in ["sword","dagger"] and not is_stone:
 		sword_trail = SwordTrail.new()
@@ -1348,7 +1348,7 @@ const SKILL_WAKE = [.25,.05]
 # (Cleave's sweep is followed far round after the blow, its wake with it.)
 const SKILL_WAKES = {"SkillCleave":[.16,.12]}
 var blade_tip_was = null
-# Ground Slam's charge on the blade (scripts/blade_charge.gd): how strong it
+# Thunder Slam's charge on the blade (scripts/blade_charge.gd): how strong it
 # is over the swing, as shares of the clip (forming as he raises the sword,
 # surging as he drives it down, breaking off it as it meets the ground,
 # fading after the blow).
@@ -1413,7 +1413,7 @@ static func cry_glow(u: float, contact: float) -> float:
 	if u <= contact: return smoothstep(CRY_GATHER[0],CRY_GATHER[1],u)
 	return 1.0-smoothstep(contact,CRY_SPENT,u)
 
-# How charged the blade is `u` of the way through Ground Slam's swing.
+# How charged the blade is `u` of the way through Thunder Slam's swing.
 static func slam_charge(u: float) -> float:
 	if u < 0.0: return 0.0
 	if u < SLAM_RAISED: return .55*smoothstep(0.0,SLAM_RAISED,u)

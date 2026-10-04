@@ -1,7 +1,12 @@
 // The outdoor world's ground, drawn on one flat slab: photographed sand,
 // fine where the wind lays it and gravelly in patches, on the track and under
 // the rocks, shaded into low dunes and wind ripples; and, where the control
-// map says so, town paving, the worn track and the oasis pool.
+// map says so, town paving, the worn track and water: the oasis, the palace's
+// pools. Water is clear: its bed shows through it, dimmed and tinted the deeper
+// it lies (red lost first), with the sun's light netted over it in the
+// shallows; its surface is ruffled by wind-driven ripples that catch the sun,
+// reflects the sky more as it is seen more slantwise (Fresnel), and laps at
+// its edge.
 shader_type spatial;
 render_mode cull_back;
 // One texel per metre. R: paving. G: the track. B: shade at the foot of walls
@@ -25,7 +30,12 @@ uniform vec3 sand_light = vec3(1.33,1.24,1.12);
 uniform vec3 sand_dark = vec3(1.0,.88,.76);
 uniform vec3 gravel_gain = vec3(1.1,1.05,1.0);
 uniform vec3 paving_tint : source_color = vec3(.74,.68,.60);
-uniform vec3 water_deep : source_color = vec3(.05,.17,.17);
+// Water: the colour it scatters back where deep, and how strongly it takes
+// out each of red, green and blue from the light through it, a metre's worth.
+uniform vec3 water_deep : source_color = vec3(.14,.33,.34);
+uniform vec3 absorption = vec3(.95,.42,.40);
+// The sky the water reflects (scripts/overworld.gd set_time).
+uniform vec3 sky_colour = vec3(.62,.70,.82);
 varying vec3 world;
 varying vec3 mesh_normal;
 
@@ -55,6 +65,15 @@ float dunes(vec2 p) {
 // Wind ripples, a hand's width apart, bent by the dunes they run over.
 float ripple_phase(vec2 p) {
 	return (p.x*.6+p.y*.8)*17.0+(fbm(p*.11)*6.0+value_noise(p*.7)*1.1)*6.0;
+}
+
+// The water's surface, as heights: two trains of wind ripples crossing, and
+// a fine chop over them.
+float ripples(vec2 q) {
+	vec2 wind = vec2(.8,.6);
+	return value_noise(q*1.15+wind*TIME*.42)*.55
+		+value_noise(vec2(q.x*.6-q.y*.8,q.x*.8+q.y*.6)*2.3-wind.yx*TIME*.63)*.3
+		+value_noise(q*6.1+vec2(TIME*.9,-TIME*.7))*.15;
 }
 
 void vertex() {
@@ -103,17 +122,48 @@ void fragment() {
 	float drift = smoothstep(.5,.78,fbm(p*.33+4.0)+(1.0-map.r)*.5);
 	vec3 ground = mix(sand,mix(flags,sand,drift*.75),paved);
 
-	// Wet sand darkens toward the pool; the pool itself is still water.
+	// Wet sand darkens toward the water.
 	ground = mix(ground,ground*vec3(.5,.46,.42),shore*(1.0-water));
-	float wave = value_noise(p*1.7+vec2(TIME*.18,TIME*.11))+value_noise(p*3.1-vec2(TIME*.13,TIME*.2));
-	vec3 pool = mix(water_deep*2.4+sand*.25,water_deep,smoothstep(.55,.95,map.a))+vec3(.05,.07,.06)*(wave-1.0);
-	ground = mix(ground,pool,water);
-
 	// Shade gathered at the foot of whatever stands on the ground.
 	ground *= 1.0-map.b*.4;
+	vec3 surface = vec3(0.0,1.0,0.0);
+	vec3 reflected = vec3(0.0);
+	if (shore > 0.0) {
+		// How deep it lies: nothing at the edge, a metre and a half in the middle.
+		float depth = smoothstep(.45,1.0,map.a)*1.5;
+		// The surface, tilted by how its ripples rise across it; rougher in
+		// the gusts that cross it.
+		float d = .07;
+		float h0 = ripples(p);
+		vec2 rise = vec2(ripples(p+vec2(d,0.0))-h0,ripples(p+vec2(0.0,d))-h0)/d;
+		float rough_water = .35+.65*smoothstep(.2,.8,value_noise(p*.21+vec2(TIME*.05,0.0)));
+		surface = normalize(vec3(-rise.x*.09*rough_water,1.0,-rise.y*.09*rough_water));
+		// The bed through the water, shifted a little by the ripples
+		// (refraction), with the sun's light netted over it by them (caustics).
+		float a = value_noise(p*2.1+surface.xz*1.5+vec2(TIME*.31,TIME*.19));
+		float b = value_noise(vec2(p.x*.8+p.y*.6,p.y*.8-p.x*.6)*2.6-vec2(TIME*.23,TIME*.29));
+		float caustic = smoothstep(.82,1.0,1.0-abs(a-b)*3.2);
+		// Silt and weed darken the bed where it lies deep.
+		vec3 bed = ground*mix(vec3(1.0),vec3(.55,.6,.5),smoothstep(.4,1.4,depth))*(1.0+caustic*1.3*exp(-depth*1.6));
+		vec3 through = exp(-absorption*(depth*1.3+.08));
+		vec3 body = bed*through+water_deep*(1.0-through.g);
+		// The sky in the water, the more of it the more slantwise it is seen.
+		vec3 eye = normalize((INV_VIEW_MATRIX*vec4(VIEW,0.0)).xyz);
+		float fresnel = .02+.98*pow(1.0-clamp(dot(surface,eye),0.0,1.0),5.0);
+		// Lapping at the edge: a bright wet line that runs up and back, and
+		// flecks of foam.
+		float lap = map.a-.5+.035*sin(TIME*1.4+value_noise(p*.5)*9.0);
+		float edge = 1.0-smoothstep(0.0,.05,abs(lap));
+		float foam = edge*smoothstep(.45,.75,value_noise(p*7.0+vec2(TIME*.2,-TIME*.15)));
+		body = mix(body,vec3(.86,.88,.84),foam*.55);
+		ground = mix(ground,body*(1.0-fresnel),water);
+		reflected = sky_colour*fresnel*water;
+	}
 	ALBEDO = ground;
-	ROUGHNESS = mix(.96,.1,water);
-	SPECULAR = mix(.1,.6,water);
+	EMISSION = reflected;
+	// Still water is glassy: the sun glints off each ripple turned to it.
+	ROUGHNESS = mix(.96,.05,water);
+	SPECULAR = mix(.1,.5,water);
 	float relief = (1.0-paved)*(1.0-water)*(1.0-track*.6);
 	vec3 n = normalize(vec3(-slope.x*1.7*relief,1.0,-slope.y*1.7*relief));
 	// Ripples tilt the surface across their own crests.
@@ -121,7 +171,7 @@ void fragment() {
 	// The grain of the sand itself, and the stones in the gravel.
 	vec2 grain = mix(mix(texture(sand_fine_normal,p*.29).xy,texture(sand_fine_normal,turned).xy,lay),texture(sand_gravel_normal,p*.23).xy,gritty*.85)*2.0-1.0;
 	n = normalize(n+vec3(grain.x,0.0,-grain.y)*mix(.55,.3,paved)*(1.0-water));
-	n = mix(n,normalize(vec3((wave-1.0)*.08,1.0,(wave-1.0)*.06)),water);
+	n = normalize(mix(n,surface,water));
 	n = normalize(n/max(n.y,.2)+vec3(mesh_normal.x,0.0,mesh_normal.z)/max(mesh_normal.y,.2)*sloped);
 	NORMAL = normalize((VIEW_MATRIX*vec4(n,0.0)).xyz);
 }

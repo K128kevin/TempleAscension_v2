@@ -20,12 +20,20 @@ extends Node3D
 ## At night they sleep (scripts/daylight.gd keeps the hour). Through the
 ## sunset and the first of the night each goes to bed in turn: four who lodge
 ## at the inn climb to the beds in its loft; those in rags, who have no roof,
-## lie down on the ground at the foot of the arena's wall, a bundle of their
-## things by their heads; the rest go home, each into a house of his own.
+## lie down on a spread of rags along the foot of a house's wall or under a
+## tree, a bundle of their things by their heads; the rest go home, each into a house of his own.
 ## Orion finishes the job in hand and goes into the house nearest his smithy,
 ## the same every night. Anya, the inn emptied, goes into the kitchen behind
 ## her bar to her own bed. The children go early, together. Through the
 ## sunrise they get up and come out again, and the day goes on.
+##
+## Three stallholders keep the greengrocers' stalls below the market square
+## (scripts/world_town.gd stall()). Each comes from his house after sunrise,
+## sets out his wares and stands behind his counter; through the sunset he
+## packs them away, throws sacking over the counter and goes home to bed. Now
+## and then one of the townspeople with a house of his own stops at an open
+## stall, talks a moment with its keeper, is handed a crate of what it sells,
+## and carries it home; he comes out again a little later.
 const Person = preload("res://scripts/townsperson.gd")
 const Kit = preload("res://scripts/world_art.gd")
 const Town = preload("res://scripts/world_town.gd")
@@ -69,6 +77,9 @@ const STREET_CHILDREN = [0,2,4]
 const ABED = ["to_bed","lie_down","asleep","indoors","get_up","from_bed"]
 # Lying down is getting up played backward, this much slower.
 const LIE_RATE = .6
+# How one sleeps: on the back, or on the left side or the right
+# (scripts/townsperson.gd).
+const SLEEP_POSES = ["Lie","LieLeft","LieRight"]
 # One asleep on a bed lies on its mattress, this high, his feet this far
 # toward its foot from its middle (he lies back from where he stood: his head
 # about .9 m behind).
@@ -77,6 +88,25 @@ const PILLOW = .3
 # A jump of the clock larger than this (a game begun or loaded, the day
 # hurried on) puts everyone at once where the hour has them.
 const JUMP = 5.0
+# The stallholders: one to each stall, in the order of world.stalls.
+const KEEPERS = [
+	{"who":"woman","garment":"Gown","cloth":Color(.46,.30,.20),"wear":.3,"hair":"Hair_Buns","hair_colour":Color(.12,.08,.05),
+		"skin":"dark","belt":Color(.30,.20,.12),"size":.97,"seed":.31},
+	{"who":"man","garment":"Robe","cloth":Color(.36,.38,.30),"wear":.35,"hair":"Hair_Buzzed","beard":true,"hair_colour":Color(.20,.14,.09),
+		"skin":"light","tone":Color(1.0,.93,.86),"belt":Color(.30,.20,.12),"size":1.0,"seed":.52},
+	{"who":"man","garment":"Tunic","cloth":Color(.50,.40,.28),"wear":.4,"hair":"Hair_SimpleParted","beard":true,"hair_colour":Color(.42,.41,.40),
+		"skin":"dark","belt":Color(.25,.17,.10),"size":.98,"seed":.64}]
+# They shut up shop through the sunset, before the rest go to bed, and open
+# up once the sun is up.
+const KEEPER_BEDTIME = Vector2(Daylight.SUNSET+5.0,Daylight.SUNSET+45.0)
+const KEEPER_RISING = Vector2(40.0,90.0)
+# How likely a stroller is to go to the stalls, each time he sets off.
+const SHOP_CHANCE = .06
+# How long a purchase takes (talk, then the crate handed over), and how
+# long its buyer stays at home with it.
+const BUY_TIME = 7.0
+const HAND_OVER = 2.2
+const AT_HOME = Vector2(12.0,30.0)
 # Clothes: neutral, undyed or faded.
 const CLOTHS = [Color(.74,.68,.56),Color(.52,.50,.47),Color(.42,.33,.25),Color(.60,.52,.40),Color(.42,.42,.30),Color(.38,.40,.42),Color(.50,.36,.28),Color(.78,.75,.68),Color(.30,.29,.27)]
 const HAIRS = [Color(.07,.05,.04),Color(.13,.08,.05),Color(.2,.14,.09),Color(.26,.2,.14),Color(.42,.41,.4)]
@@ -128,6 +158,10 @@ class Walker:
 	var rising = 0.0
 	# Climbs the stair to the inn's loft: stands on the ground's height there.
 	var climbs = false
+	# The stall it keeps, or is buying at; and what it carries home from
+	# there.
+	var stall = {}
+	var basket: Node3D
 	var at: Vector3:
 		get: return body.position
 		set(value): body.position = value
@@ -228,6 +262,7 @@ func setup(overworld) -> void:
 		children.append(walker)
 	play.spot = haunts[3].at
 	lay_beds()
+	hire_keepers()
 
 func figure(look: Dictionary) -> Node3D:
 	var person = Person.new()
@@ -421,6 +456,7 @@ func tick(delta: float, hero: Vector3) -> void:
 	if last_time < 0.0 or fposmod(now-last_time,Daylight.CYCLE) > JUMP: at_once()
 	last_time = now
 	for walker in people: tend(walker,delta)
+	for keeper in keepers: keep(keeper,delta)
 	serve(delta)
 	# Orion goes to bed between jobs.
 	if orion.state in ABED: retire(orion,delta)
@@ -470,6 +506,7 @@ func rest(walker: Walker, least: float, most: float) -> void:
 func wander(walker: Walker) -> void:
 	var occupancy = staying()+inbound()
 	if can_enter() and rng.randf() < INN_CHANCE.get(occupancy,1.0 if occupancy < 4 else 0.0) and go_to_inn(walker): return
+	if rng.randf() < SHOP_CHANCE and go_shopping(walker): return
 	# Mostly round the arena, sometimes the market, now and then an alley;
 	# and somewhere not too near.
 	var roll = rng.randf()
@@ -487,10 +524,15 @@ func tend(walker: Walker, delta: float) -> void:
 	# Bedtime: off home from the street (or from the way to the inn); one
 	# waiting at a table gets up and goes, unless Anya is bringing his drink.
 	if abed(walker):
-		if walker.state in ["walk","pause","halt","leaving","to_inn"]:
+		if walker.state in ["walk","pause","halt","leaving","to_inn","to_buy","buying","laden","from_home"]:
 			go_to_bed(walker)
 			return
 		if walker.state == "wait" and not walker in round: leave(walker)
+		# (At home with his shopping: he stays in for the night.)
+		if walker.state == "home":
+			walker.state = "indoors"
+			walker.at = walker.bed.at
+			return
 	walker.chat_rest = maxf(0.0,walker.chat_rest-delta)
 	walker.timer -= delta
 	match walker.state:
@@ -564,6 +606,7 @@ func tend(walker: Walker, delta: float) -> void:
 		"leaving":
 			if advance(walker,delta): rest(walker,2.0,6.0)
 			elif not inside(walker): walker.state = "walk"
+		"to_buy","buying","laden","home","from_home": shop(walker,delta)
 
 # A sip: the hand goes to the mug on the table, closes on its handle, lifts
 # it to the mouth, sets it down again and lets go.
@@ -789,6 +832,12 @@ func lay_beds() -> void:
 	# A bundle lies just beyond each sleeper's head.
 	for walker in people+children:
 		if walker.bed.kind == "ground": walker.bed.bundle.position = walker.bed.at-walker.bed.along*(.3+.92*walker.body.size)
+	# In the loft and in the street each sleeps as he will: on his back, or on
+	# his left side or his right.
+	var turns = RandomNumberGenerator.new()
+	turns.seed = 3307
+	for walker in people+children:
+		if walker.bed.kind in ["ground","inn"]: walker.body.sleep_pose = SLEEP_POSES[turns.randi_range(0,SLEEP_POSES.size()-1)]
 
 # Going into a house (a place of the world's): to its doorstep, then to the
 # door, where one goes in; and out to the doorstep again in the morning. The
@@ -802,44 +851,151 @@ func house_bed(place: Dictionary) -> Dictionary:
 	var door: Vector3 = place.at+inward*1.25
 	return {"kind":"house","at":door,"yaw":atan2(inward.x,inward.z),"side":door,"way":[step,door],"out":[step]}
 
-# Where those with no roof sleep: on the ground at the foot of the arena's
-# outer wall, along it, well clear of its gates and apart from one another,
-# each with a bundle of his things by his head. The first three lie end to
-# end (the street children's); the rest are spread round the wall.
+# Where those with no roof sleep: on the ground, on a spread of rags, a
+# bundle of their things by their heads. Each lies along the foot of a wall
+# of the town's houses and shops, or at the foot of a tree, well away from
+# the arena, clear of doors, gates and the market, and apart from the others.
+# The first three lie end to end along one wall (the street children's).
+const ASLEEP_APART = 7.0
 func street_beds(sleep: RandomNumberGenerator) -> Array[Dictionary]:
-	var spots: Array[Dictionary] = []
-	var steps = 144
-	for k in steps:
-		var angle = (k+.5)*TAU/steps
-		var by_gate = false
-		for gate in Town.ARENA_GATES:
-			if absf(angle_difference(angle,gate*TAU/Town.ARENA_BAYS)) < 3.0*TAU/Town.ARENA_BAYS: by_gate = true
-		if by_gate: continue
-		var at: Vector3 = Town.oval(angle,-1.3)
-		var along: Vector3 = (Town.oval(angle+.01,-1.3)-at).normalized()
-		if open_at(at) and open_at(at+along*.7) and open_at(at-along*1.5): spots.append({"angle":angle,"at":at,"along":along})
-	# The children's are on the south-west side.
-	var first = 0
-	for k in spots.size():
-		if absf(angle_difference(spots[k].angle,2.4)) < absf(angle_difference(spots[first].angle,2.4)): first = k
+	var walls: Array[Dictionary] = []
+	var trees: Array[Dictionary] = []
+	var line = {}
+	for z in range(region.position.y+1,region.end.y-1):
+		for x in range(region.position.x+1,region.end.x-1):
+			var at = Vector3(x,0,z)
+			if not sheltered(at): continue
+			for into in [Vector3(1,0,0),Vector3(-1,0,0),Vector3(0,0,1),Vector3(0,0,-1)]:
+				var along = into.cross(Vector3.UP)
+				# A wall the length of a body beside it, room to lie along it,
+				# and the street still open beyond.
+				if walled(at+into) and walled(at+into+along) and walled(at+into-along) \
+					and open_at(at+along) and open_at(at-along) and open_at(at-into) and open_at(at-into*2.0):
+					var spot = {"at":at-into*.15,"along":along,"into":into}
+					walls.append(spot)
+					line[[x,z,into]] = spot
+	# At the foot of a tree: a palm by the streets, an olive or a dead tree out
+	# at the town's edges.
+	for node in world.get_children():
+		if not node is Node3D or not (node.scene_file_path.get_file().begins_with("palm") or node.scene_file_path.get_file().get_basename() in ["olive_a","olive_b","dead_tree"]): continue
+		var trunk = Vector3(node.position.x,0,node.position.z)
+		if not region.has_point(Vector2i(roundi(trunk.x),roundi(trunk.z))): continue
+		for k in 8:
+			var out = Vector3(cos(k*TAU/8.0),0,sin(k*TAU/8.0))
+			var along = out.cross(Vector3.UP)
+			var at = trunk+out*1.15
+			if open_at(at) and open_at(at+along) and open_at(at-along) and sheltered(at.round()):
+				trees.append({"at":at,"along":along,"into":-out})
+				break
+	# The children's: three spots along one wall, two metres apart, as near
+	# Beggars' Alley in the south-west as can be.
 	var chosen: Array[Dictionary] = []
-	for k in 3: chosen.append(spots[(first+k) % spots.size()])
-	var rest = spots.filter(func(s): return chosen.all(func(c): return c.at.distance_to(s.at) > 6.0))
-	for k in range(rest.size()-1,0,-1):
-		var j = sleep.randi_range(0,k)
-		var swap = rest[k]
-		rest[k] = rest[j]
-		rest[j] = swap
-	for spot in rest:
-		if chosen.all(func(c): return c.at.distance_to(spot.at) > 7.0): chosen.append(spot)
+	var best = INF
+	for key in line:
+		var spot: Dictionary = line[key]
+		var step = Vector3i(roundi(spot.along.x)*2,0,roundi(spot.along.z)*2)
+		var run = [spot]
+		for k in [1,2]:
+			var next = [key[0]+step.x*k,key[1]+step.z*k,key[2]]
+			if line.has(next): run.append(line[next])
+		if run.size() < 3: continue
+		var far = spot.at.distance_to(Vector3(-300,0,60))
+		if far < best:
+			best = far
+			chosen.assign(run)
+	for list in [walls,trees]:
+		for k in range(list.size()-1,0,-1):
+			var j = sleep.randi_range(0,k)
+			var swap = list[k]
+			list[k] = list[j]
+			list[j] = swap
+	# The rest by turns at a wall and under a tree.
+	var pool: Array[Dictionary] = []
+	for k in maxi(walls.size(),trees.size()):
+		if k < trees.size(): pool.append(trees[k])
+		if k < walls.size(): pool.append(walls[k])
+	var rest: Array[Dictionary] = []
+	for spot in pool:
+		if (chosen+rest).all(func(c): return c.at.distance_to(spot.at) > ASLEEP_APART): rest.append(spot)
+	# (The grown take theirs from the back: the first chosen, by turns under a
+	# tree and at a wall.)
+	rest.reverse()
+	chosen.append_array(rest)
 	var beds: Array[Dictionary] = []
 	for spot in chosen:
 		var at: Vector3 = spot.at
+		# Head toward either end, as it falls.
+		var along: Vector3 = spot.along*(1.0 if sleep.randf() < .5 else -1.0)
 		var bundle = Kit.prop("bag",.36)
 		add_child(bundle)
 		bundle.rotation.y = sleep.randf_range(0,TAU)
-		beds.append({"kind":"ground","at":at,"yaw":atan2(spot.along.x,spot.along.z),"side":at,"way":[at],"out":[],"bundle":bundle,"along":spot.along})
+		beds.append({"kind":"ground","at":at,"yaw":atan2(along.x,along.z),"side":at,"way":[at],"out":[],"bundle":bundle,"along":along,"rags":rags(at,along,sleep)})
 	return beds
+
+# Somewhere one might lie down for the night: open street, away from the
+# arena (beyond its ring street), and clear of doors, gates and the markets.
+func sheltered(at: Vector3) -> bool:
+	if not open_at(at): return false
+	var arena = Vector2(at.x-Town.ARENA.x,at.z-Town.ARENA.z)/(Town.ARENA_RADII+Vector2(Town.RING-3.0,Town.RING-3.0))
+	if arena.length() < 1.0: return false
+	var flat = Vector2(at.x,at.z)
+	for place in world.places:
+		if place.kind in ["house","shop","inn","gate","well","market"] and place.at.distance_to(at) < (12.0 if place.kind == "gate" else place.radius+2.5): return false
+	# Nor on the way up to the elders' palace.
+	if absf(at.x-world.HILL.x) < world.HILL_HALF.x+world.HILL_SLOPE and at.z < world.HILL.z+world.HILL_HALF.y+world.HILL_SLOPE+8.0: return false
+	if world.rooms.any(func(room): return room.area.grow(2.0).has_point(flat) or room.door.distance_to(at) < 6.0): return false
+	for market in [Town.MARKET,Rect2(-212,63,12,11)]:
+		if market.grow(2.0).has_point(flat): return false
+	return true
+
+# A building's wall (not the rock round the town: what stands well inside
+# the open ground).
+func walled(at: Vector3) -> bool:
+	var cell: Vector2i = world.to_cell(at)
+	return world.cells[world.index(cell.x,cell.y)] == world.SOLID and world.margin_at(at) > 2.0
+
+# Photographed sacking or linen (the townspeople's own cloth), dulled with
+# dirt to `tint`, its weave at one size wherever it lies.
+func rag_cloth(tint: Color, weave: String) -> StandardMaterial3D:
+	var key = "rag%s%s" % [weave,tint.to_html()]
+	if Kit.cache.has(key): return Kit.cache[key]
+	var m = Kit.textured("res://assets/textures/cloth_%s.jpg" % weave,tint*1.9,.95)
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE*2.4
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.detail_enabled = true
+	m.detail_mask = load("res://assets/textures/rock_detail.jpg")
+	m.detail_albedo = load("res://assets/textures/rock_detail.jpg")
+	m.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
+	m.detail_uv_layer = BaseMaterial3D.DETAIL_UV_1
+	Kit.cache[key] = m
+	return m
+
+# What one sleeps on in the street: two old cloths, sacking and a worn
+# blanket, spread one over the other along `along`, dull with dirt.
+const RAGS = [Color(.40,.37,.32),Color(.46,.40,.32),Color(.34,.33,.31),Color(.50,.45,.37),Color(.38,.38,.37),Color(.42,.33,.27)]
+func rags(at: Vector3, along: Vector3, sleep: RandomNumberGenerator) -> Array:
+	var spread: Array = []
+	for layer in 2:
+		var length = 2.0 if layer == 0 else 1.45
+		var cloth = Kit.prop("cloth_red" if layer == 0 else "cloth_blue",length)
+		# (Its rings and all: the banner's grommets are knots in the rag.)
+		var rag = rag_cloth(RAGS[sleep.randi_range(0,RAGS.size()-1)]*sleep.randf_range(.9,1.1),"hessian" if layer == 0 else "linen")
+		for mesh in cloth.find_children("*","MeshInstance3D",true,false): mesh.material_override = rag
+		# (Laid flat, the cloth's thickness is the fall of its folds.)
+		cloth.scale.z *= .35
+		var flat = Node3D.new()
+		add_child(flat)
+		flat.position = at+along*(sleep.randf_range(-.15,.15) if layer == 0 else sleep.randf_range(-.35,.1))+Vector3.UP*(.004+layer*.008)
+		# The blanket over it lies askew, kicked about in the night.
+		flat.rotation.y = atan2(along.x,along.z)+(sleep.randf_range(-.12,.12) if layer == 0 else sleep.randf_range(.35,.7)*(1.0 if sleep.randf() < .5 else -1.0))+(PI if sleep.randf() < .5 else 0.0)
+		flat.add_child(cloth)
+		cloth.rotation.x = PI/2
+		cloth.position.z = -length*.5
+		cloth.position.x = sleep.randf_range(-.08,.08)
+		spread.append(flat)
+	return spread
 
 # Off to bed: by the streets to its bed's last steps, and along them.
 func go_to_bed(walker: Walker) -> void:
@@ -918,6 +1074,11 @@ func up(walker: Walker) -> void:
 	elif walker.child:
 		walker.state = "idle"
 		walker.body.play("Idle")
+	# A stallholder goes to his stall.
+	elif walker in keepers:
+		walker.route = way(walker.at,walker.stall.keeper)
+		walker.route.append(walker.stall.keeper)
+		walker.state = "to_stall"
 	else: rest(walker,1.0,4.0)
 
 # Lets go of whatever it was about: a talk, a seat at the inn and its mug,
@@ -931,6 +1092,14 @@ func release(walker: Walker) -> void:
 		walker.seat.taken = null
 		walker.seat = {}
 	walker.drinks = 0
+	# Shopping put down, a stall's customer gone.
+	if walker.basket != null:
+		walker.basket.queue_free()
+		walker.basket = null
+	walker.pace = "Walk"
+	if not walker in keepers and not walker.stall.is_empty():
+		if walker.stall.get("customer") == walker: walker.stall.customer = null
+		walker.stall = {}
 	if walker == anya:
 		round.clear()
 		stow(anya.mug)
@@ -968,9 +1137,21 @@ func rouse(walker: Walker) -> void:
 # The clock has jumped (a game begun or loaded, the day hurried on): each is
 # put at once where the hour has him, as though he had gone there.
 func at_once() -> void:
-	for walker in people+children+[anya,orion]:
+	for walker in people+children+[anya,orion]+keepers:
 		if abed(walker) and not walker.state in ["asleep","indoors"]: tuck(walker)
 		elif not abed(walker) and walker.state in ABED: rouse(walker)
+	# The stalls are open or shut as the hour has them, their keepers behind
+	# the open ones.
+	for keeper in keepers:
+		if keeper.state in ABED:
+			set_open(keeper.stall,false)
+			continue
+		if keeper.state != "keep":
+			keeper.route = PackedVector3Array()
+			keeper.at = keeper.stall.keeper
+			keeper.body.rotation.y = atan2(keeper.stall.front.x,keeper.stall.front.z)
+			stand(keeper)
+		set_open(keeper.stall,true)
 	# Some are at the inn's tables, as when the day began.
 	if people.any(func(w): return w.state in ["sit_down","wait","drink"]): return
 	for i in people.size():
@@ -981,6 +1162,166 @@ func at_once() -> void:
 		walker.seat = seat
 		seat.taken = walker
 		sit(walker)
+
+# ---- The greengrocers ----
+
+var keepers: Array[Walker] = []
+
+# A stallholder for each stall, living in the free house nearest it.
+func hire_keepers() -> void:
+	var taken: Array = (people+children+[orion]).filter(func(w): return w.bed.get("kind") == "house").map(func(w): return w.bed.at)
+	var homes: Array = world.places.filter(func(p): return p.kind == "house" and p.name == "house")
+	var hours = RandomNumberGenerator.new()
+	hours.seed = 3307
+	for i in mini(KEEPERS.size(),world.stalls.size()):
+		var stall: Dictionary = world.stalls[i]
+		stall.customer = null
+		var keeper = Walker.new()
+		keeper.body = figure(KEEPERS[i])
+		keeper.body.name = "Stallholder%d" % i
+		keeper.stall = stall
+		keeper.speed = WALK*hours.randf_range(.92,1.05)
+		keeper.at = stall.keeper
+		var free = homes.filter(func(h): return taken.all(func(t): return house_bed(h).at.distance_to(t) > .5))
+		free.sort_custom(func(a, b): return a.at.distance_to(stall.at) < b.at.distance_to(stall.at))
+		keeper.bed = house_bed(free[0])
+		taken.append(keeper.bed.at)
+		keeper.bedtime = hours.randf_range(KEEPER_BEDTIME.x,KEEPER_BEDTIME.y)
+		keeper.rising = hours.randf_range(KEEPER_RISING.x,KEEPER_RISING.y)
+		keepers.append(keeper)
+		stand(keeper)
+
+# Its wares out on the counter (open), or packed away under sacking.
+func set_open(stall: Dictionary, open: bool) -> void:
+	stall.open = open
+	for ware in stall.wares: ware.visible = open
+	for sheet in stall.cover: sheet.visible = not open
+
+func stand(keeper: Walker) -> void:
+	keeper.state = "keep"
+	keeper.timer = rng.randf_range(4.0,10.0)
+	keeper.body.play("Idle")
+
+# A stallholder's day: to his stall, setting out his wares, serving, and
+# packing up again at dusk and going home.
+func keep(keeper: Walker, delta: float) -> void:
+	if keeper.state in ABED:
+		retire(keeper,delta)
+		return
+	keeper.timer -= delta
+	var stall: Dictionary = keeper.stall
+	var reach: float = keeper.body.length("Reach")
+	match keeper.state:
+		"to_stall":
+			if advance(keeper,delta):
+				keeper.state = "opening"
+				keeper.timer = reach*2.0
+				keeper.body.play("Reach")
+		"opening","closing":
+			# Twice over the counter: setting out the crates, or packing them
+			# away and throwing the sacking over.
+			keeper.body.turn_to(stall.front,delta,6.0)
+			if keeper.timer <= reach and keeper.body.state == "Reach" and keeper.phase == "":
+				keeper.phase = "again"
+				keeper.body.state = ""
+				keeper.body.play("Reach",.2)
+				set_open(stall,keeper.state == "opening")
+			if keeper.timer <= 0.0:
+				keeper.phase = ""
+				if keeper.state == "opening": stand(keeper)
+				else: go_to_bed(keeper)
+		"keep":
+			var customer: Walker = stall.customer
+			if customer != null and customer.state == "buying":
+				keeper.body.turn_to(customer.at-keeper.at,delta,5.0)
+				keeper.body.play("Reach" if customer.timer < HAND_OVER else "Talk")
+			else:
+				keeper.body.turn_to(stall.front,delta,4.0)
+				if abed(keeper) and customer == null:
+					keeper.state = "closing"
+					keeper.timer = reach*2.0
+					keeper.body.play("Reach")
+				elif keeper.timer <= 0.0:
+					keeper.timer = rng.randf_range(5.0,12.0)
+					keeper.body.play("Arms" if rng.randf() < .35 else "Idle")
+				elif not keeper.body.state in ["Idle","Arms"]: keeper.body.play("Idle")
+
+# Off to an open stall nobody else is buying at; only one with a house to
+# take his shopping home to goes.
+func go_shopping(walker: Walker) -> bool:
+	if walker.child or walker.bed.get("kind") != "house" or abed(walker): return false
+	var open = world.stalls.filter(func(s): return s.get("open",false) and s.get("customer") == null)
+	if open.is_empty(): return false
+	var stall: Dictionary = open[rng.randi_range(0,open.size()-1)]
+	var route = way(walker.at,stall.buyer)
+	if route.is_empty(): return false
+	route.append(stall.buyer)
+	stall.customer = walker
+	walker.stall = stall
+	walker.route = route
+	walker.state = "to_buy"
+	return true
+
+# At the stall, home with a crate of what it sells, and out again.
+func shop(walker: Walker, delta: float) -> void:
+	var stall: Dictionary = walker.stall
+	match walker.state:
+		"to_buy":
+			# (A stall shut while he was on his way: he goes about his day.)
+			if not stall.get("open",false):
+				release(walker)
+				rest(walker,1.0,3.0)
+			elif advance(walker,delta):
+				walker.state = "buying"
+				walker.timer = BUY_TIME
+				walker.body.play("Talk")
+		"buying":
+			walker.body.turn_to(-stall.front,delta,6.0)
+			if walker.timer < HAND_OVER and walker.body.state != "Reach": walker.body.play("Reach")
+			if walker.timer <= 0.0:
+				stall.customer = null
+				walker.basket = produce(stall.goods[0])
+				add_child(walker.basket)
+				walker.pace = "Carry"
+				walker.route = way(walker.at,walker.bed.way[0])
+				walker.route.append_array(PackedVector3Array(walker.bed.way))
+				walker.state = "laden"
+		"laden":
+			var home = advance(walker,delta)
+			carry(walker)
+			if home:
+				# In at his door, the crate with him.
+				walker.basket.queue_free()
+				walker.basket = null
+				walker.pace = "Walk"
+				walker.body.visible = false
+				walker.state = "home"
+				walker.timer = rng.randf_range(AT_HOME.x,AT_HOME.y)
+		"home":
+			if walker.timer <= 0.0:
+				walker.body.visible = true
+				walker.at = walker.bed.at
+				walker.body.rotation.y = walker.bed.yaw+PI
+				walker.route = PackedVector3Array(walker.bed.out)
+				walker.stall = {}
+				walker.state = "from_home"
+		"from_home":
+			if advance(walker,delta): rest(walker,2.0,6.0)
+
+# A small crate of a stall's goods, to be carried home.
+func produce(goods: String) -> Node3D:
+	if goods == "carrots": return Kit.prop("carrot_crate",.26)
+	var crate = Kit.prop("farm_crate",.15)
+	Kit.produce(crate,Town.FRUIT[goods])
+	return crate
+
+# The crate held out in front in both hands, as the carrying walk holds it.
+func carry(walker: Walker) -> void:
+	var skeleton: Skeleton3D = walker.body.skeleton
+	var hands = Vector3.ZERO
+	for side in ["hand_l","hand_r"]: hands += (skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone(side))).origin
+	walker.basket.global_position = hands*.5+Vector3.DOWN*.05
+	walker.basket.rotation.y = walker.body.rotation.y
 
 # ---- Talk ----
 

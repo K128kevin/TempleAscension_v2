@@ -16,8 +16,13 @@ of that wall; its footprint is solid and the ascent point is the floor at its fo
 does not construct mesh geometry. The third-floor court assembles three decreasing
 stone bowls from the imported chalice, with a low column base in the original
 fountain obstacle footprint. Paving meshes provide the pool floor and low rim;
-the water shader uses thin instances of the same mesh. Spill particles reuse the
-imported gem mesh. The generated seal is a transparent VFX sprite,
+the water shader uses thin instances of the same mesh. That water
+(`assets/shaders/pool_water.gdshader`) is clear and pale green-blue: the stone
+shows through it, netted with moving caustic light; small crossing ripples and a
+fine chop tilt its surface to catch the torches, it reflects more as it is seen
+more slantwise (Fresnel), it churns white where the spill from the bowl above
+lands and sends rings out from there, and it rings round the hero as he wades.
+Spill particles reuse the imported gem mesh. The generated seal is a transparent VFX sprite,
 not a replacement for a 3D environment object.
 
 Floor paving keeps the imported tile mesh with `assets/shaders/quartz_floor.gdshader`:
@@ -123,8 +128,9 @@ spikes reuse the imported gem mesh with a translucent ice material; the rest is
 particles, sprites and light, with shared helpers in `scripts/vfx.gd`.
 
 Enemy hover feedback uses a flat red sprite with a procedural radial gradient
-from `scripts/assets.gd`, plus a 72×8 HUD health bar projected above the head.
-The ring scales with the enemy's stature. Both indicators ignore mouse input.
+from `scripts/assets.gd`. Every enemy in sight has a 60×4 HUD health bar
+projected above its head. The ring scales with the enemy's stature. Both
+indicators ignore mouse input.
 This UI effect adds no external bitmap or solid geometry.
 
 ## The outdoor world
@@ -146,8 +152,13 @@ bushes; they were replaced.)
   itself, so it never reads as a grid. Dune relief and wind ripples are shading only
   (the ground is flat to walk on). Where the control map marks paving the existing
   `limestone.png` flags show, dirtied by the sand photograph with sand drifted into
-  them; the map also marks the track, the oasis pool, and shade at the foot of walls
-  and rocks. The control map is a one-texel-per-metre image painted by the builders at
+  them; the map also marks the track, water (the oasis, the palace's pools), and
+  shade at the foot of walls and rocks. Water is drawn clear: its bed shows through,
+  dimmed and tinted the deeper it lies (red absorbed first, silt darkening the deep
+  bed), lit by caustics in the shallows; wind ripples and a chop, read from the
+  noise texture, tilt it to glint in the sun; it reflects the sky overhead by
+  Fresnel (the colour `scripts/overworld.gd` set_time gives it, through the day and
+  night); and it laps at its edge with a running wet line and flecks of foam. The control map is a one-texel-per-metre image painted by the builders at
   load; the shader's noise is read from a small tiling noise texture generated at load.
 - **Rocks.** Poly Haven photo scans (CC0), cut down and normalised by
   `tools/prepare_scans.py`: boulders [03](https://polyhaven.com/a/namaqualand_boulder_03),
@@ -293,6 +304,20 @@ bushes; they were replaced.)
   `scripts/townsfolk.gd` runs the town: its own A* grid of the streets (the arena,
   palace hill, smithy and the inn's loft closed), the seats at the inn's tables,
   the inn's occupancy rules, Anya's rounds and the children's games.
+- **The greengrocers.** Three stalls below the market square, just inside the
+  south gate (`scripts/world_town.gd` `greengrocers()`), are the props kit's
+  stall with crates of its apples and carrots on the counter, a barrel of
+  apples or a stack of carrot crates at one end and empty crates behind
+  (`carrot_crate`, `apple_barrel`, `crate_empty`, imported by
+  `tools/prepare_models.py`). The kit paints its fruit and vegetables by vertex
+  colour; `assets/shaders/produce.gdshader` keeps that colour, mottles and
+  bruises it with the photographed grit and gives the fruit a waxy skin, and
+  turns the apples' red to oranges, lemons, pomegranates, onions or figs
+  (`Kit.produce`). At night two of the kit's banner cloths, dyed as sacking,
+  lie over each counter. `scripts/townsfolk.gd` gives each stall a keeper, who
+  sets out his wares after sunrise, stands at the counter's end serving, and
+  packs up through the sunset and goes home; townspeople with houses stop to
+  buy and carry a crate home in both hands (the library's carrying walk).
 - **The bandits.** `tools/make_bandits.py` builds `bandit_man.glb` and
   `bandit_woman.glb` from the same two bodies, dressed after the desert raider of
   their concept art with the townspeople's garment lofting: a long sleeveless
@@ -344,6 +369,22 @@ bushes; they were replaced.)
   slope. `Overworld.height_at` reports the same height, from the same numbers, and
   the test suite compares the two. Everything is still walked on one plane: what
   stands on the hill, the hero's figure and the camera are raised to its height.
+- **The palace within.** `scripts/world_palace.gd` builds the palace as a walk-in
+  hall of the town's wall modules (fifteen bays by six, two storeys) on its terrace,
+  which is a raised deck (`Overworld.decks`) climbed by its front steps; the roof, the
+  tower over it and the walls on the camera's side are lifted away while the hero is
+  inside (`Overworld.rooms`). The throne room (28 m by 24) runs from the door to a
+  marble dais edged with gold, a deck of its own climbed by the stairs mesh, where
+  the props kit's chair stands gilded at 3.2 m as the great throne, crimson hangings
+  behind it, fires in gilded bowls either side; two rows of marble columns with
+  gilded heads and feet, a crimson runner (the kit's banner cloth laid flat) and
+  benches along the walls, the floor between left clear for the town to gather.
+  Five bedchambers open off it through arches, three west and two east, each in its
+  own colours: the kit's bed scaled up with dyed covers, its furniture in a dark
+  polished wood, a rug, stands with candles, a chest, a cabinet, a gilded table with
+  a marble top and gilded chairs, gilded urns, a fire, a hanging and a lamp. Two
+  gate guards (`scripts/town_guard.gd`) stand at the foot of the palace road and two
+  at the palace's door.
 - **Litter.** `urn_broken` (the props kit's `Vase_Rubble_Medium`) and the existing
   `rubble`, in each house's own masonry.
 - **Town and camp dressing.** Quaternius Fantasy Props MegaKit: `barrel`, `barrel_rack`,
@@ -685,7 +726,7 @@ instead of falling over, the statue crumbles as in the original game. The body
 collapses and disappears over 0.7 s, leaving thirty-six stone fragments (the imported
 rock mesh in statue stone), each a rigid body with a convex collision hull. There
 is no static rubble pile. They tumble, bounce against the paving and architecture, and settle
-with friction. Normal attacks push them away from the hit; Ground Slam and Leap
+with friction. Normal attacks push them away from the hit; Thunder Slam and Leap
 throw them farther outward and upward. The body collapse and dust follow the combat
 clock; the chips use Godot's physics clock, pause with the world, and expire after
 eight seconds. Collision slabs and prop hulls are built when the first statue falls.
@@ -698,7 +739,7 @@ credited to www.zapsplat.com under ZapSplat's license, like the other effects.
 
 `assets/audio/rock-impact.mp3` is PMSFX's "Rock Crash, Designed Rock Impact Crash,
 Big Cinematic" (PMSFX_ROCKCrsh_Designed_Rock_Impact_Carsh_Big_Cinematic_41RI2_2442.mp3),
-unedited, supplied by the user: a 0.9 s crash of breaking rock. It plays as Ground Slam's
+unedited, supplied by the user: a 0.9 s crash of breaking rock. It plays as Thunder Slam's
 and Shockwave's blows meet the ground. Its licence follows the user's PMSFX terms.
 
 `assets/audio/fountain-trickle.wav` is the original game's

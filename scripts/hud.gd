@@ -13,7 +13,6 @@ var hp_text: Label
 var en_text: Label
 var difficulty: Label
 var notice: Label
-var abilities: Label
 var status: Label
 var experience: ProgressBar
 var character_info: Label
@@ -26,7 +25,17 @@ var recovery: Label
 var prompt: Label
 var boss_bar: ProgressBar
 var boss_name: Label
-var hover_health: ProgressBar
+# The hero's buffs and debuffs (Skills.effects()), in a row over the hotbar:
+# each a small square with its icon, its stacks in the corner, and a bar
+# under it running down with the time it has left.
+const EFFECT_ICON = 32
+const EFFECT_GAP = 6
+var effect_row: Control
+var effect_slots: Array[Dictionary] = []
+# A small health bar over the head of every enemy in sight, by enemy.
+const ENEMY_BAR = Vector2(60,4)
+var enemy_bars: Array[ProgressBar] = []
+var bar_of: Dictionary = {}
 # The name of a townsperson under the cursor (only Anya has one).
 var npc_name: Label
 # One amber cast bar over each Oracle while it casts a fireball.
@@ -72,17 +81,6 @@ func setup(owner_game) -> void:
 	for state in ["normal","hover","pressed","focus"]:
 		theme.set_stylebox(state,"Button",panel_style(Color(.12,.13,.14,.96) if state=="normal" else Color(.24,.23,.20),gold))
 	root.theme = theme
-	hover_health = bar(Color(.88,.055,.04),root)
-	hover_health.custom_minimum_size = Vector2(72,5)
-	hover_health.size = Vector2(72,5)
-	hover_health.z_index = 1
-	hover_health.visible = false
-	var hover_background = StyleBoxFlat.new()
-	hover_background.bg_color = Color(.045,.015,.015,.96)
-	hover_background.border_color = Color(.18,.08,.07)
-	hover_background.set_border_width_all(1)
-	hover_background.set_corner_radius_all(2)
-	hover_health.add_theme_stylebox_override("background",hover_background)
 	npc_name = label("",14,Color(.93,.86,.7),root)
 	npc_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	npc_name.size = Vector2(160,20)
@@ -167,14 +165,17 @@ func setup(owner_game) -> void:
 		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		weapon_names.append(name_label)
-	abilities = label("",16,gold,root)
-	anchor(abilities,Vector2(.5,1),Vector2(-330,-61),Vector2(660,23))
-	abilities.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	effect_row = Control.new()
+	effect_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(effect_row)
+	anchor(effect_row,Vector2(.5,1),Vector2(-200,-170),Vector2(400,EFFECT_ICON+8))
+	effect_row.visible = false
 	var controls = label("LMB Move / Attack · RMB + 1–4 Skills · SPACE Evade · Q Heal · R Walk / Run · X Bow / Dagger · C Attributes · K Skills · I Equipment",13,Color(.7,.68,.60),root)
 	anchor(controls,Vector2(.5,1),Vector2(-400,-30),Vector2(800,22))
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = label("",19,gold,root)
-	anchor(prompt,Vector2(.5,1),Vector2(-400,-177),Vector2(800,28))
+	# (Above the row of buffs and debuffs.)
+	anchor(prompt,Vector2(.5,1),Vector2(-400,-212),Vector2(800,28))
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice = label("",21,cream,root)
 	anchor(notice,Vector2(.5,1),Vector2(-390,-290),Vector2(780,65))
@@ -245,6 +246,8 @@ func bar(color: Color, parent: Node) -> ProgressBar:
 
 func tick(dt: float) -> void:
 	game.debug.refresh()
+	show_enemy_bars()
+	show_effects()
 	show_cast_bars()
 	var r: Dictionary = game.run
 	var maximum_health = Data.max_health(r)
@@ -288,7 +291,6 @@ func tick(dt: float) -> void:
 		slot_cooldowns[i-1].text = str(ceili(recharge)) if recharge>0 else ""
 		slot_glyphs[i-1].show_skill(id,Color(.45,.44,.4) if recharge>0 else (gold if problem.is_empty() else Color(.6,.58,.5)))
 		weapon_names[i].text = "Empty" if id.is_empty() else game.Book.all()[id].title
-	abilities.text = game.skills.status()
 	panels.tick(dt)
 	var hovered_skill: String = r.hotbar[hovered_slot-1] if hovered_slot>0 else (panels.ATTACK if hovered_slot==0 else "")
 	if not hovered_skill.is_empty(): panels.show_tip(hovered_skill,weapon_slots[hovered_slot].get_global_rect())
@@ -381,14 +383,105 @@ func show_npc_name(who: Dictionary) -> void:
 	npc_name.text = who.name
 	npc_name.position = game.world.camera.unproject_position(who.at)-Vector2(npc_name.size.x*.5,10)
 
-func show_enemy_hover(enemy) -> void:
-	hover_health.visible = is_instance_valid(enemy) and not enemy.dead
-	if not hover_health.visible: return
-	hover_health.max_value = enemy.max_hp
-	hover_health.value = clampf(enemy.hp,0,enemy.max_hp)
-	var head: Vector3 = enemy.position+Vector3.UP*enemy.config.get("height",enemy.config.size*2.25)
-	var screen: Vector2 = game.world.camera.unproject_position(head)
-	hover_health.position = screen-Vector2(hover_health.size.x*.5,12)
+func effect_slot() -> Dictionary:
+	var frame = Panel.new()
+	frame.size = Vector2(EFFECT_ICON,EFFECT_ICON)
+	# (It stops the mouse only for its own tooltip.)
+	frame.mouse_filter = Control.MOUSE_FILTER_STOP
+	effect_row.add_child(frame)
+	var styles = {}
+	for kind in [["buff",Color(.62,.58,.32)],["debuff",Color(.72,.2,.14)]]:
+		var style = panel_style(Color(.035,.032,.028,.94),kind[1])
+		style.set_content_margin_all(0)
+		styles[kind[0]] = style
+	var glyph = SkillIcon.new()
+	glyph.position = Vector2(5,5); glyph.size = Vector2(EFFECT_ICON-10,EFFECT_ICON-10)
+	frame.add_child(glyph)
+	var stacks = label("",12,cream,frame)
+	stacks.position = Vector2(0,EFFECT_ICON-17); stacks.size = Vector2(EFFECT_ICON-3,16)
+	stacks.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	var under = ColorRect.new()
+	under.color = Color(.05,.03,.015,.94)
+	under.position = Vector2(0,EFFECT_ICON+2); under.size = Vector2(EFFECT_ICON,4)
+	under.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(under)
+	var left = ColorRect.new()
+	left.position = Vector2(1,1); left.size = Vector2(EFFECT_ICON-2,2)
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	under.add_child(left)
+	return {"frame":frame,"glyph":glyph,"stacks":stacks,"under":under,"left":left,"styles":styles,"tip":""}
+
+# The row of what is on the hero, centred over the hotbar; none once he has
+# fallen, nor on the ending and summary screens.
+func show_effects() -> void:
+	var active: Array = [] if not is_instance_valid(game.player) or game.player.dead or game.mode in ["dead","ending","summary"] else game.skills.effects()
+	while effect_slots.size() < active.size(): effect_slots.append(effect_slot())
+	var width = active.size()*EFFECT_ICON+maxi(0,active.size()-1)*EFFECT_GAP
+	for i in effect_slots.size():
+		var slot: Dictionary = effect_slots[i]
+		var frame: Panel = slot.frame
+		frame.visible = i < active.size()
+		if not frame.visible: continue
+		var effect: Dictionary = active[i]
+		frame.position = Vector2(roundf(effect_row.size.x*.5-width*.5)+i*(EFFECT_ICON+EFFECT_GAP),0)
+		frame.add_theme_stylebox_override("panel",slot.styles.debuff if effect.debuff else slot.styles.buff)
+		slot.glyph.show_skill(effect.id,Color(1,.66,.58) if effect.debuff else Color(.93,.91,.82))
+		slot.stacks.text = str(effect.stacks) if effect.stacks > 1 else ""
+		# The bar under it: what is left of its time, running down.
+		var timed: bool = effect.total > 0
+		slot.under.visible = timed
+		if timed:
+			var share = clampf(effect.left/effect.total,0.0,1.0)
+			slot.left.size.x = (EFFECT_ICON-2)*share
+			slot.left.color = Color(.86,.22,.14) if effect.debuff else Color(.9,.72,.3)
+		var tip = "%s%s\n%s" % [effect.name," ×%d" % effect.stacks if effect.stacks > 1 else "",effect.text]
+		if timed: tip += "\n%d s left" % ceili(effect.left)
+		if tip != slot.tip:
+			slot.tip = tip
+			frame.tooltip_text = tip
+	effect_row.visible = not active.is_empty()
+
+func enemy_bar() -> ProgressBar:
+	var p = bar(Color(.88,.055,.04),root)
+	p.custom_minimum_size = ENEMY_BAR
+	p.size = ENEMY_BAR
+	p.z_index = 1
+	var background = StyleBoxFlat.new()
+	background.bg_color = Color(.045,.015,.015,.96)
+	background.border_color = Color(.18,.08,.07)
+	background.set_border_width_all(1)
+	background.set_corner_radius_all(2)
+	p.add_theme_stylebox_override("background",background)
+	return p
+
+# The last floor's bars, taken down as a new one is entered.
+func clear_enemy_bars() -> void:
+	for health in enemy_bars: health.visible = false
+	bar_of.clear()
+
+# Over every living enemy the hero can see (not one lost in the dark beyond
+# his sight, nor one held in reserve), its health; none while the game is
+# paused, nor on the death, ending and summary screens.
+func show_enemy_bars() -> void:
+	var camera: Camera3D = game.world.camera
+	var shown: Array = []
+	if game.mode == "playing":
+		for enemy in game.enemies:
+			if not is_instance_valid(enemy) or enemy.dead or enemy.dormant or not enemy.visible or not game.world.can_see(enemy.position): continue
+			if camera.is_position_behind(enemy.position): continue
+			shown.append(enemy)
+	while enemy_bars.size() < shown.size(): enemy_bars.append(enemy_bar())
+	bar_of.clear()
+	for i in enemy_bars.size():
+		var health: ProgressBar = enemy_bars[i]
+		health.visible = i < shown.size()
+		if not health.visible: continue
+		var enemy = shown[i]
+		bar_of[enemy] = health
+		health.max_value = enemy.max_hp
+		health.value = clampf(enemy.hp,0,enemy.max_hp)
+		var head: Vector3 = enemy.position+Vector3.UP*enemy.config.get("height",enemy.config.size*2.25)
+		health.position = camera.unproject_position(head)-Vector2(health.size.x*.5,12)
 
 # Closes the centre dialog and the side panels.
 func close_modal() -> void:

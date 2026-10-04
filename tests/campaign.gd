@@ -74,7 +74,7 @@ func start(owner_game):
 		check(game.run.floor==floor_index+1 and game.mode=="playing","Stairs advance immediately without allocation gate")
 		check(game.run.points==points and game.run.xp==xp,"Stairs grant neither XP nor attribute points")
 		await get_tree().process_frame
-	check(total==246 and game.run.level>=20 and game.run.level<=Data.MAX_LEVEL,"All temple enemies grant enough XP to near the level cap of 25 (level %d)" % game.run.level)
+	check(total==258 and game.run.level>=20 and game.run.level<=Data.MAX_LEVEL,"All temple enemies grant enough XP to near the level cap of 25 (level %d)" % game.run.level)
 	check(game.enemies.size()==21 and game.boss.max_hp==1125,"Summit holds the boss and its reserve")
 	var reserve: Array=game.enemies.filter(func(e): return e.uid.begins_with("summoned:"))
 	check(reserve.size()==20 and reserve.all(func(e): return e.kind=="centurion" and e.dormant),"The boss's reserve is twenty dormant centurions")

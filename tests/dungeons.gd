@@ -63,7 +63,9 @@ func test():
 	for place in Data.DUNGEONS:
 		for area in Data.AREAS[place]:
 			check(area.counts.keys()==["bandit","bandit_archer"] and area.counts.bandit>area.counts.bandit_archer,"The dungeons hold bandits with swords and with bows: "+place)
-	check(Data.AREAS.temple[0].counts.keys()==["gladiator","archer"],"The temple's first floor holds only gladiators and archers")
+	check(Data.AREAS.temple[0].counts.keys()==["gladiator","archer","lion"],"The temple's first floor holds gladiators, archers and lions")
+	check(not Data.AREAS.temple[2].counts.has("gladiator") and Data.AREAS.temple[2].counts.centurion==58,"On the third floor centurions stand in the gladiators' place")
+	check(Data.ENEMIES.lion.damage==9.0,"A lion's swipe does 9 damage")
 	check(Data.AREAS.temple[1].counts.has("lion") and Data.AREAS.temple[1].counts.has("wizard") and not Data.AREAS.temple[1].counts.has("centurion"),"Its second adds lions and Oracles")
 	check(Data.AREAS.temple[2].counts.has("centurion") and Data.AREAS.temple.size()==Data.FLOORS and Data.AREAS.temple[3].counts.is_empty(),"Its third adds centurions, under the summit")
 	var rising = true
@@ -185,7 +187,7 @@ func test():
 	# The temple, three floors and the summit.
 	game.run.place = "temple"; game.run.floor = 0; game.run.position = [0,9]
 	game.load_floor()
-	check(game.enemies.all(func(e): return e.kind in ["gladiator","archer"] and not e.human and e.visual.is_stone),"The temple's first floor holds stone gladiators and archers")
+	check(game.enemies.all(func(e): return e.kind in ["gladiator","archer","lion"] and not e.human and e.visual.is_stone) and game.enemies.any(func(e): return e.kind=="lion"),"The temple's first floor holds stone gladiators, archers and lions")
 	game.run.floor = 1; game.load_floor()
 	check(game.world.layout.court.has_area() and is_instance_valid(game.world.fountain) and game.enemies.any(func(e): return e.kind=="lion") and game.enemies.any(func(e): return e.kind=="wizard") and not game.enemies.any(func(e): return e.kind=="centurion"),"The second floor has the fountain court, lions and Oracles")
 	game.run.floor = 2; game.load_floor()

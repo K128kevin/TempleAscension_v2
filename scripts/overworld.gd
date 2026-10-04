@@ -108,6 +108,8 @@ var glow_texture: GradientTexture2D
 const FIRE_LAYERS = 1
 const GROUND_LAYER = 2
 var ground: Node3D
+# Its material: the water in it reflects the sky (set_time).
+var ground_material: ShaderMaterial
 var hill: Node3D
 # How many of this node's children are the world itself; whatever the game
 # adds after them (effects, shots) is raised to the ground it appears on.
@@ -133,6 +135,9 @@ var screens: Array[Dictionary] = []
 # each stands on, and its "roof" and "front" (the walls on the camera's
 # side), lifted away while he is "inside".
 var rooms: Array[Dictionary] = []
+# The greengrocers' stalls (scripts/world_town.gd stall()), and who keeps
+# them (scripts/townsfolk.gd).
+var stalls: Array[Dictionary] = []
 # The arena's seats, lifted away while the hero is under the stands; and what
 # stands under them, seen only then.
 var stand_seats: Array = []
@@ -265,6 +270,9 @@ func set_time(clock: float) -> void:
 	var toward: Vector3 = Daylight.sky(floorf(clock/SUN_STEP)*SUN_STEP).toward
 	if not sun.global_transform.basis.z.is_equal_approx(toward): sun.look_at_from_position(toward*100.0,Vector3.ZERO)
 	environment.background_color = sky.sky
+	# The water reflects the sky overhead: bluer than the dust at the horizon,
+	# and as bright as the light it sheds.
+	if ground_material != null: ground_material.set_shader_parameter("sky_colour",sky.sky.lerp(sky.ambient,.65)*clampf(sky.ambient_energy*2.2,.15,1.0))
 	environment.ambient_light_color = sky.ambient
 	environment.ambient_light_energy = sky.ambient_energy
 	environment.fog_enabled = sky.fog > .0002
@@ -409,6 +417,7 @@ func lay_ground() -> void:
 	var image = Image.create_from_data(WIDTH,DEPTH,false,Image.FORMAT_RGBA8,paint)
 	var material = ShaderMaterial.new()
 	material.shader = load("res://assets/shaders/desert_ground.gdshader")
+	ground_material = material
 	material.set_shader_parameter("control",ImageTexture.create_from_image(image))
 	material.set_shader_parameter("map_origin",Vector2(WEST,NORTH))
 	material.set_shader_parameter("map_size",Vector2(WIDTH,DEPTH))

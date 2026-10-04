@@ -40,7 +40,10 @@ five or fewer statues remain, an arrow around the hero points to the nearest one
 The HUD has a red health orb at bottom left, a blue energy orb at bottom right,
 and four compact clickable ability icons centered below the action: LMB basic
 attack, RMB skill, 1 and 2, each skill with its icon and, while it recharges,
-the seconds left. Class and level, with a thin XP bar, appear at top left.
+the seconds left. Above them a row shows what is on the hero: each buff
+(gold-framed) and debuff (red-framed) as an icon, its stacks in the corner,
+with a thin bar under it running down with the time it has left; hovering one
+names it. Class and level, with a thin XP bar, appear at top left.
 Floor, remaining statues and difficulty
 appear at top right. Unassigned, incompatible, and recharging skills are disabled
 with an explanation.
@@ -258,7 +261,7 @@ time between attacks and roots it for that time; further hits add 30%, then 15%,
 then nothing, until it lands an attack. A hit during a wind-up breaks it off: the
 enemy flinches and starts the attack over once the delay ends. A hit during an Oracle's
 cast pushes the cast back by the same amount instead. Oracles cast two-second fireballs, shown by a cast
-bar, and answer a close approach with an instant frost nova that slows the hero. The temple's three floors (gladiators and archers on the first; lions and Oracles added, with the fountain court, on the second; centurions added, with the terraces, on the third) and the dungeons' levels use the original game's
+bar, and answer a close approach with an instant frost nova that slows the hero. The temple's three floors (gladiators, archers and lions on the first; Oracles added, with the fountain court, on the second; centurions in the gladiators' place, with the terraces, on the third) and the dungeons' levels use the original game's
 seeded room-and-corridor format: 8–15 tile rooms, five-tile-wide passages,
 extra connections that form loops, and ascent stairs in the most distant room.
 Floors grow from 50×50 to 74×74 tiles. The third floor includes a large central
@@ -330,7 +333,7 @@ Percentages of damage are of a normal attack.
 |---|---|---|---|---|
 | Area of Effect | 0 | Cleave | 25 | A 140° → 180° arc for 125% → 165% damage |
 | | 5 | Leap | 40 | Leap to a target in sight (up to 10 m): 125% → 300% to everyone around the landing (4.5 m) |
-| | 5 | Ground Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 5 → 9 m; a shockwave of dust and a shake of the screen |
+| | 5 | Thunder Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 5 → 9 m; a shockwave of dust and a shake of the screen |
 | | 0 | War Cry | 30 | Every enemy within 6 → 10 m takes 20% → 100% more damage for 6 → 10 seconds |
 | | 10 | Shield Charge | 35 | Sword and shield only: a charge of 8 → 14 m behind the shield, 100% → 200% to everyone in the path, thrown aside; the first one hit stunned for 1 → 2 seconds |
 | | 10 | Shockwave | 40 | 180% → 360% to everyone within 4 → 7 m, thrown back; 10-second cooldown; a shockwave of dust and a shake of the screen |
@@ -361,19 +364,19 @@ With the sword, every warrior skill has a swing of its own (`tools/import_skills
 a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for
 Vampiric and Shadow Strike, the shield shoved out behind a step for Shield Bash, the
 blade wound far back and brought down with the whole body for Execute, driven
-point-first into the ground for Ground Slam, the pommel hammered down from a deep
+point-first into the ground for Thunder Slam, the pommel hammered down from a deep
 crouch for Shockwave, the blade thrust at the sky for War Cry, a braced run behind
 the shield for Shield Charge (the sprint, the shield held straight out before him),
 and for Leap a deep crouch, the spring, the body stretched in the air with the blade
 over the head, and the landing driven down with everything behind it. Leap's
-landing, Ground Slam and Shockwave put everything into the ground at once
+landing, Thunder Slam and Shockwave put everything into the ground at once
 (`scripts/shockwave.gd`): a flash where the blow lands, the floor cracked about it
 (dark splits lit along their lips, dying away), a column of dust thrown up, and a
 single front racing out across the whole area the blow reaches, like a sonic boom
 (a hard pale edge with a fainter one after it and a low wall of haze standing on
 it; all round the warrior under the leap, across the arc ahead for the slam),
 quick at first and gone as it reaches the blow's edge; and the screen shakes. The
-charge on the blade in Ground Slam does not shoot out: it is spent into the
+charge on the blade in Thunder Slam does not shoot out: it is spent into the
 ground (the cracks glow blue with it), and what is left on the blade drifts off it
 in wisps and fades.
 
@@ -381,7 +384,7 @@ Shield Bash is the one skill with a cooldown; energy is the others' only cost.
 Dexterity quickens every attack, melee or bow, skills included; Quick Strikes only the
 normal attack. No swing is faster than a fifth of a second. A right click (or
 1 to 4) on an enemy walks into reach before a melee skill, leaps from Leap's
-range, and slams from within Ground Slam's.
+range, and slams from within Thunder Slam's.
 
 ### The ranger
 
@@ -395,7 +398,7 @@ as the warrior's do.
 | Tree | Points | Skill | Energy | Ranks 1 → 5 |
 |---|---|---|---|---|
 | Attacks | 0 | Rapid Fire (bow) | 35 → 20 | 2 → 4 arrows in a row |
-| | 0 | Power Shot (bow) | 30 | 200% → 400%, after 3 → 1 seconds of aiming (a bar over his head fills as he aims) |
+| | 0 | Power Shot (bow) | 30 | 200% → 400% to its target and every enemy within 2.5 m of it, after 3 → 1 seconds of aiming (a bar over his head fills as he aims) |
 | | 0 | Flurry (dagger) | 25 | 2 → 4 stabs of 100% → 275% |
 | | 5 | Volley (bow) | 40 | 15 → 30 arrows falling at random in the area aimed at (4.25 m radius), 80% → 150% each |
 | | 5 | Lightning Shot (bow) | 35 | 100% → 250%, leaping to 1 → 5 more enemies within 10 m of the last, each leap 20% weaker than the one before |
@@ -497,8 +500,9 @@ separate from earlier games:
 ## Adaptation decisions
 
 Enemy click areas have a minimum radius of 64 logical pixels, with extra room
-for tall enemies at close zoom. Hovering shows a red ring at their feet and a
-small health bar above their head. While the ring shows, every attack and
+for tall enemies at close zoom. Every enemy in sight carries a small health
+bar above its head; hovering one shows a red ring at its feet. While the ring
+shows, every attack and
 ability (Shift+click, held clicks, right click, 1 and 2) aims at the centre of
 that enemy rather than the ground under the cursor. Hover and attack selection use the same area;
 HUD controls, dead enemies and dormant centurions do not trigger this feedback.

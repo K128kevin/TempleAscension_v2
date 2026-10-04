@@ -16,7 +16,7 @@ the left forearm).
   SkillBash       Shield Bash: a backhand blow of the shield behind a step
   SkillExecute    the blade raised far behind the head and brought down
                   with the whole body, to the knees
-  SkillSlam       Ground Slam: the blade brought down flat on the ground
+  SkillSlam       Thunder Slam: the blade brought down flat on the ground
                   ahead
   SkillShockwave  Shockwave: a violent stomp, stepping forward into it
   SkillCry        War Cry: blade thrust at the sky, shield flung wide, head
@@ -250,7 +250,7 @@ def author(name, pose):
             for b in rig.pose.bones: b.matrix_basis = blend(b.matrix_basis, BASE[b.name], w)
             update()
         # SLAM_CHECK=1: how high the blade is over the ground (its two ends)
-        # through Ground Slam and Leap, and how near the body it comes.
+        # through Thunder Slam and Leap, and how near the body it comes.
         if name in ('SkillSlam', 'SkillLeap') and os.environ.get('SLAM_CHECK') and (f % 3 == 0):
             c = clearances()
             hand = rig.pose.bones['hand_r'].matrix
@@ -389,7 +389,7 @@ def execute(t):
     guard(up=.08*wind-.12*fall, out=.06*fall)
     plant()
 
-# Ground Slam's and Leap's blow: the blade struck down along the ground
+# Thunder Slam's and Leap's blow: the blade struck down along the ground
 # rather than point-first into it. The hand (held with the grip the swing
 # gives it) comes down as low as the folded body lets it, a little ahead; the
 # blade points ahead, tipped just enough that it meets the ground along its

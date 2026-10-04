@@ -41,6 +41,9 @@ var charge_glow: Node3D
 # HUD shows it as a bar over his head).
 var aim_total = 0.0
 var aim_left = 0.0
+# How long each timed effect on the hero lasted when it was last begun or
+# refreshed (for the HUD's bars, which run down from it): by effect.
+var lasting: Dictionary = {}
 var falls: Array = []
 var passing: Array = []
 # How far the ranger's blade reaches, how far he throws sand, how wide a
@@ -71,6 +74,9 @@ const RANGER_CLIPS = {"triple":["SkillTripleSlash",1.0,[.22,.5,.78]],"ambush":["
 	"volley":["SkillVolley",.9,[.78]],"lightning":["ArcherShot",.7,[.78]],"slowshot":["ArcherShot",.7,[.78]],"tranq":["ArcherShot",.7,[.78]]}
 # Power Shot: the ArcherShot's draw, held at full draw while he aims.
 const POWER_DRAW = .78
+# Power Shot bursts where it strikes: everyone within this many metres of the
+# one it hits takes the blow too.
+const POWER_BURST = 2.5
 const POWER_HOLD = .76
 # How far (centre to centre) the warrior's blows reach, and how far he leaps.
 const MELEE_REACH = 1.9
@@ -115,6 +121,7 @@ func reset() -> void:
 	if hidden and is_instance_valid(game.player): game.player.visual.set_shadowed(false)
 	hidden = false; hide_slow = 0
 	surprise_bonus = 0; surprise_time = 0; frenzy_bonus = 0; frenzy_time = 0
+	lasting.clear()
 	for f in falls: f.node.queue_free()
 	falls.clear()
 	for f in passing:
@@ -189,6 +196,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 			var f: Dictionary = Book.values(id,level)
 			frenzy_bonus = f.x
 			frenzy_time = f.y
+			lasting.frenzy = f.y
 			cooldowns[id] = FRENZY_COOLDOWN
 			game.float_text(game.player.position+Vector3.UP*2.3,"Frenzy!",Color(1,.45,.2))
 			passing.append([RangerFx.burst(game.world,game.player.position+Vector3.UP,Color(1,.4,.15,.8),1.4,24),1.2])
@@ -327,6 +335,27 @@ func cancel_aim() -> void:
 	aim_left = 0.0
 	if is_instance_valid(charge_glow): charge_glow.queue_free()
 
+# What is on the hero now, buffs first, for the HUD's row over the hotbar:
+# each its "id" (its icon's), "name", "stacks" (0 for none), the seconds
+# "left" of how many in all ("total"; 0 for one that lasts as long as it
+# holds), whether it is a "debuff", and a line on what it does ("text").
+func effects() -> Array:
+	var out: Array = []
+	if hidden: out.append(effect("hide_in_shadows","Hidden",0,0.0,"Unseen by enemies; moving %d%% slower." % roundi(hide_slow)))
+	if frenzy_time>0: out.append(effect("frenzy","Frenzy",0,frenzy_time,"Attacking %d%% faster." % roundi(frenzy_bonus)))
+	if surprise_time>0: out.append(effect("element_of_surprise","Element of Surprise",0,surprise_time,"Dealing %d%% more damage." % roundi(surprise_bonus)))
+	if offense_stacks>0: out.append(effect("offensive_rhythm","Offensive Rhythm",offense_stacks,offense_time,"Dealing %d%% more damage." % roundi(offense_stacks*Data.passive(game.run,"offensive_rhythm"))))
+	if defense_stacks>0:
+		var cut: float = Book.values("defensive_rhythm",rank("defensive_rhythm")).x
+		out.append(effect("defensive_rhythm","Defensive Rhythm",defense_stacks,defense_time,"Taking %d%% less damage." % roundi(defense_stacks*cut)))
+	if barrier>0 and barrier_time>0: out.append(effect("barrier","Barrier",0,barrier_time,"Absorbing the next %d damage." % ceili(barrier)))
+	if game.slowed>0: out.append(effect("chilled","Chilled",0,game.slowed,"Frozen to the bone: moving at half speed.",true,game.CHILL_SECONDS))
+	return out
+
+func effect(id: String, title: String, stacks: int, left: float, text: String, debuff: bool = false, total: float = -1.0) -> Dictionary:
+	if total<0: total = maxf(lasting.get(id,left),left) if left>0 else 0.0
+	return {"id":id,"name":title,"stacks":stacks,"left":left,"total":total,"debuff":debuff,"text":text}
+
 # How much faster the ranger attacks: Frenzy, while it lasts.
 func haste() -> float:
 	return 1.0+(frenzy_bonus*.01 if frenzy_time>0 else 0.0)
@@ -353,6 +382,7 @@ func leave_shadows() -> void:
 	if surprise.x>0:
 		surprise_bonus = surprise.x
 		surprise_time = surprise.y
+		lasting.element_of_surprise = surprise.y
 
 # One of the hero's arrows, loosed along `direction` for `percent` of a
 # normal attack; `extra` is what else it carries (RangerFx.arrow dresses it).
@@ -371,8 +401,13 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 			enemy.sleep(extra.seconds)
 			return
 		"power":
+			# (An arrow driven on through its first by Penetrating Arrows
+			# bursts only once.)
+			var around: Array = [] if extra.get("burst",false) else targets(enemy.position,POWER_BURST).filter(func(e): return e != enemy)
+			extra.burst = true
 			strike(enemy,p.damage,"physical",0.0,StoneFragment.impact(p.direction,true),true,2)
-			passing.append([RangerFx.burst(game.world,enemy.position+Vector3.UP,Color(1,.9,.6,.8),1.2,18),.8])
+			for other in around: strike(other,p.damage,"physical",0.0,StoneFragment.impact(other.position-enemy.position,true),true,2)
+			passing.append([RangerFx.burst(game.world,enemy.position+Vector3.UP,Color(1,.9,.6,.8),POWER_BURST,36),.8])
 			game.shake(.1)
 		"slow":
 			strike(enemy,p.damage,"physical",0.0,impact,true,2)
@@ -518,6 +553,7 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 	if rhythm.y>0:
 		offense_stacks = mini(int(rhythm.y),offense_stacks+1)
 		offense_time = rhythm.z
+		lasting.offensive_rhythm = rhythm.z
 	var curse: Dictionary = Book.values("cursed_blade",rank("cursed_blade"))
 	if curse.y>0 and not enemy.dead: enemy.add_dot("curse",amount*curse.x*.01,CURSE_SECONDS,int(curse.y))
 	if poison.y>0 and weapon in [2,5] and not enemy.dead: enemy.add_dot("poison",amount*poison.x*.01,POISON_SECONDS,int(poison.y))
@@ -536,6 +572,7 @@ func defend(damage: float, source) -> float:
 	if rhythm.y>0:
 		defense_stacks = mini(int(rhythm.y),defense_stacks+1)
 		defense_time = rhythm.z
+		lasting.defensive_rhythm = rhythm.z
 	var absorbed = minf(barrier,damage)
 	barrier -= absorbed
 	damage -= absorbed
@@ -569,7 +606,7 @@ func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = V
 	game.world.add_child(wave)
 	waves.append(wave)
 	game.shake(shake)
-	# The blow meeting the ground: a crash of rock (Ground Slam and
+	# The blow meeting the ground: a crash of rock (Thunder Slam and
 	# Shockwave), or the original game's Whirl impact as the warrior lands
 	# (Leap).
 	game.sound.play(sound,-9)
@@ -642,7 +679,9 @@ func execute(job: Dictionary) -> void:
 					if not executable(victim,v.y): return
 					strike(victim,blow)
 			game.player.landed_on(victim)
-		"barrier": barrier = value; barrier_time = s.duration
+		"barrier":
+			barrier = value; barrier_time = s.duration
+			lasting.barrier = s.duration
 		"blink":
 			game.player.position = game.world.move(origin,direction*minf(value,origin.distance_to(at)))
 		"firebolt":

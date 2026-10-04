@@ -170,6 +170,14 @@ func test():
 	check(lost(foe)==0,"Rank 5 aims for one second")
 	play(.5)
 	check(within(foe,1,400),"and deals 400%% (%.1f)" % lost(foe))
+	# It bursts where it strikes: one 2 m from its target takes the blow too,
+	# one 3.6 m off does not.
+	game.player.busy = 0; game.run.energy = 100; foe.hp = foe.max_hp
+	var flank = dummy(6,19)
+	var apart = dummy(6,35)
+	game.skills.cast("power_shot",at); play(1.4)
+	check(within(foe,1,400) and within(flank,1,400),"Its burst strikes everyone within 2.5 metres of its target (%.1f, %.1f)" % [lost(foe),lost(flank)])
+	check(lost(apart)==0,"but not one further off")
 	clear()
 
 	# Flurry: he takes up the dagger for it.

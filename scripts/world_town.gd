@@ -4,7 +4,8 @@ extends RefCounted
 ## box in its north stands; a broad street rings it. The inn, two shops and the
 ## houses stand round that street and along the alleys that run off it, and
 ## most of them are in a poor way: stained, cracked, some fallen in. A market
-## square with the well fills the south-east corner, and a wall with one gate
+## square with the well fills the south-east corner, the greengrocers' stalls
+## below it, and a wall with one gate
 ## closes the town off from the desert; a second gate shuts the gap in the
 ## rocks at the end of the southern alley. Two guards stand at each. From the
 ## arena's north gate a road
@@ -14,6 +15,7 @@ const Kit = preload("res://scripts/world_art.gd")
 const Desert = preload("res://scripts/world_desert.gd")
 const Interiors = preload("res://scripts/world_interiors.gd")
 const Guard = preload("res://scripts/town_guard.gd")
+const Art = preload("res://scripts/assets.gd")
 # One wall module of the kit is this wide and tall.
 const BAY = 4.0
 # What the town's walls are built and washed with.
@@ -76,6 +78,7 @@ static func build(world) -> void:
 	arena(world)
 	royal_box(world)
 	market(world)
+	greengrocers(world)
 	inn(world)
 	armorer(world)
 	provisioner(world)
@@ -478,13 +481,112 @@ static func market(world) -> void:
 		var at = Vector3(MARKET.end.x-2.2,0,MARKET.position.y+3.6+i*5.4)
 		stalls.append(item(world,"stall",at,3.0,PI/2,1.3))
 		Kit.dye(stalls[-1],[Color(.44,.20,.15),Color(.56,.46,.28),Color(.34,.33,.30),Color(.42,.34,.22)][i])
-		item(world,["farm_crate","crate","urn","bag"][i],at+Vector3(-1.9,0,1.5),[.3,.7,.8,.7][i],.4*i,.4)
+		var ware = item(world,["farm_crate","crate","urn","bag"][i],at+Vector3(-1.9,0,1.5),[.3,.7,.8,.7][i],.4*i,.4)
+		if i == 0: Kit.produce(ware)
 	world.screen(stalls)
 	item(world,"cart",Vector3(MARKET.position.x+3.0,0,MARKET.end.y-3.5),2.5,2.5,1.5)
 	for spot in [Vector3(MARKET.position.x+6.0,0,MARKET.end.y-2.4),Vector3(MARKET.position.x+7.2,0,MARKET.end.y-3.6)]:
 		item(world,"barrel",spot,.95)
 	for side in [0.0,1.0]:
 		item(world,"bench",middle+Vector3(-5.0+side*8.0,0,5.5),.55,0.0,.9)
+
+# The greengrocers: three stalls of fruit and vegetables below the market
+# square, just inside the south gate, round an aisle that runs from the square
+# down to the way through the gate. Each is kept by a stallholder
+# (scripts/townsfolk.gd), who stands behind its counter by day; at night its
+# wares are packed away and sacking thrown over its counter.
+# (Kept north of the rocks at the town's southern edge, which would hide its
+# aisle from the camera.)
+const GREENGROCERS = Rect2(-212,62,12,10)
+const STALL_HEIGHT = 3.0
+# The stall's counter top, a share of its height (the props kit's model).
+const COUNTER = .317*STALL_HEIGHT
+# How the stall model is turned for its counter to face +Z.
+const STALL_YAW = 0.0
+# The props kit's apples, turned to the market's other fruit (assets/shaders/
+# produce.gdshader); carrots are carrots.
+const FRUIT = {"apples":Color(0,0,0,0),"oranges":Color(.92,.42,.05),"lemons":Color(.9,.76,.16),"pomegranates":Color(.52,.07,.08),
+	"onions":Color(.74,.52,.27),"figs":Color(.32,.15,.25)}
+static func greengrocers(world) -> void:
+	# [where it stands, which way its counter faces, its wares, its awning]
+	# In a row down the east side, their counters to the aisle and the camera
+	# (a stall's back is hung with its awning's cloth, which would hide its
+	# keeper).
+	var plans = [[Vector3(-202.3,0,63.3),Vector3(-1,0,0),["oranges","apples","lemons"],Color(.50,.30,.15)],
+		[Vector3(-202.3,0,67.3),Vector3(-1,0,0),["carrots","onions","carrots"],Color(.38,.38,.30)],
+		[Vector3(-202.3,0,71.3),Vector3(-1,0,0),["pomegranates","figs","apples"],Color(.48,.15,.11)]]
+	for plan in plans: world.stalls.append(stall(world,plan[0],plan[1],plan[2],plan[3]))
+	# Their stock along the west side, against the houses' wall: crates and
+	# sacks, and a barrel of apples.
+	var rng: RandomNumberGenerator = world.rng
+	var stock = [["crate_empty",.2],["bag",.62],["carrot_crate",.36],["bag",.55],["apple_barrel",.82],["crate_empty",.2]]
+	for i in stock.size():
+		var at = Vector3(GREENGROCERS.position.x+.7,0,GREENGROCERS.position.y+1.6+i*1.35)
+		var thing = item(world,stock[i][0],at,stock[i][1],rng.randf_range(0,TAU),.45)
+		if stock[i][0] in ["carrot_crate","apple_barrel"]: Kit.produce(thing)
+	var middle = GREENGROCERS.get_center()
+	world.add_place("greengrocers","market",Vector3(middle.x,0,middle.y),5.5)
+	world.dab_rect(world.PAVING,GREENGROCERS.grow(-1.0),.55)
+
+# One stall: its counter (facing `front`) laid with a crate of each of its
+# wares, more on the ground at one end, empty crates stacked behind. Returns
+# where it stands ("at"), its "front", where its keeper stands ("keeper") and
+# a customer ("buyer"), what it sells ("goods"), its "wares" (shown while it
+# is open) and its "cover" (while it is shut).
+static func stall(world, at: Vector3, front: Vector3, goods: Array, awning: Color) -> Dictionary:
+	var rng: RandomNumberGenerator = world.rng
+	var along = front.cross(Vector3.UP)
+	var yaw = atan2(front.x,front.z)+STALL_YAW
+	var node = item(world,"stall",at,STALL_HEIGHT,yaw,0.0)
+	Kit.dye(node,awning)
+	world.screen([node])
+	# Only the counter stops the way: the keeper's place behind it is open.
+	var depth = Kit.sized("stall",STALL_HEIGHT).z
+	var width = Kit.sized("stall",STALL_HEIGHT).x
+	var corners = [at+front*depth*.5+along*width*.5,at-front*depth*.5-along*width*.5]
+	world.block_rect(Rect2(minf(corners[0].x,corners[1].x),minf(corners[0].z,corners[1].z),absf(corners[0].x-corners[1].x),absf(corners[0].z-corners[1].z)),world.LOW)
+	var wares: Array = []
+	for i in goods.size():
+		var spot = at+along*((i-(goods.size()-1)*.5)*.68)+front*.12+Vector3.UP*COUNTER
+		wares.append(crate(world,goods[i],spot,yaw+rng.randf_range(-.12,.12)))
+	# On the ground at its side: a barrel or a stack of crates of the first.
+	var side = at+along*(width*.5+.55)+front*.2
+	if goods[0] == "carrots":
+		wares.append(crate(world,"carrots",side,yaw+.3,0.0))
+		wares.append(crate(world,"carrots",side+Vector3.UP*.22,yaw+.1,0.0))
+		wares.append(item(world,"bag",side-front*.75,.62,rng.randf_range(0,TAU),0.0))
+	else:
+		var barrel = item(world,"apple_barrel",side,.82,rng.randf_range(0,TAU),0.0)
+		Kit.produce(barrel,FRUIT[goods[0]])
+		wares.append(barrel)
+	world.block_disc(side,.45,world.LOW)
+	# The empties, stacked behind it.
+	var back = at-front*(depth*.5+.4)+along*.5
+	for k in 3: item(world,"crate_empty",back+Vector3.UP*k*.2,.2,yaw+rng.randf_range(-.2,.2),0.0)
+	world.block_disc(back,.4,world.LOW)
+	# Its cover for the night: sacking thrown over the counter.
+	var cover: Array = []
+	for half in [-1.0,1.0]:
+		var sheet = Art.model("cloth_blue",Vector3(1.25,1.15,.04))
+		Kit.dress(sheet)
+		Kit.dye(sheet,Color(.40,.34,.25))
+		world.add_child(sheet)
+		var lying = Basis(front,along,front.cross(along))
+		sheet.basis = Basis(lying.x*1.25,lying.y*1.15,lying.z*.04)
+		# (Each sheet runs from its own end along the counter.)
+		sheet.position = at+along*(.02 if half > 0.0 else -1.17)+Vector3.UP*(COUNTER+.03+world.lift(at))
+		sheet.visible = false
+		cover.append(sheet)
+	# Its keeper stands at its other end, beside the counter: behind it, the
+	# awning would hide him from the camera.
+	return {"at":at,"front":front,"keeper":at-along*(width*.5+.42)+front*.1,"buyer":at+front*(depth*.5+.75),"goods":goods,"wares":wares,"cover":cover}
+
+# A crate of produce (or a crate of carrots), its height set by the crate.
+static func crate(world, goods: String, at: Vector3, yaw: float, solid: float = 0.0) -> Node3D:
+	if goods == "carrots": return item(world,"carrot_crate",at,.36,yaw,solid)
+	var node = item(world,"farm_crate",at,.21,yaw,solid)
+	Kit.produce(node,FRUIT[goods])
+	return node
 
 # The inn, north-west of the arena on the ring street. Its door stands open
 # (scripts/world_interiors.gd furnishes it).

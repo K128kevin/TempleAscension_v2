@@ -47,6 +47,12 @@ const RANGER_GLYPHS = {
 	"element_of_surprise":[["l",.5,.08,.5,.6],["d",.5,.82,.07],["l",.2,.22,.3,.34],["l",.8,.22,.7,.34]],
 	"poisons":[["l",.5,.1,.3,.5],["l",.5,.1,.7,.5],["a",.5,.56,.21,-16,196],["d",.42,.6,.035],["d",.56,.5,.03]],
 	"penetrating_arrows":[["l",.04,.5,.94,.5],["l",.8,.38,.94,.5,.8,.62],["l",.36,.14,.36,.86],["l",.6,.14,.6,.86]]}
+# Effects on the hero that are no skill's own (the HUD's row of buffs and
+# debuffs), and the wizard's Barrier.
+const EFFECT_GLYPHS = {
+	"barrier":[["a",.5,.5,.38,0,360],["a",.5,.5,.26,200,340],["l",.5,.2,.5,.8],["l",.24,.5,.76,.5]],
+	"chilled":[["l",.5,.08,.5,.92],["l",.14,.29,.86,.71],["l",.14,.71,.86,.29],["l",.4,.14,.5,.24,.6,.14],["l",.4,.86,.5,.76,.6,.86],
+		["l",.13,.43,.26,.38,.2,.24],["l",.87,.57,.74,.62,.8,.76],["l",.13,.57,.26,.62,.2,.76],["l",.87,.43,.74,.38,.8,.24]]}
 
 var id = ""
 var tint = Color(.93,.91,.82)
@@ -70,7 +76,7 @@ func _draw() -> void:
 	var side = minf(size.x,size.y)
 	var origin = (size-Vector2(side,side))*.5
 	var width = maxf(1.5,side*.07)
-	var glyph: Array = GLYPHS.get(id,RANGER_GLYPHS.get(id,[]))
+	var glyph: Array = GLYPHS.get(id,RANGER_GLYPHS.get(id,EFFECT_GLYPHS.get(id,[])))
 	if glyph.is_empty():
 		var initials = ""
 		for word in id.split("_"): initials += word.left(1).to_upper()

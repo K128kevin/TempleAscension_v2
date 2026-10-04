@@ -10,25 +10,26 @@ const PLACES = ["temple","world","basement","cave"]
 const DUNGEONS = ["basement","cave"]
 # Each place's floors, in the order they are met: how strong what is there is
 # (its level), and who stands there. The dungeons hold bandits, with swords
-# and with bows. The temple's first floor holds gladiators and archers; its
-# second adds lions and Oracles (and has the fountain court); its third adds
-# centurions (and has the terraces); its summit, the Crowned Statue.
+# and with bows. The temple's first floor holds gladiators, archers and lions;
+# its second adds Oracles (and has the fountain court); on its third
+# centurions stand in the gladiators' place (and it has the terraces); its
+# summit, the Crowned Statue.
 const AREAS = {
 	"basement":[{"level":1,"counts":{"bandit":14,"bandit_archer":8}},{"level":3,"counts":{"bandit":20,"bandit_archer":12}}],
 	"cave":[{"level":5,"counts":{"bandit":22,"bandit_archer":14}},{"level":8,"counts":{"bandit":28,"bandit_archer":18}}],
-	"temple":[{"level":11,"counts":{"gladiator":27,"archer":15}},
+	"temple":[{"level":11,"counts":{"gladiator":27,"archer":15,"lion":12}},
 		{"level":15,"counts":{"gladiator":28,"archer":18,"lion":20,"wizard":12}},
-		{"level":19,"counts":{"gladiator":36,"archer":18,"lion":28,"wizard":22,"centurion":22}},
+		{"level":19,"counts":{"archer":18,"lion":28,"wizard":22,"centurion":58}},
 		{"level":23,"counts":{}}]}
 # The temple's own, as lists (tests and the debug tools read them).
-const COUNTS = [{"gladiator":27,"archer":15},{"gladiator":28,"archer":18,"lion":20,"wizard":12},{"gladiator":36,"archer":18,"lion":28,"wizard":22,"centurion":22}]
+const COUNTS = [{"gladiator":27,"archer":15,"lion":12},{"gladiator":28,"archer":18,"lion":20,"wizard":12},{"archer":18,"lion":28,"wizard":22,"centurion":58}]
 const ENEMIES = {
 	"gladiator":{"title":"Gladiator","hp":33.0,"damage":7.5,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"sword","shield":"scutum","size":1.0,"color":Color(.70,.73,.69)},
 	"archer":{"title":"Archer","hp":18.0,"damage":12.5,"speed":3.56,"range":10.6,"interval":1.22,"weapon":"bow","size":.94,"color":Color(.59,.73,.68)},
 	# A stone lion the size of a living one. It swipes from where its raised
 	# forepaw reaches (its head is a metre ahead of its middle); `height` is
 	# where its health bar sits, for a figure that is not a standing man.
-	"lion":{"title":"Lion Guardian","hp":28.0,"damage":4.5,"speed":7.12,"range":2.3,"interval":.5,"weapon":"","size":1.0,"height":1.5,"color":Color(.79,.64,.42)},
+	"lion":{"title":"Lion Guardian","hp":28.0,"damage":9.0,"speed":7.12,"range":2.3,"interval":.5,"weapon":"","size":1.0,"height":1.5,"color":Color(.79,.64,.42)},
 	"wizard":{"title":"Oracle","hp":33.0,"damage":22.5,"speed":4.75,"range":11.8,"interval":3.0,"weapon":"staff","size":1.06,"color":Color(.54,.57,.78)},
 	# The centurion's long spear: he thrusts from about where its point, driven
 	# home with his step in, ends at his target, and it strikes whoever stands

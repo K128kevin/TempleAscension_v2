@@ -11,6 +11,8 @@ const Town = preload("res://scripts/world_town.gd")
 const Palace = preload("res://scripts/world_palace.gd")
 const Daylight = preload("res://scripts/daylight.gd")
 var game
+# How each townsperson sleeps, by name, to compare with the town built again.
+var sleep_poses = {}
 var passed = 0
 var failed: Array[String] = []
 
@@ -127,10 +129,43 @@ func town_checks():
 	var points: PackedVector3Array = hill_mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	for point in points:
 		var at: Vector3 = hill_mesh.global_transform*point
+		# (Where a floor stands over it, the palace's terrace, it is the floor's.)
+		if world.decks.any(func(deck): return deck.area.has_point(Vector2(at.x,at.z))): continue
 		matches = matches and absf(at.y-.02-world.height_at(at.x,at.z))<.02
 	check(matches and points.size()>1000,"The hill's ground matches the height the world reports (%d points)" % points.size())
 	var terrace = world.get_node_or_null("PalaceTerrace")
 	check(terrace != null and is_equal_approx(terrace.position.y,Overworld.HILL_HEIGHT),"The palace is built on the hilltop")
+	# Its door stands open: the throne room within, the great throne on its
+	# dais, and five bedchambers off it, every one walked to from the town.
+	var hall: Dictionary = world.places.filter(func(s): return s.kind=="hall")[0]
+	var to_throne = world.path(north_gate,hall.at)
+	check(not to_throne.is_empty() and to_throne[-1].distance_to(hall.at)<.5,"The palace's door stands open, and the throne room is walked to from the arena")
+	var palace_room: Dictionary = world.rooms.filter(func(r): return r.get("name","")=="palace")[0]
+	check(palace_room.area.has_point(Vector2(hall.at.x,hall.at.z)) and Palace.THRONE_HALF*2.0>=24.0 and Palace.HALL_BAYS.y*4.0>=24.0,"The throne room is large enough for the town to gather (%.0f by %.0f m)" % [Palace.THRONE_HALF*2.0,Palace.HALL_BAYS.y*4.0])
+	world.follow(hall.at,1)
+	var opened = not palace_room.roof.visible and palace_room.front.all(func(n): return not n.visible)
+	world.follow(palace.at,1)
+	check(opened and palace_room.roof.visible and palace_room.front.all(func(n): return n.visible),"Inside it, its roof and the walls on the camera's side are lifted away")
+	var great_throne: Node3D = null
+	for node in world.get_children(): if node.has_meta("great_throne"): great_throne = node
+	var dais_top = Overworld.HILL_HEIGHT+Palace.PODIUM+Palace.DAIS.x
+	check(great_throne != null and is_equal_approx(great_throne.position.y,dais_top) and great_throne.scale.y*Overworld.Kit.SIZE.chair.y>3.0 and great_throne.position.z<hall.at.z,"A great throne stands at the far end, raised on its dais")
+	var up_stair = world.path(hall.at,great_throne.position+Vector3(0,0,1.6))
+	var rising = true
+	var was = 0.0
+	for point in up_stair:
+		var h = world.lift(point)
+		rising = rising and h>=was-.01
+		was = h
+	check(not up_stair.is_empty() and is_equal_approx(world.lift(up_stair[-1]),dais_top) and rising,"A stair climbs to it from the floor")
+	var chambers = world.places.filter(func(s): return s.kind=="chamber")
+	var furnished = chambers.all(func(c): return world.get_children().any(func(n): return n is Node3D and n.scene_file_path.ends_with("bed.glb") and Vector2(n.position.x-c.at.x,n.position.z-c.at.z).length()<12.0))
+	check(chambers.size()==5 and chambers.all(func(c): var way = world.path(hall.at,c.at); return not way.is_empty() and way[-1].distance_to(c.at)<.5) and furnished,"Five bedchambers open off it, each with a bed (%d)" % chambers.size())
+	# Guards at the foot of the road and at the palace's door, out of the way.
+	var watch = world.get_children().filter(func(n): return n.get_script()==Town.Guard)
+	var at_road = watch.filter(func(g): return absf(g.position.x-Town.ARENA.x)<8.0 and absf(g.position.z+53.0)<3.0)
+	var at_door = watch.filter(func(g): return absf(g.position.x-Town.ARENA.x)<8.0 and absf(g.position.z-Palace.FRONT)<3.0)
+	check(at_road.size()==2 and at_door.size()==2 and at_door.all(func(g): return is_equal_approx(g.position.y,Overworld.HILL_HEIGHT+Palace.PODIUM)),"Two guards stand at the foot of the palace road and two at its door")
 	# The road up is short: about half what it first was (105 m from the gate).
 	var climb = length_of(road,north_gate)
 	check(climb>=46.0 and climb<=60.0,"The road from the arena's north gate to the palace is about 53 m (%.0f m)" % climb)
@@ -440,7 +475,7 @@ func test():
 
 	# The inn and the smithy stand open, and are furnished inside.
 	var Interiors = load("res://scripts/world_interiors.gd")
-	check(world.rooms.size()==2 and world.rooms.all(func(room): return world.fits(room.door) and room.area.grow(2.0).has_point(Vector2(room.door.x,room.door.z))),"The inn and the smithy each have an open doorway")
+	check(world.rooms.size()==3 and world.rooms.all(func(room): return world.fits(room.door) and room.area.grow(2.0).has_point(Vector2(room.door.x,room.door.z))),"The inn, the smithy and the palace each have an open doorway")
 	var common = Interiors.INN+Vector3(8.0,0,12.0)
 	var forge_floor = Interiors.SMITHY+Vector3(8.0,0,8.0)
 	check(world.fits(common) and not world.path(world.rooms[0].door,common).is_empty() and world.fits(forge_floor) and not world.path(world.rooms[1].door,forge_floor).is_empty(),"The hero can walk in through each door")
@@ -589,12 +624,36 @@ func test():
 	for w in folk.people:
 		if w.bed.kind!="inn" or w.state!="asleep": continue
 		var bed = world.get_children().filter(func(n): return n is Node3D and n.scene_file_path.get_file().get_basename()=="bed" and absf(n.position.y-Interiors.LOFT)<.05 and Vector2(n.position.x,n.position.z).distance_to(Vector2(w.at.x,w.at.z))<.6)
-		if bed.size()==1 and absf(w.at.y-Interiors.LOFT-folk.MATTRESS)<.01 and w.body.state=="Lie": on_beds += 1
+		if bed.size()==1 and absf(w.at.y-Interiors.LOFT-folk.MATTRESS)<.01 and w.body.state==w.body.sleep_pose: on_beds += 1
 	check(on_beds==4,"Each lodger lies on a bed of his own in the loft (%d)" % on_beds)
 	check(folk.anya.state=="asleep" and folk.anya.at.distance_to(folk.anya.bed.at)<.01 and folk.anya.body.state=="Lie","Anya lies asleep in her bed in the kitchen")
 	check(folk.orion.state=="indoors" and not folk.orion.body.visible and folk.orion.at.distance_to(folk.orion.bed.at)<.01 and folk.smith.tools.values().all(func(tool): return tool.hand==""),"Orion has put his tools away and gone into his house")
 	var grounded = everyone.filter(func(w): return w.bed.kind=="ground")
-	check(grounded.all(func(w): return w.state=="asleep" and w.body.visible and w.body.state=="Lie" and absf(w.at.y)<.01 and folk.open_at(w.at)),"The homeless lie asleep on the ground in the open street")
+	check(grounded.all(func(w): return w.state=="asleep" and w.body.visible and w.body.state==w.body.sleep_pose and absf(w.at.y)<.01 and folk.open_at(w.at)),"The homeless lie asleep on the ground in the open street")
+	# Each on a spread of rags, along a house's wall or under a tree, well
+	# away from the arena.
+	var on_rags = grounded.filter(func(w): return w.bed.rags.size()==2 and w.bed.rags.all(func(r): return Vector2(r.position.x-w.at.x,r.position.z-w.at.z).length()<.5 and r.position.y<.03))
+	check(on_rags.size()==grounded.size(),"Every one sleeping in the street lies on rags (%d of %d)" % [on_rags.size(),grounded.size()])
+	var arena_gap = INF
+	for w in grounded: arena_gap = minf(arena_gap,(Vector2(w.at.x-Town.ARENA.x,w.at.z-Town.ARENA.z)/Town.ARENA_RADII).length())
+	check(arena_gap>1.2,"None sleeps by the arena's wall (nearest at %.2f of its radius)" % arena_gap)
+	var sheltered = grounded.filter(func(w):
+		var by_wall = [Vector3(1,0,0),Vector3(-1,0,0),Vector3(0,0,1),Vector3(0,0,-1)].any(func(d): return folk.walled(w.at+d*1.2))
+		var by_tree = world.get_children().any(func(n): return n is Node3D and (n.scene_file_path.get_file().begins_with("palm") or n.scene_file_path.get_file().get_basename() in ["olive_a","olive_b","dead_tree"]) and Vector2(n.position.x-w.at.x,n.position.z-w.at.z).length()<1.6)
+		return by_wall or by_tree)
+	check(sheltered.size()==grounded.size(),"Each lies against a building's wall or under a tree (%d of %d)" % [sheltered.size(),grounded.size()])
+	var kids = folk.children.filter(func(c): return c.bed.kind=="ground")
+	check(kids.size()==3 and kids.all(func(c): return kids.all(func(o): return c.at.distance_to(o.at)<4.5)),"The three street children sleep together")
+	# On their backs, or their left sides or right, in the street and the loft.
+	var poses = {}
+	for w in everyone:
+		if w.bed.kind in ["ground","inn"]: poses[w.body.sleep_pose] = poses.get(w.body.sleep_pose,0)+1
+	check(poses.size()==3,"Sleepers lie on their backs and on either side (%s)" % str(poses))
+	var side = everyone.filter(func(w): return w.body.sleep_pose!="Lie" and w.state=="asleep")
+	var resting = side.all(func(w): return w.body.animator.get_animation(w.body.sleep_pose).length>0 and w.body.animator.current_animation==w.body.sleep_pose)
+	check(not side.is_empty() and resting,"Those on their sides hold their side's pose")
+	sleep_poses.clear()
+	for w in everyone: sleep_poses[w.body.name] = w.body.sleep_pose
 	check(folk.people.all(func(w): return not w.state in ["sit_down","wait","drink","stand_up"]) and folk.seats.all(func(seat): return seat.taken==null),"The inn's tables are empty")
 	check(folk.named_at(folk.anya.at).is_empty() and folk.named_at(folk.orion.at).is_empty(),"Neither is named while out of sight")
 	# Through the sunrise to the morning.
@@ -619,6 +678,44 @@ func test():
 	folk.tick(.1,Overworld.START)
 	check(everyone.all(func(w): return not w.state in folk.ABED and w.body.visible) and folk.patrons()>=3,"And on to the morning, all are up, and some at the inn's tables")
 
+	# The greengrocers below the market square: each stall kept by day, a
+	# townsperson buying there and carrying it home, and at dusk the stalls
+	# packed up and their keepers gone home to bed.
+	check(world.stalls.size()==3 and folk.keepers.size()==3 and world.stalls.all(func(s): return Town.GREENGROCERS.grow(1.5).has_point(Vector2(s.at.x,s.at.z))),"Three greengrocers' stalls stand below the market square, each with a keeper")
+	check(world.stalls.all(func(s): return s.open and s.wares.all(func(n): return n.visible) and s.cover.all(func(n): return not n.visible)) and folk.keepers.all(func(k): return k.state=="keep" and k.at.distance_to(k.stall.keeper)<.1),"By day each stall is open, its wares set out and its keeper beside it")
+	check(world.stalls.all(func(s): return folk.open_at(s.keeper) and folk.open_at(s.buyer) and not folk.way(Town.SOUTH_GATE+Vector3(0,0,-7),s.buyer).is_empty()),"A stall's keeper and customer stand on open ground, reached from the south gate")
+	check(folk.keepers.all(func(k): return k.bed.kind=="house") and folk.keepers.all(func(k): return everyone.all(func(w): return w.bed.at.distance_to(k.bed.at)>.5)),"Each keeper has a house of his own")
+	var shopper = folk.people.filter(func(w): return w.bed.kind=="house" and w.state in ["walk","pause"] and not folk.inside(w))[0]
+	check(folk.go_shopping(shopper),"A townsperson sets off to buy at a stall")
+	var sold = false
+	var carried = false
+	var reached = false
+	var hour = Daylight.MORNING+400.0
+	var shopping = 0.0
+	while shopping < 300.0 and not reached:
+		shopping += .1
+		hour += .1
+		world.set_time(hour)
+		folk.tick(.1,Overworld.START)
+		if shopper.state=="buying" and folk.keepers.any(func(k): return is_same(k.stall,shopper.stall) and k.body.state in ["Talk","Reach"]): sold = true
+		if shopper.state=="laden" and shopper.basket != null and shopper.body.state=="Carry": carried = true
+		if shopper.state=="home" and not shopper.body.visible: reached = true
+	check(sold,"The stall's keeper serves him, talking and handing over his goods")
+	check(carried,"He carries a crate of them home in both hands")
+	check(reached,"And goes in at his door with it")
+	var packing = false
+	hour = Daylight.SUNSET-5.0
+	while hour < Daylight.SUNSET+120.0:
+		hour += .1
+		world.set_time(hour)
+		folk.tick(.1,Overworld.START)
+		if folk.keepers.any(func(k): return k.state=="closing"): packing = true
+	check(packing and folk.keepers.all(func(k): return k.state=="indoors" and not k.body.visible),"Through the sunset each keeper packs up his stall and goes home to bed")
+	check(world.stalls.all(func(s): return not s.open and s.wares.all(func(n): return not n.visible) and s.cover.all(func(n): return n.visible)),"At night the stalls' wares are packed away and sacking covers their counters")
+	world.set_time(Daylight.MORNING+400.0)
+	folk.tick(.1,Overworld.START)
+	check(world.stalls.all(func(s): return s.open) and folk.keepers.all(func(k): return k.state=="keep"),"Hurried on to the morning, the stalls are open again")
+
 	# The save keeps the hero's place in the world.
 	game.player.position = Vector3(-40,0,12)
 	game.save_run()
@@ -628,6 +725,8 @@ func test():
 	game.load_floor()
 	world = game.world
 	check(world is Overworld and game.player.position.distance_to(Vector3(-40,0,12))<.01,"Continuing a save made outdoors returns there")
+	var again: Array = world.townsfolk.people+world.townsfolk.children+[world.townsfolk.anya,world.townsfolk.orion]
+	check(not sleep_poses.is_empty() and again.all(func(w): return sleep_poses.get(w.body.name,"")==w.body.sleep_pose),"Each sleeps the same way every night, the town built again")
 
 	# The temple's door: walking in begins the ascent on the first floor.
 	game.hud.tick(0)

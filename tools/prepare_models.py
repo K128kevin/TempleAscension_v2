@@ -35,6 +35,8 @@ sources={
  'pillar':kay/'pillar.gltf.glb','pillar_decorated':kay/'pillar_decorated.gltf.glb',
  'barrel':props/'Barrel.gltf','barrel_rack':props/'Barrel_Holder.gltf','crate':props/'Crate_Wooden.gltf',
  'farm_crate':props/'FarmCrate_Apple.gltf','stall':props/'Stall_Empty.gltf','cart':props/'Stall_Cart_Empty.gltf',
+ # The produce stalls' wares (scripts/world_town.gd greengrocers()).
+ 'carrot_crate':props/'FarmCrate_Carrot.gltf','apple_barrel':props/'Barrel_Apples.gltf','crate_empty':props/'FarmCrate_Empty.gltf',
  'bench':props/'Bench.gltf','table':props/'Table_Large.gltf','stool':props/'Stool.gltf',
  'urn':props/'Vase_4.gltf','bag':props/'Bag.gltf','bucket':props/'Bucket_Wooden_1.gltf',
  'cloth_red':props/'Banner_1_Cloth.gltf','cloth_blue':props/'Banner_2_Cloth.gltf',

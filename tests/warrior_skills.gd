@@ -97,7 +97,7 @@ func test():
 	game.set_process(false)
 	game.sound.muted = true
 	open_plane()
-	check(game.world.clear_line(origin,origin+forward*21.5) and game.world.fits(origin+forward*21.5),"The test plane has room for the longest Ground Slam")
+	check(game.world.clear_line(origin,origin+forward*21.5) and game.world.fits(origin+forward*21.5),"The test plane has room for the longest Thunder Slam")
 
 	# Cleave: every enemy in the arc, for the listed damage and energy.
 	hero({"cleave":1})
@@ -114,17 +114,17 @@ func test():
 	check(game.attack_range(true,0)==game.skills.MELEE_REACH,"An ordered Cleave is walked into melee reach")
 	clear()
 
-	# Ground Slam: an arc out to its listed distance.
+	# Thunder Slam: an arc out to its listed distance.
 	hero({"cleave":5,"ground_slam":1})
 	var near = dummy(4.5); var beyond = dummy(6.0); var off = dummy(4.5,45)
-	check(game.skills.cast("ground_slam",origin+forward*5) and game.run.energy==60,"Ground Slam costs 40 energy")
+	check(game.skills.cast("ground_slam",origin+forward*5) and game.run.energy==60,"Thunder Slam costs 40 energy")
 	wait(.6)
-	check(lost(near)>=10 and lost(near)<=15 and lost(beyond)==0 and lost(off)==0,"Ground Slam rank 1: 100% damage in a 70° arc out to 5 metres")
+	check(lost(near)>=10 and lost(near)<=15 and lost(beyond)==0 and lost(off)==0,"Thunder Slam rank 1: 100% damage in a 70° arc out to 5 metres")
 	check(not game.effects.any(func(e): return not e.node is Label3D),"No coloured circles mark the ground it strikes")
 	hero({"cleave":5,"ground_slam":5})
 	var distant = dummy(8.5); var past_reach = dummy(10.5)
 	game.skills.cast("ground_slam",origin+forward*5); wait(.6)
-	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(past_reach)==0 and lost(off)>0,"Ground Slam rank 5: 250% damage in a 120° arc out to 9 metres")
+	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(past_reach)==0 and lost(off)>0,"Thunder Slam rank 5: 250% damage in a 120° arc out to 9 metres")
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillSlam","The slam sends out a shockwave of dust, shakes the screen, and has its own swing")
 	var wave = game.skills.waves[0]
 	var ring: ShaderMaterial = wave.ground.material_override

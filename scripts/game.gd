@@ -58,6 +58,8 @@ var dash_direction = Vector3.ZERO
 var heal_cd = 0.0
 var regen_recovery_time = 3.0
 var slowed = 0.0
+# How long frost (an ice shard, a frost nova) slows the hero.
+const CHILL_SECONDS = 5.0
 var combat_age = 0.0
 var save_timer = 0.0
 var crown_available = false
@@ -162,7 +164,7 @@ func load_floor() -> void:
 	if world.has_method("ensure_debris_collision"): world.ensure_debris_collision()
 	hover_ring = Art.target_ring()
 	world.add_child(hover_ring)
-	hud.show_enemy_hover(null)
+	hud.clear_enemy_bars()
 	# The approach's music plays outdoors, as on the first floor.
 	sound.track(music_track())
 	if world.has_method("set_time"): world.set_time(float(run.get("clock",Daylight.MORNING)))
@@ -525,7 +527,6 @@ func update_enemy_hover() -> void:
 	if hover_ring.visible:
 		hover_ring.position = hovered.position+Vector3.UP*.08
 		hover_ring.scale = Vector3.ONE*hovered.config.size
-	hud.show_enemy_hover(hovered)
 	hud.show_npc_name(world.townsfolk.named_at(world.pointer()) if outdoors() and mode=="playing" and get_viewport().gui_get_hovered_control()==null else {})
 
 # The 1 to 4 keys: a skill used up close is walked to a unit under the cursor,
@@ -1001,7 +1002,7 @@ func tick_projectiles(dt: float) -> void:
 						p.hit.append(a.uid)
 					else:
 						hurt_player(p.damage,"frost" if p.type=="ice" else "physical",p.source)
-						if p.type=="ice" and player.invulnerable<=0: slowed = 5
+						if p.type=="ice" and player.invulnerable<=0: slowed = CHILL_SECONDS
 					if not p.piercing:
 						remove = true
 						break
@@ -1051,7 +1052,7 @@ func frost_nova(center: Vector3, radius: float, damage: float, source = null) ->
 		return
 	if player.dead or player.position.distance_to(center)>radius or not world.clear_line(center,player.position): return
 	hurt_player(damage,"frost",source)
-	if player.invulnerable<=0: slowed = 5
+	if player.invulnerable<=0: slowed = CHILL_SECONDS
 
 func effect(at: Vector3, diameter: float, color: Color, duration: float) -> Dictionary:
 	var node = Art.seal(diameter,color)

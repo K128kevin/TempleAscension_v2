@@ -34,7 +34,9 @@ const SIZE = {
 	"workbench":Vector3(2.02,.89,1.02),"workbench_drawers":Vector3(.42,.24,.3),"whetstone":Vector3(1.14,1.17,.9),
 	"anvil_log":Vector3(.93,1.07,.82),"peg_rack":Vector3(1.18,.35,.1),"chain":Vector3(1.07,.09,.91),"bucket_metal":Vector3(.49,.37,.45),
 	"axe_bronze":Vector3(.29,.83,.05),"pickaxe":Vector3(.81,1.2,.14),"nightstand":Vector3(.69,1.22,.39),"crate_metal":Vector3(.86,.87,.87),
-	"pot":Vector3(.54,.22,.49)}
+	"pot":Vector3(.54,.22,.49),
+	# The produce stalls' wares.
+	"carrot_crate":Vector3(.71,.41,.57),"apple_barrel":Vector3(.7,.9,.7),"crate_empty":Vector3(.71,.24,.41)}
 
 # The model's dimensions at its own proportions, `height` metres tall.
 static func sized(id: String, height: float) -> Vector3:
@@ -263,6 +265,24 @@ static func dye(node: Node3D, color: Color) -> void:
 		for s in mesh.mesh.get_surface_count():
 			var source: Material = mesh.mesh.surface_get_material(s)
 			if source != null and source.resource_name=="MI_Banner": mesh.set_surface_override_material(s,gritty(color,2.2,true))
+
+# The fruit or vegetables in a kit model (its vertex-painted surface) drawn
+# as produce (assets/shaders/produce.gdshader): as the kit coloured them, or
+# with its apples turned to `fruit` when that is given.
+static func produce(node: Node3D, fruit: Color = Color(0,0,0,0)) -> void:
+	var key = "produce%s" % fruit.to_html()
+	if not cache.has(key):
+		var m = ShaderMaterial.new()
+		m.shader = load("res://assets/shaders/produce.gdshader")
+		m.set_shader_parameter("grit",load("res://assets/textures/rock_detail.jpg"))
+		if fruit.a > 0.0:
+			m.set_shader_parameter("fruit",fruit)
+			m.set_shader_parameter("recolour",1.0)
+		cache[key] = m
+	for mesh in node.find_children("*","MeshInstance3D",true,false):
+		for s in mesh.mesh.get_surface_count():
+			var source: Material = mesh.mesh.surface_get_material(s)
+			if source != null and source.resource_name == "MI_Trim_Props_Vertex": mesh.set_surface_override_material(s,cache[key])
 
 # The mesh inside a kit model, for drawing many copies in one batch.
 static func mesh_of(id: String) -> Mesh:

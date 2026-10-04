@@ -19,7 +19,7 @@ static func trees(class_id: String) -> Array:
 const WARRIOR = [
 	["cleave", "Cleave", "aoe", 0, "cleave", "melee", 25, "Swipe at all enemies in a {x}° arc for {y}% damage.", [[140,125],[150,135],[160,145],[170,155],[180,165]]],
 	["leap", "Leap", "aoe", 5, "leap", "melee", 40, "Leap into the air and land at a target in line of sight, dealing {x}% damage to all enemies in the area.", [[125],[165],[205],[245],[300]]],
-	["ground_slam", "Ground Slam", "aoe", 5, "slam", "melee", 40, "Smash the ground, dealing {x}% damage to all enemies in front of you in a {y}° arc, up to {z} meters away.", [[100,70,5],[120,80,5.5],[150,90,6],[190,100,7],[250,120,9]]],
+	["ground_slam", "Thunder Slam", "aoe", 5, "slam", "melee", 40, "Smash the ground, dealing {x}% damage to all enemies in front of you in a {y}° arc, up to {z} meters away.", [[100,70,5],[120,80,5.5],[150,90,6],[190,100,7],[250,120,9]]],
 	["war_cry", "War Cry", "aoe", 0, "cry", "melee", 30, "A shout that makes every enemy within {x} meters take {y}% more damage for {z} seconds.", [[6,20,6],[7,40,7],[8,60,8],[9,80,9],[10,100,10]]],
 	["shield_charge", "Shield Charge", "aoe", 10, "charge", "shield", 35, "Charge up to {x} meters behind your shield, dealing {y}% damage to every enemy in your path and knocking them aside; the first one hit is stunned for {z} seconds.", [[8,100,1],[9.5,125,1.25],[11,150,1.5],[12.5,175,1.75],[14,200,2]]],
 	["shockwave", "Shockwave", "aoe", 10, "shockwave", "melee", 40, "Hammer the ground: a ring races out, dealing {x}% damage to all enemies within {y} meters and throwing them back. {z}-second cooldown.", [[180,4,10],[225,4.75,10],[270,5.5,10],[315,6.25,10],[360,7,10]]],
@@ -42,7 +42,7 @@ const WARRIOR = [
 # is made with (the ranger carries both, and takes up the one a skill needs).
 const RANGER = [
 	["rapid_fire", "Rapid Fire", "attack", 0, "rapid", "bow", -1, "Rapidly fires {y} arrows in a row. Costs {x} energy. Requires bow.", [[35,2],[32,2],[28,3],[24,3],[20,4]]],
-	["power_shot", "Power Shot", "attack", 0, "power", "bow", 30, "A powerful shot that deals {x}% damage. Takes {y} seconds to aim and fire. Requires bow.", [[200,3],[240,2.6],[280,2.2],[330,1.7],[400,1]]],
+	["power_shot", "Power Shot", "attack", 0, "power", "bow", 30, "A powerful shot that deals {x}% damage to its target and every enemy within 2.5 meters of it. Takes {y} seconds to aim and fire. Requires bow.", [[200,3],[240,2.6],[280,2.2],[330,1.7],[400,1]]],
 	["flurry", "Flurry", "attack", 0, "flurry", "dagger", 25, "Rapidly stab an enemy {x} times in a row for {y}% damage each. Requires dagger.", [[2,100],[2,125],[3,150],[3,200],[4,275]]],
 	["volley", "Volley", "attack", 5, "volley", "bow", 40, "Fire a volley of {x} arrows that land at random in the targeted area, each dealing {y}% damage. Requires bow.", [[15,80],[18,90],[21,100],[24,120],[30,150]]],
 	["lightning_shot", "Lightning Shot", "attack", 5, "lightning", "bow", 35, "Fire an arrow charged with lightning: it deals {x}% damage and leaps between enemies within 10 meters of your target, up to {y} times, each leap dealing 20% less damage than the last. Requires bow.", [[100,1],[120,2],[150,3],[190,4],[250,5]]],

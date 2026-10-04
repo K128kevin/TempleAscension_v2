@@ -28,19 +28,22 @@ func setup(layout) -> void:
 	for x in [pool_bounds.position.x-.18,pool_bounds.end.x+.18]:
 		model("floor",Vector3(x,-.01,pool_bounds.get_center().y),Vector3(.36,.13,pool_bounds.size.y),trim)
 		model("floor",Vector3(x,.115,pool_bounds.get_center().y),Vector3(.07,.008,pool_bounds.size.y),inlay)
-	water(Vector3(pool_bounds.get_center().x,.10,pool_bounds.get_center().y),pool_bounds.size)
+	# The lowest bowl's spill lands in the pool about a metre from the axis.
+	water(Vector3(pool_bounds.get_center().x,.10,pool_bounds.get_center().y),pool_bounds.size,0.0,1.0)
 	var stone = Art.material("marble",Color(.65,.70,.68)).duplicate()
 	stone.emission_enabled = true
 	stone.emission = Color(.055,.06,.058)
 	model("column",center,Vector3(1.95,.18,1.95),stone)
 	# Three decreasing stone bowls reuse the authored chalice mesh, including
 	# its hollow bowl and stem, to match the original fountain silhouette.
-	for tier in [[1.85,.18,.85],[1.28,.90,.68],[.74,1.48,.52]]:
+	# (Each bowl's water takes the spill of the bowl above it, a little out
+	# from where it leaves that bowl's rim.)
+	for tier in [[1.85,.18,.85,.7],[1.28,.90,.68,.45],[.74,1.48,.52,0.0]]:
 		var width: float = tier[0]
 		var bottom: float = tier[1]
 		var height: float = tier[2]
 		model("chalice",center+Vector3.UP*bottom,Vector3(width,height,width),stone)
-		water(center+Vector3.UP*(bottom+height-.055),Vector2.ONE*width*.82,width*.41)
+		water(center+Vector3.UP*(bottom+height-.055),Vector2.ONE*width*.82,width*.41,tier[3])
 		spill(center+Vector3.UP*(bottom+height-.04),width*.43)
 	# A restricted fill makes the stone tiers readable without introducing
 	# light-selection seams across the compatibility renderer's floor batches.
@@ -70,11 +73,14 @@ func model(id: String, at: Vector3, size: Vector3, material: Material) -> Node3D
 	add_child(node)
 	return node
 
-func water(at: Vector3, size: Vector2, radius: float = 0.0) -> void:
+# A water surface (assets/shaders/pool_water.gdshader): `radius` cuts a bowl's
+# to a disc; `splash` is how far from the axis the spill above lands on it.
+func water(at: Vector3, size: Vector2, radius: float = 0.0, splash: float = 0.0) -> void:
 	var material = ShaderMaterial.new()
 	material.shader = preload("res://assets/shaders/pool_water.gdshader")
 	material.set_shader_parameter("center",Vector2(center.x,center.z))
 	material.set_shader_parameter("radius",radius)
+	material.set_shader_parameter("splash",splash)
 	material.set_shader_parameter("wakes",wakes)
 	water_materials.append(material)
 	var surface = model("floor",at,Vector3(size.x,.008,size.y),material)
@@ -106,7 +112,7 @@ func spill(at: Vector3, radius: float) -> void:
 	particles.mesh = imported.find_children("*","MeshInstance3D",true,false)[0].mesh
 	imported.free()
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(.55,.82,.84,.65)
+	material.albedo_color = Color(.70,.90,.90,.6)
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.emission_enabled = true
 	material.emission = Color(.12,.22,.23)

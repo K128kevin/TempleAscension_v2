@@ -1,5 +1,5 @@
 extends Node3D
-## Ground Slam's gathering charge on the hero's blade, after the lightning of
+## Thunder Slam's gathering charge on the hero's blade, after the lightning of
 ## Thunderfury: a pale blue plasma glow sheathing the blade, brightest round
 ## its lower part, with branching lightning crackling out from it into the air,
 ## forking as it goes, and a cold light, all as strong as `intensity` (0 to 1),

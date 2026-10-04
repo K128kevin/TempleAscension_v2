@@ -6,7 +6,7 @@ extends Node3D
 ## the ground: scripts/war_cry.gd); Vampiric Strike's blood red and Shadow
 ## Strike's purple over their swings (tint()).
 ## Drawn only; nothing about the skill depends on it. Carried on the blade
-## (attach()), as Ground Slam's charge is (scripts/blade_charge.gd).
+## (attach()), as Thunder Slam's charge is (scripts/blade_charge.gd).
 
 const Vfx = preload("res://scripts/vfx.gd")
 const GLOW = Color(1.0,.12,.06)

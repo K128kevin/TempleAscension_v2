@@ -39,7 +39,15 @@ func verify():
 	enemy.dead=false; enemy.visible=true; enemy.position=at
 	game.player.position=at+Vector3(0,0,1.4)
 	game.world.follow(at,1)
-	var bar=game.hud.hover_health
+	# (The hero's sight worked out, as the game does each frame.)
+	for i in 40:
+		game.world.visibility_timer=0
+		game.world.update_visibility(game.player.position,1.0)
+	game.mode="playing"; game.hud.tick(0)
+	var bar: ProgressBar=game.hud.bar_of.get(enemy)
+	check(game.world.can_see(enemy.position),"The hero can see the enemy")
+	check(bar != null and bar.visible and bar.size==game.hud.ENEMY_BAR,"An enemy in sight carries its health bar without being hovered")
+	check(game.hud.enemy_bars.filter(func(b): return b.visible).size()==1,"Only living enemies carry one")
 	for size in [Vector2i(1280,800),Vector2i(1440,900),Vector2i(1280,720),Vector2i(1120,700)]:
 		root.size=size; await frames(3)
 		for zoom in [15.0,36.0]:
@@ -50,19 +58,21 @@ func verify():
 			if not render: continue
 			await mouse(center+Vector2(55,0))
 			check(game.clicked_enemy()==enemy,"Rendered pointer selects the enlarged region: %s / %.0f" % [size,zoom])
-			check(game.hover_ring.visible and bar.visible,"Hover shows the ring and health bar together")
+			check(game.hover_ring.visible and bar.visible,"Hover shows the ring, the health bar still over its head")
 			check(game.hover_ring.position.distance_to(enemy.position+Vector3.UP*.08)<.001,"Red ring rests under the enemy's feet")
 			for ratio in [1.0,.5,.1]:
-				enemy.hp=enemy.max_hp*ratio; game.update_enemy_hover()
-				check(absf(bar.value/bar.max_value-ratio)<.001,"Hover bar tracks the enemy's current health")
+				enemy.hp=enemy.max_hp*ratio; game.hud.tick(0)
+				check(absf(bar.value/bar.max_value-ratio)<.001,"The bar tracks the enemy's current health")
 			var head: Vector2=game.world.camera.unproject_position(enemy.position+Vector3.UP*enemy.config.size*2.25)
-			check(bar.size==Vector2(72,5) and absf(bar.get_global_rect().get_center().x-head.x)<1 and bar.get_global_rect().end.y<head.y,"Small bar follows the head in logical viewport coordinates")
+			game.hud.tick(0)
+			check(bar.size==Vector2(60,4) and absf(bar.get_global_rect().get_center().x-head.x)<1 and bar.get_global_rect().end.y<head.y,"Small bar follows the head in logical viewport coordinates")
 			check(bar.mouse_filter==Control.MOUSE_FILTER_IGNORE,"Health bar does not intercept attacks")
 			if size==Vector2i(1280,800) and zoom==15:
 				enemy.hp=enemy.max_hp*.5; game.update_enemy_hover()
 				await snapshot("gladiator-half-health")
 			await mouse(center+Vector2(100,0))
-			check(not game.hover_ring.visible and not bar.visible,"Moving outside the click area hides both indicators")
+			game.hud.tick(0)
+			check(not game.hover_ring.visible and bar.visible,"Moving outside the click area hides the ring; the health bar stays")
 	# Attacks aimed while a statue is targeted fly at its centre, even with the
 	# cursor above its head, where the ground under the cursor lies far behind.
 	game.world.zoom=15; game.world.follow(at,1)
@@ -112,11 +122,11 @@ func verify():
 			event.position=pixel; event.global_position=pixel; event.pressed=pressed
 			Input.parse_input_event(event); Input.flush_buffered_events(); await frames(1)
 		check(game.target==enemy and game.player.busy>0,"Actual left click in the enlarged area starts an attack")
-		game.mode="paused"; game.update_enemy_hover()
-		check(not game.hover_ring.visible and not bar.visible,"Pause hides the hover indicators")
+		game.mode="paused"; game.update_enemy_hover(); game.hud.tick(0)
+		check(not game.hover_ring.visible and not bar.visible,"Pause hides the ring and the health bars")
 		game.mode="playing"; await mouse(body(enemy))
-		enemy.dead=true; game.update_enemy_hover()
-		check(not game.hover_ring.visible and not bar.visible,"Enemy death immediately clears hover feedback")
+		enemy.dead=true; game.update_enemy_hover(); game.hud.tick(0)
+		check(not game.hover_ring.visible and not bar.visible,"Enemy death immediately clears its ring and health bar")
 		enemy.dead=false
 		# Put a projected target behind an ability slot to verify UI priority.
 		var pause: Button=game.hud.weapon_slots[0]
@@ -124,7 +134,7 @@ func verify():
 		enemy.position=game.world.camera.project_position(button_center,10)-Vector3.UP*enemy.config.size
 		await mouse(button_center)
 		check(game.enemy_at_screen(button_center)==enemy and game.clicked_enemy()==null,"HUD buttons take priority over enemies behind them")
-		check(not game.hover_ring.visible and not bar.visible,"Hovering UI does not highlight an enemy behind it")
+		check(not game.hover_ring.visible,"Hovering UI does not highlight an enemy behind it")
 	# The on-screen arrow: hidden while many statues stand, then pointing to the
 	# nearest once five or fewer remain. No Pause button or statue text.
 	game.mode="playing"

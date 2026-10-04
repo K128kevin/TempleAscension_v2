@@ -311,7 +311,7 @@ Proposed skill roster; **(P)** marks a passive. Names are placeholders.
 | 1 | Cleave: frontal sweep; Guard: brief defense; Endurance (P) | Power Shot: charged shot; Snare: slowing trap; Steady Aim (P) | Firebolt: projectile; Frost Nova: nearby control; Attunement (P) |
 | 4 | Shield Bash: stagger; Lunge: gap closer; Weapon Training (P) | Multishot: spread; Retreating Shot: reposition; Quick Draw (P) | Arcane Lance: piercing line; Barrier: absorb damage; Efficient Casting (P) |
 | 8 | Whirlwind: moving area attack; War Cry: short buff | Piercing Arrow: line attack; Explosive Trap: delayed area damage | Chain Lightning: jumping hit; Blink: constrained teleport |
-| 12 | Ground Slam: directional shockwave; Bulwark (P) | Marked Prey: single-target setup; Trapcraft (P) | Blizzard: persistent area control; Elemental Mastery (P) |
+| 12 | Thunder Slam: directional shockwave; Bulwark (P) | Marked Prey: single-target setup; Trapcraft (P) | Blizzard: persistent area control; Elemental Mastery (P) |
 | 18 | Execution: finisher; Battle Rhythm (P) | Rain of Arrows: area barrage; Predator (P) | Meteor: delayed burst; Arcane Reserve (P) |
 
 Active skills have five ranks; passives have three. One point buys a first rank
