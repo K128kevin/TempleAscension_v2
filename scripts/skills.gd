@@ -405,9 +405,10 @@ func attack_damage(percent: float, tag: String = "melee") -> float:
 
 # What a damaging skill hits for at `level` (its current rank, or the first
 # while unlearned), from the hero's attributes and passives as they stand:
-# {"damage": the range in words, "crit": chance and damage of a critical
-# strike}, or {} for a skill that deals no damage. Offensive Rhythm's stacks
-# and Element of Surprise come and go in a fight, so are left out.
+# {"damage": one hit's range, "crit": a critical strike's chance, "crit_damage":
+# what it multiplies a hit by}, or {} for a skill that deals no damage.
+# Offensive Rhythm's stacks and Element of Surprise come and go in a fight, so
+# are left out.
 func damage_summary(id: String, level: int) -> Dictionary:
 	var s: Dictionary = Book.all()[id]
 	level = maxi(1,level)
@@ -416,58 +417,35 @@ func damage_summary(id: String, level: int) -> Dictionary:
 	var weapon: int = Book.weapon_for(id,int(game.run.weapon))
 	if weapon<0: weapon = int(game.run.weapon)
 	var tag: String = "melee" if s.class_id=="warrior" else Data.scaling_tag(weapon)
-	# [percent of a normal attack, how many times, what each one is, extra words]
-	var hit: Array = []
+	# The percent of a normal attack one hit deals.
+	var percent = -1.0
 	match s.effect:
-		"cleave","charge": hit = [v.y,1,"",""]
-		"leap","slam","shockwave","strike","bash","execute","power": hit = [v.x,1,"",""]
-		"vampiric": hit = [v.x,1,"","; drains %s%% of the target's health" % figure(v.y)]
-		"shadow": hit = [v.x,1,"","; then %s over 5 seconds" % span(v.y,tag)]
-		"lightning": hit = [v.x,1,"","; the same to each enemy it leaps to"]
-		"rapid": hit = [100.0,v.y,"arrow",""]
-		"volley": hit = [v.y,v.x,"arrow",""]
-		"flurry": hit = [v.y,v.x,"stab",""]
-		"triple": hit = [v.x,3,"slash",""]
-		"slowshot","weaken": hit = [100.0,1,"",""]
+		"cleave","charge","volley","flurry": percent = v.y
+		"leap","slam","shockwave","strike","bash","vampiric","shadow","execute","power","lightning","triple": percent = v.x
+		"rapid","slowshot","weaken": percent = 100.0
 		"passive":
 			if id!="dash_attack": return {}
 		_:
 			# (War Cry, Throw Sand and the like; the wizard's Barrier and Blink.)
 			if s.has("ranks") or s.tag.is_empty(): return {}
-	var result = {"crit":crit_words(weapon)}
-	# How much quicker than normal the skill's motion is (the wizard's spells
-	# are not quickened).
-	if s.class_id=="ranger": result.speed = speed_words((haste()*(1.0+Data.attack_haste(game.run)*.01)-1.0)*100.0)
-	elif s.class_id=="warrior" and s.requirement in ["melee","shield"]: result.speed = speed_words(Data.attack_haste(game.run))
-	if id=="dash_attack":
-		result.damage = "Damage: %s to each enemy dashed through" % String.num(v.x,0)
-	elif hit.is_empty():
-		# The wizard's spells hit for a set amount.
-		var amount: float = Data.damage_tag(game.run,s.tag,15.0*Book.value(id,level))
-		var times: String = {"blizzard":" per pulse (5 pulses)","chain":" to each of up to 4 enemies"}.get(s.effect,"")
-		result.damage = "Damage: %s%s" % [String.num(amount,0),times]
-	else:
-		var each: String = (" per "+hit[2]) if not hit[2].is_empty() else ""
-		var times: String = " (×%d)" % int(hit[1]) if int(hit[1])>1 else ""
-		result.damage = "Damage: %s%s%s%s" % [span(hit[0],tag),each,times,hit[3]]
+	var result = crit_numbers(weapon)
+	if id=="dash_attack": result.damage = "Damage: %s" % figure(v.x)
+	# The wizard's spells hit for a set amount.
+	elif percent<0: result.damage = "Damage: %d" % roundi(Data.damage_tag(game.run,s.tag,15.0*Book.value(id,level)))
+	else: result.damage = "Damage: "+span(percent,tag)
 	return result
 
+# A critical strike with `weapon`: its chance, and the damage it does, in
+# percent of a hit, as tip lines.
+func crit_numbers(weapon: int) -> Dictionary:
+	var mastery: Dictionary = Data.specialization(game.run,weapon)
+	return {"crit":"Critical strike chance: %s%%" % figure(Data.crit_chance(game.run)+mastery.x),"crit_damage":"Critical strike damage: %s%%" % figure(Data.CRIT_MULTIPLIER*(1.0+mastery.y*.01)*100.0)}
+
 # The normal attack's speed bonus with `weapon`, in percent: Dexterity, and
-# for a melee weapon Quick Strikes, with Frenzy while it lasts. (The staff's
-# bolt is never quickened.)
+# for a melee weapon Quick Strikes. (The staff's bolt is never quickened.)
 func basic_speed(weapon: int) -> float:
 	if weapon==4: return 0.0
-	var quick: float = Data.attack_haste(game.run) if weapon==2 else Data.melee_attack_speed(game.run)
-	return ((1.0+quick*.01)*haste()-1.0)*100.0
-
-# An attack speed bonus, in words.
-func speed_words(percent: float) -> String:
-	return "Attack speed: %s%s%%" % ["+" if percent>=0 else "",figure(percent)]
-
-# A critical strike's chance and damage with `weapon`, in words.
-func crit_words(weapon: int) -> String:
-	var mastery: Dictionary = Data.specialization(game.run,weapon)
-	return "Critical strike: %s%% chance for %s%% damage" % [figure(Data.crit_chance(game.run)+mastery.x),figure(Data.CRIT_MULTIPLIER*(1.0+mastery.y*.01)*100.0)]
+	return Data.attack_haste(game.run) if weapon==2 else Data.melee_attack_speed(game.run)
 
 # A number as few figures as it needs: 25, 22.5, 22.75.
 func figure(amount: float) -> String:

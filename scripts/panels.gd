@@ -287,7 +287,7 @@ func refresh() -> void:
 		for i in 5:
 			stat_values[i].text = str(r.stats[i])
 			stat_buttons[i].disabled = r.points<=0
-		stat_summary.text = "Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%" % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(Data.attack_haste(r)),game.skills.figure(Data.crit_chance(r))]
+		stat_summary.text = "Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%" % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(game.skills.basic_speed(int(r.weapon))),game.skills.figure(Data.crit_chance(r))]
 		stat_reset.disabled = not game.safe_checkpoint()
 	if skills_open():
 		var right: float = hud.root.size.x-24-(200 if game.playground != null else 0)
@@ -313,7 +313,8 @@ func refresh() -> void:
 		if not hovered.is_empty() and nodes.has(hovered): show_tip(hovered)
 
 # The hovered skill's details: beside the tree, or above a hotbar slot when
-# `slot` (that slot's rect) is given.
+# `slot` (that slot's rect) is given. ATTACK is the normal attack's slot.
+const ATTACK = "attack"
 func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 	var on_hotbar: bool = slot.has_area()
 	if not is_instance_valid(tip):
@@ -322,11 +323,28 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 		var body = VBoxContainer.new()
 		body.add_theme_constant_override("separation",3)
 		tip.add_child(body)
-		for line in [["title",15,hud.gold],["kind",11,dim],["now",12,hud.cream],["damage",12,Color(1,.78,.45)],["crit",12,Color(1,.78,.45)],["speed",12,Color(1,.78,.45)],["next",12,dim],["lock",12,Color(1,.5,.4)],["hint",11,green]]:
+		for line in [["title",15,hud.gold],["kind",11,dim],["now",12,hud.cream],["damage",12,Color(1,.78,.45)],["crit",12,Color(1,.78,.45)],["crit_damage",12,Color(1,.78,.45)],["next",12,dim],["lock",12,Color(1,.5,.4)],["hint",11,green]]:
 			var l = text("",line[1],line[2],body)
 			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			l.custom_minimum_size.x = 250
 			tip_lines[line[0]] = l
+	var lines: Dictionary
+	if id==ATTACK: lines = attack_lines()
+	else: lines = skill_lines(id,on_hotbar)
+	for key in tip_lines:
+		tip_lines[key].text = lines.get(key,"")
+		tip_lines[key].visible = not lines.get(key,"").is_empty()
+	place_tip(id,slot)
+
+# The normal attack's tip: what the weapon in hand hits for.
+func attack_lines() -> Dictionary:
+	var weapon = int(game.run.weapon)
+	var lines = {"title":"%s · Attack" % Data.WEAPONS[weapon].capitalize(),"kind":"LMB · No energy cost"}
+	lines.merge(game.skills.crit_numbers(weapon))
+	lines.damage = "Damage: "+game.skills.span(100.0,Data.scaling_tag(weapon))
+	return lines
+
+func skill_lines(id: String, on_hotbar: bool) -> Dictionary:
 	var r: Dictionary = game.run
 	var s: Dictionary = Book.all()[id]
 	var rank = int(r.skills.get(id,0))
@@ -335,11 +353,8 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 	lines.kind = "Passive" if not active else "Active · %d energy" % game.skills.cost(id)
 	if active and s.requirement!="any": lines.kind += " · needs %s" % {"melee":"a melee weapon","shield":"sword and shield","bow":"a bow","staff":"a staff","dagger":"a dagger","bow_dagger":"a bow or dagger"}[s.requirement]
 	lines.now = Book.describe(id,maxi(1,rank))
-	# What it hits for now, by his attributes and passives.
-	var hits: Dictionary = game.skills.damage_summary(id,rank)
-	lines.damage = hits.get("damage","")+(" (at rank 1)" if rank==0 and hits.has("damage") else "")
-	lines.crit = hits.get("crit","")
-	lines.speed = hits.get("speed","")
+	# What it hits for now, by the hero's attributes and passives.
+	lines.merge(game.skills.damage_summary(id,rank))
 	lines.next = "Next rank: "+Book.describe(id,rank+1) if rank>0 and rank<s.max_rank else ""
 	lines.lock = Book.locked(r,id)
 	if lines.lock.is_empty() and rank<s.max_rank and rank>=Book.rank_cap(id,int(r.level)): lines.lock = "Next rank requires level %d." % (s.unlock+rank*3)
@@ -348,9 +363,10 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 	if Book.can_learn(r,id): lines.hint = "Click to learn" if rank==0 else "Click to raise to rank %d" % (rank+1)
 	if active and rank>0: lines.hint += ("\n" if not lines.hint.is_empty() else "")+"Right-click or 1–4: assign to RMB or that key"
 	if on_hotbar: lines.hint = ""
-	for key in tip_lines:
-		tip_lines[key].text = lines[key]
-		tip_lines[key].visible = not lines[key].is_empty()
+	return lines
+
+func place_tip(id: String, slot: Rect2) -> void:
+	var on_hotbar: bool = slot.has_area()
 	tip.visible = true
 	tip.move_to_front()
 	tip.reset_size()

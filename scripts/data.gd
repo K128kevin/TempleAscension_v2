@@ -48,9 +48,9 @@ const XP_STEPS = [100,150,220,300,400,520,650,800,960,1140,1340,1560,1800,2060,2
 const MELEE_MINIMUM = .2
 
 static func new_run(class_id: String = "warrior") -> Dictionary:
-	var starter: String = {"warrior":"cleave","ranger":"power_shot","wizard":"firebolt"}.get(class_id,"cleave")
-	var ranks = {}; ranks[starter] = 1
-	return {"version":9,"place":"temple","class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":ranks,"skill_points":0,"hotbar":[starter,"","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	# No skill is learned yet: the first level's point goes wherever the
+	# player likes.
+	return {"version":9,"place":"temple","class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 
 # Where a run can be: on a floor of the temple, or in the world outside it
 # (the town, the desert and the temple's front; scripts/overworld.gd).

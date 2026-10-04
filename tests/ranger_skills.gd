@@ -54,6 +54,9 @@ func clear():
 func hero(ranks: Dictionary, weapon: int = 2):
 	game.run = Data.new_run("ranger")
 	game.run.skills = ranks
+	# As the hero who spent his first point on Power Shot, which waits on RMB.
+	game.run.skill_points = 0
+	if ranks.has("power_shot"): game.run.hotbar[0] = "power_shot"
 	game.run.weapon = weapon
 	game.player.visual.equip(Data.WEAPONS[weapon])
 	ready()
@@ -100,7 +103,7 @@ func test():
 	check(mine.size()==20 and Book.trees("ranger")==["attack","utility","passive"],"The ranger has twenty skills in Attacks, Utility and Passive")
 	check(mine.filter(func(s): return s.tree=="attack").size()==7 and mine.filter(func(s): return s.tree=="utility").size()==7 and mine.filter(func(s): return s.tree=="passive").size()==6,"Seven attacks, seven utility skills, six passives")
 	var fresh = Data.new_run("ranger")
-	check(fresh.owned[2] and fresh.owned[5] and fresh.weapon==2 and fresh.skills=={"power_shot":1} and Save.valid(fresh),"A new ranger carries a bow and a dagger, and knows Power Shot")
+	check(fresh.owned[2] and fresh.owned[5] and fresh.weapon==2 and fresh.skills.is_empty() and fresh.skill_points==1 and Save.valid(fresh),"A new ranger carries a bow and a dagger, and has a skill point to spend")
 	check(not Book.locked(fresh,"volley").is_empty() and not Book.locked(fresh,"frenzy").is_empty() and Book.locked(fresh,"flurry").is_empty(),"Skills open by the points spent in their own tree")
 	for clip in ["DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SneakIdle","SkillVolley"]:
 		check(game.player.visual.clips.has(clip),"The ranger's clip is there: "+clip)
@@ -430,11 +433,11 @@ func test():
 	var old = Data.new_run("ranger")
 	old.version = 7
 	old.owned = [false,false,true,false,false]
-	old.skills = {"power_shot":1}
+	old.skills = {"power_shot":1}; old.skill_points = 0
 	old.level = 1
 	var migrated = Save.migrate(old)
 	check(Save.valid(old) and migrated.version==9 and migrated.owned.size()==6 and migrated.owned[5] and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
-	game.run.skills = {"power_shot":1}
+	game.run.skills = {"power_shot":1}; game.run.skill_points = 0
 	check(Save.valid(game.run),"The character is save-valid throughout")
 	FileAccess.open("res://test-results/ranger-skills.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
 	print("RANGER_SKILLS ",passed.size()," passed; ",failed)

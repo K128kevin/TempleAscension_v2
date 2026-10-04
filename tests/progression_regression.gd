@@ -12,7 +12,7 @@ func test():
 	for class_id in Data.CLASSES:
 		var run = Data.new_run(class_id)
 		check(run.stats==[5,5,5,5,5] and run.level==1 and Data.max_health(run)==100 and Data.max_energy(run)==100 and Data.energy_regen(run)==10,"Shared base resources and attributes: "+class_id)
-		check(run.skills.size()==1 and run.skill_points==0 and Book.compatible(run.hotbar[0],run.weapon),"Starter point is spent on a usable skill: "+class_id)
+		check(run.skills.is_empty() and run.skill_points==1 and run.hotbar==["","","","",""] and Save.valid(run),"A new character has learned no skill and has one point to spend: "+class_id)
 		check(run.owned.count(true)==(2 if class_id=="ranger" else 1) and run.owned[run.weapon] and run.owned[5]==(class_id=="ranger"),"Each class owns only its starting weapon (the ranger his bow and his dagger): "+class_id)
 		var active = 0; var passive = 0
 		for s in Book.all().values():
@@ -25,10 +25,10 @@ func test():
 			else: check(Book.rank_cap(s.id,s.unlock-1)==0 and Book.rank_cap(s.id,s.unlock)==1 and Book.rank_cap(s.id,s.unlock+3)==2,"Level/rank gate: "+s.id)
 		check(active=={"warrior":11,"ranger":14}.get(class_id,8) and passive=={"warrior":8,"ranger":6}.get(class_id,4),"The class's active skills and passives: "+class_id)
 		Data.gain_xp(run,Data.xp_at_level(15))
-		check(run.level==15 and run.points==70 and run.skill_points==14 and Data.max_health(run)==100,"Level 15 awards 70 attributes and 15 total skills without implicit stats: "+class_id)
+		check(run.level==15 and run.points==70 and run.skill_points==15 and Data.max_health(run)==100,"Level 15 awards 70 attributes and 15 total skills without implicit stats: "+class_id)
 		check(Save.valid(run),"Progression state validates: "+class_id)
 		Data.gain_xp(run,100000000)
-		check(run.level==20 and Data.MAX_LEVEL==20 and run.points==95 and run.skill_points==19,"Level cap of 20 and point budgets (five attributes and one skill a level): "+class_id)
+		check(run.level==20 and Data.MAX_LEVEL==20 and run.points==95 and run.skill_points==20,"Level cap of 20 and point budgets (five attributes and one skill a level): "+class_id)
 		var points = run.points
 		Data.gain_xp(run,100000)
 		check(run.points==points,"XP at cap cannot mint points: "+class_id)
@@ -56,7 +56,7 @@ func test():
 	check(requirements=={"cleave":0,"leap":5,"ground_slam":5,"powerful_strike":0,"shield_bash":0,"vampiric_strike":5,"shadow_strike":5,"execute":10,"war_cry":0,"shield_charge":10,"shockwave":10,"dash_attack":0,"shield_expertise":0,"endurance":0,"quick_strikes":5,"cursed_blade":5,"offensive_rhythm":10,"defensive_rhythm":10,"spiked_shield":10},"Document levels 1, 5, 10 and 15 become 0, 5, 10 and 15 points in the tree (Shadow Strike opening with Vampiric Strike, at 5; Execute at 10)")
 	# A skill opens once enough points are spent in its own tree.
 	var fresh = Data.new_run()
-	fresh.skill_points = 1
+	fresh.skills = {"cleave":1}; fresh.skill_points = 1
 	check(not Book.learn(fresh,"meteor"),"Cannot learn another class's skill")
 	check(not Book.learn(fresh,"leap") and fresh.skill_points==1,"Leap is locked without five points in Area of Effect")
 	check(Book.learn(fresh,"cleave") and fresh.skills.cleave==2 and fresh.skill_points==0,"Ranks are bought with skill points, not held back by level")
@@ -98,7 +98,7 @@ func test():
 	veteran.level=27; veteran.xp=60000; veteran.stats=[5,5,60,10,18]; veteran.points=0
 	veteran.skills={"firebolt":5,"meteor":4}; veteran.skill_points=18; veteran.hotbar=["firebolt","meteor",""]
 	var capped = Save.migrate(veteran)
-	var eight = Data.new_run("warrior"); eight.version=8; eight.hotbar=["cleave","",""]
+	var eight = Data.new_run("warrior"); eight.version=8; eight.skills={"cleave":1}; eight.skill_points=0; eight.hotbar=["cleave","",""]
 	var nine = Save.migrate(eight)
 	check(Save.valid(eight) and nine.version==9 and nine.hotbar==["cleave","","","",""],"Version 8 saves keep their skills, the hotbar grown to RMB and 1 to 4")
 	check(Save.valid(capped) and capped.level==20 and capped.xp==Data.xp_at_level(20) and capped.stats==[5,5,5,5,5] and capped.points==95 and capped.skill_points==20 and capped.get("migration_notice",false),"Version 5 saves above the new cap come down to level 20 with every point refunded")

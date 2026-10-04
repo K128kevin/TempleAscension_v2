@@ -53,6 +53,9 @@ func clear():
 func hero(ranks: Dictionary, weapon: int = 1):
 	game.run = Data.new_run("warrior")
 	game.run.skills = ranks
+	# As the hero who spent his first point on Cleave, which waits on RMB.
+	game.run.skill_points = 0
+	if ranks.has("cleave"): game.run.hotbar[0] = "cleave"
 	game.run.weapon = weapon; game.run.owned[weapon] = true
 	game.player.visual.equip(Data.WEAPONS[weapon])
 	ready()
@@ -314,10 +317,11 @@ func test():
 	hero({"powerful_strike":1})
 	game.run.stats[0] = 15; game.run.stats[1] = 25
 	var tip: Dictionary = game.skills.damage_summary("powerful_strike",1)
-	check(tip.damage=="Damage: 24–36" and tip.crit=="Critical strike: 25% chance for 200% damage","Powerful Strike's tip shows its damage by Strength and its crits by Dexterity")
-	check(tip.speed=="Attack speed: +6%" and game.skills.speed_words(game.skills.basic_speed(1))=="Attack speed: +6%","Its tip and the basic attack's show the attack speed Dexterity gives")
+	check(tip=={"damage":"Damage: 24–36","crit":"Critical strike chance: 25%","crit_damage":"Critical strike damage: 200%"},"Powerful Strike's tip shows only its damage by Strength and its crits by Dexterity")
+	check(game.skills.damage_summary("cleave",1).damage=="Damage: 15–23","Cleave's tip shows one hit's damage, nothing more")
+	check(is_equal_approx(game.skills.basic_speed(1),6.0),"Dexterity's attack speed is the basic attack's")
 	game.run.skills["quick_strikes"] = 1
-	check(is_equal_approx(game.skills.basic_speed(1),26.0),"Quick Strikes quickens the basic attack's shown speed, not a skill's")
+	check(is_equal_approx(game.skills.basic_speed(1),26.0),"Quick Strikes quickens the basic attack's shown speed")
 	check(game.skills.damage_summary("war_cry",1).is_empty() and game.skills.damage_summary("endurance",1).is_empty(),"Skills that deal no damage show none")
 
 	# Every number key casts the skill bound to it, 3 and 4 as well as 1 and 2.

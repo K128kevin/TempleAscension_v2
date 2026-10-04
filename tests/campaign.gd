@@ -12,7 +12,7 @@ func start(owner_game):
 	game.set_process(false)
 	check(game.run.floor==0 and game.player.position==Vector3(0,0,9),"A run inside the temple starts at its entrance")
 	check(game.player.visual.clips.size()==82,"All locomotion, weapon and hit reaction clips are present (with the ranger's and wizard's own idle, run and crouch, the shield bearers' guarded swing and reactions, the walks, the warrior's skill swings and his sword's chain of swings)")
-	check(game.run.class_id=="warrior" and game.run.skills.cleave==1,"Warrior starts with Cleave and sword")
+	check(game.run.class_id=="warrior" and game.run.weapon==1 and game.run.skills.is_empty() and game.run.skill_points==1,"Warrior starts with a sword and one skill point to spend")
 	game.player.hp=20; game.run.energy=60; game.heal()
 	check(game.player.hp==80 and game.run.energy==0 and game.heal_cd==20 and not game.run.has("flasks"),"Healing spell instantly restores 60 percent for 60 energy with a 20-second cooldown and no charges")
 	game.heal()

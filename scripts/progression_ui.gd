@@ -33,8 +33,8 @@ static func equipment(game) -> void:
 	game.hud.button("Return to game",game.resume_game)
 
 static func creation(game, difficulty: int) -> void:
-	open(game,"CHOOSE YOUR CLASS","Every class starts at level 1 with five in each attribute.\nYour first skill point learns the starter skill shown below.")
-	var summaries = ["Warrior · sword and shield · Cleave","Ranger · bow and dagger · Power Shot","Wizard · staff · Firebolt"]
+	open(game,"CHOOSE YOUR CLASS","Every class starts at level 1 with five in each attribute\nand one skill point to spend on any skill it can learn.")
+	var summaries = ["Warrior · sword and shield","Ranger · bow and dagger","Wizard · staff"]
 	for i in 3:
 		game.hud.button(summaries[i],func():
 			game.creating_character = false

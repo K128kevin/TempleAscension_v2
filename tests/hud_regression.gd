@@ -28,6 +28,9 @@ func test():
 	var game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game); game.test_mode=true; game.set_process(false)
 	game.run = Data.new_run(); game.run.seed=0
+	check(game.run.skills.is_empty() and game.run.skill_points==1,"A new warrior has one skill point to spend")
+	# The first point spent on Cleave, which takes RMB.
+	Data.Skills.learn(game.run,"cleave"); game.run.hotbar[0]="cleave"
 	game.load_floor()
 	var hud = game.hud
 	check(not game.run.has("seconds"),"New runs have no elapsed-time field")
@@ -102,7 +105,7 @@ func test():
 	check(game.mode=="character" and "CLASS" in game.hud.modal_body.get_child(0).text,"Difficulty selection opens class creation")
 	await capture("class-creation")
 	game.hud.modal_body.get_child(4).pressed.emit()
-	check(game.run.class_id=="wizard" and game.run.weapon==4 and game.run.skills.firebolt==1 and not game.creating_character,"Wizard creation grants staff and starter Firebolt")
+	check(game.run.class_id=="wizard" and game.run.weapon==4 and game.run.skills.is_empty() and game.run.skill_points==1 and not game.creating_character,"Wizard creation grants the staff and one skill point")
 	check(not Save.load_run().is_empty(),"New class creation writes a valid character save")
 	# A new character wakes in the desert: the corner tells the way, not a floor.
 	game.run.difficulty=2; hud.tick(0)

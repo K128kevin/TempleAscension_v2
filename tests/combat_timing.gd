@@ -347,6 +347,10 @@ func test():
 	game.player.position=game.world.spawn
 	for class_id in Data.CLASSES:
 		game.run=Data.new_run(class_id)
+		# The class's first skill, learned with the point it starts with and
+		# put on RMB.
+		var first: String = {"warrior":"cleave","ranger":"power_shot","wizard":"firebolt"}[class_id]
+		Data.Skills.learn(game.run,first); game.run.hotbar[0]=first
 		game.skills.reset(); game.player.cooldown=0; game.player.busy=0
 		game.player.visual.equip(Data.WEAPONS[game.run.weapon])
 		for p in game.projectiles: p.node.queue_free()
