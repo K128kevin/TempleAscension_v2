@@ -623,28 +623,12 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	var damage = Data.damage(run,randf_range(10,15))
 	var weapon: int = run.weapon
 	if weapon not in [2,4]: scheduled.append({"time":maxf(.01,animation.times[0]-.12),"type":"swing","sound":"swing-spear" if weapon==0 else "swing-blade"})
-	var phase: float = player.visual.swing_phase() if weapon == 1 else -1.0
-	if weapon == 1 and player.visual.clips.has(CombatAnimation.SWORD_OPENER):
-		# The sword's swings run on into one another while he keeps swinging;
-		# broken off, the next attack starts the chain over.
-		var share: float = CombatAnimation.SWORD_SWING_SHARE
-		if phase >= 0.0 and phase <= share+CombatAnimation.SWORD_FOLLOW:
-			# Each clip carries on a moment into the next swing's motion: the
-			# next takes over at that same moment of it, and still ends on time.
-			var into: float = maxf(0.0,phase-share)
-			sword_swing = (sword_swing+1)%CombatAnimation.SWORD_CHAIN.size()
-			sword_steps += 1
-			player.visual.play_on(CombatAnimation.SWORD_CHAIN[sword_swing]+CombatAnimation.SWORD_FEET[sword_steps%2],animation.duration/(share-into),into)
-		else:
-			sword_swing = 0
-			sword_steps = 0
-			player.visual.play(CombatAnimation.SWORD_OPENER,animation.duration/share)
+	if weapon == 1 and player.visual.clips.has(CombatAnimation.SWORD_OPENER): swing_sword(animation.duration)
 	elif weapon == 5 and player.visual.clips.has(CombatAnimation.DAGGER_ATTACKS[1]):
 		# The dagger: a stab and a slash by turns.
 		dagger_attacks += 1
 		player.visual.play(CombatAnimation.DAGGER_ATTACKS[dagger_attacks%2],animation.duration)
 	else: player.visual.play(animation.clip,animation.duration)
-	combat_age = 0
 	if weapon in [2,4]:
 		for release_time in animation.times:
 			scheduled.append({"time":release_time,"type":"arcane" if weapon==4 else "arrow","at":point,"damage":damage*(2.0/3.0 if special else 1.0),"special":special})
@@ -659,6 +643,25 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 		scheduled.append({"time":leap_duration,"type":"blast","at":player.position,"damage":damage*1.5,"follow_player":true})
 	else:
 		scheduled.append({"time":animation.times[0],"type":"melee","at":point,"damage":damage*(2.5 if special and weapon==0 else (1.25 if special else 1.0)),"weapon":weapon,"special":special,"direction":player.forward()})
+
+# The sword's next swing, its swing taking `seconds`: the swings run on into
+# one another while he keeps swinging (the normal attack, and Vampiric and
+# Shadow Strike, which are struck with the same swings); broken off, the next
+# starts the chain over.
+func swing_sword(seconds: float) -> void:
+	var phase: float = player.visual.swing_phase()
+	var share: float = CombatAnimation.SWORD_SWING_SHARE
+	if phase >= 0.0 and phase <= share+CombatAnimation.SWORD_FOLLOW:
+		# Each clip carries on a moment into the next swing's motion: the
+		# next takes over at that same moment of it, and still ends on time.
+		var into: float = maxf(0.0,phase-share)
+		sword_swing = (sword_swing+1)%CombatAnimation.SWORD_CHAIN.size()
+		sword_steps += 1
+		player.visual.play_on(CombatAnimation.SWORD_CHAIN[sword_swing]+CombatAnimation.SWORD_FEET[sword_steps%2],seconds/(share-into),into)
+	else:
+		sword_swing = 0
+		sword_steps = 0
+		player.visual.play(CombatAnimation.SWORD_OPENER,seconds/share)
 
 func tick_scheduled(dt: float) -> void:
 	for i in range(scheduled.size()-1,-1,-1):
@@ -747,10 +750,12 @@ func heal() -> void:
 	heal_cd = 20
 	save_run()
 
+# In combat only while an enemy is after him: awake to him and hunting him
+# (it stands down once it loses him). His own attacks and skills, at nothing
+# or at a statue still asleep, do not count.
 func out_of_combat() -> bool:
-	if combat_age<5 or player.busy>0: return false
 	for enemy in enemies:
-		if enemy.awake and not enemy.dead and enemy.position.distance_to(player.position)<12: return false
+		if enemy.awake and not enemy.dead and not enemy.dormant: return false
 	return true
 
 func safe_checkpoint() -> bool:
@@ -773,6 +778,7 @@ func swap_weapon() -> void:
 func equip(index: int) -> void:
 	if index<0 or index>=Data.WEAPONS.size() or not run.owned[index]: toast("You do not own that weapon."); return
 	if not out_of_combat(): toast("Change equipment out of combat."); return
+	if player.busy>0: return
 	run.weapon = index
 	player.visual.equip(Data.WEAPONS[index])
 	save_run()

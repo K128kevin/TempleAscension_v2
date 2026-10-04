@@ -207,7 +207,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | F8 | Reset the run and turn off invulnerability |
 | F10 | Jump to this adaptation's crown ending and completion summary |
 | P | Hide/show the panel; shortcuts remain active |
-| Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click on the ground, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Any unit attacks by left clicking another unit (hero or statue) or with Shift + left click, and every attack can hit any other unit. Hits play their reactions but deal no damage and nothing dies; X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
+| Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click on the ground, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Any unit attacks by left clicking another unit (hero or statue) or with Shift + left click, and every attack can hit any other unit. Hits play their reactions but deal no damage and nothing dies (Execute works on any target there, whatever its health); X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
 
 The panel also offers an instant summit jump without extra XP. Bare
 1 and 2 cast assigned skills. Floor jumps retain level and point budgets, refill health/energy, and reset enemies,
@@ -371,8 +371,8 @@ as the warrior's do.
 | | 0 | Flurry (dagger) | 25 | 2 → 4 stabs of 100% → 275% |
 | | 5 | Volley (bow) | 40 | 15 → 30 arrows falling at random in the area aimed at (4.25 m radius), 80% → 150% each |
 | | 5 | Lightning Shot (bow) | 35 | 100% → 250%, leaping to 1 → 5 more enemies within 10 m of the last |
-| | 10 | Frenzy | 0 | Attacks 40% → 150% faster for 6 → 15 seconds; 30-second cooldown |
-| | 10 | Triple Slash (dagger) | 25 | Three cuts of 130% → 250% on the target and 2 → 4 enemies beside it |
+| | 5 | Frenzy | 0 | Attacks 40% → 150% faster for 6 → 15 seconds; 30-second cooldown |
+| | 10 | Triple Slash (dagger) | 25 | Three cuts of 130% → 250% on the target and on 2 → 4 more enemies around him (within 2.6 m, on any side) |
 | Utility | 0 | Slow Shot (bow) | 20 | The target moves 30% → 75% slower for 3 → 6 seconds |
 | | 0 | Weakening Strike (bow or dagger) | 15 | Critical strikes on the target deal 50% → 150% more for 6 seconds, in 2 → 5 stacks |
 | | 5 | Hide in Shadows | 20 | Unseen by enemies, moving 50% → 15% slower; out of combat only; ended by attacking, being struck or dashing |
@@ -422,7 +422,9 @@ award its XP again. XP and skill investment survive death and travel.
 
 Free respec is available in the attribute panel (C) at a safe floor entrance, out of combat; it
 refunds earned attribute/skill points and clears the hotbar. Equipment can change
-out of combat; skill assignments at any time. Maximum resource increases do not heal;
+out of combat; skill assignments at any time. "In combat" means an enemy is
+after the hero (awake to him and hunting him); his own attacks and skills do
+not put him in combat. Maximum resource increases do not heal;
 refunds clamp current resources. The Q healing spell has no charges; it spends 60
 energy, heals 60% of maximum health instantly and recharges after 20 seconds. E
 at a safe entrance opens the attribute panel; ascending restores health and energy.

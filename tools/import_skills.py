@@ -10,16 +10,15 @@ turn is set outright at every frame, so the blade runs where the swing
 sends it and never through the body or the shield (which the game keeps on
 the left forearm).
 
-  SkillCleave     a wide level sweep from right to left
+  SkillCleave     a backhand sweep from left to right behind a step
   SkillStrike     Powerful Strike: an overhead chop
   SkillStab       Vampiric Strike: a lunging thrust to the gut
-  SkillBash       Shield Bash: the shield shoved forward behind a step
+  SkillBash       Shield Bash: a backhand blow of the shield behind a step
   SkillExecute    the blade raised far behind the head and brought down
                   with the whole body, to the knees
   SkillSlam       Ground Slam: the blade brought down flat on the ground
                   ahead
-  SkillShockwave  Shockwave: the blade's pommel hammered down between the
-                  feet from a deep crouch
+  SkillShockwave  Shockwave: a violent stomp, stepping forward into it
   SkillCry        War Cry: blade thrust at the sky, shield flung wide, head
                   back
   SkillCharge     Shield Charge: the sprint, with the shield held out before
@@ -262,21 +261,62 @@ def author(name, pose):
 
 # ---- The clips ----
 
+# Cleave's, Shield Bash's and Shockwave's step: he steps forward into the blow and
+# brings the rear foot up after it, ending in his stance a step further on.
+# The game carries him over the ground as he steps (scripts/visual.gd
+# ROOT_ADVANCE keeps the same keys); here each foot is kept where it is on
+# the ground beneath him while he is carried past it.
+BASH_ADVANCE = [(0, 0), (.3, 0), (.5, .38), (.66, .4), (1, .4)]
+CLEAVE_ADVANCE = [(0, 0), (.32, 0), (.52, .38), (.66, .4), (1, .4)]
+STOMP_ADVANCE = [(0, 0), (.36, .1), (.56, .45), (.74, .5), (1, .5)]
+
+def step_feet(advance, t, left, right):
+    """The feet, each a list of (time, (forward, lift)) points of where it is
+    over the ground (forward of where it stood), kept there in the clip as he
+    is carried along by `advance`."""
+    carried = sample(advance, t)
+    for s, points in (('l', left), ('r', right)):
+        at = vsample([(k, (v[0], v[1], 0)) for k, v in points], t)
+        foot = PLANTED[s]+V(0, -(at.x-carried), at.y)
+        # (A raised knee comes up forward of the foot.)
+        leg(s, foot, KNEES[s]+V(0, -.6-.6*at.y, .5*at.y))
+
+def face_shield(direction):
+    """Rolls the shield forearm about its length so the shield's face looks
+    along `direction` (the board lies on the forearm's outer side, along its -Z)."""
+    fore = rig.pose.bones['lowerarm_l']
+    q = fore.matrix.to_quaternion()
+    along = q @ V(0, 1, 0)
+    want = Vector(direction)
+    want = (want-along*want.dot(along)).normalized()
+    now = -(q @ V(0, 0, 1))
+    now = (now-along*now.dot(along)).normalized()
+    angle = now.angle(want)
+    if now.cross(want).dot(along) < 0: angle = -angle
+    roll('lowerarm_l', angle)
+
 def cleave(t):
-    # Wound back to the right and swept level across to the left, the body
-    # turning with it; the shield swings the other way to balance.
-    turn = sample([(0, 0), (.3, -.55), (.42, -.5), (.6, .6), (.78, .55), (1, 0)], t)
-    hips(down=sample([(0, 0), (.4, .05), (.6, .08), (1, 0)], t))
-    rotate('pelvis', (0, 0, 1), turn*.4)
-    rotate('spine_01', (0, 0, 1), turn*.35)
-    rotate('spine_02', (0, 0, 1), turn*.3)
-    rotate('spine_03', (1, 0, 0), sample([(0, 0), (.4, -.05), (.6, .15), (1, 0)], t))
-    rotate('neck_01', (0, 0, 1), -turn*.5)
-    hand = vsample([(0, SWORD_HOME), (.3, V(-.62, .3, 1.3)), (.42, V(-.7, .15, 1.25)), (.52, V(-.3, -.6, 1.15)), (.6, V(.3, -.55, 1.1)), (.75, V(.5, -.1, 1.05)), (1, SWORD_HOME)], t)
-    blade = vsample([(0, V(-.2, -1, .3)), (.3, V(-.6, .6, .5)), (.42, V(-.7, .7, .1)), (.52, V(-.2, -1, 0)), (.6, V(.8, -.6, 0)), (.75, V(.9, .2, .2)), (1, V(-.2, -1, .3))], t)
-    sword(hand, V(-.8, .3, .9), blade)
-    guard(out=sample([(0, 0), (.4, .12), (.6, -.1), (1, 0)], t), forward=sample([(0, 0), (.5, .12), (1, 0)], t))
-    plant()
+    # A backhand sweep behind a step: the blade carried across the body to
+    # the left shoulder, its point back over it, the body coiled round to the
+    # left after it; then the left foot driven forward and the body uncoiled
+    # through the blow, the blade swept flat out across the front and away to
+    # the right, the back of the hand leading, and followed right round; the
+    # shield arm swings the other way to balance, and the rear foot is
+    # brought up after.
+    coil = sample([(0, 0), (.3, 1), (.38, 1), (.5, 0), (1, 0)], t)
+    sweep = sample([(0, 0), (.38, 0), (.6, 1), (.74, 1.05), (1, 0)], t)
+    hips(down=.04*coil+.1*sweep, forward=sample([(0, 0), (.3, -.04), (.52, .3), (.66, .36), (.9, .4), (1, .4)], t)-sample(CLEAVE_ADVANCE, t))
+    rotate('pelvis', (0, 0, 1), .3*coil-.35*sweep)
+    rotate('spine_01', (0, 0, 1), .35*coil-.35*sweep)
+    rotate('spine_02', (0, 0, 1), .3*coil-.3*sweep)
+    rotate('spine_02', (1, 0, 0), .05*coil+.18*sweep)
+    rotate('neck_01', (0, 0, 1), -.35*coil+.3*sweep)
+    hand = vsample([(0, SWORD_HOME), (.3, V(.22, -.12, 1.32)), (.38, V(.24, -.1, 1.34)), (.47, V(.1, -.62, 1.2)), (.52, V(-.25, -.7, 1.16)), (.6, V(-.62, -.3, 1.12)), (.74, V(-.64, -.05, 1.1)), (1, SWORD_HOME)], t)
+    blade = vsample([(0, V(-.2, -1, .3)), (.3, V(.5, .7, .4)), (.38, V(.55, .75, .3)), (.47, V(.45, -.9, .05)), (.52, V(-.35, -1, 0)), (.6, V(-.95, -.3, -.05)), (.74, V(-.85, .45, 0)), (1, V(-.2, -1, .3))], t)
+    sword(hand, vsample([(0, V(-.8, .3, .9)), (.3, V(-.1, -.7, 1.7)), (.47, V(-.3, -.6, 1.6)), (.6, V(-.9, -.2, 1.5)), (1, V(-.8, .3, .9))], t), blade)
+    guard(out=-.05*coil+.32*sweep, forward=.05*coil-.25*sweep, up=-.05*sweep)
+    step_feet(CLEAVE_ADVANCE, t, [(0, (0, 0)), (.32, (0, 0)), (.44, (.22, .1)), (.52, (.42, 0)), (1, (.42, 0))],
+        [(0, (0, 0)), (.66, (0, 0)), (.78, (.22, .08)), (.9, (.4, 0)), (1, (.4, 0))])
 
 def strike(t):
     # Raised high overhead, then brought straight down with a bend of the
@@ -308,17 +348,28 @@ def stab(t):
     plant(lead='l', forward=.3*thrust)
 
 def bash(t):
-    # The shield drawn in to the chest and shoved out behind a step of the
-    # left foot, the shoulder behind it; the sword hangs back and clear.
-    draw = sample([(0, 0), (.28, 1), (.38, 1), (.5, 0), (1, 0)], t)
-    shove = sample([(0, 0), (.38, 0), (.5, 1), (.64, 1), (1, 0)], t)
-    hips(forward=.16*shove, down=.06*shove)
-    rotate('pelvis', (0, 0, 1), -.2*draw+.35*shove)
-    rotate('spine_01', (0, 0, 1), -.15*draw+.3*shove)
-    rotate('spine_02', (1, 0, 0), .2*shove)
-    guard(forward=-.1*draw+.45*shove, out=.05*draw-.05*shove, up=.05*shove)
+    # A backhand blow with the shield behind a step: the shield drawn across
+    # the chest to the right, the body coiled round after it and the weight
+    # sat back; then the left foot driven forward and the whole body uncoiled
+    # through it, the shield arm flung out forward and to the left, the back
+    # of the board leading, the shoulder behind it, and followed through
+    # wide; the sword kept back and clear, the rear foot brought up after.
+    coil = sample([(0, 0), (.3, 1), (.36, 1), (.48, 0), (1, 0)], t)
+    swing = sample([(0, 0), (.34, 0), (.5, 1), (.64, 1.15), (.8, .5), (1, 0)], t)
+    hips(down=.05*coil+.1*swing, forward=sample([(0, 0), (.3, -.06), (.5, .3), (.66, .36), (.9, .4), (1, .4)], t)-sample(BASH_ADVANCE, t))
+    rotate('pelvis', (0, 0, 1), -.4*coil+.45*swing)
+    rotate('spine_01', (0, 0, 1), -.4*coil+.45*swing)
+    rotate('spine_02', (0, 0, 1), -.3*coil+.35*swing)
+    rotate('spine_02', (1, 0, 0), -.05*coil+.28*swing)
+    rotate('neck_01', (0, 0, 1), .3*coil-.35*swing)
+    hand = vsample([(0, V(.35, -.02, .97)), (.3, V(-.1, -.34, 1.2)), (.36, V(-.12, -.34, 1.22)), (.5, V(.48, -.78, 1.28)), (.64, V(.78, -.42, 1.2)), (.8, V(.55, -.1, 1.0)), (1, V(.35, -.02, .97))], t)
+    pole = vsample([(0, V(.65, .3, 1.0)), (.3, V(.5, -.4, 1.7)), (.5, V(1.0, -.1, 1.4)), (.64, V(1.0, .4, 1.2)), (1, V(.65, .3, 1.0))], t)
+    arm('l', hand, pole)
+    face = vsample([(0, V(1, 0, 0)), (.3, V(0, -1, .1)), (.5, V(.4, -1, 0)), (.64, V(1, -.5, 0)), (1, V(1, 0, 0))], t)
+    face_shield(face)
     sword(V(-.42, .25, 1.0), V(-.85, .3, .9), V(-.3, -.8, -.2))
-    plant(lead='l', forward=.35*shove, lift=.08*math.sin(math.pi*sample([(0, 0), (.38, 0), (.56, 1), (1, 1)], t)))
+    step_feet(BASH_ADVANCE, t, [(0, (0, 0)), (.3, (0, 0)), (.42, (.24, .12)), (.5, (.42, 0)), (1, (.42, 0))],
+        [(0, (0, 0)), (.64, (0, 0)), (.76, (.22, .08)), (.88, (.4, 0)), (1, (.4, 0))])
 
 def execute(t):
     # The blade carried far back over the shoulder as the body arches, then
@@ -394,20 +445,27 @@ def leap(t):
     else: plant(lead='l', forward=.3*land)
 
 def shockwave(t):
-    # A deep crouch, the sword raised with it, and the pommel hammered down
-    # between the feet; the shield arm flung out for balance.
-    up = sample([(0, 0), (.3, 1), (.44, 1), (1, 0)], t)
-    down = sample([(0, 0), (.44, 0), (.56, 1), (.76, 1), (1, 0)], t)
-    hips(down=.1*up+.42*down, forward=.02*down)
-    rotate('spine_01', (1, 0, 0), -.1*up+.5*down)
-    rotate('spine_02', (1, 0, 0), -.1*up+.3*down)
-    rotate('spine_03', (1, 0, 0), .15*down)
-    rotate('Head', (1, 0, 0), .15*up-.25*down)
-    hand = vsample([(0, SWORD_HOME), (.3, V(-.25, .15, 1.95)), (.44, V(-.25, .1, 2.0)), (.56, V(-.3, -.42, .3)), (.76, V(-.3, -.4, .26)), (1, SWORD_HOME)], t)
-    blade = vsample([(0, V(-.2, -1, .3)), (.3, V(0, .5, 1)), (.44, V(0, .45, 1)), (.56, V(0, -.3, 1)), (.76, V(0, -.3, 1)), (1, V(-.2, -1, .3))], t)
-    sword(hand, V(-.85, 0, 1.5) if t < .5 else V(-.85, -.1, .7), blade)
-    guard(out=.3*down, up=.05*down, forward=-.05*down)
-    plant()
+    # A violent stomp: the left knee hauled up high as he rears back, both
+    # arms flung up and the chest thrown open; then the foot driven down a
+    # stride ahead with the whole body behind it, the hips dropped deep, the
+    # back folded over it and both arms hurled down and out; held, and the
+    # rear foot brought up as he rises.
+    rear = sample([(0, 0), (.36, 1), (.42, 1), (.54, 0), (1, 0)], t)
+    drive = sample([(0, 0), (.42, 0), (.56, 1), (.74, 1), (1, 0)], t)
+    hips(down=-.05*rear+.4*drive, forward=sample([(0, 0), (.36, -.02), (.56, .34), (.74, .36), (.95, .5), (1, .5)], t)-sample(STOMP_ADVANCE, t))
+    rotate('pelvis', (1, 0, 0), -.12*rear+.3*drive)
+    rotate('spine_01', (1, 0, 0), -.25*rear+.45*drive)
+    rotate('spine_02', (1, 0, 0), -.18*rear+.3*drive)
+    rotate('spine_03', (1, 0, 0), -.08*rear+.15*drive)
+    rotate('pelvis', (0, 0, 1), .1*rear-.08*drive)
+    rotate('neck_01', (1, 0, 0), -.12*rear+.05*drive)
+    rotate('Head', (1, 0, 0), .2*rear-.3*drive)
+    hand = vsample([(0, SWORD_HOME), (.36, V(-.45, .12, 1.75)), (.42, V(-.46, .14, 1.78)), (.56, V(-.68, -.2, .62)), (.74, V(-.66, -.18, .6)), (1, SWORD_HOME)], t)
+    blade = vsample([(0, V(-.2, -1, .3)), (.36, V(-.4, .3, .9)), (.42, V(-.4, .35, .9)), (.56, V(-.8, -.4, -.3)), (.74, V(-.8, -.4, -.3)), (1, V(-.2, -1, .3))], t)
+    sword(hand, V(-.9, .3, 1.5) if t < .48 else V(-1.0, .2, .9), blade)
+    guard(out=.25*rear+.4*drive, up=.35*rear-.15*drive, forward=-.05*rear+.05*drive)
+    step_feet(STOMP_ADVANCE, t, [(0, (0, 0)), (.18, (.04, .14)), (.38, (.18, .42)), (.44, (.24, .42)), (.56, (.5, 0)), (1, (.5, 0))],
+        [(0, (0, 0)), (.74, (0, 0)), (.84, (.26, .08)), (.94, (.5, 0)), (1, (.5, 0))])
 
 def cry(t):
     # The blade thrust straight up, the shield flung wide, the chest out and

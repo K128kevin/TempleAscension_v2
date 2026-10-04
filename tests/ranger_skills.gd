@@ -234,11 +234,13 @@ func test():
 	# Triple Slash.
 	hero({"triple_slash":1},5)
 	foe = dummy(1.6)
-	var beside: Array = [dummy(1.9,35),dummy(1.9,-35),dummy(2.2,65)]
+	var at_back = dummy(1.2,180)
+	var beside: Array = [at_back,dummy(1.9,35),dummy(2.2,65),dummy(3.4,-35)]
 	check(game.skills.cast("triple_slash",foe.position) and is_equal_approx(game.run.energy,75.0) and game.player.visual.state=="SkillTripleSlash","Triple Slash costs 25 energy and has its own motion")
 	play(1.3)
 	var others = beside.filter(func(e): return lost(e)>0)
-	check(within(foe,3,130) and others.size()==2 and within(others[0],3,130),"Rank 1 cuts the target three times for 130%% and two beside it (%.1f, %d beside)" % [lost(foe),others.size()])
+	check(within(foe,3,130) and others.size()==2 and within(others[0],3,130),"Rank 1 cuts the target three times for 130%% and the two nearest around him (%.1f, %d others)" % [lost(foe),others.size()])
+	check(lost(at_back)>0 and lost(beside[3])==0,"Those it reaches are around him, behind him too, not beside the target")
 	clear()
 
 	# Slow Shot.

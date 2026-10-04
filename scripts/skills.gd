@@ -2,6 +2,7 @@ extends Node
 const Data = preload("res://scripts/data.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const Shockwave = preload("res://scripts/shockwave.gd")
+const WarCry = preload("res://scripts/war_cry.gd")
 const Art = preload("res://scripts/assets.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const RangerFx = preload("res://scripts/ranger_fx.gd")
@@ -15,7 +16,7 @@ var barrier_time = 0.0
 var cooldowns: Dictionary = {}
 # Shield Charge under way: how long he runs on, which way, and who he has hit.
 var charge: Dictionary = {}
-# Shockwaves under way (scripts/shockwave.gd).
+# Shockwaves and War Cry rings under way (scripts/shockwave.gd, war_cry.gd).
 var waves: Array = []
 # Offensive and Defensive Rhythm: the stacks built, and how long they last.
 # Tests fix the crit roll: -1 rolls, 0 never crits, 1 always does.
@@ -53,7 +54,8 @@ const POISON_SECONDS = 5.0
 const FRENZY_COOLDOWN = 30.0
 const SAND_COOLDOWN = 45.0
 const TRANQ_COOLDOWN = 45.0
-const TRIPLE_BESIDE = 2.4
+# How far round him Triple Slash reaches the others it hits.
+const TRIPLE_AROUND = 2.6
 # The ranger's blows made at arm's length, aimed by facing as the warrior's.
 const RANGER_BLOWS = ["flurry","triple","sand","ambush"]
 # Each of the ranger's skills has its own motion (tools/import_ranger.py):
@@ -77,9 +79,13 @@ const DASH_CLEAVE_SPEED = 1.6
 const SWINGS = ["cleave","slam","strike","bash","vampiric","shadow","execute","cry","charge","shockwave"]
 # Each of the warrior's skills has a swing of its own (tools/import_skills.py):
 # its clip, how long it plays, and how far through it the blow lands.
-const WARRIOR_CLIPS = {"cleave":["SkillCleave",1.0,.52],"strike":["SkillStrike",1.0,.55],"vampiric":["SkillStab",.9,.52],"shadow":["SkillStab",.9,.52],
+const WARRIOR_CLIPS = {"cleave":["SkillCleave",1.0,.52],"strike":["SkillStrike",1.0,.55],
 	"bash":["SkillBash",.9,.5],"execute":["SkillExecute",1.3,.58],"slam":["SkillSlam",1.1,.52],"shockwave":["SkillShockwave",1.2,.56],
 	"cry":["SkillCry",1.0,.3],"charge":["SkillCharge",1.0,.82],"leap":["SkillLeap",1.0,.56]}
+# Vampiric and Shadow Strike are struck with the normal attack's swings, run
+# on from (and into) them as they are (Game.swing_sword), the blade glowing
+# as they land: blood red and shadowy purple.
+const SWORD_CHAIN_SKILLS = {"vampiric":Color(.95,.03,.06),"shadow":Color(.55,.12,1.0)}
 # Shield Charge: how fast he goes, and how far the ones in his way are thrown.
 const CHARGE_SPEED = 11.0
 # Firebolt is the Oracle's fireball: how far it flies, and its blast.
@@ -199,7 +205,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	if s.effect=="execute":
 		var limit: float = Book.values(id,level).y
 		var victim = single_target(at,direction.normalized())
-		if victim == null or victim.hp/victim.max_hp>=limit*.01:
+		if victim == null or not executable(victim,limit):
 			game.toast("Execute needs an enemy below %d%% health." % limit)
 			return false
 	if not free: game.run.energy -= cost(id)
@@ -214,7 +220,6 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	# Stepping into a strike, he stops short of the unit it is aimed at (or
 	# drives it back as the blow lands).
 	game.player.begin_strike(at)
-	game.combat_age = 0
 	var duration = .7
 	var contact = .35
 	var clip = "Cast"
@@ -269,6 +274,9 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 			clip = own[0]
 			duration = maxf(Data.MELEE_MINIMUM,own[1]/haste)
 			contact = duration*own[2]
+		elif game.run.weapon==1 and SWORD_CHAIN_SKILLS.has(s.effect) and game.player.visual.clips.has(Motion.SWORD_OPENER):
+			# (The swing's time and its blow's moment are the normal attack's.)
+			clip = Motion.SWORD_OPENER
 	if s.effect=="leap":
 		var gap: float = game.player.position.distance_to(at)
 		# He lands beside a unit standing at the target, not on it.
@@ -290,7 +298,14 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		game.player.visual.hold_at(POWER_HOLD,maxf(0.0,contact-POWER_DRAW*.78))
 		if is_instance_valid(charge_glow): charge_glow.queue_free()
 		charge_glow = RangerFx.charge(game.player.visual,contact)
+	elif clip==Motion.SWORD_OPENER:
+		game.swing_sword(duration)
+		game.player.visual.tint_blade(SWORD_CHAIN_SKILLS[s.effect],duration)
 	else: game.player.visual.play(clip,duration)
+	# Cleave and the strikes struck with the normal attack's swings whistle as
+	# its swings do, a moment before the blow.
+	if s.effect=="cleave" or SWORD_CHAIN_SKILLS.has(s.effect):
+		game.scheduled.append({"time":maxf(.01,contact-.12),"type":"swing","sound":"swing-spear" if game.run.weapon==0 else "swing-blade"})
 	game.player.busy = duration
 	game.player.cooldown = duration
 	if contacts.size()>1:
@@ -455,6 +470,11 @@ func figure(amount: float) -> String:
 func span(percent: float, tag: String) -> String:
 	return "%d–%d" % [roundi(Data.damage_tag(game.run,tag,10.0)*percent*.01),roundi(Data.damage_tag(game.run,tag,15.0)*percent*.01)]
 
+# Whether Execute may be used on `victim`: below `limit` percent of its
+# health, or anywhere in the debug playground, where any target will do.
+func executable(victim, limit: float) -> bool:
+	return game.playground != null or victim.hp/victim.max_hp<limit*.01
+
 # How much Offensive Rhythm's stacks multiply the hero's damage by.
 func rhythm_boost() -> float:
 	return 1.0+offense_stacks*Data.passive(game.run,"offensive_rhythm")*.01
@@ -569,6 +589,11 @@ func execute(job: Dictionary) -> void:
 			ground_blow(origin,v.y,SHAKE_SLAM,Vector3.ZERO,360.0,"rock-impact")
 		"cry":
 			for enemy in targets(origin,v.x): enemy.rally(v.y,v.z)
+			# The red glow on his blade bursts from it as a ring over the ground
+			# the cry covers.
+			var ring = WarCry.make(origin+Vector3.UP*game.world.lift(origin),v.x)
+			game.world.add_child(ring)
+			waves.append(ring)
 			game.float_text(game.player.position+Vector3.UP*2.3,"War Cry!",Color(1,.8,.4))
 		"charge":
 			# The blow at the end of the run: whoever is still before him.
@@ -599,7 +624,7 @@ func execute(job: Dictionary) -> void:
 						victim.refresh_dots("curse")
 				"execute":
 					# The opening may have closed since the swing began.
-					if victim.hp/victim.max_hp>=v.y*.01: return
+					if not executable(victim,v.y): return
 					strike(victim,blow)
 			game.player.landed_on(victim)
 		"barrier": barrier = value; barrier_time = s.duration
@@ -652,9 +677,9 @@ func execute(job: Dictionary) -> void:
 		"triple":
 			var main = single_target(at,direction)
 			if main == null: return
-			# Those beside the one he cuts at, nearest it first.
-			var beside: Array = arc_targets(origin,direction,170.0,CLEAVE_REACH).filter(func(e): return e != main and e.position.distance_to(main.position)<=TRIPLE_BESIDE)
-			beside.sort_custom(func(a,b): return a.position.distance_squared_to(main.position)<b.position.distance_squared_to(main.position))
+			# Those around him, on every side, nearest him first.
+			var beside: Array = arc_targets(origin,direction,360.0,TRIPLE_AROUND).filter(func(e): return e != main)
+			beside.sort_custom(func(a,b): return a.position.distance_squared_to(origin)<b.position.distance_squared_to(origin))
 			for enemy in [main]+beside.slice(0,int(v.y)): strike(enemy,attack_damage(v.x,Data.scaling_tag(int(game.run.weapon))))
 			game.player.landed_on(main)
 		"sand":

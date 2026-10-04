@@ -8,6 +8,7 @@ const ShieldArm = preload("res://scripts/shield_arm.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const SwordTrail = preload("res://scripts/sword_trail.gd")
 const BladeCharge = preload("res://scripts/blade_charge.gd")
+const BladeGlow = preload("res://scripts/blade_glow.gd")
 # A slain statue breaks apart into individual physics-driven stone fragments:
 # a front sweeps down the body, the stone above it cracking loose (the statue
 # shader's shatter) and each fragment let go as the front reaches it. A blast
@@ -85,7 +86,7 @@ var ground_speed = 0.0
 # (Actor.tick).
 # (The sword chain's swings each walk him a stride on over the swing's share
 # of the clip, Motion.SWORD_SWING_SHARE; its recovery stands still.)
-const ROOT_ADVANCE = {"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustR":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustL":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]]}
+const ROOT_ADVANCE = {"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustR":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustL":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]],"SkillCleave":[[0.0,0.0],[.32,0.0],[.52,.38],[.66,.4],[1.0,.4]],"SkillBash":[[0.0,0.0],[.3,0.0],[.5,.38],[.66,.4],[1.0,.4]],"SkillShockwave":[[0.0,0.0],[.36,.1],[.56,.45],[.74,.5],[1.0,.5]]}
 var travelled = 0.0
 var pending_travel = 0.0
 
@@ -211,8 +212,10 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			mesh.material_override = Art.bronze()
 		elif mesh.name.begins_with("RangerQuiver"):
 			# Tooled leather and bronze, full of fletched arrows
-			# (assets/shaders/quiver.gdshader).
-			mesh.visible = hero_class == "ranger"
+			# (assets/shaders/quiver.gdshader). Worn only while he has the bow
+			# in hand (equip()).
+			if hero_class == "ranger": quivers.append(mesh)
+			mesh.visible = hero_class == "ranger" and weapon_kind == "bow"
 			mesh.material_override = Art.quiver()
 		elif mesh.name.begins_with("RangerDagger"):
 			# Worn in its sheath on the outside of the left thigh, hilt up.
@@ -362,7 +365,11 @@ func derive_walks() -> void:
 			library.add_animation(name,made)
 		clips[name] = prefix+name
 
+# The ranger's quiver, on his back while he carries the bow.
+var quivers: Array = []
 func equip(weapon: String) -> void:
+	for quiver in quivers:
+		if is_instance_valid(quiver): quiver.visible = weapon == "bow"
 	carry_in_hand = null
 	if is_instance_valid(shield_attachment): shield_attachment.queue_free()
 	shield_item = null
@@ -375,6 +382,8 @@ func equip(weapon: String) -> void:
 	sword_trail = null
 	if is_instance_valid(blade_charge): blade_charge.queue_free()
 	blade_charge = null
+	if is_instance_valid(blade_glow): blade_glow.queue_free()
+	blade_glow = null
 	# The hero's hard cuts leave a wake behind the blade, and Ground Slam
 	# charges it.
 	if weapon in ["sword","dagger"] and not is_stone:
@@ -382,6 +391,8 @@ func equip(weapon: String) -> void:
 		add_child(sword_trail)
 		# (Carried on the blade once there is one.)
 		blade_charge = BladeCharge.new()
+		# War Cry's red glow on the sword.
+		if weapon == "sword": blade_glow = BladeGlow.new()
 	if is_instance_valid(equipment):
 		equipment.queue_free()
 		equipment = null
@@ -1237,12 +1248,26 @@ var sword_trail: MeshInstance3D
 # are slower or outside it, and leave none.
 const SKILL_WAKE_SPEED = 15.0
 const SKILL_WAKE = [.25,.05]
+# (Cleave's sweep is followed far round after the blow, its wake with it.)
+const SKILL_WAKES = {"SkillCleave":[.16,.12]}
 var blade_tip_was = null
 # Ground Slam's charge on the blade (scripts/blade_charge.gd): how strong it
 # is over the swing, as shares of the clip (forming as he raises the sword,
 # surging as he drives it down, breaking off it as it meets the ground,
 # fading after the blow).
 var blade_charge: Node3D
+# War Cry's red glow on the sword (scripts/blade_glow.gd): gathering as he
+# raises it to shout, full as the cry bursts from it (the clip's contact,
+# when the ring sets out over the ground: scripts/war_cry.gd), and gone with
+# the ring a moment after.
+var blade_glow: Node3D
+const CRY_GATHER = [.02,.26]
+const CRY_SPENT = .4
+# A swing's own glow (tint_blade()): its colour, and how long is left of the
+# swing it lasts over, of how long.
+var blade_tint = Color.RED
+var tint_left = 0.0
+var tint_span = 0.0
 var slam_struck = false
 var slam_u = -1.0
 # How near the ground (metres, at life size) the blade's point is when it
@@ -1270,6 +1295,26 @@ func slam_strike_check() -> void:
 		blade_charge.discharge(Vector3(point_at.x,global_position.y,point_at.z))
 	var light_height: float = (blade_charge.light.global_position.y-global_position.y)/rig.scale.x
 	blade_charge.shed_light(0.0 if slam_struck else slam_charge(slam_u)*clampf((light_height-SLAM_LIGHT_LOW)/(SLAM_LIGHT_HIGH-SLAM_LIGHT_LOW),0.0,1.0))
+
+# The blade glowing `color` over a swing `seconds` long (Vampiric and Shadow
+# Strike).
+func tint_blade(color: Color, seconds: float) -> void:
+	blade_tint = color
+	tint_span = maxf(.01,seconds)
+	tint_left = tint_span
+
+# How strongly the blade glows `u` of the way through a tinted swing: lit as
+# it winds up, full as the blow lands (a little over half way), fading after.
+static func swing_glow(u: float) -> float:
+	if u >= 1.0: return 0.0
+	return smoothstep(0.0,.3,u)*(1.0-smoothstep(.62,1.0,u))
+
+# How strongly the sword glows `u` of the way through War Cry's clip, whose
+# cry bursts out at `contact`.
+static func cry_glow(u: float, contact: float) -> float:
+	if u < 0.0: return 0.0
+	if u <= contact: return smoothstep(CRY_GATHER[0],CRY_GATHER[1],u)
+	return 1.0-smoothstep(contact,CRY_SPENT,u)
 
 # How charged the blade is `u` of the way through Ground Slam's swing.
 static func slam_charge(u: float) -> float:
@@ -1620,7 +1665,8 @@ func advance(dt: float) -> void:
 			u = animator.current_animation_position/animator.current_animation_length
 		if not cutting and u >= 0.0 and blade_tip_was != null and dt > 0.0:
 			var speed: float = (tip-blade_tip_was).length()/dt/rig.scale.x
-			cutting = not dead and speed > SKILL_WAKE_SPEED and u >= contact-SKILL_WAKE[0] and u <= contact+SKILL_WAKE[1]
+			var wake: Array = SKILL_WAKES.get(state,SKILL_WAKE)
+			cutting = not dead and speed > SKILL_WAKE_SPEED and u >= contact-wake[0] and u <= contact+wake[1]
 		blade_tip_was = tip
 		sword_trail.step(dt,cutting,blade*Vector3(0,.42,0),blade*Vector3(0,1.02,0))
 		if is_instance_valid(blade_charge):
@@ -1629,6 +1675,13 @@ func advance(dt: float) -> void:
 			if slam_u < 0.0: slam_struck = false
 			blade_charge.step(dt,slam_charge(slam_u))
 			slam_strike_check()
+		if is_instance_valid(blade_glow):
+			if blade_glow.get_parent() != weapon_item: blade_glow.attach(weapon_item,.42,1.02)
+			tint_left = maxf(0.0,tint_left-dt)
+			var cry: float = cry_glow(u if state == "SkillCry" and not dead else -1.0,skill_contact("SkillCry"))
+			var tinted: float = 0.0 if dead or tint_span <= 0.0 else swing_glow(1.0-tint_left/tint_span)
+			blade_glow.tint(BladeGlow.GLOW if cry >= tinted else blade_tint)
+			blade_glow.step(maxf(cry,tinted))
 
 # The forward travel to move the unit by since last asked (Actor.tick).
 # How much further the current clip will carry the unit (not yet taken).
