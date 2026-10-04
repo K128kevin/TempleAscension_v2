@@ -39,8 +39,10 @@ func test():
 		var area: Rect2 = root.get_visible_rect()
 		var left: Rect2 = hud.health.get_global_rect()
 		var right: Rect2 = hud.energy.get_global_rect()
-		check(left.position.x<area.size.x*.15 and left.position.y>area.size.y*.65,"Health anchored bottom-left at "+str(size))
-		check(right.end.x>area.size.x*.85 and right.position.y>area.size.y*.65,"Energy anchored bottom-right at "+str(size))
+		# Either side of the hotbar, close to it, at the foot of the screen.
+		var bar: Rect2 = hud.weapon_slots[0].get_global_rect().merge(hud.weapon_slots[-1].get_global_rect())
+		check(left.end.x<bar.position.x and bar.position.x-left.end.x<30 and left.position.y>area.size.y*.65,"Health sits just left of the hotbar at "+str(size))
+		check(right.position.x>bar.end.x and right.position.x-bar.end.x<30 and right.position.y>area.size.y*.65,"Energy sits just right of the hotbar at "+str(size))
 		check(area.encloses(left) and area.encloses(right),"Orbs fit the viewport at "+str(size))
 		var first: Rect2 = hud.weapon_slots[0].get_global_rect()
 		var last: Rect2 = hud.weapon_slots[-1].get_global_rect()

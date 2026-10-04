@@ -752,6 +752,12 @@ Big Cinematic" (PMSFX_ROCKCrsh_Designed_Rock_Impact_Carsh_Big_Cinematic_41RI2_24
 unedited, supplied by the user: a 0.9 s crash of breaking rock. It plays as Thunder Slam's
 and Shockwave's blows meet the ground. Its licence follows the user's PMSFX terms.
 
+`assets/audio/lightning-zap.wav` and `assets/audio/power-whoosh.wav` are
+synthesised by `tools/make_sounds.py` (noise, tones and filters; no recording):
+the snap, stuttering arc and crackling sparks of Lightning Shot striking (each
+leap of it crackles again, fainter), and the quick, heavy rush of air and deep
+punch of Power Shot striking. They are original to this project.
+
 `assets/audio/fountain-trickle.wav` is the original game's
 `public/sfx-fountain-trickle.m4a`, decoded without normalization or editing to
 48 kHz stereo 16-bit PCM. macOS `afconvert` performed the decode; its extensible

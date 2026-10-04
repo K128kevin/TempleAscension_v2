@@ -406,6 +406,7 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 			var around: Array = [] if extra.get("burst",false) else targets(enemy.position,POWER_BURST).filter(func(e): return e != enemy)
 			extra.burst = true
 			strike(enemy,p.damage,"physical",0.0,StoneFragment.impact(p.direction,true),true,2)
+			game.sound.play("power-whoosh",-5)
 			for other in around: strike(other,p.damage,"physical",0.0,StoneFragment.impact(other.position-enemy.position,true),true,2)
 			passing.append([RangerFx.burst(game.world,enemy.position+Vector3.UP,Color(1,.9,.6,.8),POWER_BURST,36),.8])
 			game.shake(.1)
@@ -418,6 +419,7 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 			weaken(enemy,extra.percent,extra.cap)
 		"lightning":
 			strike(enemy,p.damage,"lightning",0.0,impact,true,2)
+			game.sound.play("lightning-zap",-8)
 			# It leaps on from one to the next, never to the same twice, each
 			# leap 20% weaker than the one before (LIGHTNING_FADE).
 			var struck: Array = [enemy]
@@ -429,6 +431,8 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 				var next = choices[0]
 				passing.append([RangerFx.bolt(game.world,from.position+Vector3.UP*1.1,next.position+Vector3.UP*1.1),.22])
 				strike(next,attack_damage(extra.percent,"ranged")*pow(LIGHTNING_FADE,leap+1),"lightning",0.0,Vector3.ZERO,true,2)
+				# (Each leap crackles, fainter as it fades.)
+				game.sound.play("lightning-zap",-12-leap*2)
 				struck.append(next)
 				from = next
 		_: strike(enemy,p.damage,"physical",0.0,impact,p.skill,2)

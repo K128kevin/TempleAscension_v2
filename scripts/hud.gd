@@ -21,7 +21,6 @@ var direction: Label
 var enemy_arrow: Polygon2D
 const ARROW_SHOW_AT = 5
 const ARROW_RADIUS = 92.0
-var recovery: Label
 var prompt: Label
 var boss_bar: ProgressBar
 var boss_name: Label
@@ -29,6 +28,15 @@ var boss_name: Label
 # each a small square with its icon, its stacks in the corner, and a bar
 # under it running down with the time it has left.
 const EFFECT_ICON = 32
+# The hotbar and the orbs either side of it are drawn at this scale of their
+# laid-out sizes, this far up from the bottom of the screen, the orbs this far
+# out from the bar. (No line of controls runs under them: the README lists
+# them.)
+const BAR_SCALE = .7
+const BAR_WIDTH = 356.0
+const BAR_BOTTOM = 16.0
+const ORB_HEIGHT = 182.0
+const ORB_GAP = 10.0
 const EFFECT_GAP = 6
 var effect_row: Control
 var effect_slots: Array[Dictionary] = []
@@ -90,12 +98,6 @@ func setup(owner_game) -> void:
 	health = left.orb; hp_text = left.value
 	var right = make_orb(true)
 	energy = right.orb; en_text = right.value
-	recovery = label("",13,cream,root)
-	anchor(recovery,Vector2(0,1),Vector2(20,-26),Vector2(180,22))
-	recovery.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var energy_caption = label("RMB + 1–4 · Skills",13,cream,root)
-	anchor(energy_caption,Vector2(1,1),Vector2(-208,-26),Vector2(188,22))
-	energy_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	objective = label("",20,gold,root)
 	anchor(objective,Vector2(1,0),Vector2(-464,22),Vector2(440,28))
 	objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -116,7 +118,9 @@ func setup(owner_game) -> void:
 	var row = Control.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(row)
-	anchor(row,Vector2(.5,1),Vector2(-178,-124),Vector2(356,56))
+	# Drawn at BAR_SCALE of its laid-out size, low and centred, between the orbs.
+	anchor(row,Vector2(.5,1),Vector2(-BAR_WIDTH*BAR_SCALE*.5,-BAR_BOTTOM-56*BAR_SCALE),Vector2(BAR_WIDTH,56))
+	row.scale = Vector2.ONE*BAR_SCALE
 	idle_style = panel_style(Color(.035,.032,.028,.94),Color(.37,.31,.21))
 	selected_style = panel_style(Color(.15,.115,.065,.97),gold)
 	selected_style.set_border_width_all(2)
@@ -168,14 +172,11 @@ func setup(owner_game) -> void:
 	effect_row = Control.new()
 	effect_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(effect_row)
-	anchor(effect_row,Vector2(.5,1),Vector2(-200,-170),Vector2(400,EFFECT_ICON+8))
+	anchor(effect_row,Vector2(.5,1),Vector2(-200,-BAR_BOTTOM-56*BAR_SCALE-6-(EFFECT_ICON+8)),Vector2(400,EFFECT_ICON+8))
 	effect_row.visible = false
-	var controls = label("LMB Move / Attack · RMB + 1–4 Skills · SPACE Evade · Q Heal · R Walk / Run · X Bow / Dagger · C Attributes · K Skills · I Equipment · Alt+Z Hide UI",13,Color(.7,.68,.60),root)
-	anchor(controls,Vector2(.5,1),Vector2(-400,-30),Vector2(800,22))
-	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt = label("",19,gold,root)
-	# (Above the row of buffs and debuffs.)
-	anchor(prompt,Vector2(.5,1),Vector2(-400,-212),Vector2(800,28))
+	# (Above the orbs, and so above the row of buffs and debuffs.)
+	anchor(prompt,Vector2(.5,1),Vector2(-400,-BAR_BOTTOM-ORB_HEIGHT*BAR_SCALE-36),Vector2(800,28))
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice = label("",21,cream,root)
 	anchor(notice,Vector2(.5,1),Vector2(-390,-290),Vector2(780,65))
@@ -194,7 +195,10 @@ func make_orb(is_energy: bool) -> Dictionary:
 	var holder = Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(holder)
-	anchor(holder,Vector2(1 if is_energy else 0,1),Vector2(-204 if is_energy else 24,-214),Vector2(180,182))
+	# Close either side of the hotbar, at its scale, their feet level with it.
+	var beside = BAR_WIDTH*BAR_SCALE*.5+ORB_GAP
+	anchor(holder,Vector2(.5,1),Vector2(beside if is_energy else -beside-180*BAR_SCALE,-BAR_BOTTOM-ORB_HEIGHT*BAR_SCALE),Vector2(180,ORB_HEIGHT))
+	holder.scale = Vector2.ONE*BAR_SCALE
 	var title = label("ENERGY" if is_energy else "HEALTH",16,gold,holder)
 	title.size = Vector2(180,24)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -295,7 +299,6 @@ func tick(dt: float) -> void:
 	var hovered_skill: String = r.hotbar[hovered_slot-1] if hovered_slot>0 else (panels.ATTACK if hovered_slot==0 else "")
 	if not hovered_skill.is_empty(): panels.show_tip(hovered_skill,weapon_slots[hovered_slot].get_global_rect())
 	elif panels.hovered.is_empty() and is_instance_valid(panels.tip): panels.tip.visible = false
-	recovery.text = "Q · Heal 60%% · 60 energy%s" % [" · %ds" % ceili(game.heal_cd) if game.heal_cd>0 else ""]
 	prompt.text = ""
 	if game.mode == "playing":
 		if outdoors: prompt.text = outdoor_prompt()
@@ -303,7 +306,7 @@ func tick(dt: float) -> void:
 		elif remaining==0 and game.has_way_on(): prompt.text = "The stairway is open. %s" % ("Press E to %s" % ("descend" if r.place in Data.DUNGEONS else "ascend") if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
 		elif r.place in Data.DUNGEONS and r.floor>0 and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair"
 		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
-		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest · C attributes · K skills"
+		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
 	boss_name.visible = boss_bar.visible
 	if boss_bar.visible:

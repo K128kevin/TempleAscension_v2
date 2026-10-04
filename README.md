@@ -38,10 +38,11 @@ Clicking the ground cancels a combat order. While idle, the hero faces the curso
 between the camera and the hero, or an enemy near a wall, turns semi-transparent. Once
 five or fewer statues remain, an arrow around the hero points to the nearest one.
 
-The HUD has a red health orb at bottom left, a blue energy orb at bottom right,
-and four compact clickable ability icons centered below the action: LMB basic
-attack, RMB skill, 1 and 2, each skill with its icon and, while it recharges,
-the seconds left. Above them a row shows what is on the hero: each buff
+The HUD keeps to the foot of the screen: a compact row of clickable ability
+icons in the middle (LMB basic attack, RMB and 1 to 4, each skill with its icon
+and, while it recharges, the seconds left), with the red health orb just to its
+left and the green energy orb just to its right. No line of controls is shown
+on screen; they are listed above. Above them a row shows what is on the hero: each buff
 (gold-framed) and debuff (red-framed) as an icon, its stacks in the corner,
 with a thin bar under it running down with the time it has left; hovering one
 names it. Class and level, with a thin XP bar, appear at top left.
@@ -49,7 +50,7 @@ Floor, remaining statues and difficulty
 appear at top right. Unassigned, incompatible, and recharging skills are disabled
 with an explanation.
 
-Gaining a level puts a small + button above each orb: the left one opens the
+Gaining a level puts a small + button at each lower corner: the left one opens the
 attribute panel on the left side of the screen, the right one the skill tree
 panel on the right. Each stays until its points are spent. C and K open and
 close the same panels; both can be open at once, Escape closes them, and the
