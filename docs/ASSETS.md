@@ -746,6 +746,12 @@ eight seconds. Collision slabs and prop hulls are built when the first statue fa
 whooshes pack), unedited: a 3.8 s burst of flame with a burning tail. It plays as
 the Oracle's fireball leaves its staff and as the wizard casts Firebolt. It is
 credited to www.zapsplat.com under ZapSplat's license, like the other effects.
+While it is heard, a few small arcs of electricity jump about the spot it struck
+(`scripts/crackle.gd`), thinning out and dying with the sound's fade.
+
+`assets/audio/arrow-stone-impact.mp3` is the original Temple Ascension's sound of
+an arrow striking stone, copied unchanged from it. As there, it plays when one of
+the hero's arrows hits a statue, at the same level as `weapon-impact.mp3`.
 
 `assets/audio/rock-impact.mp3` is PMSFX's "Rock Crash, Designed Rock Impact Crash,
 Big Cinematic" (PMSFX_ROCKCrsh_Designed_Rock_Impact_Carsh_Big_Cinematic_41RI2_2442.mp3),

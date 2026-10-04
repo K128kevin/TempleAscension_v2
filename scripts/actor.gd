@@ -783,7 +783,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	if dead or dormant: return
 	if game.playground != null:
 		# The playground shows every hit, but nothing takes damage.
-		game.sound.play("weapon-impact",-15)
+		game.sound.play(impact_sound(),-15)
 		react_to_hit()
 		if kind != "player": push_back()
 		return
@@ -794,7 +794,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	if daze=="ambush": damage *= 1.0+daze_bonus*.01
 	hp -= damage
 	if damage>0 and daze != "ambush": end_stun()
-	game.sound.play("weapon-impact",-15)
+	game.sound.play(impact_sound(),-15)
 	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),HIT_COLORS[look],look=="crit")
 	if hp <= 0:
 		if death_impact == Vector3.ZERO:
@@ -804,6 +804,11 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 		if not awake: game.awaken(self)
 		react_to_hit()
 		push_back()
+
+# What a hit sounds like: an arrow striking a statue rings on the stone, as
+# in the original game; anything else is a weapon's impact.
+func impact_sound() -> String:
+	return "arrow-stone-impact" if game.arrow_struck == self and not human else "weapon-impact"
 
 func push_back() -> void:
 	if pushback_step >= PUSHBACK.size(): return

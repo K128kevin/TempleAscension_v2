@@ -6,6 +6,7 @@ const WarCry = preload("res://scripts/war_cry.gd")
 const Art = preload("res://scripts/assets.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const RangerFx = preload("res://scripts/ranger_fx.gd")
+const Crackle = preload("res://scripts/crackle.gd")
 const Motion = preload("res://scripts/combat_animation.gd")
 var game
 var pending: Array = []
@@ -16,7 +17,8 @@ var barrier_time = 0.0
 var cooldowns: Dictionary = {}
 # Shield Charge under way: how long he runs on, which way, and who he has hit.
 var charge: Dictionary = {}
-# Shockwaves and War Cry rings under way (scripts/shockwave.gd, war_cry.gd).
+# Shockwaves, War Cry rings and Lightning Shot's crackle under way
+# (scripts/shockwave.gd, war_cry.gd, crackle.gd).
 var waves: Array = []
 # Offensive and Defensive Rhythm: the stacks built, and how long they last.
 # Tests fix the crit roll: -1 rolls, 0 never crits, 1 always does.
@@ -438,7 +440,12 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 			strike(enemy,p.damage,"lightning",0.0,impact,true,2)
 			# Heard once a shot, however many it strikes (an arrow driven on
 			# through its first, and every leap).
-			if not extra.get("zapped",false): game.sound.play("lightning-zap",-4)
+			# Its crackle goes on about where it struck as long as it is heard.
+			if not extra.get("zapped",false):
+				game.sound.play("lightning-zap",-4)
+				var crackle = Crackle.make(enemy.position+Vector3.UP*game.world.lift(enemy.position))
+				game.world.add_child(crackle)
+				waves.append(crackle)
 			extra.zapped = true
 			# It leaps on from one to the next, never to the same twice, each
 			# leap 20% weaker than the one before (LIGHTNING_FADE).

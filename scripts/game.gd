@@ -73,6 +73,9 @@ var skills
 var creating_character = false
 # The debug playground, while it is open (Shift+P in debug mode).
 var playground = null
+# Whoever one of the hero's arrows is striking just now: on a statue it rings
+# as arrowhead on stone (scripts/actor.gd hit).
+var arrow_struck = null
 # Set as the hero walks in through the temple's door: the first floor then
 # loads with him standing just inside it.
 var arriving_by_door = false
@@ -1026,7 +1029,10 @@ func tick_projectiles(dt: float) -> void:
 						var kind: String = "physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type)
 						# The hero's own shots count as his hits.
 						var impact = StoneFragment.impact(p.direction)
-						if p.friendly and p.type=="arrow": skills.arrow_hit(a,p)
+						if p.friendly and p.type=="arrow":
+							arrow_struck = a
+							skills.arrow_hit(a,p)
+							arrow_struck = null
 						elif p.friendly: skills.strike(a,p.damage,kind,0.0,impact,p.skill)
 						else: a.hit(p.damage,kind,0.0,impact)
 						p.hit.append(a.uid)

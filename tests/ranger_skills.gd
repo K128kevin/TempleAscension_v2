@@ -8,6 +8,7 @@ const Temple = preload("res://scripts/temple.gd")
 const Actor = preload("res://scripts/actor.gd")
 const Art = preload("res://scripts/assets.gd")
 const Motion = preload("res://scripts/combat_animation.gd")
+const Crackle = preload("res://scripts/crackle.gd")
 const STEP = 1.0/60
 var game
 var origin: Vector3
@@ -248,7 +249,16 @@ func test():
 	check(game.skills.cast("lightning_shot",at) and is_equal_approx(game.run.energy,65.0),"Lightning Shot costs 35 energy")
 	play(1.2)
 	var leapt = line.filter(func(e): return lost(e)>0).size()
+	var crackles: Array = game.skills.waves.filter(func(w): return w is Crackle)
+	check(crackles.size()==1 and not crackles[0].arcs.is_empty() and crackles[0].position.distance_to(line[0].position)<.01 and is_equal_approx(crackles[0].lasting,Crackle.ZAP.get_length()),"Small arcs of electricity crackle about where it struck, once a shot, for as long as its sound")
+	play(Crackle.ZAP.get_length())
+	check(game.skills.waves.filter(func(w): return w is Crackle).is_empty() and not is_instance_valid(crackles[0]) or crackles[0].is_queued_for_deletion(),"and die away with it")
 	check(leapt==6 and within(line[0],1,250) and within(line[1],1,200) and within(line[5],1,250*pow(.8,5)) and lost(line[6])==0 and lost(outside)==0,"Rank 5 strikes for 250%% and leaps to five more, each within 10 meters of the last and 20%% weaker than the strike before (%d struck)" % leapt)
+	game.arrow_struck = line[0]
+	check(line[0].impact_sound()=="arrow-stone-impact" and line[1].impact_sound()=="weapon-impact","An arrow striking a statue rings on the stone, as in the original; other hits sound as weapons'")
+	line[0].human = true
+	check(line[0].impact_sound()=="weapon-impact","but not on a living foe")
+	line[0].human = false; game.arrow_struck = null
 	hero({"lightning_shot":1})
 	for e in line: e.hp = e.max_hp
 	game.skills.cast("lightning_shot",at)
