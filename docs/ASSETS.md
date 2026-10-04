@@ -235,6 +235,18 @@ bushes; they were replaced.)
   its leg bent to it by IK, and when the lion is driven over the ground by a blow
   the diagonal pairs of paws step in turn, landing ahead of the body the way it is
   carried.
+- **The gate guards.** `tools/make_guard.py` builds `town_guard.glb`
+  (`assets/models/character/`): the hero's body at the centurion's heavy build,
+  in the centurion statue's armor (the KayKit Knight's cuirass, arm and leg
+  plates and helm, close-fitted as `tools/prepare_enemy_outfits.py` fits them),
+  at life size, its pieces kept apart and only the standing idle kept. The game
+  dresses it for real (`scripts/town_guard.gd`): the body in the warrior's
+  painted skin and kit, the armor through `assets/shaders/guard_armor.gdshader`
+  (the knight's palette read only for what each part is made of: hammered and
+  rusting steel, bronze, red wool, leather, all dusty), a grounded spear in the
+  smithy's steel-and-wood finish, and the KayKit square shield painted as a red
+  legionary's board (`assets/shaders/guard_shield.gdshader`). Two stand at each
+  of the town's gates.
 - **The townspeople.** `tools/make_townsfolk.py` builds `townsman.glb` and
   `townswoman.glb` (`assets/models/character/`) from the base character pack's two
   bodies (its "superhero" male and female, which come unclothed, cut to 7,000
@@ -281,6 +293,24 @@ bushes; they were replaced.)
   `scripts/townsfolk.gd` runs the town: its own A* grid of the streets (the arena,
   palace hill, smithy and the inn's loft closed), the seats at the inn's tables,
   the inn's occupancy rules, Anya's rounds and the children's games.
+- **The bandits.** `tools/make_bandits.py` builds `bandit_man.glb` and
+  `bandit_woman.glb` from the same two bodies, dressed after the desert raider of
+  their concept art with the townspeople's garment lofting: a long sleeveless
+  linen tunic banded in red at its tattered hem, a studded leather vest with a
+  strap across the chest, a red sash under a leather belt, a ragged apron over the
+  skirt, a red shawl wound about the neck, a short cape down the back, a cloth
+  wound about the brow and knotted behind, and leather bracers and shin bindings
+  (`assets/shaders/bandit_leather.gdshader`: hide, bronze studs, strips wound over
+  linen); sandals are drawn on the feet (`shoes.gdshader`'s `sandal`). The hero's
+  fighting clips are retargeted to each body from `warrior.glb`, and the ranger's
+  quiver and sheathed dagger are carried over from it, moved bone by bone to each
+  body's frame. Their sword is a sica (`assets/models/props/sica.glb`), the bronze
+  sword's blade swept back toward its point; the sword shader's `SWEEP` keeps its
+  fuller on the curve. `scripts/bandit.gd` draws each bandit's look from its id
+  (man or woman, skin, hair and beard, dyes, which of shawl, cape and brow wrap
+  are worn), and `cloth.gdshader`'s `bands` and `lattice` weave the red stripes
+  and lozenges into the linen; `scripts/bandit_wardrobe.gd`, written by the
+  script, records what each garment covers.
 - **Walk-in buildings.** `scripts/world_interiors.gd` builds the inn and the smithy
   as halls of the town's wall modules on all four sides, with an open doorway.
   `Overworld.rooms` holds each hall's footprint, its roof and its front (the south
@@ -455,6 +485,7 @@ animation licenses sit beside it. Rebuild with Blender:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_ranger.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_bandits.py
 ```
 
 ## Additional authored geometry (CC0)
@@ -518,6 +549,8 @@ shield arm pull back. The right foot stays planted by leg IK. Rebuild with:
 ```sh
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_enemy_outfits.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/outfit_hero.py
+# (After tools/paint_kits.py: the gate guards, from the finished hero.)
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_guard.py
 ```
 
 Bodies, armor, robes, weapons, shields, arrows and the boss's crown share

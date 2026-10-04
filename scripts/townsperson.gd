@@ -58,6 +58,7 @@ func setup(appearance: Dictionary) -> void:
 	for clip in animator.get_animation_list():
 		animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if clip in LOOPS else Animation.LOOP_NONE
 	seated_drink()
+	lying()
 	var cover: Dictionary = Wardrobe.COVER[look.who]
 	var worn: Array = [look.garment]
 	if look.get("under","") != "": worn.append(look.under)
@@ -136,6 +137,23 @@ func seated_drink() -> void:
 			elif kind == Animation.TYPE_POSITION_3D: made.track_set_key_value(track,key,sit.position_track_interpolate(source,time))
 	made.loop_mode = Animation.LOOP_NONE
 	library.add_animation("SitDrink",made)
+
+# Asleep, on the back: the clip "Lie", the first moment of getting up off the
+# ground held still, made once for each body. (Getting up, played backward,
+# lies down: lie_down.)
+func lying() -> void:
+	var library: AnimationLibrary = animator.get_animation_library(animator.get_animation_library_list()[0])
+	if library.has_animation("Lie"): return
+	var made: Animation = animator.get_animation("GetUp").duplicate(true)
+	for track in made.get_track_count():
+		for key in range(made.track_get_key_count(track)-1,0,-1): made.track_remove_key(track,key)
+	made.length = 1.0
+	made.loop_mode = Animation.LOOP_LINEAR
+	library.add_animation("Lie",made)
+
+func lie_down(rate: float, blend: float = .3) -> void:
+	state = "LieDown"
+	animator.play("GetUp",blend,-rate,true)
 
 func flesh(cover: Dictionary, worn: Array, wear: float) -> ShaderMaterial:
 	var m = ShaderMaterial.new()

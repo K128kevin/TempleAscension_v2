@@ -17,6 +17,9 @@ const MODULES = {"w":"wall","d":"wall_door","s":"wall_window","a":"wall_arched",
 const LOFT = 3.4
 const INN = Vector3(-279.5,0,-70.5)
 const INN_BAYS = Vector2i(5,4)
+# Anya's own bed, in the kitchen behind the bar (from the inn's corner): the
+# back room under the loft, by its door.
+const ANYA_BED = Vector3(14.2,0,2.35)
 const SMITHY = Vector3(-245.5,0,-69.5)
 const SMITHY_BAYS = Vector2i(4,3)
 
@@ -92,8 +95,8 @@ static func lamp(world, at: Vector3, energy: float, reach: float, colour: Color 
 	return light
 
 # The inn: a common room with its tables and its bar, the kitchen's wall and
-# door behind the bar, and above the kitchen a loft of beds, up a stair by
-# the east wall.
+# door behind the bar (Anya's bed is in the kitchen), and above the kitchen a
+# loft of beds, up a stair by the east wall.
 static func inn(world, tint: Color, wood: Color) -> Dictionary:
 	var c = INN
 	var size = Vector2(INN_BAYS.x*BAY,INN_BAYS.y*BAY)
@@ -177,6 +180,13 @@ static func inn(world, tint: Color, wood: Color) -> Dictionary:
 			put(world,"candlestick",bed+Vector3(2.15,.95,-1.05),.36)
 	put(world,"chest",Vector3(c.x+1.6,0,c.z+5.6),.7,PI/2,.5)
 	put(world,"lantern",Vector3(c.x+9.9,1.9,c.z+1.1),.8)
+	# Anya's bed below, in the kitchen, with a stand and a candle by it. (The
+	# loft is the ground over the kitchen: these stand a storey below it, and
+	# close no cells of it.)
+	var own = c+ANYA_BED+Vector3.DOWN*LOFT
+	world.place("bed",own,Kit.sized("bed",.81))
+	world.place("nightstand",own+Vector3(-1.5,0,-.9),Kit.sized("nightstand",.95))
+	world.place("candlestick",own+Vector3(-1.5,.95,-.9),Kit.sized("candlestick",.36))
 	lamp(world,Vector3(c.x+10.0,2.2,c.z+4.0),.8,8.0)
 	return room
 

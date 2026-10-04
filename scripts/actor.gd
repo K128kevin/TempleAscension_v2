@@ -4,6 +4,7 @@ const Motion = preload("res://scripts/combat_animation.gd")
 const Visual = preload("res://scripts/visual.gd")
 const Art = preload("res://scripts/assets.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
+const Bandit = preload("res://scripts/bandit.gd")
 var game
 var visual
 var kind = "player"
@@ -131,10 +132,12 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 		hp = max_hp
 		dress()
 
-# An enemy's figure: a statue of its kind, still until it wakes; or a man in
-# a hero's kit, who stands at his ease.
+# An enemy's figure: a statue of its kind, still until it wakes; or a bandit,
+# who stands at his ease.
 func dress() -> void:
 	if human:
+		# Each bandit's look is its own, the same each time it is met.
+		if config.human == "bandit": visual.bandit_look = Bandit.look(uid.hash())
 		visual.setup(false,Color.WHITE,config.weapon,config.size,"",config.human)
 		visual.play(visual.idle_action())
 		return

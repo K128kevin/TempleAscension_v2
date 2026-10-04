@@ -9,6 +9,9 @@ uniform sampler2D grit : source_color, filter_linear_mipmap, repeat_enable;
 // How high the shoe comes (metres on the body at rest), and how thick it is.
 uniform float top = 0.115;
 uniform float thick = 0.012;
+// A sandal (the bandits', scripts/bandit.gd): only the sole and a strap about
+// the ankle at its top; the rest of the foot bare.
+uniform float sandal = 0.0;
 varying float height;
 
 void vertex() {
@@ -20,6 +23,7 @@ void vertex() {
 void fragment() {
 	// (An arm's points carry how far along the arm they are instead.)
 	if (height > top || 1.0 - UV2.y > 0.001) discard;
+	if (sandal > 0.0 && height > 0.024 && height < top - 0.016) discard;
 	float worn = texture(grit, UV * 9.0).r;
 	float sole = 1.0 - smoothstep(0.012, 0.022, height);
 	// A stitched cuff at the ankle.

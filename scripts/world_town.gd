@@ -5,12 +5,15 @@ extends RefCounted
 ## houses stand round that street and along the alleys that run off it, and
 ## most of them are in a poor way: stained, cracked, some fallen in. A market
 ## square with the well fills the south-east corner, and a wall with one gate
-## closes the town off from the desert. From the arena's north gate a road
+## closes the town off from the desert; a second gate shuts the gap in the
+## rocks at the end of the southern alley. Two guards stand at each. From the
+## arena's north gate a road
 ## climbs to the elders' palace (scripts/world_palace.gd). The town's people
 ## have yet to arrive.
 const Kit = preload("res://scripts/world_art.gd")
 const Desert = preload("res://scripts/world_desert.gd")
 const Interiors = preload("res://scripts/world_interiors.gd")
+const Guard = preload("res://scripts/town_guard.gd")
 # One wall module of the kit is this wide and tall.
 const BAY = 4.0
 # What the town's walls are built and washed with.
@@ -52,6 +55,11 @@ const UNDER_DOOR = Vector2(3.2,6.0)
 const BOX_HALF = 7.1
 const BOX_FLOOR = 6.6
 const THRONES = 5
+# The thrones' height (a chair's seat about half way up it), how far apart
+# they stand, and the height of the marble-topped table before them.
+const THRONE_HEIGHT = 1.1
+const THRONE_SPACING = 1.3
+const TABLE_HEIGHT = .78
 # The street that rings the arena: the buildings stand along its far side.
 const RING = 14.0
 const MARKET = Rect2(-205,38,21,24)
@@ -64,6 +72,7 @@ const MODULES = {"w":"wall","d":"wall_door","s":"wall_window","a":"wall_arched",
 static func build(world) -> void:
 	streets(world)
 	gate_wall(world)
+	south_gate(world)
 	arena(world)
 	royal_box(world)
 	market(world)
@@ -175,9 +184,53 @@ static func gate_wall(world) -> void:
 		world.block_rect(Rect2(x-1.7,at.z-1.8,3.4,3.6))
 		world.brazier(at+Vector3(-2.8,0,side*.2),1.0,1.1)
 		hanging(world,"cloth_red",Vector3(x-1.85,2.6,side*6.2),4.4,-PI/2,Color(.44,.14,.10))
+		# A guard before each tower, on the town side, watching the way through.
+		guard(world,Vector3(x-2.3,0,side*4.75),Vector3(-.45,0,-side),.25+side*.2)
 	towers.append(world.place("wall",Vector3(x,6.2,0),Vector3(9.4,1.5,1.4),material,-PI/2))
 	world.screen(towers)
 	world.add_place("town gate","gate",Vector3(x,0,0),7.0)
+
+# The gate across the gap in the rocks at the end of the southern alley, built
+# as the town gate is: a wall from rock to rock, two towers flanking the way
+# through, joined by a lintel. Its guards stand outside, facing the desert.
+const SOUTH_GATE = Vector3(-226,0,82)
+static func south_gate(world) -> void:
+	var material = Kit.masonry(CREAM,BROWN,.4,.65)
+	var g: Vector3 = SOUTH_GATE
+	var x = g.x-20.0
+	while x<g.x+20.0:
+		var middle = x+BAY*.5
+		x += BAY
+		if absf(middle-g.x)<5.0 or world.margin_at(Vector3(middle,0,g.z))<-9.0: continue
+		var piece = world.place("wall",Vector3(middle,0,g.z),Vector3(BAY,5.6,1.4),material)
+		world.block_rect(Rect2(middle-BAY*.5,g.z-.7,BAY,1.4))
+		world.screen([piece])
+	var towers: Array = []
+	for side in [-1.0,1.0]:
+		var at = Vector3(g.x+side*6.2,0,g.z)
+		towers.append(world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material))
+		world.block_rect(Rect2(at.x-1.8,g.z-1.7,3.6,3.4))
+		world.brazier(at+Vector3(side*.2,0,2.8),1.0,1.1)
+		hanging(world,"cloth_red",Vector3(at.x,2.6,g.z+1.85),4.4,0.0,Color(.44,.14,.10))
+		guard(world,Vector3(g.x+side*4.75,0,g.z+2.3),Vector3(-side*.5,0,1),.6+side*.2)
+	towers.append(world.place("wall",Vector3(g.x,6.2,g.z),Vector3(9.4,1.5,1.4),material))
+	world.screen(towers)
+	# The way through is paved, giving way to the track on either side.
+	for z in range(int(g.z)-4,int(g.z)+5):
+		for along in range(-4,5): world.dab(world.PAVING,int(g.x)+along,z,.85-absf(z-g.z)*.09)
+	world.add_place("south gate","gate",g,7.0)
+
+# A gate guard (scripts/town_guard.gd) standing at `at`, facing along `facing`.
+# His spear and shield stand with him; nothing walks through them.
+static func guard(world, at: Vector3, facing: Vector3, variant: float) -> Node3D:
+	var man = Guard.new()
+	man.name = "GateGuard"
+	world.add_child(man)
+	man.position = at+Vector3.UP*world.lift(at)
+	man.rotation.y = atan2(facing.x,facing.z)
+	man.setup(variant)
+	world.block_disc(at+man.basis*Vector3(.1,0,.15),.65,world.LOW)
+	return man
 
 # A point on the arena's oval at `angle`, `inset` metres inside its outer wall.
 static func oval(angle: float, inset: float = 0.0) -> Vector3:
@@ -240,6 +293,11 @@ static func arena(world) -> void:
 			var foot_at = (oval(angle-step*.5,podium)+oval(angle+step*.5,podium))*.5
 			nodes.append(world.place("wall",foot_at,Vector3(foot+.3,PODIUM+.9,1.0),shaded,yaw))
 		world.screen(nodes)
+		# Under the stands the hero is indoors: the outer wall on the camera's
+		# side (with a gateway's walls there) is lifted away, as a room's
+		# front is (world.stand_front).
+		if out.dot(Vector3(world.VIEW.x,0,world.VIEW.z).normalized()) > -.1:
+			world.stand_front.append_array(nodes if gate else nodes.slice(0,3))
 	# The ring's outer wall and the wall round the sand are solid. Between
 	# them, under the seats, runs a paved and shadowed undercroft, reached by
 	# a doorway in each side of the gateways.
@@ -340,8 +398,8 @@ static func undercroft(world, material: Material) -> void:
 
 # The royal box, in the north stands over the gate the palace road comes in
 # by: a pavilion of white marble where the elders sit to watch the games,
-# with five gilded thrones, gilded columns and rails, and a crimson canopy
-# and hangings.
+# with five gilded thrones behind a marble-topped table, gilded columns and
+# rails, and a crimson canopy and hangings.
 static func royal_box(world) -> void:
 	var marble = Kit.marble()
 	var gold = Kit.gold()
@@ -383,13 +441,25 @@ static func royal_box(world) -> void:
 		nodes.append(bowl)
 	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR+4.6,back+2.8),Vector3(BOX_HALF*2.0-.6,.12,5.4),crimson))
 	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR+4.48,back+5.4),Vector3(BOX_HALF*2.0-.2,.34,.45),gold))
-	# The five elders' thrones, in a row facing the sand, the middle one the
-	# tallest.
+	# The five elders' thrones, in a row facing the sand: gilded chairs of a
+	# man's size, all alike (the inn's seats are of the same height).
+	var seats = front-4.2
 	for i in THRONES:
-		var offset = (i-(THRONES-1)*.5)*1.6
-		var throne = world.place("chair",Vector3(x+offset,BOX_FLOOR,front-4.2),Kit.sized("chair",2.8 if is_zero_approx(offset) else 2.4),gold,0.0)
+		var offset = (i-(THRONES-1)*.5)*THRONE_SPACING
+		var throne = world.place("chair",Vector3(x+offset,BOX_FLOOR,seats),Kit.sized("chair",THRONE_HEIGHT),gold,0.0)
 		throne.set_meta("throne",true)
 		nodes.append(throne)
+	# Before them a long table on gilded legs, topped with a single slab of
+	# veined marble overhanging it a little all round.
+	var reach = (THRONES-1)*THRONE_SPACING+1.0
+	var table_at = seats+.95
+	for side in [-1.0,1.0]:
+		var frame = world.place("table",Vector3(x+side*reach*.25,BOX_FLOOR,table_at),Vector3(reach*.5,TABLE_HEIGHT-.06,.86),gold)
+		frame.set_meta("elders_table",true)
+		nodes.append(frame)
+	var top = world.place("floor",Vector3(x,BOX_FLOOR+TABLE_HEIGHT-.06,table_at),Vector3(reach+.16,.06,1.0),marble)
+	top.set_meta("elders_table",true)
+	nodes.append(top)
 	world.screen(nodes)
 	world.add_place("elders' box","royal_box",Vector3(x,0,front+3.0),5.0)
 

@@ -24,6 +24,7 @@ run "$godot_bin" --headless --path . --script tests/torch_regression.gd --log-fi
 run "$godot_bin" --headless --path . --script tests/floor_tiles.gd --log-file "$PWD/test-results/floor-tiles.log"
 run "$godot_bin" --headless --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-regression.log"
 run "$godot_bin" --headless --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-visuals.log"
+run "$godot_bin" --headless --path . --script tests/bandit_visuals.gd --log-file "$PWD/test-results/bandit-visuals.log"
 run "$godot_bin" --headless --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-regression.log"
 run "$godot_bin" --headless --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover.log"
 run "$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log" -- --test
@@ -37,6 +38,7 @@ if [ "${RENDER_TEST:-0}" = "1" ]; then
   run "$godot_bin" --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover-native.log" -- --render-hover
   run "$godot_bin" --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing-native.log" -- --live-attacks
   run "$godot_bin" --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-render.log" -- --render-enemies
+  run "$godot_bin" --path . --script tests/bandit_visuals.gd --log-file "$PWD/test-results/bandit-render.log" -- --render-bandits
   run "$godot_bin" --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-render.log" -- --render-shields
   run "$godot_bin" --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-render.log" -- --render-classes
   run "$godot_bin" --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-render.log" -- --render-bow

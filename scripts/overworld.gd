@@ -91,6 +91,12 @@ var level = OUTDOORS
 var spawn = Vector3.ZERO
 var bounds = Rect2(WEST,NORTH,WIDTH,DEPTH)
 var sun: DirectionalLight3D
+# The sun's shadow map is laid on a grid fixed to the world's middle; a sun
+# turned a little every frame slides that grid under every shadow out here
+# (the arena stands 254m from the middle: a fifth of a texel a frame), and
+# the shadows' edges crawl back and forth, seeming to shake. So the sun is
+# turned only every SUN_STEP seconds, in steps too small to see.
+const SUN_STEP = .1
 var environment: Environment
 # The time of day shown (Daylight's clock), how far it is night, and the
 # fires: each {"light", "flame", "glow", "reach", "energy"}.
@@ -131,6 +137,9 @@ var rooms: Array[Dictionary] = []
 # stands under them, seen only then.
 var stand_seats: Array = []
 var stand_fittings: Array = []
+# Its outer wall on the camera's side, lifted away then too, as a room's
+# front is: still casting its shadow, so the undercroft stays shaded.
+var stand_front: Array = []
 var under_stands = false
 # The town's people (scripts/townsfolk.gd).
 var townsfolk: Node3D
@@ -239,7 +248,8 @@ func setup_sky() -> void:
 	# The temple's torches cast hard, cheap shadows (project settings); the
 	# sun's long shadows need a finer, filtered map.
 	RenderingServer.directional_shadow_atlas_set_size(4096,true)
-	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+	# (Filtered finely enough that their edges show no teeth.)
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_HIGH)
 	add_child(sun)
 	set_time(Daylight.MORNING+400.0)
 
@@ -252,7 +262,8 @@ func set_time(clock: float) -> void:
 	sun.light_color = sky.light
 	sun.light_energy = sky.energy
 	sun.visible = sky.energy > .004
-	sun.look_at_from_position(sky.toward*100.0,Vector3.ZERO)
+	var toward: Vector3 = Daylight.sky(floorf(clock/SUN_STEP)*SUN_STEP).toward
+	if not sun.global_transform.basis.z.is_equal_approx(toward): sun.look_at_from_position(toward*100.0,Vector3.ZERO)
 	environment.background_color = sky.sky
 	environment.ambient_light_color = sky.ambient
 	environment.ambient_light_energy = sky.ambient_energy
@@ -737,12 +748,16 @@ func follow(pos: Vector3, delta: float) -> void:
 	camera.look_at(camera.position-VIEW)
 	camera.size = lerpf(camera.size,zoom,minf(1,delta*8))
 	# A building the hero is in stands open to the view.
-	# Under the arena's stands, the seats overhead are lifted away.
+	# Under the arena's stands he is indoors: the seats overhead and the
+	# outer wall before him are lifted away.
 	var under: bool = Town.under_stands(pos)
 	if under != under_stands:
 		under_stands = under
 		for node in stand_seats: node.visible = not under
 		for node in stand_fittings: node.visible = under
+		for node in stand_front:
+			for mesh in node.find_children("*","GeometryInstance3D",true,false)+([node] if node is GeometryInstance3D else []):
+				mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY if under else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	for room in rooms:
 		var inside: bool = room.area.has_point(Vector2(pos.x,pos.z))
 		if inside == room.inside: continue

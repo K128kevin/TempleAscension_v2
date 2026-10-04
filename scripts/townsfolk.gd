@@ -16,12 +16,23 @@ extends Node3D
 ## an iron rod, going from one to the next. No one goes into the arena,
 ## through the palace gate or out of
 ## the town.
+##
+## At night they sleep (scripts/daylight.gd keeps the hour). Through the
+## sunset and the first of the night each goes to bed in turn: four who lodge
+## at the inn climb to the beds in its loft; those in rags, who have no roof,
+## lie down on the ground at the foot of the arena's wall, a bundle of their
+## things by their heads; the rest go home, each into a house of his own.
+## Orion finishes the job in hand and goes into the house nearest his smithy,
+## the same every night. Anya, the inn emptied, goes into the kitchen behind
+## her bar to her own bed. The children go early, together. Through the
+## sunrise they get up and come out again, and the day goes on.
 const Person = preload("res://scripts/townsperson.gd")
 const Kit = preload("res://scripts/world_art.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Interiors = preload("res://scripts/world_interiors.gd")
 const Art = preload("res://scripts/assets.gd")
 const Smith = preload("res://scripts/smith.gd")
+const Daylight = preload("res://scripts/daylight.gd")
 const ADULTS = 25
 const CHILDREN = 6
 # How many of the grown townspeople are in the inn at once.
@@ -40,6 +51,32 @@ const CHAT_REST = 25.0
 # drink leaves, by how many are staying.
 const INN_CHANCE = {4:.35,5:.22,6:.14,7:.07}
 const LEAVE_CHANCE = {4:.3,5:.5,6:.65,7:.8,8:.92}
+# When the grown go to bed (each at his own time between these) and get up;
+# the children go together, early. Anya shuts the inn once it is empty, from
+# this time, and is up before anyone.
+const BEDTIME = Vector2(Daylight.SUNSET+40.0,Daylight.NIGHT+40.0)
+const RISING = Vector2(15.0,150.0)
+const CHILD_BEDTIME = Daylight.SUNSET+30.0
+const CHILD_RISING = 110.0
+const ANYA_BEDTIME = Daylight.NIGHT+20.0
+const ANYA_RISING = 10.0
+# Who lodges at the inn (by their place in LOOKS); those in rags this far
+# gone sleep in the street. Of the children, these three do too.
+const LODGERS = [11,12,13,23]
+const HOMELESS_WEAR = .85
+const STREET_CHILDREN = [0,2,4]
+# Going to bed, asleep (lying down, or "indoors", unseen) and getting up.
+const ABED = ["to_bed","lie_down","asleep","indoors","get_up","from_bed"]
+# Lying down is getting up played backward, this much slower.
+const LIE_RATE = .6
+# One asleep on a bed lies on its mattress, this high, his feet this far
+# toward its foot from its middle (he lies back from where he stood: his head
+# about .9 m behind).
+const MATTRESS = .54
+const PILLOW = .3
+# A jump of the clock larger than this (a game begun or loaded, the day
+# hurried on) puts everyone at once where the hour has them.
+const JUMP = 5.0
 # Clothes: neutral, undyed or faded.
 const CLOTHS = [Color(.74,.68,.56),Color(.52,.50,.47),Color(.42,.33,.25),Color(.60,.52,.40),Color(.42,.42,.30),Color(.38,.40,.42),Color(.50,.36,.28),Color(.78,.75,.68),Color(.30,.29,.27)]
 const HAIRS = [Color(.07,.05,.04),Color(.13,.08,.05),Color(.2,.14,.09),Color(.26,.2,.14),Color(.42,.41,.4)]
@@ -81,6 +118,16 @@ class Walker:
 	var from = Vector3.ZERO
 	var child = false
 	var repath = 0.0
+	# Where it sleeps (lay_beds): "kind" ("inn", "kitchen", "house" or
+	# "ground"); "at", where it lies (or the door it goes in by) and "yaw",
+	# which way; "side", where it stands to lie down and up again; "way", the
+	# last steps there from the streets, and "out", the steps back. And when
+	# it goes to bed and gets up, as times of the day.
+	var bed = {}
+	var bedtime = 0.0
+	var rising = 0.0
+	# Climbs the stair to the inn's loft: stands on the ground's height there.
+	var climbs = false
 	var at: Vector3:
 		get: return body.position
 		set(value): body.position = value
@@ -113,6 +160,10 @@ var play = {"mode":"rest","timer":4.0,"it":0,"spot":Vector3.ZERO,"next":"tag","f
 var check = 0.0
 # Mugs not in a hand or on a table wait here, unseen.
 var pantry: Node3D
+# The hour last seen (Daylight's), or -1 before the first.
+var last_time = -1.0
+# The inn's kitchen, under the loft behind the bar, where Anya sleeps.
+var kitchen = Rect2()
 
 func setup(overworld) -> void:
 	world = overworld
@@ -176,6 +227,7 @@ func setup(overworld) -> void:
 		walker.speed = CHILD_RUN
 		children.append(walker)
 	play.spot = haunts[3].at
+	lay_beds()
 
 func figure(look: Dictionary) -> Node3D:
 	var person = Person.new()
@@ -365,10 +417,24 @@ func clear_mug(seat: Dictionary) -> void:
 
 func tick(delta: float, hero: Vector3) -> void:
 	delta = minf(delta,.1)
+	var now: float = world.time
+	if last_time < 0.0 or fposmod(now-last_time,Daylight.CYCLE) > JUMP: at_once()
+	last_time = now
 	for walker in people: tend(walker,delta)
 	serve(delta)
-	smith.tick(delta)
-	romp(delta)
+	# Orion goes to bed between jobs.
+	if orion.state in ABED: retire(orion,delta)
+	elif smith.plan.is_empty() and abed(orion): go_to_bed(orion)
+	else: smith.tick(delta)
+	# The children play while none of them is abed.
+	if children.any(func(c): return c.state in ABED or abed(c)):
+		for child in children:
+			if child.state in ABED: retire(child,delta)
+			elif abed(child): go_to_bed(child)
+			elif child.state == "run":
+				child.state = "idle"
+				child.body.play("Idle")
+	else: romp(delta)
 	meet(delta)
 	part(hero)
 	check -= delta
@@ -376,7 +442,7 @@ func tick(delta: float, hero: Vector3) -> void:
 		check = .5
 		# The inn is never let run low: the nearest stroller is called in.
 		if staying()+inbound() <= INN_LEAST and can_enter():
-			var strollers = people.filter(func(w): return w.state in ["walk","pause"] and not inside(w))
+			var strollers = people.filter(func(w): return w.state in ["walk","pause"] and not inside(w) and not abed(w))
 			strollers.sort_custom(func(a, b): return a.at.distance_to(world.rooms[0].door) < b.at.distance_to(world.rooms[0].door))
 			for walker in strollers:
 				if go_to_inn(walker): break
@@ -391,6 +457,7 @@ func advance(walker: Walker, delta: float) -> bool:
 		walker.at = Vector3(walker.route[0].x,0,walker.route[0].z)
 		walker.route.remove_at(0)
 	else: walker.at += to.normalized()*step
+	if walker.climbs: walker.at = Vector3(walker.at.x,world.lift(walker.at),walker.at.z)
 	walker.body.turn_to(to,delta)
 	walker.body.stride(walker.pace,walker.speed)
 	return walker.route.is_empty()
@@ -414,6 +481,16 @@ func wander(walker: Walker) -> void:
 	else: walker.state = "walk"
 
 func tend(walker: Walker, delta: float) -> void:
+	if walker.state in ABED:
+		retire(walker,delta)
+		return
+	# Bedtime: off home from the street (or from the way to the inn); one
+	# waiting at a table gets up and goes, unless Anya is bringing his drink.
+	if abed(walker):
+		if walker.state in ["walk","pause","halt","leaving","to_inn"]:
+			go_to_bed(walker)
+			return
+		if walker.state == "wait" and not walker in round: leave(walker)
 	walker.chat_rest = maxf(0.0,walker.chat_rest-delta)
 	walker.timer -= delta
 	match walker.state:
@@ -468,7 +545,7 @@ func tend(walker: Walker, delta: float) -> void:
 			if walker.timer <= 0.0 and walker.phase == "":
 				walker.drinks += 1
 				var stays = staying()
-				if can_leave() and (walker.drinks >= 3 or rng.randf() < LEAVE_CHANCE.get(stays,1.0 if stays > 8 else 0.0)): leave(walker)
+				if abed(walker) or can_leave() and (walker.drinks >= 3 or rng.randf() < LEAVE_CHANCE.get(stays,1.0 if stays > 8 else 0.0)): leave(walker)
 				else:
 					walker.state = "wait"
 					walker.timer = 0.0
@@ -547,6 +624,9 @@ func leave(walker: Walker) -> void:
 # end of the bar to his seat, sets it on the table before him, and goes back
 # for the next.
 func serve(delta: float) -> void:
+	if anya.state in ABED:
+		retire(anya,delta)
+		return
 	anya.timer -= delta
 	anya.phase_time += delta
 	var body = anya.body
@@ -555,7 +635,9 @@ func serve(delta: float) -> void:
 			body.turn_to(Vector3(0,0,1),delta,6.0)
 			if body.state != "Idle" and body.state != "Arms": body.play("Idle")
 			var waiting = people.filter(func(w): return w.state == "wait")
-			if not waiting.is_empty() and anya.timer <= 0.0:
+			# Once the last has gone, she goes to bed.
+			if abed(anya) and people.all(func(w): return not w.state in ["to_inn","sit_down","wait","drink"]): go_to_bed(anya)
+			elif not waiting.is_empty() and anya.timer <= 0.0:
 				round.clear()
 				round.append(waiting[0])
 				anya.route = PackedVector3Array([tap])
@@ -637,6 +719,268 @@ func next_table(from_bar: bool) -> void:
 		route.append(patron.seat.serve)
 		anya.state = "carry"
 	anya.route = route
+
+# ---- Night ----
+
+# Whether it is past its bedtime (or not yet its time to get up).
+func abed(walker: Walker) -> bool:
+	var t: float = world.time
+	return t >= walker.bedtime or t < walker.rising
+
+# Who sleeps where, and when each goes to bed and gets up.
+func lay_beds() -> void:
+	var sleep = RandomNumberGenerator.new()
+	sleep.seed = 1207
+	var c = Interiors.INN
+	kitchen = Rect2(c.x+1.0,c.z+1.0,Interiors.INN_BAYS.x*Interiors.BAY-2.0,5.6)
+	# The loft's four beds (scripts/world_interiors.gd), up the stair by the
+	# east wall and along the loft: each lodger stands beside his bed, at its
+	# foot's end, and lies down on it. In the morning he comes down and goes
+	# out into the town.
+	var foot = c+Vector3(18.0,0,13.4)
+	var door: Vector3 = world.rooms[0].door
+	var bottom = c+Vector3(18.0,0,12.6)
+	var top = c+Vector3(18.0,0,6.6)
+	var loft: Array[Dictionary] = []
+	for i in 4:
+		var middle = c+Vector3(3.1+i*4.3,Interiors.LOFT,2.35)
+		var side = Vector3(middle.x+1.2,Interiors.LOFT,c.z+3.0)
+		var landing = Vector3(side.x,0,c.z+4.6)
+		loft.append({"kind":"inn","at":middle+Vector3(0,MATTRESS,PILLOW),"yaw":0.0,"side":side,"way":[foot,bottom,top,landing,side],
+			"out":[landing,top,bottom,foot,Vector3(door.x+.5,0,c.z+14.6),door]})
+	# Anya's, in the kitchen: from behind the bar, past its east end and the
+	# casks by the stair, through the kitchen's door.
+	var own: Vector3 = c+Interiors.ANYA_BED
+	var beside = own+Vector3(1.15,0,.8)
+	var through = [c+Vector3(12.6,0,7.65),c+Vector3(15.6,0,7.45),c+Vector3(16.75,0,6.9),c+Vector3(16.75,0,5.4)]
+	var back = through.duplicate()
+	back.reverse()
+	anya.bed = {"kind":"kitchen","at":own+Vector3(0,MATTRESS,PILLOW),"yaw":0.0,"side":beside,"way":through+[beside],"out":back+[post]}
+	anya.bedtime = ANYA_BEDTIME
+	anya.rising = ANYA_RISING
+	# The houses: Orion's is the one nearest his smithy; the others are
+	# shared out among the rest.
+	var homes: Array = world.places.filter(func(p): return p.kind == "house" and p.name == "house")
+	var smithy: Vector3 = world.rooms[1].door
+	homes.sort_custom(func(a, b): return a.at.distance_to(smithy) < b.at.distance_to(smithy))
+	orion.bed = house_bed(homes.pop_front())
+	orion.bedtime = sleep.randf_range(BEDTIME.x,BEDTIME.y)
+	orion.rising = sleep.randf_range(RISING.x,RISING.y)
+	for i in range(homes.size()-1,0,-1):
+		var j = sleep.randi_range(0,i)
+		var swap = homes[i]
+		homes[i] = homes[j]
+		homes[j] = swap
+	var street: Array[Dictionary] = street_beds(sleep)
+	for i in ADULTS:
+		var walker: Walker = people[i]
+		walker.bedtime = sleep.randf_range(BEDTIME.x,BEDTIME.y)
+		walker.rising = sleep.randf_range(RISING.x,RISING.y)
+		if i in LODGERS:
+			walker.bed = loft.pop_front()
+			walker.climbs = true
+		elif LOOKS[i][3] >= HOMELESS_WEAR and not street.is_empty(): walker.bed = street.pop_back()
+		else: walker.bed = house_bed(homes.pop_front())
+	for i in CHILDREN:
+		var child: Walker = children[i]
+		child.bedtime = CHILD_BEDTIME
+		child.rising = CHILD_RISING
+		child.bed = street.pop_front() if i in STREET_CHILDREN and not street.is_empty() else house_bed(homes.pop_front())
+	# A bundle lies just beyond each sleeper's head.
+	for walker in people+children:
+		if walker.bed.kind == "ground": walker.bed.bundle.position = walker.bed.at-walker.bed.along*(.3+.92*walker.body.size)
+
+# Going into a house (a place of the world's): to its doorstep, then to the
+# door, where one goes in; and out to the doorstep again in the morning. The
+# door is in the house's south face or its west one, whichever way the house
+# stands from the step.
+func house_bed(place: Dictionary) -> Dictionary:
+	var step: Vector3 = nearest_open(place.at)
+	var inward = Vector3(0,0,-1)
+	var north: Vector2i = world.to_cell(place.at+Vector3(0,0,-2.0))
+	if world.cells[world.index(north.x,north.y)] != world.SOLID: inward = Vector3(1,0,0)
+	var door: Vector3 = place.at+inward*1.25
+	return {"kind":"house","at":door,"yaw":atan2(inward.x,inward.z),"side":door,"way":[step,door],"out":[step]}
+
+# Where those with no roof sleep: on the ground at the foot of the arena's
+# outer wall, along it, well clear of its gates and apart from one another,
+# each with a bundle of his things by his head. The first three lie end to
+# end (the street children's); the rest are spread round the wall.
+func street_beds(sleep: RandomNumberGenerator) -> Array[Dictionary]:
+	var spots: Array[Dictionary] = []
+	var steps = 144
+	for k in steps:
+		var angle = (k+.5)*TAU/steps
+		var by_gate = false
+		for gate in Town.ARENA_GATES:
+			if absf(angle_difference(angle,gate*TAU/Town.ARENA_BAYS)) < 3.0*TAU/Town.ARENA_BAYS: by_gate = true
+		if by_gate: continue
+		var at: Vector3 = Town.oval(angle,-1.3)
+		var along: Vector3 = (Town.oval(angle+.01,-1.3)-at).normalized()
+		if open_at(at) and open_at(at+along*.7) and open_at(at-along*1.5): spots.append({"angle":angle,"at":at,"along":along})
+	# The children's are on the south-west side.
+	var first = 0
+	for k in spots.size():
+		if absf(angle_difference(spots[k].angle,2.4)) < absf(angle_difference(spots[first].angle,2.4)): first = k
+	var chosen: Array[Dictionary] = []
+	for k in 3: chosen.append(spots[(first+k) % spots.size()])
+	var rest = spots.filter(func(s): return chosen.all(func(c): return c.at.distance_to(s.at) > 6.0))
+	for k in range(rest.size()-1,0,-1):
+		var j = sleep.randi_range(0,k)
+		var swap = rest[k]
+		rest[k] = rest[j]
+		rest[j] = swap
+	for spot in rest:
+		if chosen.all(func(c): return c.at.distance_to(spot.at) > 7.0): chosen.append(spot)
+	var beds: Array[Dictionary] = []
+	for spot in chosen:
+		var at: Vector3 = spot.at
+		var bundle = Kit.prop("bag",.36)
+		add_child(bundle)
+		bundle.rotation.y = sleep.randf_range(0,TAU)
+		beds.append({"kind":"ground","at":at,"yaw":atan2(spot.along.x,spot.along.z),"side":at,"way":[at],"out":[],"bundle":bundle,"along":spot.along})
+	return beds
+
+# Off to bed: by the streets to its bed's last steps, and along them.
+func go_to_bed(walker: Walker) -> void:
+	release(walker)
+	var bed: Dictionary = walker.bed
+	var route = PackedVector3Array()
+	if bed.kind != "kitchen": route = way(walker.at,bed.way[0])
+	route.append_array(PackedVector3Array(bed.way))
+	walker.route = route
+	walker.state = "to_bed"
+	if walker.child:
+		walker.speed = WALK*1.2
+		walker.pace = "Walk"
+	if walker == orion: orion.body.figure.position.y = 0.0
+
+# Going to bed, asleep, and getting up.
+func retire(walker: Walker, delta: float) -> void:
+	walker.timer -= delta
+	var bed: Dictionary = walker.bed
+	var body = walker.body
+	var lying: float = body.length("GetUp")
+	match walker.state:
+		"to_bed":
+			if advance(walker,delta):
+				if bed.kind == "house":
+					# In at the door.
+					body.visible = false
+					walker.state = "indoors"
+				else:
+					walker.state = "lie_down"
+					walker.timer = lying/LIE_RATE
+					walker.from = walker.at
+					body.lie_down(LIE_RATE)
+		"lie_down":
+			var t = clampf(1.0-walker.timer*LIE_RATE/lying,0.0,1.0)
+			walker.at = walker.from.lerp(bed.at,smoothstep(.15,.8,t))
+			body.rotation.y = lerp_angle(body.rotation.y,bed.yaw,minf(1.0,delta*6.0))
+			if walker.timer <= 0.0:
+				walker.state = "asleep"
+				body.rotation.y = bed.yaw
+				body.play("Lie",.4)
+		"asleep","indoors":
+			if not abed(walker): rise(walker)
+		"get_up":
+			var t = clampf(1.0-walker.timer/lying,0.0,1.0)
+			walker.at = bed.at.lerp(bed.side,smoothstep(.2,.85,t))
+			if walker.timer <= 0.0:
+				walker.route = PackedVector3Array(bed.out)
+				walker.state = "from_bed"
+		"from_bed":
+			if advance(walker,delta): up(walker)
+
+# Morning: out of the door, or up off the bed or the ground.
+func rise(walker: Walker) -> void:
+	var body = walker.body
+	if walker.bed.kind == "house":
+		body.visible = true
+		walker.at = walker.bed.at
+		body.rotation.y = walker.bed.yaw+PI
+		walker.route = PackedVector3Array(walker.bed.out)
+		walker.state = "from_bed"
+	else:
+		walker.state = "get_up"
+		walker.timer = body.length("GetUp")
+		body.play("GetUp",.4)
+
+# Up and out: back to the day.
+func up(walker: Walker) -> void:
+	walker.route = PackedVector3Array()
+	if walker == anya:
+		anya.state = "post"
+		anya.timer = rng.randf_range(1.0,3.0)
+		anya.body.play("Idle")
+	# (Orion goes back to his work: scripts/smith.gd takes him there.)
+	elif walker == orion: orion.state = "work"
+	elif walker.child:
+		walker.state = "idle"
+		walker.body.play("Idle")
+	else: rest(walker,1.0,4.0)
+
+# Lets go of whatever it was about: a talk, a seat at the inn and its mug,
+# the drink Anya was carrying.
+func release(walker: Walker) -> void:
+	walker.partner = null
+	walker.phase = ""
+	walker.body.reach(Vector3.ZERO,0.0,0.0)
+	if walker.body.held != null: walker.body.hold(null)
+	if not walker.seat.is_empty():
+		walker.seat.taken = null
+		walker.seat = {}
+	walker.drinks = 0
+	if walker == anya:
+		round.clear()
+		stow(anya.mug)
+	elif walker.mug != null:
+		walker.mug.queue_free()
+		walker.mug = null
+
+# Abed at once (the clock has jumped).
+func tuck(walker: Walker) -> void:
+	release(walker)
+	var bed: Dictionary = walker.bed
+	var body = walker.body
+	if walker == orion:
+		smith.down_tools()
+		body.figure.position.y = 0.0
+	walker.route = PackedVector3Array()
+	walker.at = bed.at
+	body.rotation.y = bed.yaw
+	if bed.kind == "house":
+		body.visible = false
+		walker.state = "indoors"
+	else:
+		body.visible = true
+		walker.state = "asleep"
+		body.play("Lie",0.0)
+
+# Up at once (the clock has jumped): just out of the house, or off the stair,
+# or up beside where it slept.
+func rouse(walker: Walker) -> void:
+	var bed: Dictionary = walker.bed
+	walker.body.visible = true
+	walker.at = bed.out[-1] if not bed.out.is_empty() else bed.side
+	up(walker)
+
+# The clock has jumped (a game begun or loaded, the day hurried on): each is
+# put at once where the hour has him, as though he had gone there.
+func at_once() -> void:
+	for walker in people+children+[anya,orion]:
+		if abed(walker) and not walker.state in ["asleep","indoors"]: tuck(walker)
+		elif not abed(walker) and walker.state in ABED: rouse(walker)
+	# Some are at the inn's tables, as when the day began.
+	if people.any(func(w): return w.state in ["sit_down","wait","drink"]): return
+	for i in people.size():
+		var walker: Walker = people[i]
+		if i%5 != 0 or abed(walker) or not walker.state in ["walk","pause"]: continue
+		var seat = free_seat()
+		if seat.is_empty(): break
+		walker.seat = seat
+		seat.taken = walker
+		sit(walker)
 
 # ---- Talk ----
 
@@ -781,6 +1125,7 @@ func flee(child: Walker, it: Walker) -> Vector3:
 
 # The named townsperson at a point of the ground (only Anya has a name).
 func named_at(point: Vector3) -> Dictionary:
-	if Vector2(point.x-anya.at.x,point.z-anya.at.z).length() < 1.1: return {"name":"Anya","at":anya.at+Vector3.UP*1.9}
-	if Vector2(point.x-orion.at.x,point.z-orion.at.z).length() < 1.2: return {"name":"Orion","at":orion.at+Vector3.UP*2.0}
+	# (Not while she is in the kitchen, under the loft; nor Orion indoors.)
+	if not kitchen.has_point(Vector2(anya.at.x,anya.at.z)) and Vector2(point.x-anya.at.x,point.z-anya.at.z).length() < 1.1: return {"name":"Anya","at":anya.at+Vector3.UP*1.9}
+	if orion.body.visible and Vector2(point.x-orion.at.x,point.z-orion.at.z).length() < 1.2: return {"name":"Orion","at":orion.at+Vector3.UP*2.0}
 	return {}

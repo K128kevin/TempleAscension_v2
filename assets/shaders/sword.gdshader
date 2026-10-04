@@ -9,6 +9,9 @@ render_mode diffuse_burley, specular_schlick_ggx;
 uniform float POMMEL_TOP = 0.045;
 uniform float GRIP_TOP = 0.215;
 uniform float GUARD_TOP = 0.33;
+// How far the blade sweeps back toward its point (the bandits' sica,
+// tools/make_bandits.py): its fuller follows the curve.
+uniform float SWEEP = 0.0;
 const float FULLER_END = 0.86;
 const float FULLER_HALF_WIDTH = 0.04;
 
@@ -17,6 +20,8 @@ varying vec3 local_normal;
 
 void vertex() {
 	local_position = VERTEX;
+	float swept = max(0.0, VERTEX.y - 0.36) / 0.64;
+	local_position.x += SWEEP * swept * swept;
 	local_normal = NORMAL;
 }
 

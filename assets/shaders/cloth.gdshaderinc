@@ -10,6 +10,12 @@ uniform float weave_scale = 5.0;
 // hems, holes, filth.
 uniform float wear = 0.0;
 uniform float seed = 0.0;
+// Woven in a second colour (the bandits', scripts/bandit.gd): `bands`, stripes
+// and a row of lozenges across the cloth near its hem; `lattice`, a lozenge
+// lattice all over it and a border at the hem.
+uniform vec3 band_dye = vec3(0.45, 0.08, 0.07);
+uniform float bands = 0.0;
+uniform float lattice = 0.0;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7)) + seed * 17.0) * 43758.5453);
@@ -31,6 +37,23 @@ void fragment() {
 	float weave_level = dot(textureLod(weave, vec2(0.5), 12.0).rgb, vec3(0.333));
 	float thread = dot(texture(weave, UV * weave_scale).rgb, vec3(0.333)) / weave_level;
 	vec3 colour = dye * mix(1.0, thread, 0.85);
+	vec3 woven = band_dye * mix(1.0, thread, 0.85);
+	if (bands > 0.0) {
+		float from_hem = (1.0 - length_down) * 1.1;
+		float stripe = step(abs(from_hem - 0.07), 0.018) + step(abs(from_hem - 0.16), 0.009) + step(abs(from_hem - 0.2), 0.009);
+		vec2 lozenge = vec2(abs(fract(UV.x * 9.0) - 0.5) * 2.0, abs(from_hem - 0.115) / 0.022);
+		float row = step(lozenge.x + lozenge.y, 0.8) * step(abs(from_hem - 0.115), 0.025);
+		colour = mix(colour, woven, clamp(stripe + row, 0.0, 1.0));
+	}
+	if (lattice > 0.0) {
+		vec2 diagonal = vec2(UV.x + UV.y, UV.x - UV.y) * 7.0;
+		float line = min(abs(fract(diagonal.x) - 0.5), abs(fract(diagonal.y) - 0.5));
+		colour = mix(colour, colour * 0.55, 1.0 - smoothstep(0.04, 0.08, line));
+		vec2 cell = fract(diagonal) - 0.5;
+		colour = mix(colour, woven, 1.0 - smoothstep(0.08, 0.12, length(cell)));
+		float border = step(0.86, length_down) * step(length_down, 0.95);
+		colour = mix(colour, woven, border * step(0.3, fract(UV.x * 12.0)));
+	}
 	// Sun and washing take the dye out unevenly.
 	float fade = texture(grit, at * 0.55).r;
 	colour = mix(colour, vec3(dot(colour, vec3(0.333))) * 1.12, wear * 0.45 * smoothstep(0.3, 0.7, fade));

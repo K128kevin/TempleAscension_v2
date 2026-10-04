@@ -9,6 +9,7 @@ const Overworld = preload("res://scripts/overworld.gd")
 const Temple = preload("res://scripts/temple.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Palace = preload("res://scripts/world_palace.gd")
+const Daylight = preload("res://scripts/daylight.gd")
 var game
 var passed = 0
 var failed: Array[String] = []
@@ -64,16 +65,23 @@ func town_checks():
 	var thrones = 0
 	var sculptures = 0
 	var facing_sand = true
+	var throne_heights: Array = []
+	var marble_top = false
 	for node in world.get_children():
 		if not node is Node3D: continue
 		var inside = absf(node.position.x-Town.ARENA.x)<Town.BOX_HALF and node.position.z<Town.ARENA.z-Town.ARENA_FLOOR.y and node.position.z>Town.ARENA.z-Town.ARENA_RADII.y and node.position.y>=Town.BOX_FLOOR-.5
 		if not inside: continue
 		if node.has_meta("throne"):
 			thrones += 1
+			throne_heights.append(node.scale.y*Overworld.Kit.SIZE.chair.y)
 			# A chair's seat is on its own +Z side: the sand is south of the box.
 			facing_sand = facing_sand and (node.global_transform.basis*Vector3.BACK).normalized().distance_to(Vector3.BACK)<.01
+		if node.has_meta("elders_table") and node.find_children("*","MeshInstance3D",true,false)[0].material_override == marble: marble_top = true
 		if node.has_meta("statue") and node.get_meta("statue")=="lion" and node.get_meta("marble"): sculptures += 1
 	check(facing_sand,"The thrones face the sand")
+	# Chairs of a man's size, like the inn's seats, the middle one no larger.
+	check(throne_heights.size()==5 and throne_heights.all(func(h): return is_equal_approx(h,throne_heights[0]) and h>.9 and h<1.3),"The thrones are alike and of a man's size (%s)" % [throne_heights])
+	check(marble_top,"A marble-topped table stands before the thrones")
 	check(thrones==5 and sculptures==0 and box != null and box.find_children("*","MeshInstance3D",true,false)[0].material_override == marble,"The box is marble, with five thrones and no statues (%d)" % sculptures)
 	# Its walls are built of modules near the kit's own four metres square, and
 	# its marble is laid at one size in the world: nothing is stretched.
@@ -471,7 +479,8 @@ func test():
 	var orion_look: Dictionary = folk.orion.body.look
 	check(folk.orion.body.name=="Orion" and orion_look.hair=="" and orion_look.beard and orion_look.hair_colour.r<.08 and orion_look.bulk>=1.0 and orion_look.garment=="Sack" and orion_look.cloth.r>orion_look.cloth.b*2.0,"Orion the blacksmith: bald, black-bearded, heavy, in a sleeveless brown tunic")
 	check(ragged>=9 and neat>=5 and folk.children.all(func(c): return c.body.look.wear>=.75 and c.body.look.size<.7),"Many are in rags, some decently dressed; the children are poor and small")
-	# Three minutes of town life.
+	# Three minutes of town life, by day (a new character wakes in the night).
+	world.set_time(Daylight.MORNING+400.0)
 	var least = 99
 	var most = 0
 	var served = 0
@@ -541,6 +550,74 @@ func test():
 	check(tool_sizes.hammer < .5 and tool_sizes.sword < 1.0 and tool_sizes.rod < 1.15,"Orion's hammer, blade and rod are true to size (%s)" % str(tool_sizes))
 	check(folk.orion.body.look.has("shoes") and folk.orion.body.figure.position.y > .05,"Orion wears shoes, and stands on the smithy's tiles rather than in them")
 	check(strayed==0 and kids_in==0 and walled==0,"No one enters the arena, the palace hill or the desert; the children keep out of the inn; none walk through walls (%d, %d, %d)" % [strayed,kids_in,walled])
+
+	# Night: everyone goes to bed through the evening, and gets up again
+	# through the sunrise.
+	var everyone: Array = folk.people+folk.children+[folk.anya,folk.orion]
+	var beds_by_kind = {}
+	for w in everyone: beds_by_kind[w.bed.kind] = beds_by_kind.get(w.bed.kind,0)+1
+	check(beds_by_kind.get("inn",0)==4 and beds_by_kind.get("ground",0)>=10 and beds_by_kind.get("house",0)>=10 and folk.anya.bed.kind=="kitchen" and folk.orion.bed.kind=="house","Four lodge in the inn's loft, those in rags sleep on the ground, the rest at home; Anya in her kitchen (%s)" % str(beds_by_kind))
+	var house_doors = {}
+	for w in everyone:
+		if w.bed.kind=="house": house_doors[snapped(w.bed.at,Vector3.ONE*.1)] = true
+	check(house_doors.size()==beds_by_kind.get("house",0),"No two share a house's door")
+	var houses = world.places.filter(func(p): return p.kind=="house" and p.name=="house")
+	var orion_home = houses[0]
+	for p in houses:
+		if p.at.distance_to(world.rooms[1].door)<orion_home.at.distance_to(world.rooms[1].door): orion_home = p
+	check(folk.orion.bed.way[0].distance_to(orion_home.at)<1.5,"Orion's house is the one orion_home his smithy")
+	var anya_bed = world.get_children().filter(func(n): return n is Node3D and n.scene_file_path.get_file().get_basename()=="bed" and Vector2(n.position.x,n.position.z).distance_to(Vector2(folk.anya.bed.at.x,folk.anya.bed.at.z))<.6)
+	check(anya_bed.size()==1 and absf(anya_bed[0].position.y)<.05 and folk.kitchen.has_point(Vector2(anya_bed[0].position.x,anya_bed[0].position.z)),"Anya's bed stands in the kitchen behind the bar, on its floor")
+	# The evening, minute by minute.
+	var t: float = Daylight.SUNSET+20.0
+	world.set_time(t)
+	folk.tick(.1,Overworld.START)
+	check(everyone.all(func(w): return not w.state in folk.ABED and w.body.visible),"Before the evening all are up")
+	var climbed = false
+	while t < Daylight.NIGHT+260.0:
+		t += .1
+		world.set_time(t)
+		folk.tick(.1,Overworld.START)
+		for w in folk.people:
+			if w.climbs and w.state=="to_bed" and w.at.y>1.0 and w.at.y<Interiors.LOFT-.5: climbed = true
+	var asleep = everyone.filter(func(w): return w.state in ["asleep","indoors"])
+	for w in everyone:
+		if not w.state in ["asleep","indoors"]: print("AWAKE ",w.body.name," ",w.state," ",w.at," ",w.route.size())
+	check(asleep.size()==everyone.size(),"By the middle of the night everyone is in bed (%d of %d)" % [asleep.size(),everyone.size()])
+	check(climbed,"The lodgers climb the inn's stair to the loft")
+	var on_beds = 0
+	for w in folk.people:
+		if w.bed.kind!="inn" or w.state!="asleep": continue
+		var bed = world.get_children().filter(func(n): return n is Node3D and n.scene_file_path.get_file().get_basename()=="bed" and absf(n.position.y-Interiors.LOFT)<.05 and Vector2(n.position.x,n.position.z).distance_to(Vector2(w.at.x,w.at.z))<.6)
+		if bed.size()==1 and absf(w.at.y-Interiors.LOFT-folk.MATTRESS)<.01 and w.body.state=="Lie": on_beds += 1
+	check(on_beds==4,"Each lodger lies on a bed of his own in the loft (%d)" % on_beds)
+	check(folk.anya.state=="asleep" and folk.anya.at.distance_to(folk.anya.bed.at)<.01 and folk.anya.body.state=="Lie","Anya lies asleep in her bed in the kitchen")
+	check(folk.orion.state=="indoors" and not folk.orion.body.visible and folk.orion.at.distance_to(folk.orion.bed.at)<.01 and folk.smith.tools.values().all(func(tool): return tool.hand==""),"Orion has put his tools away and gone into his house")
+	var grounded = everyone.filter(func(w): return w.bed.kind=="ground")
+	check(grounded.all(func(w): return w.state=="asleep" and w.body.visible and w.body.state=="Lie" and absf(w.at.y)<.01 and folk.open_at(w.at)),"The homeless lie asleep on the ground in the open street")
+	check(folk.people.all(func(w): return not w.state in ["sit_down","wait","drink","stand_up"]) and folk.seats.all(func(seat): return seat.taken==null),"The inn's tables are empty")
+	check(folk.named_at(folk.anya.at).is_empty() and folk.named_at(folk.orion.at).is_empty(),"Neither is named while out of sight")
+	# Through the sunrise to the morning.
+	t = Daylight.CYCLE-2.0
+	world.set_time(t)
+	folk.tick(.1,Overworld.START)
+	while t < Daylight.CYCLE+Daylight.SUNRISE+60.0:
+		t += .1
+		world.set_time(t)
+		folk.tick(.1,Overworld.START)
+	for w in everyone:
+		if w.state in folk.ABED: print("ABED ",w.body.name," ",w.state," ",w.at," ",w.route.size())
+	check(everyone.all(func(w): return not w.state in folk.ABED and w.body.visible),"By morning all are up and about again")
+	check(folk.anya.state in ["post","to_tap","fill","carry","place","return"] and folk.inn.has_point(Vector2(folk.anya.at.x,folk.anya.at.z)) and not folk.kitchen.has_point(Vector2(folk.anya.at.x,folk.anya.at.z)),"Anya is back behind her bar")
+	check(folk.orion.state=="work" and not folk.smith.plan.is_empty(),"Orion is back at his work")
+	check(folk.people.all(func(w): return absf(w.at.y)<.01),"The lodgers are down from the loft")
+	# The hour jumped: at once where it has them.
+	world.set_time(Daylight.NIGHT+300.0)
+	folk.tick(.1,Overworld.START)
+	check(everyone.all(func(w): return w.state in ["asleep","indoors"]) and folk.orion.at.distance_to(folk.orion.bed.at)<.01,"Hurried on to the night, all are at once in bed, Orion in the same house")
+	world.set_time(Daylight.MORNING+400.0)
+	folk.tick(.1,Overworld.START)
+	check(everyone.all(func(w): return not w.state in folk.ABED and w.body.visible) and folk.patrons()>=3,"And on to the morning, all are up, and some at the inn's tables")
 
 	# The save keeps the hero's place in the world.
 	game.player.position = Vector3(-40,0,12)

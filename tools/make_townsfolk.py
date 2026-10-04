@@ -5,7 +5,8 @@ female "superhero", which come unclothed) on its own skeleton, with the pack's
 hairstyles, a wardrobe, and the clips a townsperson needs from the two
 animation libraries, retargeted as tools/import_character.py retargets the
 hero's: standing, talking, walking, jogging, sitting down and getting up,
-sitting, sitting and talking, drinking, reaching, carrying, dancing.
+sitting, sitting and talking, drinking, reaching, carrying, dancing, and
+getting up from lying on the ground (played backward, lying down).
 
 The packs have no clothes, so the wardrobe is fitted here from the body's own
 shape. A garment is a tube lofted down the body: at each height the outline
@@ -40,7 +41,7 @@ OUT = ROOT/'assets/models/character'
 # The game's clip: the library's.
 CLIPS = {'Idle': 'Idle_Loop', 'Talk': 'Idle_Talking_Loop', 'Walk': 'Walk_Loop', 'Jog': 'Jog_Fwd_Loop', 'SitDown': 'Sitting_Enter',
     'StandUp': 'Sitting_Exit', 'Sit': 'Sitting_Idle_Loop', 'SitTalk': 'Sitting_Talking_Loop', 'Reach': 'Interact', 'Dance': 'Dance_Loop',
-    'Drink': 'Consume', 'Carry': 'Walk_Carry_Loop', 'Arms': 'Idle_FoldArms_Loop'}
+    'Drink': 'Consume', 'Carry': 'Walk_Carry_Loop', 'Arms': 'Idle_FoldArms_Loop', 'GetUp': 'LayToIdle'}
 ARM = ('upperarm', 'lowerarm', 'hand', 'index', 'middle', 'pinky', 'ring', 'thumb')
 # Triangles the body is cut to (a crowd of twenty is on screen at once).
 BODY_TRIANGLES = 7000

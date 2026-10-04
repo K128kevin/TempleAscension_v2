@@ -9,7 +9,11 @@ extends Node3D
 const Vfx = preload("res://scripts/vfx.gd")
 # Flicker stays within this share of the torch's brightness.
 const FLICKER = .14
-const REACH = 40.0
+# Drawn up to this far from the camera. The cameras stand well back from the
+# hero (31m in the temple, 43m outdoors) and look over him at a slant, so a
+# fire at the far edge of a wide view is some 70m off: any nearer, and a
+# flame in plain view (the campfire, beyond the hero as he wakes) vanished.
+const REACH = 90.0
 
 var light: OmniLight3D
 var elapsed = 0.0

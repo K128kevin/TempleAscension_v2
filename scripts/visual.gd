@@ -6,6 +6,7 @@ const FootPlanter = preload("res://scripts/foot_planter.gd")
 const HandGrip = preload("res://scripts/hand_grip.gd")
 const ShieldArm = preload("res://scripts/shield_arm.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
+const Bandit = preload("res://scripts/bandit.gd")
 const SwordTrail = preload("res://scripts/sword_trail.gd")
 const BladeCharge = preload("res://scripts/blade_charge.gd")
 const BladeGlow = preload("res://scripts/blade_glow.gd")
@@ -137,12 +138,23 @@ const BOW_FULL_DRAW = 1.2
 # Each statue is carved in the likeness of a hero of its class, with his kit
 # (tools/paint_kits.py) cut into the stone; the lion has its own carved face.
 const STATUE_KITS = {"gladiator":"warrior","centurion":"warrior","boss":"warrior","archer":"ranger","wizard":"wizard","lion":"lion"}
+# A bandit (`hero_class` "bandit") is a man or woman of the desert in a
+# raider's kit, with a curved blade and no shield (scripts/bandit.gd); the
+# actor sets `bandit_look` before setup().
+var bandit = false
+var bandit_look: Dictionary = {}
+# The bandits' sica: shorter than the hero's sword.
+const SICA_SIZE = Vector3(.19,.86,.09)
 
 func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enemy_kind: String = "", hero_class: String = "warrior") -> void:
 	is_stone = stone
 	self.enemy_kind = enemy_kind
 	quadruped = stone and enemy_kind == "lion"
 	var character = "guardian_%s" % enemy_kind if stone and enemy_kind in ["gladiator","archer","centurion","wizard","boss"] else ("guardian" if stone else "warrior")
+	bandit = not stone and hero_class == "bandit"
+	if bandit:
+		if bandit_look.is_empty(): bandit_look = Bandit.look(0)
+		character = "bandit_%s" % bandit_look.who
 	if quadruped: character = "lion"
 	rig = load("res://assets/models/character/%s.glb" % character).instantiate()
 	# The supplied Godot rig faces +Z, matching Actor.forward().
@@ -163,6 +175,9 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	skeleton.move_child(planter,0)
 	planter.setup(skeleton)
 	for mesh in rig.find_children("*", "MeshInstance3D", true, false):
+		if bandit:
+			dress_bandit(mesh)
+			continue
 		skin_meshes.append(mesh)
 		if stone:
 			if mesh.skin != null and mesh.mesh is ArrayMesh:
@@ -220,15 +235,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		elif mesh.name.begins_with("RangerDagger"):
 			# Worn in its sheath on the outside of the left thigh, hilt up.
 			mesh.visible = hero_class == "ranger"
-			var sheath = Art.sheathed(mesh.get_active_material(0))
-			if sheath is ShaderMaterial:
-				sheath = sheath.duplicate()
-				if mesh.skin != null and mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
-				var length: AABB = mesh.mesh.get_aabb()
-				sheath.set_shader_parameter("pommel_height",length.end.y)
-				sheath.set_shader_parameter("point_height",length.position.y)
-				sheath.set_shader_parameter("rest_pose",mesh.skin != null)
-			mesh.material_override = sheath
+			sheathe(mesh)
 		elif mesh.name.begins_with("Ranger") and not "RangerCloak" in mesh.name and not "RangerBody" in mesh.name:
 			mesh.visible = hero_class == "ranger"
 		elif "HeroHelmet" in mesh.name:
@@ -341,6 +348,37 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	equip(weapon)
 	play(idle_action())
 
+# A bladed piece of gear worn in its sheath (assets/shaders/sheathed.gdshader).
+func sheathe(mesh: MeshInstance3D) -> void:
+	var sheath = Art.sheathed(mesh.get_active_material(0))
+	if sheath is ShaderMaterial:
+		sheath = sheath.duplicate()
+		if mesh.skin != null and mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
+		var length: AABB = mesh.mesh.get_aabb()
+		sheath.set_shader_parameter("pommel_height",length.end.y)
+		sheath.set_shader_parameter("point_height",length.position.y)
+		sheath.set_shader_parameter("rest_pose",mesh.skin != null)
+	mesh.material_override = sheath
+
+# One part of a bandit's figure, dressed as its look says, or taken away if
+# this bandit does not wear it. Each carries the ranger's quiver (worn while
+# the bow is in hand) and his dagger, sheathed on the thigh.
+func dress_bandit(mesh: MeshInstance3D) -> void:
+	if mesh.name == "Quiver":
+		quivers.append(mesh)
+		mesh.material_override = Art.quiver()
+	elif mesh.name == "Dagger": sheathe(mesh)
+	else:
+		var material = Bandit.material(mesh.name,bandit_look)
+		if material == null:
+			mesh.queue_free()
+			return
+		mesh.material_override = material
+	# (Its bounds follow the skeleton; a falling bandit must not be culled
+	# by where he stood.)
+	mesh.extra_cull_margin = 1.0
+	skin_meshes.append(mesh)
+
 func derive_walks() -> void:
 	if not clips.has("Walk"): return
 	var prefix: String = clips.Walk.trim_suffix("Walk")
@@ -415,13 +453,18 @@ func equip(weapon: String) -> void:
 		weapon_finish = Art.wizard_staff()
 	# The Crowned Statue wields a great sword.
 	if weapon=="sword" and enemy_kind=="boss": weapon_size *= BOSS_SWORD_SCALE
-	var item = Art.model("oracle_staff" if oracle or silver_staff else weapon, weapon_size,weapon_finish)
+	# A bandit's sword is a sica, curved and shorter.
+	var sica = bandit and weapon=="sword"
+	if sica:
+		weapon_size = SICA_SIZE
+		weapon_finish = Art.sica_material()
+	var item = Art.model("oracle_staff" if oracle or silver_staff else ("sica" if sica else weapon), weapon_size,weapon_finish)
 	weapon_item = item
 	hand.add_child(item)
 	# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
 	item.rotation.x = PI / 2
 	# The grip sits a fixed share up each hilt; the larger sword's hilt is longer.
-	item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22,"dagger":-.10}.get(weapon,-.17))
+	item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22,"dagger":-.10}.get(weapon,-.17)*(SICA_SIZE.y/sizes.sword.y if sica else 1.0))
 	weapon_rest = item.transform
 	if oracle or silver_staff:
 		item.top_level = true
@@ -438,7 +481,7 @@ func equip(weapon: String) -> void:
 			nocked_arrow.visible = false
 		align_weapon()
 	# The hero's sword comes with a shield; among statues only shield bearers carry one.
-	if (weapon=="sword" and not is_stone) or enemy_kind in SHIELD_BEARERS:
+	if (weapon=="sword" and not is_stone and not bandit) or enemy_kind in SHIELD_BEARERS:
 		var scutum = enemy_kind in SHIELD_BEARERS
 		var tower = enemy_kind=="centurion"
 		shield_attachment = BoneAttachment3D.new()

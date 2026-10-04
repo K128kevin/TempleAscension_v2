@@ -290,6 +290,24 @@ func tick(delta: float) -> void:
 	sparks.emitting = working == "grind" and wheel_rate > WHEEL_SPEED*.6
 	settle(delta,working)
 
+# Done for the day at once (the clock has jumped to the night): every tool
+# back in its place, his hands empty, upright, and the wheel still. (At an
+# ordinary bedtime scripts/townsfolk.gd waits for him to finish a job.)
+func down_tools() -> void:
+	for name in tools:
+		tools[name].hand = ""
+		tools[name].node.global_transform = placed(tools[name].rest)
+	for side in hands:
+		hands[side].tool = ""
+		hands[side].want = null
+		hands[side].weight = 0.0
+		arms[side].weight = 0.0
+	lean_wanted = 0.0
+	lean.lean = 0.0
+	plan = []
+	wheel_rate = 0.0
+	sparks.emitting = false
+
 # One of his labours at `t` seconds into it: the hands put where it has
 # them. `ending` asks only whether it is at a moment he can stop on.
 func work(kind: String, t: float, ending: bool) -> bool:
@@ -362,7 +380,8 @@ func rebase(hand: Dictionary, local: bool) -> void:
 # Hands eased toward where they are wanted, the arms and the tools after them.
 func settle(delta: float, working: String) -> void:
 	lean.lean = lerpf(lean.lean,lean_wanted,1.0-exp(-delta*5.0))
-	body.figure.position.y = STAND
+	# (On the smithy's tiles; on the street, coming from his house, on the ground.)
+	body.figure.position.y = STAND if world.rooms[1].area.has_point(Vector2(walker.at.x,walker.at.z)) else 0.0
 	var blend = 1.0-exp(-delta*EASE)
 	for side in hands:
 		var hand: Dictionary = hands[side]

@@ -127,6 +127,15 @@ static func world_stone(source: StandardMaterial3D) -> StandardMaterial3D:
 	return m
 
 # The hero's sword: brass fittings, a dark leather grip and a fullered silver blade.
+# The bandits' sica: the sword's finish, its fuller following the curve.
+static func sica_material() -> ShaderMaterial:
+	if materials.has("sica"): return materials.sica
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/sword.gdshader")
+	m.set_shader_parameter("SWEEP",1.1)
+	materials.sica = m
+	return m
+
 static func sword_material() -> ShaderMaterial:
 	if materials.has("sword"): return materials.sword
 	var m = ShaderMaterial.new()

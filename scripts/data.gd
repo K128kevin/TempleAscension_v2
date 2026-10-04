@@ -35,11 +35,12 @@ const ENEMIES = {
 	# within its point's reach as the blow lands ("strike", centre to centre,
 	# from where his step has carried him).
 	"centurion":{"title":"Centurion","hp":65.0,"damage":27.5,"speed":3.56,"range":3.0,"strike":3.1,"interval":1.0,"weapon":"spear","shield":"tower","size":1.2,"color":Color(.64,.68,.76)},
-	# Bandits are men, not statues: they fall rather than crumble. Each fights
+	# Bandits are people, not statues: they fall rather than crumble. Each fights
 	# `as` one of the temple's guardians does (a swordsman as a gladiator, a
-	# bowman as an archer), in a ranger's hood and cloak.
-	"bandit":{"title":"Bandit","as":"gladiator","human":"ranger","hp":30.0,"damage":7.0,"speed":3.7,"range":1.9,"interval":1.0,"weapon":"sword","size":1.0,"color":Color(.5,.4,.3)},
-	"bandit_archer":{"title":"Bandit Archer","as":"archer","human":"ranger","hp":18.0,"damage":10.0,"speed":3.6,"range":10.6,"interval":1.3,"weapon":"bow","size":1.0,"color":Color(.5,.4,.3)},
+	# bowman as an archer), in a raider's linen, leather and red cloth
+	# (scripts/bandit.gd), a man or a woman.
+	"bandit":{"title":"Bandit","as":"gladiator","human":"bandit","hp":30.0,"damage":7.0,"speed":3.7,"range":1.9,"interval":1.0,"weapon":"sword","size":1.0,"color":Color(.5,.4,.3)},
+	"bandit_archer":{"title":"Bandit Archer","as":"archer","human":"bandit","hp":18.0,"damage":10.0,"speed":3.6,"range":10.6,"interval":1.3,"weapon":"bow","size":1.0,"color":Color(.5,.4,.3)},
 	"boss":{"title":"The Crowned Statue","hp":1250.0,"damage":67.5,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
 const CLASSES = ["warrior","ranger","wizard"]
