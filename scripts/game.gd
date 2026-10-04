@@ -727,6 +727,7 @@ func dash() -> void:
 	scheduled.clear() # Evading cancels an unfinished wind-up or remaining volley.
 	sound.play("dash-whoosh")
 	skills.pending.clear()
+	skills.cancel_aim()
 	dash_time = .16
 	var offset = world.pointer()-player.position
 	dash_speed = minf(41,offset.length()/.16)

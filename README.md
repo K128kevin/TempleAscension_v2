@@ -302,7 +302,7 @@ Percentages of damage are of a normal attack.
 |---|---|---|---|---|
 | Area of Effect | 0 | Cleave | 25 | A 140° → 180° arc for 125% → 165% damage |
 | | 5 | Leap | 40 | Leap to a target in sight (up to 10 m): 125% → 300% to everyone around the landing (4.5 m) |
-| | 5 | Ground Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 7 → 15 m; a shockwave of dust and a shake of the screen |
+| | 5 | Ground Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 5 → 9 m; a shockwave of dust and a shake of the screen |
 | | 0 | War Cry | 30 | Every enemy within 6 → 10 m takes 20% → 100% more damage for 6 → 10 seconds |
 | | 10 | Shield Charge | 35 | Sword and shield only: a charge of 8 → 14 m behind the shield, 100% → 200% to everyone in the path, thrown aside; the first one hit stunned for 1 → 2 seconds |
 | | 10 | Shockwave | 40 | 180% → 360% to everyone within 4 → 7 m, thrown back; 10-second cooldown; a shockwave of dust and a shake of the screen |
@@ -311,7 +311,7 @@ Percentages of damage are of a normal attack.
 | | 5 | Vampiric Strike | 25 | 80% → 125% plus 3% → 12% of the target's total health, healing the same share of your own |
 | | 5 | Shadow Strike | 25 | 25% → 70%, then 100% → 220% over 5 seconds; refreshes Cursed Blade on the target |
 | | 10 | Execute | 45 | 200% → 450%, only on an enemy below 20% → 40% health |
-| Passive | 0 | Dash Attack | | Enemies the dash passes through take 10 → 50 damage and are pushed back; the dash costs 15 → 5 extra energy |
+| Passive | 0 | Dash Attack | | Enemies the dash passes through take 50% → 200% damage and are pushed back; the dash costs 15 → 5 extra energy |
 | | 0 | Shield Expertise | | 5% → 50% chance to block any attack with the shield, for 25% → 80% less damage |
 | | 0 | Endurance | | Energy recovers 10% → 75% faster |
 | | 5 | Quick Strikes | | Normal attacks 20% → 170% faster |
@@ -367,14 +367,14 @@ as the warrior's do.
 | Tree | Points | Skill | Energy | Ranks 1 → 5 |
 |---|---|---|---|---|
 | Attacks | 0 | Rapid Fire (bow) | 35 → 20 | 2 → 4 arrows in a row |
-| | 0 | Power Shot (bow) | 30 | 200% → 400%, after 3 → 1 seconds of aiming |
+| | 0 | Power Shot (bow) | 30 | 200% → 400%, after 3 → 1 seconds of aiming (a bar over his head fills as he aims) |
 | | 0 | Flurry (dagger) | 25 | 2 → 4 stabs of 100% → 275% |
 | | 5 | Volley (bow) | 40 | 15 → 30 arrows falling at random in the area aimed at (4.25 m radius), 80% → 150% each |
 | | 5 | Lightning Shot (bow) | 35 | 100% → 250%, leaping to 1 → 5 more enemies within 10 m of the last |
-| | 5 | Frenzy | 0 | Attacks 40% → 150% faster for 6 → 15 seconds; 30-second cooldown |
+| | 5 | Frenzy | 0 | Attacks 10% → 35% faster for 6 → 15 seconds; 30-second cooldown |
 | | 10 | Triple Slash (dagger) | 25 | Three cuts of 130% → 250% on the target and on 2 → 4 more enemies around him (within 2.6 m, on any side) |
 | Utility | 0 | Slow Shot (bow) | 20 | The target moves 30% → 75% slower for 3 → 6 seconds |
-| | 0 | Weakening Strike (bow or dagger) | 15 | Critical strikes on the target deal 50% → 150% more for 6 seconds, in 2 → 5 stacks |
+| | 0 | Weakening Strike (bow or dagger) | 15 | Critical strikes on the target deal 10% → 15% more a stack for 6 seconds, in 2 → 5 stacks (75% at most) |
 | | 5 | Hide in Shadows | 20 | Unseen by enemies, moving 50% → 15% slower; out of combat only; ended by attacking, being struck or dashing |
 | | 5 | Throw Sand | 40 | An enemy within 3 m wanders blind, unable to attack, for 3 → 12 seconds, or until hurt; 45-second cooldown |
 | | 5 | Tranquilizer (bow) | 40 | The target sleeps for 3 → 12 seconds, or until hurt; the arrow does no damage; 45-second cooldown |

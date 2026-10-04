@@ -149,10 +149,21 @@ func test():
 	hero({"power_shot":1})
 	foe = dummy(6)
 	check(game.skills.cast("power_shot",at) and is_equal_approx(game.run.energy,70.0),"Power Shot costs 30 energy")
-	play(2.8)
+	play(1.5)
+	game.hud.show_cast_bars()
+	check(game.hud.aim_bar != null and game.hud.aim_bar.visible and absf(game.hud.aim_bar.value-.5)<.03,"A bar over his head shows the aim, half full halfway through")
+	play(1.3)
 	check(lost(foe)==0 and game.player.busy>0 and game.player.visual.state=="ArcherShot","Rank 1 aims for three seconds, the bow held drawn")
 	play(.6)
 	check(within(foe,1,200),"then deals 200%% (%.1f)" % lost(foe))
+	game.hud.show_cast_bars()
+	check(not game.hud.aim_bar.visible,"and the bar is gone with the shot")
+	game.player.busy = 0; game.run.energy = 100; foe.hp = foe.max_hp
+	game.skills.cast("power_shot",at); play(.5)
+	game.dash(); play(3.5)
+	game.hud.show_cast_bars()
+	check(lost(foe)==0 and game.skills.aim_total==0 and not game.hud.aim_bar.visible,"Dashing lets the aim go: no shot, and no bar")
+	ready()
 	hero({"power_shot":5}); foe.hp = foe.max_hp
 	game.skills.cast("power_shot",at)
 	play(.9)
@@ -219,7 +230,7 @@ func test():
 	hero({"frenzy":1})
 	var normal: float = game.attack_profile().duration
 	check(game.skills.cast("frenzy",at) and game.run.energy==Data.max_energy(game.run) and game.player.busy==0,"Frenzy costs nothing and takes no time")
-	check(is_equal_approx(game.attack_profile().duration,normal/1.4),"Rank 1: attacks 40% faster")
+	check(is_equal_approx(game.attack_profile().duration,normal/1.1),"Rank 1: attacks 10% faster")
 	check(game.skills.reason("frenzy").begins_with("Recharging: 30"),"It recharges for 30 seconds")
 	play(5.5)
 	check(game.skills.frenzy_time>0 and is_instance_valid(game.skills.frenzy_aura),"It lasts six seconds, and shows on him")
@@ -228,7 +239,7 @@ func test():
 	hero({"frenzy":5},5)
 	normal = game.attack_profile().duration
 	game.skills.cast("frenzy",at)
-	check(is_equal_approx(game.attack_profile().duration,normal/2.5) and is_equal_approx(game.skills.frenzy_time,15.0),"Rank 5: 150% faster for 15 seconds, with the dagger as with the bow")
+	check(is_equal_approx(game.attack_profile().duration,normal/1.35) and is_equal_approx(game.skills.frenzy_time,15.0),"Rank 5: 35% faster for 15 seconds, with the dagger as with the bow")
 	clear()
 
 	# Triple Slash.
@@ -260,14 +271,14 @@ func test():
 	foe = dummy(6)
 	check(game.skills.cast("weakening_strike",at) and is_equal_approx(game.run.energy,85.0) and game.run.weapon==2,"Weakening Strike costs 15 energy, and with the bow is a shot")
 	play(1.0)
-	check(within(foe,1,100) and foe.weak_stacks==1 and is_equal_approx(foe.weak_bonus,50.0),"It hits and leaves one stack")
+	check(within(foe,1,100) and foe.weak_stacks==1 and is_equal_approx(foe.weak_bonus,10.0),"It hits and leaves one stack")
 	game.player.busy = 0; game.skills.cast("weakening_strike",at); play(1.0)
 	game.player.busy = 0; game.skills.cast("weakening_strike",at); play(1.0)
 	check(foe.weak_stacks==2,"Rank 1 stacks twice at most")
 	foe.hp = foe.max_hp
 	game.skills.crit_override = 1
 	game.skills.strike(foe,10.0)
-	check(is_equal_approx(lost(foe),10.0*Data.CRIT_MULTIPLIER*2.0),"Two stacks of 50%: a critical strike on it deals double again")
+	check(is_equal_approx(lost(foe),10.0*Data.CRIT_MULTIPLIER*1.2),"Two stacks of 10%: a critical strike on it deals a fifth more")
 	game.skills.crit_override = 0
 	for i in 400: foe.tick(STEP)
 	check(foe.weak_stacks==0,"The stacks last six seconds")
@@ -276,7 +287,7 @@ func test():
 	foe = dummy(1.6)
 	check(game.skills.cast("weakening_strike",foe.position) and game.run.weapon==5 and game.player.visual.state=="DaggerSlash","With the dagger in hand it is a cut")
 	play(.8)
-	check(within(foe,1,100) and foe.weak_stacks==1 and is_equal_approx(foe.weak_bonus,150.0),"which hits and weakens as the shot does")
+	check(within(foe,1,100) and foe.weak_stacks==1 and is_equal_approx(foe.weak_bonus,15.0) and Book.values("weakening_strike",5).y==5,"which hits and weakens as the shot does (rank 5: 15% a stack, five stacks)")
 	clear()
 
 	# Hide in Shadows.

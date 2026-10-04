@@ -341,6 +341,7 @@ func cast_bar() -> ProgressBar:
 	p.add_theme_stylebox_override("background",background)
 	return p
 
+var aim_bar: ProgressBar
 func show_cast_bars() -> void:
 	var casting: Array = game.enemies.filter(func(e): return e.kind=="wizard" and not e.dead and e.visible and e.cast_total>0 and e.windup>0)
 	while cast_bars.size()<casting.size(): cast_bars.append(cast_bar())
@@ -354,6 +355,14 @@ func show_cast_bars() -> void:
 		# Just above where the hover health bar sits.
 		var head: Vector3 = caster.position+Vector3.UP*caster.config.size*2.25
 		cast_bars[i].position = game.world.camera.unproject_position(head)-Vector2(cast_bars[i].size.x*.5,24)
+	# The hero's own: Power Shot's aim, filling over his head until he looses.
+	var aiming: bool = game.skills.aim_total>0 and not game.player.dead
+	if aiming and aim_bar == null: aim_bar = cast_bar()
+	if aim_bar != null:
+		aim_bar.visible = aiming
+		if aiming:
+			aim_bar.value = clampf(1.0-game.skills.aim_left/game.skills.aim_total,0.0,1.0)
+			aim_bar.position = game.world.camera.unproject_position(game.player.position+Vector3.UP*2.25)-Vector2(aim_bar.size.x*.5,24)
 
 # The name of the townsperson under the cursor, over her head.
 func show_npc_name(who: Dictionary) -> void:

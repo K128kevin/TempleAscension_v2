@@ -116,15 +116,15 @@ func test():
 
 	# Ground Slam: an arc out to its listed distance.
 	hero({"cleave":5,"ground_slam":1})
-	var near = dummy(6.5); var beyond = dummy(8.5); var off = dummy(6.5,45)
+	var near = dummy(4.5); var beyond = dummy(6.0); var off = dummy(4.5,45)
 	check(game.skills.cast("ground_slam",origin+forward*5) and game.run.energy==60,"Ground Slam costs 40 energy")
 	wait(.6)
-	check(lost(near)>=10 and lost(near)<=15 and lost(beyond)==0 and lost(off)==0,"Ground Slam rank 1: 100% damage in a 70° arc out to 7 metres")
+	check(lost(near)>=10 and lost(near)<=15 and lost(beyond)==0 and lost(off)==0,"Ground Slam rank 1: 100% damage in a 70° arc out to 5 metres")
 	check(not game.effects.any(func(e): return not e.node is Label3D),"No coloured circles mark the ground it strikes")
 	hero({"cleave":5,"ground_slam":5})
-	var distant = dummy(14.5); var past_reach = dummy(16.5)
+	var distant = dummy(8.5); var past_reach = dummy(10.5)
 	game.skills.cast("ground_slam",origin+forward*5); wait(.6)
-	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(past_reach)==0 and lost(off)>0,"Ground Slam rank 5: 250% damage in a 120° arc out to 15 metres")
+	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(past_reach)==0 and lost(off)>0,"Ground Slam rank 5: 250% damage in a 120° arc out to 9 metres")
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillSlam","The slam sends out a shockwave of dust, shakes the screen, and has its own swing")
 	var wave = game.skills.waves[0]
 	var ring: ShaderMaterial = wave.ground.material_override
@@ -359,8 +359,8 @@ func test():
 		check(met.position.distance_to(before)>.4,"and pushes it back (%.2fm)" % met.position.distance_to(before))
 		check(game.dash_struck.size()==1 and not game.dash_attack,"each enemy once, and the striking ends with the dash")
 		clear()
-	check(dealt_by_rank[1]>dealt_by_rank[0]*3.5,"Rank 5 hits for 50 to rank 1's 10")
-	check(Book.values("dash_attack",1)==({"x":10.0,"y":15.0,"z":0.0}) and Book.values("dash_attack",3)==({"x":20.0,"y":11.0,"z":0.0}),"Dash Attack's damage and extra cost run 10/15/20/30/50 and 15/13/11/8/5")
+	check(dealt_by_rank[0]>=5.0 and dealt_by_rank[0]<=7.5 and dealt_by_rank[1]>=20.0 and dealt_by_rank[1]<=30.0,"Rank 1 hits for 50%% of a normal attack, rank 5 for 200%% (%.1f, %.1f)" % [dealt_by_rank[0],dealt_by_rank[1]])
+	check(Book.values("dash_attack",1)==({"x":50.0,"y":15.0,"z":0.0}) and Book.values("dash_attack",3)==({"x":100.0,"y":11.0,"z":0.0}),"Dash Attack's damage and extra cost run 50/75/100/150/200% and 15/13/11/8/5")
 
 	# Critical hits: 20%, and 0.25% more a point of Dexterity, for double damage,
 	# rolled for every struck_dummy hit.

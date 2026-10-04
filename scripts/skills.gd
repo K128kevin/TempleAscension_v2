@@ -37,6 +37,10 @@ var frenzy_bonus = 0.0
 var frenzy_time = 0.0
 var frenzy_aura: Node3D
 var charge_glow: Node3D
+# Power Shot being aimed: how long the aim is, and how much of it is left (the
+# HUD shows it as a bar over his head).
+var aim_total = 0.0
+var aim_left = 0.0
 var falls: Array = []
 var passing: Array = []
 # How far the ranger's blade reaches, how far he throws sand, how wide a
@@ -115,7 +119,7 @@ func reset() -> void:
 		if is_instance_valid(f[0]): f[0].queue_free()
 	passing.clear()
 	if is_instance_valid(frenzy_aura): frenzy_aura.queue_free()
-	if is_instance_valid(charge_glow): charge_glow.queue_free()
+	cancel_aim()
 
 func rank(id: String) -> int:
 	return int(game.run.skills.get(id,0))
@@ -298,6 +302,8 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		game.player.visual.hold_at(POWER_HOLD,maxf(0.0,contact-POWER_DRAW*.78))
 		if is_instance_valid(charge_glow): charge_glow.queue_free()
 		charge_glow = RangerFx.charge(game.player.visual,contact)
+		aim_total = contact
+		aim_left = contact
 	elif clip==Motion.SWORD_OPENER:
 		game.swing_sword(duration)
 		game.player.visual.tint_blade(SWORD_CHAIN_SKILLS[s.effect],duration)
@@ -312,6 +318,12 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		for i in contacts.size(): pending.append({"time":duration*contacts[i],"id":id,"rank":level,"at":at,"direction":direction.normalized(),"blow":i,"blows":contacts.size(),"span":duration/contacts.size()})
 	else: pending.append({"time":contact,"id":id,"rank":level,"at":at,"direction":direction.normalized()})
 	return true
+
+# Power Shot let go of before it is loosed (he dashed, or the shot is away).
+func cancel_aim() -> void:
+	aim_total = 0.0
+	aim_left = 0.0
+	if is_instance_valid(charge_glow): charge_glow.queue_free()
 
 # How much faster the ranger attacks: Frenzy, while it lasts.
 func haste() -> float:
@@ -440,13 +452,13 @@ func damage_summary(id: String, level: int) -> Dictionary:
 		"rapid","slowshot","weaken": percent = 100.0
 		"passive":
 			if id!="dash_attack": return {}
+			percent = v.x
 		_:
 			# (War Cry, Throw Sand and the like; the wizard's Barrier and Blink.)
 			if s.has("ranks") or s.tag.is_empty(): return {}
 	var result = crit_numbers(weapon)
-	if id=="dash_attack": result.damage = "Damage: %s" % figure(v.x)
 	# The wizard's spells hit for a set amount.
-	elif percent<0: result.damage = "Damage: %d" % roundi(Data.damage_tag(game.run,s.tag,15.0*Book.value(id,level)))
+	if percent<0: result.damage = "Damage: %d" % roundi(Data.damage_tag(game.run,s.tag,15.0*Book.value(id,level)))
 	else: result.damage = "Damage: "+span(percent,tag)
 	return result
 
@@ -647,7 +659,7 @@ func execute(job: Dictionary) -> void:
 			# The next arrow's draw.
 			if job.blow<job.blows-1: game.player.visual.play("BowShot",job.span)
 		"power":
-			if is_instance_valid(charge_glow): charge_glow.queue_free()
+			cancel_aim()
 			loose(direction,v.x,{"kind":"power"})
 		"slowshot": loose(direction,100.0,{"kind":"slow","percent":v.x,"seconds":v.y})
 		"tranq": loose(direction,0.0,{"kind":"tranq","seconds":v.x})
@@ -727,12 +739,13 @@ func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
 		enemy.stun(v.z)
 		charge.stunned = true
 
-# Dash Attack: an enemy the dash passes through takes the rank's damage and is
+# Dash Attack: an enemy the dash passes through takes the rank's share of a
+# normal attack's damage and is
 # pushed back, out of the hero's path.
 const DASH_PUSH = .8
 func dash_hit(enemy, direction: Vector3, struck: Array) -> void:
 	struck.append(enemy)
-	strike(enemy,Book.values("dash_attack",rank("dash_attack")).x)
+	strike(enemy,attack_damage(Book.values("dash_attack",rank("dash_attack")).x))
 	var aside: Vector3 = enemy.position-game.player.position
 	aside.y = 0
 	var side: Vector3 = direction.cross(Vector3.UP)
@@ -763,6 +776,8 @@ func tick(dt: float) -> void:
 	defense_time = maxf(0,defense_time-dt)
 	if defense_time<=0: defense_stacks = 0
 	surprise_time = maxf(0,surprise_time-dt)
+	aim_left = maxf(0,aim_left-dt)
+	if aim_left<=0 or game.player.dead: aim_total = 0.0
 	frenzy_time = maxf(0,frenzy_time-dt)
 	# Frenzy shows on him while it lasts.
 	if frenzy_time>0 and not is_instance_valid(frenzy_aura): frenzy_aura = RangerFx.aura(game.player.visual)
