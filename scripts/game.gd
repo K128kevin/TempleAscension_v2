@@ -163,8 +163,10 @@ func load_floor() -> void:
 	# statue's fall, which it held up.)
 	if world.has_method("ensure_debris_collision"): world.ensure_debris_collision()
 	hover_ring = Art.target_ring()
+	hover_ring.layers = UI_LAYER
 	world.add_child(hover_ring)
 	hud.clear_enemy_bars()
+	show_ui(not ui_hidden)
 	# The approach's music plays outdoors, as on the first floor.
 	sound.track(music_track())
 	if world.has_method("set_time"): world.set_time(float(run.get("clock",Daylight.MORNING)))
@@ -393,6 +395,10 @@ func _input(event: InputEvent) -> void:
 		if event.button_index==MOUSE_BUTTON_LEFT: left_held = false
 		if event.button_index==MOUSE_BUTTON_RIGHT: right_held = false
 	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode==KEY_Z and event.alt_pressed and not event.ctrl_pressed and not event.meta_pressed:
+			show_ui(ui_hidden)
+			get_viewport().set_input_as_handled()
+			return
 		if debug.handle_key(event):
 			get_viewport().set_input_as_handled()
 			return
@@ -407,6 +413,18 @@ func _input(event: InputEvent) -> void:
 		if event.physical_keycode in [KEY_1,KEY_2,KEY_3,KEY_4] and mode=="character" and not hud.panels.hovered.is_empty():
 			hud.panels.assign(hud.panels.hovered,event.physical_keycode-KEY_1+1)
 			get_viewport().set_input_as_handled()
+
+# Alt+Z hides the whole interface, and shows it again: the HUD and every
+# panel, dialog and word on it, and what is drawn into the world for the
+# player's eyes alone (damage numbers, a dazed enemy's marks, the target
+# ring), which stand on a render layer of their own (UI_LAYER) for the camera
+# to leave out. The world itself is untouched.
+const UI_LAYER = 1 << 19
+var ui_hidden = false
+func show_ui(on: bool) -> void:
+	ui_hidden = not on
+	hud.visible = on
+	if is_instance_valid(world) and is_instance_valid(world.camera): world.camera.set_cull_mask_value(20,on)
 
 # C and K open and close the attribute panel (left) and the skill panel (right);
 # I, the equipment screen. The game is paused while any of them is open.
@@ -1076,6 +1094,7 @@ func float_text(at: Vector3, text: String, color: Color, swell: bool = false) ->
 	l.modulate = color
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.no_depth_test = true
+	l.layers = UI_LAYER
 	world.add_child(l)
 	l.position = at+Vector3.UP
 	if swell:
