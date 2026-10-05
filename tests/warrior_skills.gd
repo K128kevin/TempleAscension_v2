@@ -361,6 +361,22 @@ func test():
 	game.dash()
 	check(game.dash_time>0,"and can be used once it has")
 	game.dash_time = 0; game.player.busy = 0; game.player.invulnerable = 0
+	# The dash is a sprint, his own run faster, never a roll.
+	hero({"cleave":1})
+	game.dash_cooldown = 0
+	game.dash()
+	game.dash_direction = forward; game.dash_length = game.DASH_REACH; game.player.face(origin+forward)
+	var shown_states: Dictionary = {}
+	var sprint_rate = 0.0
+	for i in ceili(game.DASH_SECONDS/STEP):
+		play(STEP)
+		shown_states[game.player.visual.state] = true
+		if i==20: sprint_rate = game.player.visual.locomotion_rate
+	check(shown_states.keys()==[game.player.visual.run_action()],"The dash is his run the whole way, with no roll (%s)" % [shown_states.keys()])
+	check(absf(game.player.position.distance_to(origin)-game.DASH_REACH)<.15,"covering the dash's whole reach (%.2f m)" % game.player.position.distance_to(origin))
+	check(game.DASH_REACH/game.dash_whole()>game.PLAYER_RUN_SPEED*1.5 and sprint_rate>1.3,"far faster than he runs, his stride paced to it (%.1f m/s, stride ×%.2f)" % [game.DASH_REACH/game.dash_whole(),sprint_rate])
+	check(is_equal_approx(game.dash_share(game.DASH_SECONDS),0.0) and is_equal_approx(game.dash_share(0.0),1.0) and game.dash_pace(.01)<game.dash_pace(.3),"easing a little toward a run at its end")
+	clear()
 	var dealt_by_rank: Array = []
 	for r in [1,5]:
 		hero({"dash_attack":r})

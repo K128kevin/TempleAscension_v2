@@ -48,18 +48,16 @@ var ordered_slot = 0
 # Dash Attack: the dash under way strikes whoever it passes through, each once.
 var dash_attack = false
 var dash_struck: Array = []
-# The dash is two sprinting strides into a dive and a roll (Visual's Evade
-# clip, at a brisk but natural pace). He gathers speed over the strides
-# (DASH_RUN seconds, DASH_RUN_SHARE of the ground), leaps at his quickest and
-# slows as he rolls up onto his feet (DASH_ROLL seconds), and is free again
-# DASH_RISE after that. `dash_length` is how far this dash goes, DASH_REACH
-# at most.
-const DASH_RUN = .32
-const DASH_ROLL = .4
-const DASH_SECONDS = DASH_RUN+DASH_ROLL
+# The dash is a sprint: his own run, faster, for DASH_SECONDS. He is up to
+# his sprint almost at once (DASH_SPRINT seconds), holds it, and over the
+# last DASH_EASE seconds eases back toward a run (DASH_EASED of it), so that
+# he runs on out of it rather than stopping dead; he is free again DASH_RISE
+# after that. `dash_length` is how far this dash goes, DASH_REACH at most.
+const DASH_SECONDS = .72
 const DASH_REACH = 6.8
-const DASH_RUN_SHARE = .47
-const DASH_CLIP = .72
+const DASH_SPRINT = .08
+const DASH_EASE = .12
+const DASH_EASED = .55
 const DASH_RISE = .05
 # The dash costs nothing, but recharges for this long after each (Dash Attack
 # shortens it).
@@ -67,7 +65,6 @@ const DASH_COOLDOWN = 3.0
 # How long the healing spell takes to recharge.
 const HEAL_COOLDOWN = 20.0
 var dash_length = DASH_REACH
-var dash_rolling = false
 var leap_left = 0.0
 var leap_duration = .26
 var leap_direction = Vector3.ZERO
@@ -652,9 +649,8 @@ func player_control(dt: float) -> void:
 		var covered: float = dash_share(dash_time)
 		dash_time -= dt
 		player.position = world.move(player.position,dash_direction*dash_length*(dash_share(dash_time)-covered))
-		if not dash_rolling and dash_time<=DASH_ROLL:
-			dash_rolling = true
-			player.visual.play("Evade",DASH_CLIP)
+		# His stride keeps pace with the ground he covers.
+		player.visual.run_at(dash_length*dash_pace(dash_time))
 		if dash_attack:
 			for enemy in skills.targets(player.position,1.0):
 				if not enemy in dash_struck: skills.dash_hit(enemy,dash_direction,dash_struck)
@@ -857,8 +853,27 @@ func shake(strength: float, seconds: float = SHAKE_TIME) -> void:
 # The share of a dash's ground covered with `left` seconds of it to go.
 static func dash_share(left: float) -> float:
 	var gone: float = clampf(DASH_SECONDS-left,0.0,DASH_SECONDS)
-	if gone<DASH_RUN: return DASH_RUN_SHARE*pow(gone/DASH_RUN,1.3)
-	return DASH_RUN_SHARE+(1.0-DASH_RUN_SHARE)*(1.0-pow(1.0-(gone-DASH_RUN)/DASH_ROLL,1.5))
+	var held: float = DASH_SECONDS-DASH_SPRINT-DASH_EASE
+	var covered: float
+	if gone<DASH_SPRINT: covered = gone*gone/(2.0*DASH_SPRINT)
+	elif gone<DASH_SPRINT+held: covered = DASH_SPRINT*.5+gone-DASH_SPRINT
+	else:
+		var easing: float = gone-DASH_SPRINT-held
+		covered = DASH_SPRINT*.5+held+easing-(1.0-DASH_EASED)*easing*easing/(2.0*DASH_EASE)
+	return covered/dash_whole()
+
+# The share of a dash's ground covered a second at the pace he is going with
+# `left` seconds of it to go (times its length: his speed).
+static func dash_pace(left: float) -> float:
+	var gone: float = clampf(DASH_SECONDS-left,0.0,DASH_SECONDS)
+	var pace: float = 1.0
+	if gone<DASH_SPRINT: pace = gone/DASH_SPRINT
+	elif gone>DASH_SECONDS-DASH_EASE: pace = 1.0-(1.0-DASH_EASED)*(gone-(DASH_SECONDS-DASH_EASE))/DASH_EASE
+	return pace/dash_whole()
+
+# The ground a whole dash covers, in seconds at his sprint.
+static func dash_whole() -> float:
+	return DASH_SPRINT*.5+(DASH_SECONDS-DASH_SPRINT-DASH_EASE)+DASH_EASE*(1.0+DASH_EASED)*.5
 
 func dash() -> void:
 	if leap_left>0: return
@@ -877,13 +892,11 @@ func dash() -> void:
 	dash_time = DASH_SECONDS
 	var offset = world.pointer()-player.position
 	dash_length = minf(DASH_REACH,offset.length())
-	dash_rolling = false
 	dash_direction = offset.normalized()
 	if dash_direction.length()<.1: dash_direction = player.forward()
 	player.face(player.position+dash_direction)
 	player.invulnerable = DASH_SECONDS
-	# (Two strides are one turn of the run.)
-	player.visual.play(player.visual.run_action(),DASH_RUN)
+	player.visual.run_at(dash_length/dash_whole())
 	player.busy = DASH_SECONDS+DASH_RISE
 	route.clear()
 	target = null

@@ -1893,6 +1893,17 @@ func run_action() -> String:
 	if weapon_kind == "sword" and clips.has("SwordRun"): return "SwordRun"
 	return "Run"
 
+# Running at `travel_speed` metres a second whatever else is under way (the
+# hero's dash): his run, its stride paced to the ground he covers.
+func run_at(travel_speed: float) -> void:
+	if dead: return
+	var action = run_action()
+	var rate = clampf(travel_speed/(STRIDE_SPEED.get(action,STRIDE_SPEED.Run)*rig.scale.x),.3,2.5)
+	if state != action: play(action,0.0,rate)
+	elif not is_equal_approx(rate,locomotion_rate):
+		animator.play(clips[action],-1,rate)
+		locomotion_rate = rate
+
 # `travel_speed`, when given, is how fast the unit moves over the ground
 # (metres a second): the stride is played at that pace, so the planted foot
 # keeps still on the ground rather than skating.

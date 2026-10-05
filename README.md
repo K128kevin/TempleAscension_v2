@@ -22,7 +22,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Shift + left click | Attack toward cursor without moving |
 | Right click | Cast active skill slot 1 |
 | Hold left mouse | Continuously repath toward the cursor (a hold begun on the ground keeps walking when dragged over a statue) |
-| Space | Dash: no energy cost, recharges for 3 seconds |
+| Space | Dash: a short sprint toward the cursor, untouchable while it lasts; no energy cost, recharges for 3 seconds |
 | R | Toggle between running and walking (a slower pace) |
 | Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
 | 1 – 4 | Cast the other four assigned active skills |
