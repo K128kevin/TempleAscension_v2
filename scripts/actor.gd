@@ -5,6 +5,7 @@ const Visual = preload("res://scripts/visual.gd")
 const Art = preload("res://scripts/assets.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const Bandit = preload("res://scripts/bandit.gd")
+const Vfx = preload("res://scripts/vfx.gd")
 var game
 var visual
 var kind = "player"
@@ -215,7 +216,9 @@ func tick(dt: float) -> void:
 	nova_cooldown = maxf(0,nova_cooldown-dt)
 	if dead:
 		death_age += dt
-		if death_age > 8 and kind != "player": visible = false
+		if death_age > 8 and kind != "player":
+			visible = false
+			visual.clear_ragdoll()
 		return
 	if kind == "player": return
 	tick_dots(dt)
@@ -381,7 +384,8 @@ func playground_kill() -> void:
 	dead = true
 	windup = 0; busy = 0; cast_total = 0; laser_time = 0
 	if is_instance_valid(laser_model): laser_model.queue_free()
-	if kind == "player" or human: visual.play("Death")
+	if human: visual.fall()
+	elif kind == "player": visual.play("Death")
 	else:
 		visual.crumble()
 		game.sound.play("stone-crumble",-8)
@@ -784,6 +788,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	if game.playground != null:
 		# The playground shows every hit, but nothing takes damage.
 		game.sound.play(impact_sound(),-15)
+		if human: bleed(death_impact)
 		react_to_hit()
 		if kind != "player": push_back()
 		return
@@ -796,6 +801,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	if damage>0 and daze != "ambush": end_stun()
 	game.sound.play(impact_sound(),-15)
 	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),HIT_COLORS[look],look=="crit")
+	if human and damage>0: bleed(death_impact,hp<=0)
 	if hp <= 0:
 		if death_impact == Vector3.ZERO:
 			death_impact = StoneFragment.impact(position-game.player.position)
@@ -804,6 +810,12 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 		if not awake: game.awaken(self)
 		react_to_hit()
 		push_back()
+
+# A man bleeds where he is struck: a slight spatter thrown the way the blow
+# went (`away`, or from the hero), heavier from the one that kills him.
+func bleed(away: Vector3, heavy: bool = false) -> void:
+	if away == Vector3.ZERO: away = position-game.player.position
+	Vfx.blood(game.world,position+Vector3.UP*1.2*config.get("size",1.0),away,heavy)
 
 # What a hit sounds like: an arrow striking a statue rings on the stone, as
 # in the original game; anything else is a weapon's impact.
@@ -856,9 +868,10 @@ func die(reward: bool = true, death_impact: Vector3 = Vector3.ZERO) -> void:
 	dots.clear()
 	end_stun()
 	if is_instance_valid(laser_model): laser_model.queue_free()
-	# Statues crumble into physical fragments, with the original crumble sound.
+	# Statues crumble into physical fragments, with the original crumble sound;
+	# a man falls limp, thrown by the blow.
 	if human:
-		visual.play("Death")
+		visual.fall(death_impact)
 		game.sound.play("weapon-impact",-9)
 	else:
 		visual.crumble(false,death_impact)

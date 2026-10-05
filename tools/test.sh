@@ -32,6 +32,7 @@ run "$godot_bin" --headless --path . --script tests/buff_bar.gd --log-file "$PWD
 run "$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log" -- --test
 run "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"
 run "$godot_bin" --headless --fixed-fps 60 --path . --script tests/statue_physics.gd --log-file "$PWD/test-results/statue-physics.log"
+run "$godot_bin" --headless --fixed-fps 60 --path . --script tests/bandit_ragdoll.gd --log-file "$PWD/test-results/bandit-ragdoll.log"
 run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-normal.log"
 run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-regression.log" -- --debug-mode --floor=3 --bow --axe
 run "$godot_bin" --headless --path . --script tests/playground.gd --log-file "$PWD/test-results/playground.log" -- --debug-mode
@@ -43,6 +44,7 @@ if [ "${RENDER_TEST:-0}" = "1" ]; then
   run "$godot_bin" --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing-native.log" -- --live-attacks
   run "$godot_bin" --path . --script tests/enemy_visuals.gd --log-file "$PWD/test-results/enemy-render.log" -- --render-enemies
   run "$godot_bin" --path . --script tests/bandit_visuals.gd --log-file "$PWD/test-results/bandit-render.log" -- --render-bandits
+  run "$godot_bin" --fixed-fps 60 --path . --script tests/bandit_ragdoll.gd --log-file "$PWD/test-results/bandit-ragdoll-render.log" -- --render-ragdoll
   run "$godot_bin" --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-render.log" -- --render-shields
   run "$godot_bin" --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-render.log" -- --render-classes
   run "$godot_bin" --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-render.log" -- --render-bow

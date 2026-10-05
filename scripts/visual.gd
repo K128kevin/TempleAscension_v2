@@ -6,6 +6,7 @@ const FootPlanter = preload("res://scripts/foot_planter.gd")
 const HandGrip = preload("res://scripts/hand_grip.gd")
 const ShieldArm = preload("res://scripts/shield_arm.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
+const Ragdoll = preload("res://scripts/ragdoll.gd")
 const Bandit = preload("res://scripts/bandit.gd")
 const SwordTrail = preload("res://scripts/sword_trail.gd")
 const BladeCharge = preload("res://scripts/blade_charge.gd")
@@ -306,6 +307,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		play(idle_action())
 		return
 	derive_walks()
+	lower_roll()
 	# The fists that close on a grip, from the stance clips that hold one: the
 	# sword hand's, and the hand the ranger carries his bow in.
 	grip = HandGrip.new()
@@ -378,6 +380,30 @@ func dress_bandit(mesh: MeshInstance3D) -> void:
 	# by where he stood.)
 	mesh.extra_cull_margin = 1.0
 	skin_meshes.append(mesh)
+
+# The Evade clip is the library's roll, which dives hip-high into a somersault
+# in the air. The hero's is a low dive onto the shoulders: the hips are kept
+# down through the dive by up to ROLL_DROP metres, between ROLL_DIVE's times
+# in the clip (from and to its own height: in, held, out).
+const ROLL_DROP = .3
+const ROLL_DIVE = [.1,.24,.36,.5]
+func lower_roll() -> void:
+	if not clips.has("Evade") or skeleton.find_bone("pelvis") < 0: return
+	var prefix: String = clips.Evade.trim_suffix("Evade")
+	var library: AnimationLibrary = animator.get_animation_library(prefix.trim_suffix("/"))
+	if not library.has_animation("EvadeLow"):
+		var made: Animation = animator.get_animation(clips.Evade).duplicate(true)
+		var pelvis = skeleton.find_bone("pelvis")
+		# (Down, in the frame the hips are placed in.)
+		var down: Vector3 = skeleton.get_bone_global_rest(skeleton.get_bone_parent(pelvis)).basis.inverse()*Vector3.DOWN
+		for track in made.get_track_count():
+			if made.track_get_type(track) != Animation.TYPE_POSITION_3D or String(made.track_get_path(track)).get_slice(":",1) != "pelvis": continue
+			for key in made.track_get_key_count(track):
+				var t: float = made.track_get_key_time(track,key)
+				var share: float = smoothstep(ROLL_DIVE[0],ROLL_DIVE[1],t)*(1.0-smoothstep(ROLL_DIVE[2],ROLL_DIVE[3],t))
+				made.track_set_key_value(track,key,made.track_get_key_value(track,key)+down*ROLL_DROP*share)
+		library.add_animation("EvadeLow",made)
+	clips["Evade"] = prefix+"EvadeLow"
 
 func derive_walks() -> void:
 	if not clips.has("Walk"): return
@@ -1453,6 +1479,36 @@ func react(action: String, duration: float) -> void:
 	play(action,duration)
 	reaction_time = duration
 
+# A man slain falls limp (scripts/ragdoll.gd), thrown by `impact`, the
+# velocity of the blow. His bodies are let go at the next pose: by then they
+# have been brought from the skeleton's rest, where their joints are made, to
+# the pose he died in.
+var ragdoll: PhysicalBoneSimulator3D
+var ragdoll_impact = Vector3.ZERO
+var ragdoll_held = false
+func fall(impact: Vector3 = Vector3.ZERO) -> void:
+	if dead: return
+	if rig.scale.is_equal_approx(Vector3.ONE): ragdoll = Ragdoll.make(skeleton)
+	if ragdoll == null:
+		play("Death")
+		return
+	dead = true
+	state = "Death"
+	reaction_time = 0
+	animator.pause()
+	ragdoll_impact = impact
+	ragdoll_held = true
+	var actor = get_parent()
+	if actor.get("game") != null and actor.game.world.has_method("ensure_debris_collision"):
+		actor.game.world.ensure_debris_collision()
+	if is_instance_valid(nocked_arrow): nocked_arrow.visible = false
+
+# The body is gone: its limbs are no longer simulated.
+func clear_ragdoll() -> void:
+	if ragdoll == null: return
+	ragdoll.queue_free()
+	ragdoll = null
+
 # `settled` hides a statue already slain on load, without replaying its debris.
 func crumble(settled: bool = false, impact: Vector3 = Vector3.ZERO) -> void:
 	if crumbling >= 0.0: return
@@ -1699,7 +1755,10 @@ var anim_clock = 0.0
 
 func advance(dt: float) -> void:
 	anim_clock += dt
-	turn_toward_facing(dt)
+	if ragdoll != null and ragdoll_held:
+		ragdoll_held = false
+		Ragdoll.drop(ragdoll,ragdoll_impact)
+	if ragdoll == null: turn_toward_facing(dt)
 	cloak_tick(dt)
 	bow_lowering = maxf(0.0,bow_lowering-dt)
 	bow_raising = maxf(0.0,bow_raising-dt)
@@ -1732,7 +1791,7 @@ func advance(dt: float) -> void:
 		moving = Vector3(at.x-last_position.x,0,at.z-last_position.z)/dt
 		ground_speed = moving.length()
 	last_position = at
-	if animator.active:
+	if animator.active or ragdoll != null:
 		# Feet stay planted unless the unit runs, dashes, leaps or falls.
 		# (Knocked flat, it slides back along the ground instead.)
 		var floored = state.ends_with("HitKnockdown")

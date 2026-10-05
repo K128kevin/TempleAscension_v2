@@ -52,6 +52,26 @@ static func curve(start: float, finish: float) -> Curve:
 	c.add_point(Vector2(0,start)); c.add_point(Vector2(1,finish))
 	return c
 
+# A slight spatter of blood from a wound at `at` (in `parent`'s space), thrown
+# `away` from the blow: a few dark drops that arc, fall and are gone.
+static func blood(parent: Node3D, at: Vector3, away: Vector3, heavy: bool = false) -> CPUParticles3D:
+	away.y = 0
+	var p = particles(parent,26 if heavy else 14,.5,true,false)
+	p.position = at
+	p.explosiveness = .92
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = .07
+	p.direction = (away.normalized()+Vector3.UP*.5).normalized() if away.length_squared() > .0001 else Vector3.UP
+	p.spread = 60
+	p.initial_velocity_min = 1.2; p.initial_velocity_max = 4.4 if heavy else 3.6
+	p.gravity = Vector3(0,-9.8,0)
+	p.scale_amount_min = .08; p.scale_amount_max = .22 if heavy else .17
+	p.scale_amount_curve = curve(1.0,.55)
+	p.color_ramp = ramp([0,.75,1],[Color(.4,.02,.02,.95),Color(.28,.01,.01,.9),Color(.2,0,0,0)])
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+	return p
+
 # Particles run on the engine clock; hold them while combat is paused.
 static func hold_when_paused(game, emitters: Array) -> void:
 	var running = game!=null and game.mode=="playing"

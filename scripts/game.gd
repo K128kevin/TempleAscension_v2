@@ -48,7 +48,15 @@ var ordered_slot = 0
 # Dash Attack: the dash under way strikes whoever it passes through, each once.
 var dash_attack = false
 var dash_struck: Array = []
-var dash_speed = 41.0
+# The dash is a dive and a roll (Visual's Evade clip, at a brisk but natural
+# pace): he covers its ground in DASH_SECONDS, springing off, quickest through
+# the dive and slowing as he rolls up onto his feet, and is free again after
+# DASH_BUSY. `dash_speed` is his mean speed over it.
+const DASH_SECONDS = .45
+const DASH_REACH = 4.2
+const DASH_CLIP = .8
+const DASH_BUSY = .5
+var dash_speed = DASH_REACH/DASH_SECONDS
 var leap_left = 0.0
 var leap_duration = .26
 var leap_direction = Vector3.ZERO
@@ -624,8 +632,9 @@ func player_control(dt: float) -> void:
 		if leap_left<=0: player.visual.position.y = world.lift(player.position)
 		return
 	if dash_time>0:
+		var covered: float = dash_share(dash_time)
 		dash_time -= dt
-		player.position = world.move(player.position,dash_direction*dash_speed*dt)
+		player.position = world.move(player.position,dash_direction*dash_speed*DASH_SECONDS*(dash_share(dash_time)-covered))
 		if dash_attack:
 			for enemy in skills.targets(player.position,1.0):
 				if not enemy in dash_struck: skills.dash_hit(enemy,dash_direction,dash_struck)
@@ -815,6 +824,11 @@ func shake(strength: float) -> void:
 	shake_strength = maxf(shake_strength,strength)
 	shake_left = SHAKE_TIME
 
+# The share of a dash's ground covered with `left` seconds of it to go.
+static func dash_share(left: float) -> float:
+	var u: float = pow(clampf(1.0-left/DASH_SECONDS,0.0,1.0),.7)
+	return u*u*(3.0-2.0*u)
+
 func dash() -> void:
 	if leap_left>0: return
 	if mode!="playing" or player.dead: return
@@ -832,15 +846,15 @@ func dash() -> void:
 	sound.play("dash-whoosh")
 	skills.pending.clear()
 	skills.cancel_aim()
-	dash_time = .16
+	dash_time = DASH_SECONDS
 	var offset = world.pointer()-player.position
-	dash_speed = minf(41,offset.length()/.16)
+	dash_speed = minf(DASH_REACH,offset.length())/DASH_SECONDS
 	dash_direction = offset.normalized()
 	if dash_direction.length()<.1: dash_direction = player.forward()
 	player.face(player.position+dash_direction)
-	player.invulnerable = .22
-	player.visual.play("Evade",.25)
-	player.busy = .2
+	player.invulnerable = DASH_SECONDS
+	player.visual.play("Evade",DASH_CLIP)
+	player.busy = DASH_BUSY
 	route.clear()
 	target = null
 
