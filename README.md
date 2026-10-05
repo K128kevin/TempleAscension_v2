@@ -31,7 +31,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | E | Ascend, claim the crown, or rest at a safe entrance |
 | Walk through the temple's door | Enter the temple's first floor from the desert, or leave it again |
 | Escape | Pause, continue saved game, choose new run/difficulty, sound, quit |
-| Alt + Z | Hide the whole interface (every bar, icon, panel and word, damage numbers included), and show it again |
+| Ctrl + Z | Hide the whole interface (every bar, icon, panel and word, damage numbers included), and show it again |
 | F11, Alt+Enter, or Ctrl+Cmd+F on a Mac | Fullscreen on or off (also in the Escape menu; remembered between launches) |
 
 Clicking the ground cancels a combat order. While idle, the hero faces the cursor. Architecture

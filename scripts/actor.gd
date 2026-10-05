@@ -682,7 +682,7 @@ func held(how: String, seconds: float) -> void:
 		words.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		words.no_depth_test = true
 		stun_mark = words
-	# (Drawn for the player's eyes: hidden with the interface, Alt+Z.)
+	# (Drawn for the player's eyes: hidden with the interface, Ctrl+Z.)
 	stun_mark.layers = game.UI_LAYER
 	add_child(stun_mark)
 	stun_mark.position = Vector3.UP*size*2.2

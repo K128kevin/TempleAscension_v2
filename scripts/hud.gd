@@ -37,6 +37,10 @@ const BAR_WIDTH = 356.0
 const BAR_BOTTOM = 16.0
 const ORB_HEIGHT = 182.0
 const ORB_GAP = 10.0
+# How far down each orb's box the middle of its globe is (make_orb: under its
+# title), and how far up the hotbar sits so its middle is level with it.
+const ORB_MIDDLE = 105.0
+const ROW_BOTTOM = BAR_BOTTOM+(ORB_HEIGHT-ORB_MIDDLE-28)*BAR_SCALE
 const EFFECT_GAP = 6
 var effect_row: Control
 var effect_slots: Array[Dictionary] = []
@@ -118,8 +122,9 @@ func setup(owner_game) -> void:
 	var row = Control.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(row)
-	# Drawn at BAR_SCALE of its laid-out size, low and centred, between the orbs.
-	anchor(row,Vector2(.5,1),Vector2(-BAR_WIDTH*BAR_SCALE*.5,-BAR_BOTTOM-56*BAR_SCALE),Vector2(BAR_WIDTH,56))
+	# Drawn at BAR_SCALE of its laid-out size, centred between the orbs and
+	# level with their middles.
+	anchor(row,Vector2(.5,1),Vector2(-BAR_WIDTH*BAR_SCALE*.5,-ROW_BOTTOM-56*BAR_SCALE),Vector2(BAR_WIDTH,56))
 	row.scale = Vector2.ONE*BAR_SCALE
 	idle_style = panel_style(Color(.035,.032,.028,.94),Color(.37,.31,.21))
 	selected_style = panel_style(Color(.15,.115,.065,.97),gold)
@@ -172,7 +177,7 @@ func setup(owner_game) -> void:
 	effect_row = Control.new()
 	effect_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(effect_row)
-	anchor(effect_row,Vector2(.5,1),Vector2(-200,-BAR_BOTTOM-56*BAR_SCALE-6-(EFFECT_ICON+8)),Vector2(400,EFFECT_ICON+8))
+	anchor(effect_row,Vector2(.5,1),Vector2(-200,-ROW_BOTTOM-56*BAR_SCALE-6-(EFFECT_ICON+8)),Vector2(400,EFFECT_ICON+8))
 	effect_row.visible = false
 	prompt = label("",19,gold,root)
 	# (Above the orbs, and so above the row of buffs and debuffs.)
@@ -195,7 +200,7 @@ func make_orb(is_energy: bool) -> Dictionary:
 	var holder = Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(holder)
-	# Close either side of the hotbar, at its scale, their feet level with it.
+	# Close either side of the hotbar, at its scale, their middles level with it.
 	var beside = BAR_WIDTH*BAR_SCALE*.5+ORB_GAP
 	anchor(holder,Vector2(.5,1),Vector2(beside if is_energy else -beside-180*BAR_SCALE,-BAR_BOTTOM-ORB_HEIGHT*BAR_SCALE),Vector2(180,ORB_HEIGHT))
 	holder.scale = Vector2.ONE*BAR_SCALE

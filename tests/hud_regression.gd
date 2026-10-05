@@ -44,6 +44,7 @@ func test():
 		check(left.end.x<bar.position.x and bar.position.x-left.end.x<30 and left.position.y>area.size.y*.65,"Health sits just left of the hotbar at "+str(size))
 		check(right.position.x>bar.end.x and right.position.x-bar.end.x<30 and right.position.y>area.size.y*.65,"Energy sits just right of the hotbar at "+str(size))
 		check(area.encloses(left) and area.encloses(right),"Orbs fit the viewport at "+str(size))
+		check(absf(bar.get_center().y-left.get_center().y)<1.5 and absf(bar.get_center().y-right.get_center().y)<1.5,"The hotbar's middle is level with the middle of both orbs at %s (%.1f, %.1f)" % [size,bar.get_center().y,left.get_center().y])
 		var first: Rect2 = hud.weapon_slots[0].get_global_rect()
 		var last: Rect2 = hud.weapon_slots[-1].get_global_rect()
 		check(absf((first.position.x+last.end.x)*.5-area.size.x*.5)<2 and left.end.x<first.position.x and last.end.x<right.position.x,"Six compact ability panels (LMB, RMB, 1–4) centered without overlap at "+str(size))

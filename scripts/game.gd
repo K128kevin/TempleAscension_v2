@@ -400,7 +400,7 @@ func _input(event: InputEvent) -> void:
 		if event.button_index==MOUSE_BUTTON_LEFT: left_held = false
 		if event.button_index==MOUSE_BUTTON_RIGHT: right_held = false
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode==KEY_Z and event.alt_pressed and not event.ctrl_pressed and not event.meta_pressed:
+		if event.physical_keycode==KEY_Z and event.ctrl_pressed and not event.alt_pressed and not event.meta_pressed:
 			show_ui(ui_hidden)
 			get_viewport().set_input_as_handled()
 			return
@@ -428,7 +428,7 @@ func _input(event: InputEvent) -> void:
 			hud.panels.assign(hud.panels.hovered,event.physical_keycode-KEY_1+1)
 			get_viewport().set_input_as_handled()
 
-# Alt+Z hides the whole interface, and shows it again: the HUD and every
+# Ctrl+Z hides the whole interface, and shows it again: the HUD and every
 # panel, dialog and word on it, and what is drawn into the world for the
 # player's eyes alone (damage numbers, a dazed enemy's marks, the target
 # ring), which stand on a render layer of their own (UI_LAYER) for the camera
