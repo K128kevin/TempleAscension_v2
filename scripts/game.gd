@@ -91,11 +91,10 @@ var skills
 var creating_character = false
 # The debug playground, while it is open (Shift+P in debug mode).
 var playground = null
-# Whoever one of the hero's arrows, or his blade (spear, sword, axe or dagger),
-# is striking just now: on a statue an arrow rings as arrowhead on stone, and
-# on a bandit each is heard going into him (scripts/actor.gd impact_sound).
+# Whoever one of the hero's arrows is striking just now: on a statue it rings
+# as arrowhead on stone, on a bandit it is heard going into him
+# (scripts/actor.gd impact_sound).
 var arrow_struck = null
-var melee_struck = null
 # Set as the hero walks in through the temple's door: the first floor then
 # loads with him standing just inside it.
 var arriving_by_door = false

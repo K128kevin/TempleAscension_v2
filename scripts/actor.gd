@@ -817,14 +817,13 @@ func bleed(away: Vector3, heavy: bool = false) -> void:
 	if away == Vector3.ZERO: away = position-game.player.position
 	Vfx.blood(game.world,position+Vector3.UP*1.2*config.get("size",1.0),away,heavy)
 
-# What a hit sounds like: an arrow striking a statue rings on the stone, as
-# in the original game; an arrow or a blade going into a bandit is heard as
-# that (the arrow one of three hits, by chance); anything else is a weapon's
-# impact.
+# What a hit sounds like. On a statue: an arrow rings on the stone, as in the
+# original game, and anything else is a weapon's impact on it. On a bandit
+# (never the statues' sounds): an arrow going in, one of three hits by
+# chance, and anything else a blade going in.
 func impact_sound() -> String:
-	if game.arrow_struck == self: return "arrow-flesh-%d" % randi_range(1,3) if human else "arrow-stone-impact"
-	if game.melee_struck == self and human: return "sword-hit-flesh"
-	return "weapon-impact"
+	if human: return "arrow-flesh-%d" % randi_range(1,3) if game.arrow_struck == self else "sword-hit-flesh"
+	return "arrow-stone-impact" if game.arrow_struck == self else "weapon-impact"
 
 func push_back() -> void:
 	if pushback_step >= PUSHBACK.size(): return
@@ -873,10 +872,9 @@ func die(reward: bool = true, death_impact: Vector3 = Vector3.ZERO) -> void:
 	end_stun()
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	# Statues crumble into physical fragments, with the original crumble sound;
-	# a man falls limp, thrown by the blow.
+	# a man falls limp, thrown by the blow (heard already, as it struck).
 	if human:
 		visual.fall(death_impact)
-		game.sound.play("weapon-impact",-9)
 	else:
 		visual.crumble(false,death_impact)
 		game.sound.play("stone-crumble",-8)

@@ -262,11 +262,9 @@ func test():
 	check(heard.keys().all(func(k): return k in ["arrow-flesh-1","arrow-flesh-2","arrow-flesh-3"]) and heard.size()==3,"On a bandit it is one of the three arrow hits, by chance (%s)" % [heard.keys()])
 	for k in heard: check(ResourceLoader.exists("res://assets/audio/%s.wav" % k),"%s is there to be heard" % k)
 	game.arrow_struck = null
-	game.melee_struck = line[0]
-	check(line[0].impact_sound()=="sword-hit-flesh" and ResourceLoader.exists("res://assets/audio/sword-hit-flesh.mp3"),"A blade going into a bandit has its own sound")
+	check(line[0].impact_sound()=="sword-hit-flesh" and ResourceLoader.exists("res://assets/audio/sword-hit-flesh.mp3"),"Any other hit on a bandit is a blade going in: never a statue's sound")
 	line[0].human = false
-	check(line[0].impact_sound()=="weapon-impact","and into a statue, a weapon's impact as before")
-	game.melee_struck = null
+	check(line[0].impact_sound()=="weapon-impact","and on a statue, a weapon's impact as before")
 	hero({"lightning_shot":1})
 	for e in line: e.hp = e.max_hp
 	game.skills.cast("lightning_shot",at)
