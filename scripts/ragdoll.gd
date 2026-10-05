@@ -41,8 +41,8 @@ const TOPPLE_MOST = 2.5
 # blow; hurled by a blast (Leap, Thunder Slam, Shockwave, Power Shot: an
 # impact faster than BLAST), to rebound from whatever wall he meets.
 const BLAST = 4.0
-const PUSH = 2.0
-const BLAST_PUSH = 6.0
+const PUSH = 3.0
+const BLAST_PUSH = 9.0
 static var flesh: PhysicsMaterial
 
 # The bodies of `skeleton`, jointed and still: null if it is not a man's.
