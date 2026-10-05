@@ -52,24 +52,85 @@ static func curve(start: float, finish: float) -> Curve:
 	c.add_point(Vector2(0,start)); c.add_point(Vector2(1,finish))
 	return c
 
-# A spray of blood from a wound at `at` (in `parent`'s space), thrown `away`
-# from the blow: dark drops that arc, fall and are gone.
-static func blood(parent: Node3D, at: Vector3, away: Vector3, heavy: bool = false) -> CPUParticles3D:
+# Blood from a wound at `at` (in `parent`'s space), thrown `away` from the
+# blow: drops that fly drawn out into streaks (assets/shaders/blood_drop.gdshader)
+# out of a brief red mist, and spatter the floor (at height `ground`) where
+# they come down, to lie there a few seconds (blood_splat.gdshader). The drops'
+# emitter is returned; the mist and the splats are not `parent`'s own emitters.
+const BLOOD_SPREAD = 60.0
+const SPLAT_LIES = 5.0
+const SPLAT_DRIES = 1.5
+static var drop_material: ShaderMaterial
+static var splat_shader: Shader
+static var splat_mesh: QuadMesh
+static func blood(parent: Node3D, at: Vector3, away: Vector3, heavy: bool = false, ground: float = 0.0) -> CPUParticles3D:
 	away.y = 0
-	var p = particles(parent,56 if heavy else 30,.65,true,false)
+	var way: Vector3 = (away.normalized()+Vector3.UP*.5).normalized() if away.length_squared() > .0001 else Vector3.UP
+	var fastest: float = 6.0 if heavy else 4.6
+	if drop_material == null:
+		drop_material = ShaderMaterial.new()
+		drop_material.shader = preload("res://assets/shaders/blood_drop.gdshader")
+	var p = particles(parent,84 if heavy else 44,.85,true,false)
+	p.mesh = p.mesh.duplicate()
+	p.mesh.material = drop_material
 	p.position = at
 	p.explosiveness = .92
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	p.emission_sphere_radius = .1
-	p.direction = (away.normalized()+Vector3.UP*.5).normalized() if away.length_squared() > .0001 else Vector3.UP
-	p.spread = 60
-	p.initial_velocity_min = 1.2; p.initial_velocity_max = 6.0 if heavy else 4.6
+	p.set_particle_flag(CPUParticles3D.PARTICLE_FLAG_ALIGN_Y_TO_VELOCITY,true)
+	p.direction = way
+	p.spread = BLOOD_SPREAD
+	p.initial_velocity_min = 1.2; p.initial_velocity_max = fastest
 	p.gravity = Vector3(0,-9.8,0)
-	p.scale_amount_min = .09; p.scale_amount_max = .3 if heavy else .23
-	p.scale_amount_curve = curve(1.0,.55)
-	p.color_ramp = ramp([0,.75,1],[Color(.4,.02,.02,.95),Color(.28,.01,.01,.9),Color(.2,0,0,0)])
+	p.scale_amount_min = .05; p.scale_amount_max = .2 if heavy else .16
+	p.scale_amount_curve = curve(1.0,.6)
+	p.color_ramp = ramp([0,.8,1],[Color(.36,.012,.012,1),Color(.24,.006,.006,1),Color(.2,0,0,0)])
 	p.emitting = true
 	p.finished.connect(p.queue_free)
+	# The fine spray about the wound.
+	var mist = particles(p,14 if heavy else 8,.32,true,false)
+	mist.explosiveness = .95
+	mist.direction = way
+	mist.spread = 40
+	mist.initial_velocity_min = .6; mist.initial_velocity_max = 2.2
+	mist.gravity = Vector3(0,-2.0,0)
+	mist.scale_amount_min = .25; mist.scale_amount_max = .5 if heavy else .4
+	mist.scale_amount_curve = curve(.5,1.4)
+	mist.color_ramp = ramp([0,.25,1],[Color(.3,.01,.01,0),Color(.3,.01,.01,.3),Color(.22,0,0,0)])
+	mist.emitting = true
+	# Where some of the drops come down.
+	if splat_shader == null:
+		splat_shader = preload("res://assets/shaders/blood_splat.gdshader")
+		splat_mesh = QuadMesh.new()
+		splat_mesh.orientation = PlaneMesh.FACE_Y
+	var floor = Node3D.new()
+	floor.name = "BloodSplats"
+	parent.add_child(floor)
+	var last = 0.0
+	for i in 12 if heavy else 6:
+		var velocity: Vector3 = (way+Vector3(randf_range(-1,1),randf_range(-1,1),randf_range(-1,1))*.7).normalized()*randf_range(1.2,fastest)
+		var fall: float = (velocity.y+sqrt(velocity.y*velocity.y+19.6*maxf(0.0,at.y-ground)))/9.8
+		var splat = MeshInstance3D.new()
+		splat.mesh = splat_mesh
+		splat.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var finish = ShaderMaterial.new()
+		finish.shader = splat_shader
+		finish.set_shader_parameter("seed",randf()*40.0)
+		finish.set_shader_parameter("fade",0.0)
+		splat.material_override = finish
+		# Drawn out the way the drop was going as it struck.
+		var size: float = randf_range(.14,.34 if heavy else .28)
+		splat.scale = Vector3(size,1.0,size*randf_range(1.2,1.9))
+		splat.rotation.y = atan2(velocity.x,velocity.z)
+		splat.position = Vector3(at.x+velocity.x*fall,ground+.012+.001*i,at.z+velocity.z*fall)
+		floor.add_child(splat)
+		var life = floor.create_tween()
+		life.tween_interval(fall)
+		life.tween_property(finish,"shader_parameter/fade",1.0,.06)
+		life.tween_interval(SPLAT_LIES)
+		life.tween_property(finish,"shader_parameter/fade",0.0,SPLAT_DRIES)
+		last = maxf(last,fall)
+	floor.create_tween().tween_callback(floor.queue_free).set_delay(last+.06+SPLAT_LIES+SPLAT_DRIES+.1)
 	return p
 
 # Particles run on the engine clock; hold them while combat is paused.

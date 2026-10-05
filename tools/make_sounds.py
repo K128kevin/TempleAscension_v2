@@ -8,6 +8,10 @@
   power-whoosh.wav    Power Shot striking (synthesised: noise, tones and
                       filters only): a quick rush of air that swells into the
                       blow and stops with it, and a deep punch.
+  sword-hit-flesh.wav A blade striking a bandit: a recording supplied by the
+                      user (source_art/audio/bandit-sword-hit.mp3), its
+                      silence before the blow and after it cut away, faded
+                      out at its end.
   arrow-flesh-1..3.wav  An arrow striking a bandit: the three hits of a
                       recording supplied by the user
                       (source_art/audio/arrow-hits.mp3), cut apart at the
@@ -118,6 +122,21 @@ def arrow_hits():
     return hits
 
 
+# Where the blade's hit begins (its slash, just before the blow lands) and
+# where its ring has died away, in seconds, and how long it fades out over.
+BLADE_HIT = (.135, .7)
+BLADE_FADE = .08
+
+
+def blade_hit():
+    start, end = BLADE_HIT
+    hit = decoded(ROOT/'source_art/audio/bandit-sword-hit.mp3')[int(start*RATE):int(end*RATE)].copy()
+    rise, fall = int(.003*RATE), int(BLADE_FADE*RATE)
+    hit[:rise] *= np.linspace(0, 1, rise)[:, None]
+    hit[-fall:] *= (np.cos(np.linspace(0, math.pi, fall))*.5+.5)[:, None]
+    return hit
+
+
 def drawn_before():
     """The draws the first lightning sound made of the shared generator, made
     again (and thrown away), so the blow below keeps the noise it was first
@@ -166,5 +185,6 @@ def whoosh():
 if __name__ == '__main__':
     write('lightning-zap.wav', zap())
     write('power-whoosh.wav', whoosh())
+    write('sword-hit-flesh.wav', blade_hit())
     for i, hit in enumerate(arrow_hits()):
         write('arrow-flesh-%d.wav' % (i+1), hit)

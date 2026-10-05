@@ -753,9 +753,13 @@ While it is heard, a few small arcs of electricity jump about the spot it struck
 an arrow striking stone, copied unchanged from it. As there, it plays when one of
 the hero's arrows hits a statue, at the same level as `weapon-impact.mp3`.
 
-`assets/audio/sword-hit-flesh.mp3` is a blade striking flesh, supplied by the user
-(`sword_hit_bandit.mp3`), unedited: it plays whenever a bandit is hit by anything
-but one of the hero's arrows (blades, skills, spells, splash alike). `assets/audio/arrow-flesh-1.wav` to
+`assets/audio/sword-hit-flesh.wav` is a blade striking flesh, a recording supplied
+by the user (`source_art/audio/bandit-sword-hit.mp3`), cut by `tools/make_sounds.py`
+to its slash and blow (the silence before and after taken away) and faded out at
+its end: it plays whenever a bandit is hit by anything but one of the hero's
+arrows (blades, skills, spells, splash alike), each time at a pitch up to 12%
+higher or lower and up to 2 dB louder or softer (`scripts/audio.gd` VARIED), so
+that it never sounds the same twice running. `assets/audio/arrow-flesh-1.wav` to
 `arrow-flesh-3.wav` are the three arrow hits of a recording supplied by the user
 (`source_art/audio/arrow-hits.mp3`), cut apart at the silences between them by
 `tools/make_sounds.py` and each faded out at its end; one of them, by chance,

@@ -104,10 +104,6 @@ static func body(skeleton: Skeleton3D, part: Dictionary) -> PhysicalBone3D:
 	bone.collision_mask = WORLD_LAYER
 	return bone
 
-# (Hurled, a limb crosses more than a wall's thickness in a step.)
-static func sweep(bone: PhysicalBone3D) -> void:
-	PhysicsServer3D.body_set_enable_continuous_collision_detection(bone.get_rid(),true)
-
 # Lets go of him, with the velocity of the blow that felled him (as a
 # statue's stones are thrown: StoneFragment.impact).
 static func drop(simulator: PhysicalBoneSimulator3D, impact: Vector3) -> void:
@@ -116,8 +112,15 @@ static func drop(simulator: PhysicalBoneSimulator3D, impact: Vector3) -> void:
 	var topple: Vector3 = impact.limit_length(TOPPLE_MOST)
 	for bone in simulator.get_children():
 		if bone is PhysicalBone3D:
-			sweep(bone)
 			bone.linear_velocity = impact+topple*TOPPLE.get(String(bone.bone_name),0.0)
+
+# No limb moves faster than FASTEST: one wedged between his weight and a wall
+# is not flung out by its joint.
+const FASTEST = 16.0
+static func calm(simulator: PhysicalBoneSimulator3D) -> void:
+	for bone in simulator.get_children():
+		if bone is PhysicalBone3D and bone.linear_velocity.length_squared() > FASTEST*FASTEST:
+			bone.linear_velocity = bone.linear_velocity.limit_length(FASTEST)
 
 static func bodies(simulator: PhysicalBoneSimulator3D) -> Array:
 	return simulator.get_children().filter(func(bone): return bone is PhysicalBone3D)

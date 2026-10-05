@@ -1759,6 +1759,7 @@ func advance(dt: float) -> void:
 		ragdoll_held = false
 		Ragdoll.drop(ragdoll,ragdoll_impact)
 	if ragdoll == null: turn_toward_facing(dt)
+	else: Ragdoll.calm(ragdoll)
 	cloak_tick(dt)
 	bow_lowering = maxf(0.0,bow_lowering-dt)
 	bow_raising = maxf(0.0,bow_raising-dt)

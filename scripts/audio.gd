@@ -8,6 +8,11 @@ var muted := false
 var recent_sounds: Dictionary = {}
 const TOGETHER = 4
 const TOGETHER_MS = 80
+# Every sound is pitched a little differently each time it plays (PITCH);
+# these vary more, in pitch and in loudness (dB), so that heard over and over
+# they never sound like one recording: [pitch, loudness].
+const PITCH = .06
+const VARIED = {"sword-hit-flesh":[.12,2.0]}
 
 func _ready() -> void:
 	music = AudioStreamPlayer.new()
@@ -37,8 +42,9 @@ func play(id: String, volume: float = -11) -> void:
 	var sound := AudioStreamPlayer.new()
 	add_child(sound)
 	sound.stream = streams[id]
-	sound.volume_db = volume
-	sound.pitch_scale = randf_range(.94,1.06)
+	var vary: Array = VARIED.get(id,[PITCH,0.0])
+	sound.volume_db = volume+randf_range(-vary[1],vary[1])
+	sound.pitch_scale = randf_range(1.0-vary[0],1.0+vary[0])
 	sound.finished.connect(sound.queue_free)
 	sound.play()
 
