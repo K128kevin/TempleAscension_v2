@@ -11,7 +11,9 @@ const ArmReach = preload("res://scripts/arm_reach.gd")
 # Measured from him (he faces +Z, his right toward -X): where his right fist
 # closes on the spear, and where his shield stands, turned out to his left.
 const SPEAR_FIST = Vector3(-.3,1.0,.24)
-const SPEAR_SIZE = Vector3(.14,2.3,.09)
+# His spear's parts, each what it is made of (tools/make_spear.py), as
+# assets/shaders/spear.gdshader's `part`.
+const SPEAR_PARTS = {"Head":0,"Socket":0,"Rivet":0,"Butt":0,"Shaft":1,"Grip":2}
 const SHIELD_AT = Vector3(.44,0,.2)
 const SHIELD_SIZE = Vector3(.6,1.0,.2)
 const SHIELD_TURN = .5
@@ -46,10 +48,19 @@ func setup(variant: float) -> void:
 			if mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 			mesh.material_override = armor
 		mesh.extra_cull_margin = 1.0
-	# His spear, its butt on the ground below his fist.
-	spear = Art.model("spear",SPEAR_SIZE,Art.arms_material(.84))
+	# His spear (a legionary's hasta), its butt on the ground below his fist,
+	# its blade's flat turned to the front; no two quite alike.
+	spear = Art.model("hasta",Vector3.ONE)
+	for mesh in spear.find_children("*","MeshInstance3D",true,false):
+		var finish = ShaderMaterial.new()
+		finish.shader = load("res://assets/shaders/spear.gdshader")
+		finish.set_shader_parameter("part",SPEAR_PARTS.get(String(mesh.name),1))
+		finish.set_shader_parameter("blade",mesh.name == "Head")
+		finish.set_shader_parameter("seed",variant)
+		mesh.material_override = finish
 	add_child(spear)
 	spear.position = Vector3(SPEAR_FIST.x,0,SPEAR_FIST.z)
+	spear.rotation.y = (variant-.5)*.3
 	# His shield, stood on its foot, its face turned out to his left.
 	shield = Art.model("scutum",SHIELD_SIZE)
 	var board = ShaderMaterial.new()

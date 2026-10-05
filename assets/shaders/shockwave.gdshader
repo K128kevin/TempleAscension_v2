@@ -6,7 +6,9 @@ shader_type spatial;
 // it and dying away. Drawn on a disc (or the slice of one the blow reaches)
 // laid on the ground, and on a low wall standing on the front (`wall`).
 // UV.x is how far out a point is (0 at the blow, 1 at the blow's reach; up
-// the wall, its height), UV.y how far round the slice.
+// the wall, its height), UV.y how far round the slice (0 to 1 across its arc;
+// the ground is drawn a little past either side, below 0 and past 1, for the
+// cracks to run on out of the arc, each stopping where it will).
 render_mode unshaded, cull_disabled, depth_draw_never, blend_mix, shadows_disabled;
 uniform bool wall = false;
 // Where the front is (a share of the reach), and how much of it is left.
@@ -19,6 +21,9 @@ uniform float crack_reach = .3;
 uniform float crack_strength = 0.0;
 uniform vec3 crack_glow : source_color = vec3(.45,.72,1.0);
 uniform float crack_size = .55;
+// The blow's reach (metres) and the angle of its arc (radians).
+uniform float reach = 5.0;
+uniform float arc = 6.2831853;
 varying vec3 at;
 
 vec2 hash22(vec2 p) {
@@ -75,14 +80,28 @@ void fragment() {
 		float streaks = noise(vec2(UV.y*90.0,UV.x*5.0-front*3.0));
 		float behind = out_from < 0.0 ? exp(out_from*5.0)*(0.4+0.45*streaks) : exp(-out_from*70.0)*.35;
 		float wave = clamp(edge+echo+behind*.8,0.0,1.0)*strength*sides;
-		// The ground broken where the blow fell: cracks out from it, thinning
-		// with distance, shown once the front has passed over them.
-		// (Each a dark split in the stone, lit along its lips.)
-		float near = border(at.xz/crack_size);
-		float thin = 1.0-smoothstep(crack_reach*.3,crack_reach,UV.x);
-		float shown = step(UV.x,front+.02)*crack_strength*thin;
-		float split = (1.0-smoothstep(0.012,0.035,near))*shown;
-		float lips = (1.0-smoothstep(0.03,0.16,near))*shown;
+		// The ground broken where the blow fell: cracks out from it, shown
+		// once the front has passed over them. Each a dark split in the stone,
+		// lit along its lips: jagged (the pattern twisted at three scales, so
+		// every line kinks and wanders), uneven in width along its length,
+		// and thinning out to its end, which comes at no set line: out from
+		// the blow, and past the sides of its arc, each runs on as far as its
+		// own patch of ground lets it.
+		vec2 p = at.xz/crack_size;
+		p += (vec2(noise(p*1.7),noise(p*1.7+5.2))-.5)*.7;
+		p += (vec2(noise(p*5.3+1.7),noise(p*5.3+9.1))-.5)*.22;
+		p += (vec2(noise(p*15.0+3.3),noise(p*15.0+7.7))-.5)*.07;
+		float near = border(p);
+		float width = mix(.45,1.05,noise(p*1.1+2.0));
+		float r = UV.x*reach;
+		float past_side = max(-UV.y,UV.y-1.0)*arc*r;
+		float side_end = 1.0-smoothstep(0.0,.25+1.6*noise(at.xz*.55+3.0),past_side);
+		float far_end = 1.0-smoothstep(crack_reach*.25,crack_reach*(.7+.6*noise(at.xz*.45+8.0)),UV.x);
+		float fading = side_end*far_end;
+		float shown = step(UV.x,front+.02)*crack_strength*step(.02,fading);
+		width *= fading;
+		float split = (1.0-smoothstep(.004*width,.014*width,near))*shown;
+		float lips = (1.0-smoothstep(.01*width,.06*width,near))*shown*(.55+.45*fading);
 		vec3 colour = mix(tint.rgb,vec3(1.0),edge*.6);
 		colour = mix(colour,crack_glow*1.5,clamp(lips*1.4,0.0,1.0));
 		colour = mix(colour,vec3(0.03,0.035,0.05),clamp(split*1.6,0.0,1.0));

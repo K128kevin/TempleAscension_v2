@@ -48,16 +48,23 @@ var ordered_slot = 0
 # Dash Attack: the dash under way strikes whoever it passes through, each once.
 var dash_attack = false
 var dash_struck: Array = []
-# The dash is a sprint: his own run, faster, for DASH_SECONDS. He is up to
+# The dash is a sprint: his own run at DASH_SPEED, a little over twice his
+# running pace, toward the cursor, DASH_MIN to DASH_REACH metres. He is up to
 # his sprint almost at once (DASH_SPRINT seconds), holds it, and over the
 # last DASH_EASE seconds eases back toward a run (DASH_EASED of it), so that
 # he runs on out of it rather than stopping dead; he is free again DASH_RISE
-# after that. `dash_length` is how far this dash goes, DASH_REACH at most.
-const DASH_SECONDS = .72
+# after that. He leans into it as a sprinter does (DASH_LEAN radians, from
+# the waist), which carries the quicker stride. `dash_length` is how far this
+# dash goes, and `dash_seconds` how long it takes.
+const DASH_SPEED = 12.5
+const DASH_MIN = 2.5
 const DASH_REACH = 6.8
 const DASH_SPRINT = .08
 const DASH_EASE = .12
 const DASH_EASED = .55
+const DASH_LEAN = .2
+# (How fast he takes up the lean and straightens again, radians a second.)
+const DASH_LEAN_RATE = 3.5
 const DASH_RISE = .05
 # The dash costs nothing, but recharges for this long after each (Dash Attack
 # shortens it).
@@ -65,6 +72,8 @@ const DASH_COOLDOWN = 3.0
 # How long the healing spell takes to recharge.
 const HEAL_COOLDOWN = 20.0
 var dash_length = DASH_REACH
+var dash_seconds = 0.0
+var dash_lean = null
 var leap_left = 0.0
 var leap_duration = .26
 var leap_direction = Vector3.ZERO
@@ -635,6 +644,7 @@ func order_attack(clicked, special: bool, slot: int = 0) -> void:
 
 func player_control(dt: float) -> void:
 	if player.dead: return
+	lean_into_dash(dt)
 	if leap_left>0:
 		# The flight is the last `leap_duration` seconds; before that he gathers.
 		var before: float = leap_left
@@ -650,7 +660,7 @@ func player_control(dt: float) -> void:
 		dash_time -= dt
 		player.position = world.move(player.position,dash_direction*dash_length*(dash_share(dash_time)-covered))
 		# His stride keeps pace with the ground he covers.
-		player.visual.run_at(dash_length*dash_pace(dash_time))
+		player.visual.run_at(dash_speed(dash_time))
 		if dash_attack:
 			for enemy in skills.targets(player.position,1.0):
 				if not enemy in dash_struck: skills.dash_hit(enemy,dash_direction,dash_struck)
@@ -851,29 +861,39 @@ func shake(strength: float, seconds: float = SHAKE_TIME) -> void:
 	shake_time = seconds
 
 # The share of a dash's ground covered with `left` seconds of it to go.
-static func dash_share(left: float) -> float:
-	var gone: float = clampf(DASH_SECONDS-left,0.0,DASH_SECONDS)
-	var held: float = DASH_SECONDS-DASH_SPRINT-DASH_EASE
+func dash_share(left: float) -> float:
+	var gone: float = clampf(dash_seconds-left,0.0,dash_seconds)
+	var held: float = dash_seconds-DASH_SPRINT-DASH_EASE
 	var covered: float
 	if gone<DASH_SPRINT: covered = gone*gone/(2.0*DASH_SPRINT)
 	elif gone<DASH_SPRINT+held: covered = DASH_SPRINT*.5+gone-DASH_SPRINT
 	else:
 		var easing: float = gone-DASH_SPRINT-held
 		covered = DASH_SPRINT*.5+held+easing-(1.0-DASH_EASED)*easing*easing/(2.0*DASH_EASE)
-	return covered/dash_whole()
+	return covered*DASH_SPEED/maxf(dash_length,.01)
 
-# The share of a dash's ground covered a second at the pace he is going with
-# `left` seconds of it to go (times its length: his speed).
-static func dash_pace(left: float) -> float:
-	var gone: float = clampf(DASH_SECONDS-left,0.0,DASH_SECONDS)
+# How fast he is going (metres a second) with `left` seconds of the dash to go.
+func dash_speed(left: float) -> float:
+	var gone: float = clampf(dash_seconds-left,0.0,dash_seconds)
 	var pace: float = 1.0
 	if gone<DASH_SPRINT: pace = gone/DASH_SPRINT
-	elif gone>DASH_SECONDS-DASH_EASE: pace = 1.0-(1.0-DASH_EASED)*(gone-(DASH_SECONDS-DASH_EASE))/DASH_EASE
-	return pace/dash_whole()
+	elif gone>dash_seconds-DASH_EASE: pace = 1.0-(1.0-DASH_EASED)*(gone-(dash_seconds-DASH_EASE))/DASH_EASE
+	return DASH_SPEED*pace
 
-# The ground a whole dash covers, in seconds at his sprint.
-static func dash_whole() -> float:
-	return DASH_SPRINT*.5+(DASH_SECONDS-DASH_SPRINT-DASH_EASE)+DASH_EASE*(1.0+DASH_EASED)*.5
+# The dash's length, and so how long it takes at its speed.
+func set_dash_length(length: float) -> void:
+	dash_length = clampf(length,DASH_MIN,DASH_REACH)
+	dash_seconds = dash_length/DASH_SPEED+DASH_SPRINT*.5+DASH_EASE*(1.0-DASH_EASED)*.5
+
+# He leans into the dash from the waist, and straightens again after it
+# (scripts/body_lean.gd on his skeleton, made when first needed).
+func lean_into_dash(dt: float) -> void:
+	var wanted: float = DASH_LEAN if dash_time>0 else 0.0
+	if dash_lean == null and wanted == 0.0: return
+	if not is_instance_valid(dash_lean) or dash_lean.get_parent() != player.visual.skeleton:
+		dash_lean = preload("res://scripts/body_lean.gd").new()
+		player.visual.skeleton.add_child(dash_lean)
+	dash_lean.lean = move_toward(dash_lean.lean,wanted,DASH_LEAN_RATE*dt)
 
 func dash() -> void:
 	if leap_left>0: return
@@ -889,15 +909,15 @@ func dash() -> void:
 	sound.play("dash-whoosh")
 	skills.pending.clear()
 	skills.cancel_aim()
-	dash_time = DASH_SECONDS
 	var offset = world.pointer()-player.position
-	dash_length = minf(DASH_REACH,offset.length())
+	set_dash_length(offset.length())
+	dash_time = dash_seconds
 	dash_direction = offset.normalized()
 	if dash_direction.length()<.1: dash_direction = player.forward()
 	player.face(player.position+dash_direction)
-	player.invulnerable = DASH_SECONDS
-	player.visual.run_at(dash_length/dash_whole())
-	player.busy = DASH_SECONDS+DASH_RISE
+	player.invulnerable = dash_seconds
+	player.visual.run_at(DASH_SPEED)
+	player.busy = dash_seconds+DASH_RISE
 	route.clear()
 	target = null
 

@@ -23,6 +23,8 @@ var waves: Array = []
 # Offensive and Defensive Rhythm: the stacks built, and how long they last.
 # Tests fix the crit roll: -1 rolls, 0 never crits, 1 always does.
 var crit_override = -1
+# And the block roll, the same way.
+var block_override = -1
 var offense_stacks = 0
 var offense_time = 0.0
 var defense_stacks = 0
@@ -63,7 +65,7 @@ const VOLLEY_HIT = 1.1
 const VOLLEY_FALL = .45
 const LIGHTNING_LEAP = 10.0
 # How much of the last strike's damage Lightning Shot carries to the next.
-const LIGHTNING_FADE = .8
+const LIGHTNING_FADE = .75
 const POISON_SECONDS = 5.0
 const FRENZY_COOLDOWN = 30.0
 const SAND_COOLDOWN = 45.0
@@ -448,7 +450,7 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 				waves.append(crackle)
 			extra.zapped = true
 			# It leaps on from one to the next, never to the same twice, each
-			# leap 20% weaker than the one before (LIGHTNING_FADE).
+			# leap 25% weaker than the one before (LIGHTNING_FADE).
 			var struck: Array = [enemy]
 			var from = enemy
 			for leap in int(extra.leaps):
@@ -524,6 +526,9 @@ func damage_summary(id: String, level: int) -> Dictionary:
 			# (War Cry, Throw Sand and the like; the wizard's Barrier and Blink.)
 			if s.has("ranks") or s.tag.is_empty(): return {}
 	var result = crit_numbers(weapon)
+	if s.effect=="charge":
+		percent *= charge_boost()
+		result.crit = "Critical strike chance: %s%%" % figure(Data.crit_chance(game.run)+Data.specialization(game.run,weapon).x+Data.block_chance(game.run))
 	# The wizard's spells hit for a set amount.
 	if percent<0: result.damage = "Damage: %d" % roundi(Data.damage_tag(game.run,s.tag,15.0*Book.value(id,level)))
 	else: result.damage = "Damage: "+span(percent,tag)
@@ -568,14 +573,14 @@ func rhythm_boost() -> float:
 # specialization in it adds to the chance of a critical strike and to its
 # damage; Weakening Strike's stacks on the target add to that damage again;
 # Element of Surprise raises the whole; and Poisons leave their own.
-func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO, skill: bool = true, weapon: int = -1) -> void:
+func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO, skill: bool = true, weapon: int = -1, crit_bonus: float = 0.0) -> void:
 	if not is_instance_valid(enemy) or enemy.dead or enemy.dormant: return
 	if weapon<0: weapon = int(game.run.weapon)
 	var rhythm: Dictionary = Book.values("offensive_rhythm",rank("offensive_rhythm"))
 	amount *= rhythm_boost()
 	if surprise_time>0: amount *= 1.0+surprise_bonus*.01
 	var mastery: Dictionary = Data.specialization(game.run,weapon)
-	var crit: bool = randf()*100.0<Data.crit_chance(game.run)+mastery.x if crit_override<0 else crit_override==1
+	var crit: bool = randf()*100.0<Data.crit_chance(game.run)+mastery.x+crit_bonus if crit_override<0 else crit_override==1
 	if crit: amount *= Data.CRIT_MULTIPLIER*(1.0+mastery.y*.01)*(1.0+enemy.weak_stacks*enemy.weak_bonus*.01)
 	var poison: Dictionary = Book.values("poisons",rank("poisons"))
 	enemy.hit(amount,type,bonus,death_impact,"crit" if crit else ("skill" if skill else "normal"))
@@ -587,15 +592,15 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 	if curse.y>0 and not enemy.dead: enemy.add_dot("curse",amount*curse.x*.01,CURSE_SECONDS,int(curse.y))
 	if poison.y>0 and weapon in [2,5] and not enemy.dead: enemy.add_dot("poison",amount*poison.x*.01,POISON_SECONDS,int(poison.y))
 
-# An attack reaching the hero, after armor: Shield Expertise may block part of
-# it (Spiked Shield answering the attacker), Defensive Rhythm lowers it and
+# An attack reaching the hero, after armor: a shield in hand may block part of
+# it, as Shield Expertise improves (Spiked Shield answering the attacker), Defensive Rhythm lowers it and
 # gains a stack, and a barrier absorbs what it can. Returns the damage left.
 func defend(damage: float, source) -> float:
 	var blocked = false
-	var block: Dictionary = Book.values("shield_expertise",rank("shield_expertise"))
-	if block.x>0 and int(game.run.weapon)==1 and randf()*100.0<block.x:
+	var chance: float = Data.block_chance(game.run)
+	if chance>0 and (randf()*100.0<chance if block_override<0 else block_override==1):
 		blocked = true
-		damage *= 1.0-block.y*.01
+		damage *= 1.0-Data.block_mitigation(game.run)*.01
 	var rhythm: Dictionary = Book.values("defensive_rhythm",rank("defensive_rhythm"))
 	damage *= 1.0-defense_stacks*rhythm.x*.01
 	if rhythm.y>0:
@@ -806,7 +811,7 @@ func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
 	if not charge.has("hit"): charge = {"left":0.0,"hit":[],"stunned":false}
 	charge.hit.append(enemy)
 	var first_hit: bool = not charge.stunned
-	strike(enemy,attack_damage(v.y))
+	strike(enemy,attack_damage(v.y)*charge_boost(),"physical",0.0,Vector3.ZERO,true,-1,Data.block_chance(game.run))
 	var aside: Vector3 = enemy.position-game.player.position
 	aside.y = 0
 	var side: Vector3 = direction.cross(Vector3.UP)
@@ -815,6 +820,11 @@ func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
 	if first_hit:
 		enemy.stun(v.z)
 		charge.stunned = true
+
+# Shield Charge hits harder behind a better shield: its damage raised by the
+# percent a block reduces an attack by (its crit chance by the chance to block).
+func charge_boost() -> float:
+	return 1.0+Data.block_mitigation(game.run)*.01
 
 # Dash Attack: an enemy the dash passes through takes the rank's share of a
 # normal attack's damage and is

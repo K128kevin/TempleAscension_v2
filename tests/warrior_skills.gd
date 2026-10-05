@@ -71,6 +71,8 @@ func ready():
 	game.leap_left = 0; game.dash_time = 0; game.dash_cooldown = 0; game.dash_attack = false; game.combat_age = 10
 	# Damage checks are exact; critical hits are tested on their own.
 	game.skills.crit_override = 0
+	# and so are blocks: the shield's own are tested on their own.
+	game.skills.block_override = 0
 	game.player.visual.position = Vector3.ZERO
 
 # Skills and enemies run on; the hero stays where he stands.
@@ -169,7 +171,7 @@ func test():
 	var first = dummy(3.0); var second = dummy(6.0); var aside = dummy(5.0,40)
 	check(game.skills.cast("shield_charge",origin+forward*7.5) and game.run.energy==65,"Shield Charge costs 35 energy")
 	play(1.2)
-	check(lost(first)>=10 and lost(first)<=15 and lost(second)>=10 and lost(second)<=15 and lost(aside)==0,"Rank 1: everyone in the path takes 100%")
+	check(lost(first)>=12 and lost(first)<=18 and lost(second)>=12 and lost(second)<=18 and lost(aside)==0,"Rank 1: everyone in the path takes 100%, raised 20% by the round shield's block")
 	check(first.stun_memory>0,"The first one hit was stunned")
 	check(game.player.position.distance_to(origin)>4.0,"He ran on through them (%.1f m)" % game.player.position.distance_to(origin))
 	check(first.position.distance_to(origin+forward*3.0)>.8 or second.position.distance_to(origin+forward*6.0)>.8,"and they were thrown aside")
@@ -361,21 +363,31 @@ func test():
 	game.dash()
 	check(game.dash_time>0,"and can be used once it has")
 	game.dash_time = 0; game.player.busy = 0; game.player.invulnerable = 0
-	# The dash is a sprint, his own run faster, never a roll.
+	# The dash is a sprint, his own run a little over twice as fast, never a
+	# roll, leaning into it.
 	hero({"cleave":1})
 	game.dash_cooldown = 0
 	game.dash()
-	game.dash_direction = forward; game.dash_length = game.DASH_REACH; game.player.face(origin+forward)
+	game.dash_direction = forward; game.set_dash_length(game.DASH_REACH); game.dash_time = game.dash_seconds; game.player.face(origin+forward)
 	var shown_states: Dictionary = {}
 	var sprint_rate = 0.0
-	for i in ceili(game.DASH_SECONDS/STEP):
+	var leaned = 0.0
+	for i in ceili(game.dash_seconds/STEP):
 		play(STEP)
 		shown_states[game.player.visual.state] = true
-		if i==20: sprint_rate = game.player.visual.locomotion_rate
+		if i==15:
+			sprint_rate = game.player.visual.locomotion_rate
+			leaned = game.dash_lean.lean
 	check(shown_states.keys()==[game.player.visual.run_action()],"The dash is his run the whole way, with no roll (%s)" % [shown_states.keys()])
 	check(absf(game.player.position.distance_to(origin)-game.DASH_REACH)<.15,"covering the dash's whole reach (%.2f m)" % game.player.position.distance_to(origin))
-	check(game.DASH_REACH/game.dash_whole()>game.PLAYER_RUN_SPEED*1.5 and sprint_rate>1.3,"far faster than he runs, his stride paced to it (%.1f m/s, stride ×%.2f)" % [game.DASH_REACH/game.dash_whole(),sprint_rate])
-	check(is_equal_approx(game.dash_share(game.DASH_SECONDS),0.0) and is_equal_approx(game.dash_share(0.0),1.0) and game.dash_pace(.01)<game.dash_pace(.3),"easing a little toward a run at its end")
+	check(game.DASH_SPEED>=game.PLAYER_RUN_SPEED*2.0 and sprint_rate>1.7,"twice as fast as he runs, his stride paced to it (%.1f m/s, stride ×%.2f)" % [game.DASH_SPEED,sprint_rate])
+	check(leaned>.15,"leaning forward into it (%.2f rad)" % leaned)
+	play(.5)
+	check(game.dash_lean.lean==0.0,"and upright again after")
+	check(is_equal_approx(game.dash_share(game.dash_seconds),0.0) and is_equal_approx(game.dash_share(0.0),1.0) and game.dash_speed(.01)<game.dash_speed(.3),"easing a little toward a run at its end")
+	var long_dash: float = game.dash_seconds
+	game.set_dash_length(.5)
+	check(is_equal_approx(game.dash_length,game.DASH_MIN) and game.dash_seconds<long_dash,"A dash to the cursor close by still goes a little way, as fast, and so is over sooner")
 	clear()
 	var dealt_by_rank: Array = []
 	for r in [1,5]:
@@ -484,12 +496,23 @@ func test():
 	check(not dazed.stunned,"The curse's damage breaks a stun")
 	clear()
 
-	# Shield Expertise, Spiked Shield and Defensive Rhythm.
+	# The shield, Shield Expertise, Spiked Shield and Defensive Rhythm.
 	hero({})
 	var attacker = dummy(1.6)
 	game.player.hp = 100; game.hurt_player(10,"physical",attacker)
 	var normal: float = 100-game.player.hp
+	game.skills.block_override = -1
+	seed(20261002)
+	var shield_blocks = 0
+	for i in 400:
+		game.player.hp = 100; game.player.invulnerable = 0
+		game.hurt_player(10,"physical",attacker)
+		var taken: float = 100-game.player.hp
+		if is_equal_approx(taken,normal*.8): shield_blocks += 1
+		else: check(is_equal_approx(taken,normal),"An unblocked hit lands whole")
+	check(shield_blocks>=70 and shield_blocks<=130,"The round shield alone blocks a quarter of all attacks (%d of 400), which then deal 20%% less" % shield_blocks)
 	hero({"shield_expertise":5,"spiked_shield":5})
+	game.skills.block_override = -1
 	seed(20261002)
 	var blocks = 0; var spiked = 0
 	for i in 400:
@@ -497,20 +520,22 @@ func test():
 		var attacker_hp: float = attacker.hp
 		game.hurt_player(10,"physical",attacker)
 		var taken: float = 100-game.player.hp
-		if is_equal_approx(taken,normal*.2):
+		if is_equal_approx(taken,normal*.6):
 			blocks += 1
 			var answer: float = attacker_hp-attacker.hp
 			if answer>=8.0 and answer<=12.0: spiked += 1
 		else: check(is_equal_approx(taken,normal) and attacker.hp==attacker_hp,"An unblocked hit lands whole and unanswered")
-	check(blocks>=160 and blocks<=240,"Shield Expertise rank 5 blocks half of all attacks (%d of 400), which then deal 80%% less" % blocks)
+	check(blocks>=150 and blocks<=230,"With Shield Expertise rank 5 the round shield blocks 45%% of all attacks (%d of 400), which then deal 40%% less" % blocks)
 	check(spiked==blocks,"Spiked Shield rank 5 answers every block with 80% of a normal attack")
 	hero({"shield_expertise":5},0)
+	game.skills.block_override = -1
 	var unshielded = 0
 	for i in 60:
 		game.player.hp = 100; game.player.invulnerable = 0
 		game.hurt_player(10,"physical",attacker)
 		if not is_equal_approx(100-game.player.hp,normal): unshielded += 1
 	check(unshielded==0,"There is no blocking without the shield")
+	game.skills.block_override = 0
 	hero({"defensive_rhythm":5})
 	var hits: Array = []
 	for i in 8:

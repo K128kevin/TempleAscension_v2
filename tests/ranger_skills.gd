@@ -253,7 +253,7 @@ func test():
 	check(crackles.size()==1 and not crackles[0].arcs.is_empty() and crackles[0].position.distance_to(line[0].position)<.01 and is_equal_approx(crackles[0].lasting,Crackle.ZAP.get_length()),"Small arcs of electricity crackle about where it struck, once a shot, for as long as its sound")
 	play(Crackle.ZAP.get_length())
 	check(game.skills.waves.filter(func(w): return w is Crackle).is_empty() and not is_instance_valid(crackles[0]) or crackles[0].is_queued_for_deletion(),"and die away with it")
-	check(leapt==6 and within(line[0],1,250) and within(line[1],1,200) and within(line[5],1,250*pow(.8,5)) and lost(line[6])==0 and lost(outside)==0,"Rank 5 strikes for 250%% and leaps to five more, each within 10 meters of the last and 20%% weaker than the strike before (%d struck)" % leapt)
+	check(leapt==6 and within(line[0],1,250) and within(line[1],1,250*.75) and within(line[5],1,250*pow(.75,5)) and lost(line[6])==0 and lost(outside)==0,"Rank 5 strikes for 250%% and leaps to five more, each within 10 meters of the last and 25%% weaker than the strike before (%d struck)" % leapt)
 	game.arrow_struck = line[0]
 	check(line[0].impact_sound()=="arrow-stone-impact" and line[1].impact_sound()=="weapon-impact","An arrow striking a statue rings on the stone, as in the original; other hits sound as weapons'")
 	line[0].human = true

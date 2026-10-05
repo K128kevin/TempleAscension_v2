@@ -254,10 +254,19 @@ bushes; they were replaced.)
   dresses it for real (`scripts/town_guard.gd`): the body in the warrior's
   painted skin and kit, the armor through `assets/shaders/guard_armor.gdshader`
   (the knight's palette read only for what each part is made of: hammered and
-  rusting steel, bronze, red wool, leather, all dusty), a grounded spear in the
-  smithy's steel-and-wood finish, and the KayKit square shield painted as a red
+  rusting steel, bronze, red wool, leather, all dusty), a grounded spear, and the
+  KayKit square shield painted as a red
   legionary's board (`assets/shaders/guard_shield.gdshader`). Two stand at each
-  of the town's gates.
+  of the town's gates. The spear is a legionary's hasta (`assets/models/props/hasta.glb`,
+  built by `tools/make_spear.py`), 2.3 m: a slender leaf-shaped iron head with a
+  raised midrib, its faces hollowed to a fine point, on a conical socket with two
+  collars and a rivet; an ash shaft bound in a spiralled leather thong where the
+  fist closes; and a pointed iron butt-spike. Every part is the MedievalPack
+  spear's shaft cylinder, cut from its head, subdivided and turned to the part's
+  profile (the head flattened through its section into the blade), unwrapped
+  round and along it for `assets/shaders/spear.gdshader`: hammered, faintly rusted
+  iron with the blade's edges honed bright, oiled and handled ash grain, and the
+  thong's turns.
 - **The townspeople.** `tools/make_townsfolk.py` builds `townsman.glb` and
   `townswoman.glb` (`assets/models/character/`) from the base character pack's two
   bodies (its "superhero" male and female, which come unclothed, cut to 7,000
@@ -513,7 +522,11 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   on the ground is `scripts/shockwave.gd`: a disc laid on the floor over the blow's
   reach (a slice of one for the slam's arc) and a low wall standing on the front,
   both drawn by `assets/shaders/shockwave.gdshader` (the racing front, its haze,
-  and the cracks about the point of impact), with a flash of light and one burst of
+  and the cracks about the point of impact: thin, jagged lines, the cell pattern
+  they follow twisted at three scales and their width uneven along them, each
+  thinning out to an end of its own, out from the blow and past the sides of the
+  slam's arc, for which the slice's ground is drawn 30° wider than the front it
+  carries), with a flash of light and one burst of
   the soft-dot billboards (`scripts/vfx.gd`) for the dust thrown up; the floor's
   own meshes are untouched.
   `scripts/skills.gd` picks each skill's
@@ -605,6 +618,7 @@ shield arm pull back. The right foot stays planted by leg IK. Rebuild with:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/outfit_hero.py
 # (After tools/paint_kits.py: the gate guards, from the finished hero.)
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_guard.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_spear.py
 ```
 
 Bodies, armor, robes, weapons, shields, arrows and the boss's crown share

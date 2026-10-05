@@ -20,6 +20,8 @@ func start(owner_game):
 	game.run.energy=10; game.dash_cooldown=0; game.dash()
 	check(game.run.energy==10 and game.dash_time>0 and game.player.invulnerable>0 and is_equal_approx(game.dash_cooldown,3.0),"Dash costs no energy and recharges for 3 seconds")
 	game.player.busy=0; game.player.invulnerable=0; game.dash_time=0
+	# (No block softens the hits: the stagger needs the whole blow.)
+	game.skills.block_override=0
 	game.player.hp=game.player.max_hp; game.hurt_player(5)
 	check(game.player.visual.state in ["ShieldHit","ShieldHitHead"] and game.player.visual.reaction_time>0,"Light damage plays a hit flinch, shield held steady")
 	game.player.visual.locomotion(true,false)

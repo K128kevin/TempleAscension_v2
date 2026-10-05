@@ -15,6 +15,9 @@ const CRACKS = 1.3
 # The front's wall of haze: how high it stands as it sets out.
 const WALL = 1.1
 const DUST = Color(.93,.9,.84,.85)
+# How far round past either side of a slice's arc the ground is drawn, for its
+# cracks to run on out past the arc's edge, each stopping where it will.
+const SPILL = 30.0
 const CHARGE = Color(.45,.72,1.0)
 const EMBER = Color(1.0,.62,.3)
 var age = 0.0
@@ -39,20 +42,26 @@ static func make(at: Vector3, reach: float, direction: Vector3 = Vector3.ZERO, d
 	var half = deg_to_rad(degrees*.5)
 	var steps = maxi(12,int(96*degrees/360.0))
 	var glow: Color = CHARGE if plasma else EMBER
-	# The ground under the blow, out to its reach: rings of a slice.
+	# The ground under the blow, out to its reach: rings of a slice, drawn
+	# SPILL degrees wider either side (UV.y still 0 to 1 across the arc
+	# itself, beyond it below 0 and past 1) for the cracks alone.
+	var spill = deg_to_rad(SPILL) if degrees < 360.0 else 0.0
+	var span = steps+int(ceil(steps*spill/maxf(half,.01)))
 	var disc = ImmediateMesh.new()
 	var rings = 28
 	for r in rings:
 		disc.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-		for s in steps+1:
-			var angle = lerpf(-half,half,float(s)/steps)
+		for s in span+1:
+			var angle = lerpf(-half-spill,half+spill,float(s)/span)
 			for edge in [r,r+1]:
 				var out = float(edge)/rings
-				disc.surface_set_uv(Vector2(out,float(s)/steps))
+				disc.surface_set_uv(Vector2(out,(angle+half)/(2.0*half)))
 				disc.surface_add_vertex(Vector3(sin(angle),0,cos(angle))*out*reach)
 		disc.surface_end()
 	node.ground = sheet(disc,false,glow)
 	node.ground.material_override.set_shader_parameter("crack_reach",clampf((3.2 if plasma else 2.2)/reach,.12,.6))
+	node.ground.material_override.set_shader_parameter("reach",reach)
+	node.ground.material_override.set_shader_parameter("arc",2.0*half)
 	node.add_child(node.ground)
 	# The wall standing on the front: a strip a metre across, widened to the
 	# front's distance as it runs out.

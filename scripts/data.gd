@@ -48,6 +48,10 @@ const Skills = preload("res://scripts/skill_data.gd")
 const CLASSES = ["warrior","ranger","wizard"]
 # (The dagger is the ranger's second weapon, carried with his bow.)
 const WEAPONS = ["spear","sword","bow","axe","staff","dagger"]
+# The shields a hero may carry with the sword: x percent chance to block an
+# attack, and y percent less damage from one that is blocked. (The warrior
+# starts with the round shield.)
+const SHIELDS = {"round_shield":{"title":"Round Shield","block":25.0,"mitigation":20.0}}
 const SPECIALS = ["Jab","Slash","Rapid Fire","Whirl","Arcane Bolt","Stab"]
 const COSTS = [15.0,20.0,18.0,35.0,12.0,15.0]
 const STATS = ["Strength","Dexterity","Intelligence","Vitality","Willpower"]
@@ -70,7 +74,7 @@ const MELEE_MINIMUM = .2
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	return {"version":10,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	return {"version":10,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"shield":"round_shield" if class_id=="warrior" else "","difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 
 # The floor the run is on (in the world outside, the temple's first).
 static func area(run: Dictionary) -> Dictionary:
@@ -164,6 +168,21 @@ static func specialization(run: Dictionary, weapon: int) -> Dictionary:
 	var id: String = {2:"bow_specialization",5:"dagger_specialization"}.get(weapon,"")
 	if id.is_empty(): return {"x":0.0,"y":0.0,"z":0.0}
 	return Skills.values(id,int(run.skills.get(id,0)))
+
+# The shield in hand (the sword is carried with one), or {} with none. (A
+# character from before shields had stats carries the round shield.)
+static func shield(run: Dictionary) -> Dictionary:
+	if int(run.weapon)!=1: return {}
+	return SHIELDS.get(run.get("shield","round_shield"),{})
+
+# Percent chance to block an attack, and percent less damage a blocked attack
+# deals: the shield's own, and Shield Expertise's on top. Nothing without a shield.
+static func block_chance(run: Dictionary) -> float:
+	var held: Dictionary = shield(run)
+	return held.block+Skills.values("shield_expertise",int(run.skills.get("shield_expertise",0))).x if not held.is_empty() else 0.0
+static func block_mitigation(run: Dictionary) -> float:
+	var held: Dictionary = shield(run)
+	return held.mitigation+Skills.values("shield_expertise",int(run.skills.get("shield_expertise",0))).y if not held.is_empty() else 0.0
 
 # Percent faster the normal melee attack is: Dexterity and Quick Strikes.
 static func melee_attack_speed(run: Dictionary) -> float:
