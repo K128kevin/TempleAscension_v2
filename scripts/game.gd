@@ -64,6 +64,8 @@ const DASH_RISE = .05
 # The dash costs nothing, but recharges for this long after each (Dash Attack
 # shortens it).
 const DASH_COOLDOWN = 3.0
+# How long the healing spell takes to recharge.
+const HEAL_COOLDOWN = 20.0
 var dash_length = DASH_REACH
 var dash_rolling = false
 var leap_left = 0.0
@@ -74,6 +76,8 @@ var dash_time = 0.0
 var dash_direction = Vector3.ZERO
 var heal_cd = 0.0
 var dash_cooldown = 0.0
+# The whole of this dash's recharge (DASH_COOLDOWN, less Dash Attack's).
+var dash_recharge = DASH_COOLDOWN
 var regen_recovery_time = 3.0
 var slowed = 0.0
 # How long frost (an ice shard, a frost nova) slows the hero.
@@ -852,6 +856,7 @@ func dash() -> void:
 	# Dash Attack makes the dash strike, and recharge sooner.
 	var attacks: bool = run.skills.has("dash_attack")
 	dash_cooldown = DASH_COOLDOWN-Book.values("dash_attack",int(run.skills.get("dash_attack",0))).y
+	dash_recharge = dash_cooldown
 	dash_attack = attacks
 	skills.leave_shadows()
 	dash_struck.clear()
@@ -881,7 +886,7 @@ func heal() -> void:
 	sound.play("heal")
 	run.energy -= 60
 	player.hp = minf(Data.max_health(run),player.hp+Data.max_health(run)*.6)
-	heal_cd = 20
+	heal_cd = HEAL_COOLDOWN
 	save_run()
 
 # In combat only while an enemy is after him: awake to him and hunting him

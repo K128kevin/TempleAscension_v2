@@ -485,7 +485,10 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   swing is struck on a full stride of the rear foot past the front, so the feet
   alternate. Swinging on, one runs into the next (`scripts/combat_animation.gd`
   SWORD_CHAIN); broken off, the next attack starts again from SwordOpen, the first
-  cut wound up out of the stance. Each clip ends with a recovery to the stance
+  cut wound up out of the stance as a serve or a long throw is: the hand drops back
+  past the hip as he turns away and dips, comes up behind the shoulder with the
+  elbow leading, and the blade, left lying back over the shoulder, is whipped over
+  the top into the cut. Each clip ends with a recovery to the stance
   (stepping back into it if the swing left the right foot forward) that plays only
   if he swings no more. The script checks every frame that the blade and sword arm
   keep clear of the body, the shield arm and the shield (`SWING_CHECK` in its
@@ -755,8 +758,9 @@ the hero's arrows hits a statue, at the same level as `weapon-impact.mp3`.
 
 `assets/audio/sword-hit-flesh.wav` is a blade striking flesh, a recording supplied
 by the user (`source_art/audio/bandit-sword-hit.mp3`), cut by `tools/make_sounds.py`
-to its slash and blow (the silence before and after taken away) and faded out at
-its end: it plays whenever a bandit is hit by anything but one of the hero's
+to its slash and blow (the silence before and after taken away), given a little
+more weight (the blow brought up about 3 dB as it lands, gently saturated, the
+whole about 3 dB louder than recorded) and faded out at its end: it plays whenever a bandit is hit by anything but one of the hero's
 arrows (blades, skills, spells, splash alike), each time at a pitch up to 12%
 higher or lower and up to 2 dB louder or softer (`scripts/audio.gd` VARIED), so
 that it never sounds the same twice running. `assets/audio/arrow-flesh-1.wav` to

@@ -18,8 +18,12 @@ const ZAP = preload("res://assets/audio/lightning-zap.wav")
 const FADE = .6
 # Thunder Slam's arcs: how many at once, and how long they go on crackling
 # at the edge after the front has reached it, the last of that fading.
-const OUTWARD_ARCS = 9
+const OUTWARD_ARCS = 14
 const OUTWARD_LINGER = .3
+# Each of Thunder Slam's is short, and blinks out sooner than Lightning
+# Shot's, to pop up again somewhere else.
+const OUTWARD_LENGTH = Vector2(.25,.6)
+const OUTWARD_LIFE = Vector2(.035,.09)
 # How far from the spot the arcs reach, how many are alight at once, and
 # how long each lasts before it jumps somewhere else.
 const REACH = 1.3
@@ -101,15 +105,18 @@ func spark() -> Dictionary:
 	b.y = maxf(b.y,.03)
 	return {"a":a,"b":b,"left":randf_range(LIFE.x,LIFE.y)}
 
-# One of Thunder Slam's: low over the ground behind the front, leaping out
-# toward it and past it, somewhere across the slam's arc.
+# One of Thunder Slam's: a short arc low over the ground somewhere the front
+# has passed, most often near it, pointing out along the way the blow went
+# and hopping up off the floor or down onto it.
 func outward_spark() -> Dictionary:
-	var out = maxf(.6,Shockwave.spread(age)*reach)
+	var out = maxf(.8,Shockwave.spread(age)*reach)
+	var length = randf_range(OUTWARD_LENGTH.x,OUTWARD_LENGTH.y)
+	var from = minf(out*sqrt(randf_range(.1,1.0)),reach-length)
 	var turn = randf_range(-half,half)
-	var bearing: Vector3 = way.rotated(Vector3.UP,turn)
-	var a: Vector3 = bearing*out*randf_range(.55,.92)+Vector3.UP*randf_range(.04,.45)
-	var b: Vector3 = way.rotated(Vector3.UP,clampf(turn+randf_range(-.18,.18),-half,half))*minf(reach,out+randf_range(.1,.6))+Vector3.UP*randf_range(.04,.3)
-	return {"a":a,"b":b,"left":randf_range(LIFE.x,LIFE.y)}
+	var bend = clampf(turn+randf_range(-1,1)*length/maxf(from,.5)*.5,-half,half)
+	var a: Vector3 = way.rotated(Vector3.UP,turn)*maxf(from,.3)+Vector3.UP*randf_range(.03,.22)
+	var b: Vector3 = way.rotated(Vector3.UP,bend)*maxf(from,.3)+way.rotated(Vector3.UP,bend)*length+Vector3.UP*randf_range(.03,.4)
+	return {"a":a,"b":b,"left":randf_range(OUTWARD_LIFE.x,OUTWARD_LIFE.y)}
 
 func tick(dt: float) -> bool:
 	age += dt

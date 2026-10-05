@@ -27,6 +27,22 @@ func test():
 	var skills = game.skills
 	hud.tick(0)
 	check(not hud.effect_row.visible and shown(hud).is_empty(),"With nothing on him, no row shows")
+	# Under the hotbar: the dash's and the healing spell's recharges.
+	var tiles: Array = hud.ready_tiles
+	var bar: Rect2 = hud.weapon_slots[0].get_global_rect().merge(hud.weapon_slots[-1].get_global_rect())
+	var under: Rect2 = tiles[0].frame.get_global_rect().merge(tiles[1].frame.get_global_rect())
+	check(tiles.map(func(t): return t.glyph.id)==["dash","heal"] and under.position.y>=bar.end.y and absf(under.get_center().x-bar.get_center().x)<1.5 and under.end.y<=root.get_visible_rect().size.y,"Dash and heal show side by side, centred under the hotbar")
+	check(tiles.all(func(t): return t.count.text=="" and t.shade.size.y==0 and t.frame.get_theme_stylebox("panel")==t.styles.ready),"Both lit and ready at first")
+	game.mode = "playing"; game.dash_cooldown = 0; game.dash()
+	game.player.hp = 1; game.run.energy = 100; game.heal_cd = 0; game.heal()
+	hud.tick(0)
+	check(tiles[0].count.text=="3" and tiles[1].count.text=="20" and tiles.all(func(t): return t.frame.get_theme_stylebox("panel")==t.styles.waiting and is_equal_approx(t.shade.size.y,hud.READY_ICON-2)),"Used, each dims and counts down its recharge (%s, %s)" % [tiles[0].count.text,tiles[1].count.text])
+	game.dash_cooldown = 1.5; game.heal_cd = 5.0
+	hud.tick(0)
+	check(tiles[0].count.text=="2" and tiles[1].count.text=="5" and is_equal_approx(tiles[0].shade.size.y,(hud.READY_ICON-2)*.5) and is_equal_approx(tiles[1].shade.size.y,(hud.READY_ICON-2)*.25),"its shade shrinking as it recharges")
+	game.dash_cooldown = 0; game.heal_cd = 0; game.dash_time = 0; game.player.busy = 0; game.player.invulnerable = 0; game.player.hp = game.player.max_hp
+	hud.tick(0)
+	check(tiles.all(func(t): return t.count.text=="" and t.frame.get_theme_stylebox("panel")==t.styles.ready),"and is lit again once ready")
 	# A buff with stacks, a timed buff, and a debuff.
 	skills.offense_stacks = 3; skills.offense_time = 4.0; skills.lasting.offensive_rhythm = 4.0
 	skills.frenzy_bonus = 20; skills.frenzy_time = 10.0; skills.lasting.frenzy = 10.0

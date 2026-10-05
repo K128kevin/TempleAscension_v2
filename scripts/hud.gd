@@ -44,6 +44,11 @@ const ROW_BOTTOM = BAR_BOTTOM+(ORB_HEIGHT-ORB_MIDDLE-28)*BAR_SCALE
 const EFFECT_GAP = 6
 var effect_row: Control
 var effect_slots: Array[Dictionary] = []
+# Under the hotbar, the dash's and the healing spell's tiles: each lit when
+# ready, and while it recharges dimmed, shaded by what is left and counting
+# down its seconds.
+const READY_ICON = 26
+var ready_tiles: Array[Dictionary] = []
 # A small health bar over the head of every enemy in sight, by enemy.
 const ENEMY_BAR = Vector2(60,4)
 var enemy_bars: Array[ProgressBar] = []
@@ -179,6 +184,12 @@ func setup(owner_game) -> void:
 	root.add_child(effect_row)
 	anchor(effect_row,Vector2(.5,1),Vector2(-200,-ROW_BOTTOM-56*BAR_SCALE-6-(EFFECT_ICON+8)),Vector2(400,EFFECT_ICON+8))
 	effect_row.visible = false
+	var ready_row = Control.new()
+	ready_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(ready_row)
+	var across = READY_ICON*2+EFFECT_GAP
+	anchor(ready_row,Vector2(.5,1),Vector2(-across*.5,-ROW_BOTTOM+6),Vector2(across,READY_ICON))
+	for i in 2: ready_tiles.append(ready_tile(ready_row,["dash","heal"][i],["Dash (Space)","Healing spell (Q)"][i],i*(READY_ICON+EFFECT_GAP)))
 	prompt = label("",19,gold,root)
 	# (Above the orbs, and so above the row of buffs and debuffs.)
 	anchor(prompt,Vector2(.5,1),Vector2(-400,-BAR_BOTTOM-ORB_HEIGHT*BAR_SCALE-36),Vector2(800,28))
@@ -257,6 +268,7 @@ func tick(dt: float) -> void:
 	game.debug.refresh()
 	show_enemy_bars()
 	show_effects()
+	show_ready()
 	show_cast_bars()
 	var r: Dictionary = game.run
 	var maximum_health = Data.max_health(r)
@@ -390,6 +402,41 @@ func show_npc_name(who: Dictionary) -> void:
 	if not npc_name.visible: return
 	npc_name.text = who.name
 	npc_name.position = game.world.camera.unproject_position(who.at)-Vector2(npc_name.size.x*.5,10)
+
+func ready_tile(row: Control, kind: String, tip: String, x: float) -> Dictionary:
+	var frame = Panel.new()
+	frame.position = Vector2(x,0); frame.size = Vector2(READY_ICON,READY_ICON)
+	frame.tooltip_text = tip
+	row.add_child(frame)
+	var styles = {}
+	for look in [["ready",gold],["waiting",Color(.37,.31,.21)]]:
+		var style = panel_style(Color(.035,.032,.028,.94),look[1])
+		style.set_content_margin_all(0)
+		styles[look[0]] = style
+	var glyph = SkillIcon.new()
+	glyph.position = Vector2(4,4); glyph.size = Vector2(READY_ICON-8,READY_ICON-8)
+	frame.add_child(glyph)
+	# (The shade over it shrinks away as it recharges.)
+	var shade = ColorRect.new()
+	shade.color = Color(0,0,0,.55)
+	shade.position = Vector2(1,1); shade.size = Vector2(READY_ICON-2,0)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(shade)
+	var count = label("",13,cream,frame)
+	count.size = Vector2(READY_ICON,READY_ICON)
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	count.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	return {"kind":kind,"frame":frame,"glyph":glyph,"shade":shade,"count":count,"styles":styles}
+
+func show_ready() -> void:
+	for tile in ready_tiles:
+		var left: float = game.dash_cooldown if tile.kind=="dash" else game.heal_cd
+		var whole: float = game.dash_recharge if tile.kind=="dash" else game.HEAL_COOLDOWN
+		var waiting = left>0
+		tile.shade.size.y = (READY_ICON-2)*clampf(left/maxf(whole,.01),0.0,1.0)
+		tile.count.text = str(ceili(left)) if waiting else ""
+		tile.glyph.show_skill(tile.kind,Color(.45,.44,.4) if waiting else cream)
+		tile.frame.add_theme_stylebox_override("panel",tile.styles.waiting if waiting else tile.styles.ready)
 
 func effect_slot() -> Dictionary:
 	var frame = Panel.new()

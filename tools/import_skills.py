@@ -542,6 +542,24 @@ SWING_DOWN = [(0, .06), (.22, .04), (.42, .08), (.52, .25), (.60, .38), (.70, .3
     (2.14, .06), (2.36, .1), (2.52, .22), (2.64, .22), (2.86, .06)]
 SWING_FORWARD = [(0, 0), (.42, -.06), (.52, .1), (.62, .14), (.9, 0), (1.42, -.06), (1.52, .1), (1.62, .14), (1.9, 0), (2.36, -.08), (2.52, .16),
     (2.64, .16), (2.9, 0)]
+# The first cut out of the stance has a wind-up of its own, as a serve or a
+# long throw has: the blade is not lifted straight to the shoulder but swung
+# round to it. The hand drops back past the hip as he turns away and dips,
+# the point left standing before him; it comes up behind the shoulder with the
+# elbow leading, the point tipping back over it; and the blade, left lying
+# back over the shoulder, is whipped over the top into the cut. These are the cycle's keys with its
+# first .42 replaced (from the cut's last moment before it lands, .47, the
+# two are the same, so the swings that follow run on from it as before).
+OPEN_UNTIL = .45
+def opening(points, keys):
+    return keys+[k for k in points if k[0] > OPEN_UNTIL]
+OPEN_HAND = opening(SWING_HAND, [(0, tuple(SWORD_HOME)), (.12, (-.38, .32, .88)), (.24, (-.45, .44, 1.02)), (.34, (-.44, .46, 1.42)), (.42, (-.34, .4, 1.66))])
+OPEN_BLADE = opening(SWING_BLADE, [(0, tuple(rig.pose.bones['hand_r'].matrix.to_quaternion() @ V(0, 0, 1))), (.12, (0, -.55, .85)), (.24, (-.1, .25, .95)), (.34, (-.25, .9, .35)),
+    (.42, (-.2, .85, -.35))])
+OPEN_POLE = opening(SWING_POLE, [(0, (-.4, .6, 1.2)), (.12, (-.6, .9, 1.1)), (.24, (-.8, .9, 1.2)), (.34, (-.95, .5, 1.4)), (.42, (-.9, .4, 1.5))])
+OPEN_TURN = opening(SWING_TURN, [(0, 0), (.12, -.25), (.24, -.6), (.34, -.85), (.42, -.95)])
+OPEN_LEAN = opening(SWING_LEAN, [(0, 0), (.12, .12), (.24, .05), (.34, -.1), (.42, -.18)])
+OPEN_DOWN = opening(SWING_DOWN, [(0, .02), (.12, .12), (.24, .1), (.34, .05), (.42, .08)])
 # Each swing's step: the travel the game carries him through over the swing
 # (scripts/visual.gd ROOT_ADVANCE keeps the same keys), and the rear foot's
 # stride past the front one (start, end, distance, lift) over ground that
@@ -580,14 +598,19 @@ def roll(name, angle):
 # The hand's turn through the cycle (filled in below), and the share of it
 # the upper arm and the forearm take up (the wrist is left the rest).
 TWIST = []
+OPEN_TWIST = []
 TWIST_STEPS = 96
 ARM_ROLL = (.45, .3)
+# What a swing is keyed from: the cycle, or the cycle wound up out of the
+# stance.
+CYCLE = {'hand': SWING_HAND, 'blade': SWING_BLADE, 'pole': SWING_POLE, 'turn': SWING_TURN, 'lean': SWING_LEAN, 'down': SWING_DOWN, 'twist': TWIST}
+OPENING = {'hand': OPEN_HAND, 'blade': OPEN_BLADE, 'pole': OPEN_POLE, 'turn': OPEN_TURN, 'lean': OPEN_LEAN, 'down': OPEN_DOWN, 'twist': OPEN_TWIST}
 
-def swing_pose(tau, twist=True):
+def swing_pose(tau, twist=True, of=CYCLE):
     u = tau % 1.0
-    turn = flow(SWING_TURN, tau)
-    lean = flow(SWING_LEAN, tau)
-    hips(down=flow(SWING_DOWN, tau), forward=flow(SWING_FORWARD, tau))
+    turn = flow(of['turn'], tau)
+    lean = flow(of['lean'], tau)
+    hips(down=flow(of['down'], tau), forward=flow(SWING_FORWARD, tau))
     rotate('pelvis', (0, 0, 1), turn*.4)
     rotate('spine_01', (0, 0, 1), turn*.35)
     rotate('spine_02', (0, 0, 1), turn*.3)
@@ -595,12 +618,12 @@ def swing_pose(tau, twist=True):
     rotate('spine_02', (1, 0, 0), lean*.5)
     rotate('neck_01', (0, 0, 1), -turn*.5)
     rotate('Head', (1, 0, 0), -lean*.6)
-    hand = flow(SWING_HAND, tau)
-    short[0] = (arm('r', hand, flow(SWING_POLE, tau))-hand).length
+    hand = flow(of['hand'], tau)
+    short[0] = (arm('r', hand, flow(of['pole'], tau))-hand).length
     # The wrist bends only so far: where the blade would lie nearer along
     # the forearm than that, it is held off it.
     fore = rig.pose.bones['lowerarm_r'].matrix.to_quaternion() @ V(0, 1, 0)
-    blade = flow(SWING_BLADE, tau).normalized()
+    blade = flow(of['blade'], tau).normalized()
     across = (blade-fore*blade.dot(fore)).normalized()
     angle = max(math.pi/2-WRIST_BEND, min(math.pi/2+WRIST_BEND, fore.angle(blade)))
     point_hand('r', fore*math.cos(angle)+across*math.sin(angle), fore)
@@ -610,7 +633,8 @@ def swing_pose(tau, twist=True):
         # forearm more, and the fist only what is left.
         at = (tau % 3.0)*TWIST_STEPS
         i = int(at)
-        turned = TWIST[i]+(TWIST[i+1]-TWIST[i])*(at-i)
+        table = of['twist']
+        turned = table[i]+(table[i+1]-table[i])*(at-i)
         hand = rig.pose.bones['hand_r'].matrix.copy()
         fore = rig.pose.bones['lowerarm_r'].matrix.copy()
         roll('upperarm_r', turned*ARM_ROLL[0])
@@ -658,9 +682,19 @@ for i in range(3*TWIST_STEPS+1):
     TWIST.append(angle)
 # (Counted from the turn nearest none: the arm turns the short way round.)
 middle = 2*math.pi*round((max(TWIST)+min(TWIST))/2/(2*math.pi))
-TWIST = [a-middle for a in TWIST]
+TWIST[:] = [a-middle for a in TWIST]
 print('SWING_TWIST', [round(math.degrees(a)) for a in TWIST[::12]], 'wound', round(math.degrees(TWIST[-1]-TWIST[0])))
 TWIST.append(TWIST[-1])
+# The opening's: followed back from the cut's landing, where it is the
+# cycle's own, to the stance.
+landing = TWIST_STEPS//2
+OPEN_TWIST[:] = TWIST
+for i in range(landing-1, -1, -1):
+    reset()
+    swing_pose(i/TWIST_STEPS, twist=False, of=OPENING)
+    angle = hand_twist()
+    OPEN_TWIST[i] = angle+2*math.pi*round((OPEN_TWIST[i+1]-angle)/(2*math.pi))
+print('SWING_TWIST opening', [round(math.degrees(a)) for a in OPEN_TWIST[:landing+1:6]])
 
 # ---- Checking the swings: nothing through anything else ----
 
@@ -726,8 +760,10 @@ def author_swing(name, start, foot, opening=False):
         reset()
         if f <= swing:
             t = f/swing
-            swing_pose(start+t)
-            w = 1-ease(t/.3) if opening else 0.0
+            swing_pose(start+t, of=OPENING if opening else CYCLE)
+            # (Its first key is the stance's own sword arm: only the rest of
+            # him has to be eased out of the stance.)
+            w = 1-ease(t/.1) if opening else 0.0
             feet = (foot, t, 0.0)
         else:
             # On into the next swing as far as SWING_FOLLOW, exactly as the

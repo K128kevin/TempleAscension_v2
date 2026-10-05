@@ -10,8 +10,10 @@
                       blow and stops with it, and a deep punch.
   sword-hit-flesh.wav A blade striking a bandit: a recording supplied by the
                       user (source_art/audio/bandit-sword-hit.mp3), its
-                      silence before the blow and after it cut away, faded
-                      out at its end.
+                      silence before the blow and after it cut away, its
+                      blow given a little more weight (brought up as it
+                      lands, gently saturated, and the whole a little
+                      louder), faded out at its end.
   arrow-flesh-1..3.wav  An arrow striking a bandit: the three hits of a
                       recording supplied by the user
                       (source_art/audio/arrow-hits.mp3), cut apart at the
@@ -126,15 +128,26 @@ def arrow_hits():
 # where its ring has died away, in seconds, and how long it fades out over.
 BLADE_HIT = (.135, .7)
 BLADE_FADE = .08
+# Its weight: how much the blow is brought up as it lands (at BLADE_BLOW
+# seconds into the cut, for about BLADE_BLOW_SPAN), how hard it is driven
+# into saturation, and the peak it is set to (the recording's own is .72).
+BLADE_BLOW = .14
+BLADE_BLOW_SPAN = .06
+BLADE_PUNCH = .4
+BLADE_DRIVE = 1.3
+BLADE_PEAK = .82
 
 
 def blade_hit():
     start, end = BLADE_HIT
     hit = decoded(ROOT/'source_art/audio/bandit-sword-hit.mp3')[int(start*RATE):int(end*RATE)].copy()
     rise, fall = int(.003*RATE), int(BLADE_FADE*RATE)
+    t = np.arange(len(hit))/RATE
+    hit *= (1+BLADE_PUNCH*np.exp(-((t-BLADE_BLOW)/BLADE_BLOW_SPAN)**2))[:, None]
+    hit = np.tanh(hit*BLADE_DRIVE)
     hit[:rise] *= np.linspace(0, 1, rise)[:, None]
     hit[-fall:] *= (np.cos(np.linspace(0, math.pi, fall))*.5+.5)[:, None]
-    return hit
+    return hit/np.max(np.abs(hit))*BLADE_PEAK
 
 
 def drawn_before():
