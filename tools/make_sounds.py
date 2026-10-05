@@ -1,5 +1,4 @@
-"""Makes two of the ranger's sounds, written to assets/audio as 48 kHz 16-bit
-WAV.
+"""Makes the ranger's sounds, written to assets/audio as 48 kHz 16-bit WAV.
 
   lightning-zap.wav   Lightning Shot striking: ZapSplat's electric crackle
                       (source_art/audio/electric.m4a, supplied by the user),
@@ -9,6 +8,11 @@ WAV.
   power-whoosh.wav    Power Shot striking (synthesised: noise, tones and
                       filters only): a quick rush of air that swells into the
                       blow and stops with it, and a deep punch.
+  arrow-flesh-1..3.wav  An arrow striking a bandit: the three hits of a
+                      recording supplied by the user
+                      (source_art/audio/arrow-hits.mp3), cut apart at the
+                      silences between them, as recorded, each faded out
+                      at its end.
 
   python3 tools/make_sounds.py
 """
@@ -80,16 +84,38 @@ ZAP_FADE = .6
 
 def zap():
     """ZapSplat's crackle, decoded, levelled and faded out at its end."""
-    with tempfile.TemporaryDirectory() as folder:
-        decoded = Path(folder)/'electric.wav'
-        subprocess.run(['afconvert', '-f', 'WAVE', '-d', 'LEI16@48000', str(ROOT/'source_art/audio/electric.m4a'), str(decoded)], check=True)
-        with wave.open(str(decoded)) as w:
-            channels = w.getnchannels()
-            signal = np.frombuffer(w.readframes(w.getnframes()), '<i2').reshape(-1, channels)/32767
+    signal = decoded(ROOT/'source_art/audio/electric.m4a').copy()
     fade = int(ZAP_FADE*RATE)
     # (An eased fall, gentle at first, so it dies away rather than dips.)
     signal[-fade:] *= (np.cos(np.linspace(0, math.pi, fade))*.5+.5)[:, None]
     return signal/np.max(np.abs(signal))*.89
+
+
+# Where each of the recording's three arrow hits begins and ends (seconds):
+# just before each strikes, and in the quiet after it.
+ARROW_HITS = [(.044, .275), (.296, .655), (.676, .96)]
+
+
+def decoded(path):
+    """A recording decoded by macOS afconvert, as (samples, channels)."""
+    with tempfile.TemporaryDirectory() as folder:
+        out = Path(folder)/'decoded.wav'
+        subprocess.run(['afconvert', '-f', 'WAVE', '-d', 'LEI16@48000', str(path), str(out)], check=True)
+        with wave.open(str(out)) as w:
+            channels = w.getnchannels()
+            return np.frombuffer(w.readframes(w.getnframes()), '<i2').reshape(-1, channels)/32767
+
+
+def arrow_hits():
+    recording = decoded(ROOT/'source_art/audio/arrow-hits.mp3')
+    hits = []
+    for start, end in ARROW_HITS:
+        hit = recording[int(start*RATE):int(end*RATE)].copy()
+        rise, fall = int(.002*RATE), int(.02*RATE)
+        hit[:rise] *= np.linspace(0, 1, rise)[:, None]
+        hit[-fall:] *= np.linspace(1, 0, fall)[:, None]
+        hits.append(hit)
+    return hits
 
 
 def drawn_before():
@@ -140,3 +166,5 @@ def whoosh():
 if __name__ == '__main__':
     write('lightning-zap.wav', zap())
     write('power-whoosh.wav', whoosh())
+    for i, hit in enumerate(arrow_hits()):
+        write('arrow-flesh-%d.wav' % (i+1), hit)

@@ -108,7 +108,11 @@ static func sheet(mesh: Mesh, standing: bool, glow: Color) -> MeshInstance3D:
 
 # How far out the front is (a share of the reach): away fast, slowing as it goes.
 func front() -> float:
-	var u = clampf(age/SWEEP,0.0,1.0)
+	return spread(age)
+
+# How far out the front is, `seconds` after the blow, of the whole reach.
+static func spread(seconds: float) -> float:
+	var u = clampf(seconds/SWEEP,0.0,1.0)
 	return 1.0-pow(1.0-u,2.6)
 
 func show_front() -> void:

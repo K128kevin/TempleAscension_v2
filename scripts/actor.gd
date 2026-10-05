@@ -811,16 +811,20 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 		react_to_hit()
 		push_back()
 
-# A man bleeds where he is struck: a slight spatter thrown the way the blow
+# A man bleeds where he is struck: a spray thrown the way the blow
 # went (`away`, or from the hero), heavier from the one that kills him.
 func bleed(away: Vector3, heavy: bool = false) -> void:
 	if away == Vector3.ZERO: away = position-game.player.position
 	Vfx.blood(game.world,position+Vector3.UP*1.2*config.get("size",1.0),away,heavy)
 
 # What a hit sounds like: an arrow striking a statue rings on the stone, as
-# in the original game; anything else is a weapon's impact.
+# in the original game; an arrow or a blade going into a bandit is heard as
+# that (the arrow one of three hits, by chance); anything else is a weapon's
+# impact.
 func impact_sound() -> String:
-	return "arrow-stone-impact" if game.arrow_struck == self and not human else "weapon-impact"
+	if game.arrow_struck == self: return "arrow-flesh-%d" % randi_range(1,3) if human else "arrow-stone-impact"
+	if game.melee_struck == self and human: return "sword-hit-flesh"
+	return "weapon-impact"
 
 func push_back() -> void:
 	if pushback_step >= PUSHBACK.size(): return

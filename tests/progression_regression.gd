@@ -49,7 +49,7 @@ func test():
 	var bash = Book.values("shield_bash",1); var bash_top = Book.values("shield_bash",5)
 	check(bash.x==25 and bash.y==5 and bash.z==32 and bash_top.x==50 and bash_top.y==10 and bash_top.z==20 and Book.all().shield_bash.cost==35,"Shield Bash's listed ranks and cost")
 	check(Book.values("execute",5).x==450 and Book.values("execute",5).y==40 and Book.all().execute.cost==45 and Book.all().execute.points==10,"Execute's listed ranks, cost and requirement")
-	check(Book.values("quick_strikes",5).x==170 and Book.values("dash_attack",5).x==200 and Book.values("dash_attack",1).y==15 and Book.values("cursed_blade",5).y==8,"Passive ranks as listed")
+	check(Book.values("quick_strikes",5).x==170 and Book.values("dash_attack",5).x==200 and is_equal_approx(Book.values("dash_attack",1).y,.4) and Book.values("cursed_blade",5).y==8,"Passive ranks as listed")
 	var requirements = {}
 	for s in Book.all().values():
 		if s.class_id=="warrior": requirements[s.id] = s.points

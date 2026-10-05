@@ -4,12 +4,22 @@ extends Node3D
 ## (assets/audio/lightning-zap.wav), each a short jagged thread of light that
 ## flickers, snaps out and strikes again somewhere else nearby, the last of
 ## them dying away as the sound fades. A flickering blue light goes with them.
+##
+## Thunder Slam drives the same arcs outward (`outward`): they spark out
+## from the blow across the slam's arc, racing just behind its shockwave's
+## front (scripts/shockwave.gd), and die as the front thins at its reach.
+##
 ## Thin ribbons of light drawn afresh each frame, as the lightning leaping
 ## between enemies is (scripts/ranger_fx.gd bolt); it does no damage.
+const Shockwave = preload("res://scripts/shockwave.gd")
 const ZAP = preload("res://assets/audio/lightning-zap.wav")
 # How long the sound's own fade is (tools/make_sounds.py ZAP_FADE): the arcs
 # thin out and die with it.
 const FADE = .6
+# Thunder Slam's arcs: how many at once, and how long they go on crackling
+# at the edge after the front has reached it, the last of that fading.
+const OUTWARD_ARCS = 9
+const OUTWARD_LINGER = .3
 # How far from the spot the arcs reach, how many are alight at once, and
 # how long each lasts before it jumps somewhere else.
 const REACH = 1.3
@@ -20,6 +30,13 @@ const LIFE = Vector2(.06,.16)
 const REDRAW = .035
 var age = 0.0
 var lasting = 1.0
+var fade = FADE
+var count = ARCS
+# Thunder Slam's: the way the blow goes, the half-angle of its arc and how far
+# it reaches (zero reach: Lightning Shot's, about one spot).
+var way = Vector3.FORWARD
+var half = PI
+var reach = 0.0
 var arcs: Array = []
 var redraw = 0.0
 var mesh: ImmediateMesh
@@ -30,40 +47,68 @@ static func make(at: Vector3) -> Node3D:
 	var node = new()
 	node.position = at
 	node.lasting = ZAP.get_length()
-	node.mesh = ImmediateMesh.new()
-	node.material = StandardMaterial3D.new()
-	node.material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	node.material.vertex_color_use_as_albedo = true
-	node.material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	node.material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	node.material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	node.material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	var threads = MeshInstance3D.new()
-	threads.mesh = node.mesh
-	threads.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	node.add_child(threads)
-	node.flash = OmniLight3D.new()
-	node.flash.light_color = Color(.6,.8,1)
-	node.flash.omni_range = 3.5
-	node.flash.position = Vector3.UP*.9
-	node.add_child(node.flash)
-	node.tick(0.0)
+	node.dress()
 	return node
 
-# How strong it still is: whole until the sound starts to fade, then eased
-# away with it.
+# Thunder Slam's arcs, out from `at` along `direction` across `degrees` of arc
+# to `reach` metres.
+static func outward(at: Vector3, direction: Vector3, degrees: float, reach: float) -> Node3D:
+	var node = new()
+	node.position = at
+	node.way = direction.normalized() if direction.length() > .01 else Vector3.FORWARD
+	node.half = deg_to_rad(degrees*.5)
+	node.reach = reach
+	node.count = OUTWARD_ARCS
+	node.lasting = Shockwave.SWEEP+OUTWARD_LINGER
+	node.fade = OUTWARD_LINGER+.15
+	node.dress()
+	return node
+
+func dress() -> void:
+	mesh = ImmediateMesh.new()
+	material = StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	var threads = MeshInstance3D.new()
+	threads.mesh = mesh
+	threads.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(threads)
+	flash = OmniLight3D.new()
+	flash.light_color = Color(.6,.8,1)
+	flash.omni_range = 3.5
+	flash.position = Vector3.UP*.9
+	add_child(flash)
+	tick(0.0)
+
+# How strong it still is: whole until the sound starts to fade (or Thunder
+# Slam's front has reached its edge), then eased away.
 func strength() -> float:
-	var fading = clampf((age-(lasting-FADE))/FADE,0.0,1.0)
+	var fading = clampf((age-(lasting-fade))/fade,0.0,1.0)
 	return cos(fading*PI)*.5+.5
 
 # A new arc between two points about the spot, low by the ground or up about
 # the body it struck, sometimes grounding itself.
 func spark() -> Dictionary:
+	if reach > 0: return outward_spark()
 	var a = Vector3(randf_range(-1,1),0,randf_range(-1,1)).limit_length(1.0)*REACH+Vector3.UP*randf_range(.1,1.7)
 	var way = Vector3(randf_range(-1,1),randf_range(-.7,.7),randf_range(-1,1)).normalized()
 	var b: Vector3 = a+way*randf_range(.35,.9)
 	if randf() < .3: b = Vector3(a.x+randf_range(-.4,.4),.03,a.z+randf_range(-.4,.4))
 	b.y = maxf(b.y,.03)
+	return {"a":a,"b":b,"left":randf_range(LIFE.x,LIFE.y)}
+
+# One of Thunder Slam's: low over the ground behind the front, leaping out
+# toward it and past it, somewhere across the slam's arc.
+func outward_spark() -> Dictionary:
+	var out = maxf(.6,Shockwave.spread(age)*reach)
+	var turn = randf_range(-half,half)
+	var bearing: Vector3 = way.rotated(Vector3.UP,turn)
+	var a: Vector3 = bearing*out*randf_range(.55,.92)+Vector3.UP*randf_range(.04,.45)
+	var b: Vector3 = way.rotated(Vector3.UP,clampf(turn+randf_range(-.18,.18),-half,half))*minf(reach,out+randf_range(.1,.6))+Vector3.UP*randf_range(.04,.3)
 	return {"a":a,"b":b,"left":randf_range(LIFE.x,LIFE.y)}
 
 func tick(dt: float) -> bool:
@@ -73,7 +118,7 @@ func tick(dt: float) -> bool:
 		arcs[i].left -= dt
 		if arcs[i].left <= 0: arcs.remove_at(i)
 	# (Fewer and fewer strike again as it fades.)
-	while arcs.size() < ceili(ARCS*power) and age < lasting:
+	while arcs.size() < ceili(count*power) and age < lasting:
 		if arcs.size() > 0 and randf() > power: break
 		arcs.append(spark())
 	redraw -= dt
@@ -81,6 +126,10 @@ func tick(dt: float) -> bool:
 		redraw = REDRAW
 		draw(power)
 	flash.light_energy = 1.8*power*randf_range(.4,1.0) if not arcs.is_empty() else 0.0
+	# (Thunder Slam's light runs out with its arcs.)
+	if reach > 0:
+		flash.position = way*Shockwave.spread(age)*reach*.75+Vector3.UP*.5
+		flash.omni_range = 5.0
 	return age >= lasting
 
 func draw(power: float) -> void:

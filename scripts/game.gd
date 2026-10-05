@@ -48,15 +48,24 @@ var ordered_slot = 0
 # Dash Attack: the dash under way strikes whoever it passes through, each once.
 var dash_attack = false
 var dash_struck: Array = []
-# The dash is a dive and a roll (Visual's Evade clip, at a brisk but natural
-# pace): he covers its ground in DASH_SECONDS, springing off, quickest through
-# the dive and slowing as he rolls up onto his feet, and is free again after
-# DASH_BUSY. `dash_speed` is his mean speed over it.
-const DASH_SECONDS = .45
-const DASH_REACH = 4.2
-const DASH_CLIP = .8
-const DASH_BUSY = .5
-var dash_speed = DASH_REACH/DASH_SECONDS
+# The dash is two sprinting strides into a dive and a roll (Visual's Evade
+# clip, at a brisk but natural pace). He gathers speed over the strides
+# (DASH_RUN seconds, DASH_RUN_SHARE of the ground), leaps at his quickest and
+# slows as he rolls up onto his feet (DASH_ROLL seconds), and is free again
+# DASH_RISE after that. `dash_length` is how far this dash goes, DASH_REACH
+# at most.
+const DASH_RUN = .32
+const DASH_ROLL = .4
+const DASH_SECONDS = DASH_RUN+DASH_ROLL
+const DASH_REACH = 6.8
+const DASH_RUN_SHARE = .47
+const DASH_CLIP = .72
+const DASH_RISE = .05
+# The dash costs nothing, but recharges for this long after each (Dash Attack
+# shortens it).
+const DASH_COOLDOWN = 3.0
+var dash_length = DASH_REACH
+var dash_rolling = false
 var leap_left = 0.0
 var leap_duration = .26
 var leap_direction = Vector3.ZERO
@@ -64,6 +73,7 @@ var leap_speed = 0.0
 var dash_time = 0.0
 var dash_direction = Vector3.ZERO
 var heal_cd = 0.0
+var dash_cooldown = 0.0
 var regen_recovery_time = 3.0
 var slowed = 0.0
 # How long frost (an ice shard, a frost nova) slows the hero.
@@ -81,9 +91,11 @@ var skills
 var creating_character = false
 # The debug playground, while it is open (Shift+P in debug mode).
 var playground = null
-# Whoever one of the hero's arrows is striking just now: on a statue it rings
-# as arrowhead on stone (scripts/actor.gd hit).
+# Whoever one of the hero's arrows, or his blade (spear, sword, axe or dagger),
+# is striking just now: on a statue an arrow rings as arrowhead on stone, and
+# on a bandit each is heard going into him (scripts/actor.gd impact_sound).
 var arrow_struck = null
+var melee_struck = null
 # Set as the hero walks in through the temple's door: the first floor then
 # loads with him standing just inside it.
 var arriving_by_door = false
@@ -163,6 +175,7 @@ func load_floor() -> void:
 	dash_time = 0
 	dash_attack = false
 	dash_struck.clear()
+	dash_cooldown = 0
 	leap_left = 0
 	heal_cd = run.heal_cooldown
 	regen_recovery_time = 3.0
@@ -380,6 +393,7 @@ func _process(dt: float) -> void:
 			player.hp = minf(Data.max_health(run),player.hp+Data.max_health(run)*health_regen_rate*dt)
 			run.energy = minf(Data.max_energy(run),run.energy+Data.energy_regen(run)*dt)
 		heal_cd = maxf(0,heal_cd-dt)
+		dash_cooldown = maxf(0,dash_cooldown-dt)
 		slowed = maxf(0,slowed-dt)
 		save_timer += dt
 		if save_timer>8 and playground == null:
@@ -634,7 +648,10 @@ func player_control(dt: float) -> void:
 	if dash_time>0:
 		var covered: float = dash_share(dash_time)
 		dash_time -= dt
-		player.position = world.move(player.position,dash_direction*dash_speed*DASH_SECONDS*(dash_share(dash_time)-covered))
+		player.position = world.move(player.position,dash_direction*dash_length*(dash_share(dash_time)-covered))
+		if not dash_rolling and dash_time<=DASH_ROLL:
+			dash_rolling = true
+			player.visual.play("Evade",DASH_CLIP)
 		if dash_attack:
 			for enemy in skills.targets(player.position,1.0):
 				if not enemy in dash_struck: skills.dash_hit(enemy,dash_direction,dash_struck)
@@ -826,19 +843,16 @@ func shake(strength: float) -> void:
 
 # The share of a dash's ground covered with `left` seconds of it to go.
 static func dash_share(left: float) -> float:
-	var u: float = pow(clampf(1.0-left/DASH_SECONDS,0.0,1.0),.7)
-	return u*u*(3.0-2.0*u)
+	var gone: float = clampf(DASH_SECONDS-left,0.0,DASH_SECONDS)
+	if gone<DASH_RUN: return DASH_RUN_SHARE*pow(gone/DASH_RUN,1.3)
+	return DASH_RUN_SHARE+(1.0-DASH_RUN_SHARE)*(1.0-pow(1.0-(gone-DASH_RUN)/DASH_ROLL,1.5))
 
 func dash() -> void:
 	if leap_left>0: return
-	if mode!="playing" or player.dead: return
-	# Dash Attack makes the dash strike, and adds to its cost.
+	if mode!="playing" or player.dead or dash_cooldown>0: return
+	# Dash Attack makes the dash strike, and recharge sooner.
 	var attacks: bool = run.skills.has("dash_attack")
-	var price: float = 10.0+Book.values("dash_attack",int(run.skills.get("dash_attack",0))).y
-	if run.energy<price:
-		toast("Evade needs %d energy." % price)
-		return
-	run.energy -= price
+	dash_cooldown = DASH_COOLDOWN-Book.values("dash_attack",int(run.skills.get("dash_attack",0))).y
 	dash_attack = attacks
 	skills.leave_shadows()
 	dash_struck.clear()
@@ -848,13 +862,15 @@ func dash() -> void:
 	skills.cancel_aim()
 	dash_time = DASH_SECONDS
 	var offset = world.pointer()-player.position
-	dash_speed = minf(DASH_REACH,offset.length())/DASH_SECONDS
+	dash_length = minf(DASH_REACH,offset.length())
+	dash_rolling = false
 	dash_direction = offset.normalized()
 	if dash_direction.length()<.1: dash_direction = player.forward()
 	player.face(player.position+dash_direction)
 	player.invulnerable = DASH_SECONDS
-	player.visual.play("Evade",DASH_CLIP)
-	player.busy = DASH_BUSY
+	# (Two strides are one turn of the run.)
+	player.visual.play(player.visual.run_action(),DASH_RUN)
+	player.busy = DASH_SECONDS+DASH_RISE
 	route.clear()
 	target = null
 

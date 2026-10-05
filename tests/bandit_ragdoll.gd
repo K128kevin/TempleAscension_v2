@@ -136,7 +136,7 @@ func test():
 	bandit.position -= Vector3.RIGHT*3
 	var folds = {"knee":[INF,-INF],"elbow":[INF,-INF]}
 	var lowest = INF
-	for i in 150:
+	for i in 210:
 		await frames(1)
 		for side in ["l","r"]:
 			for joint in [["knee","thigh_","calf_"],["elbow","upperarm_","lowerarm_"]]:
@@ -152,7 +152,7 @@ func test():
 	var pelvis: Vector3 = bone_at(bandit.visual,"pelvis")
 	print("RAGDOLL_LIES head ",head," pelvis ",pelvis)
 	check(head.y < .45 and pelvis.y < .4,"He comes to lie on the ground")
-	check((pelvis-bandit.position).dot(Vector3.FORWARD) > .15 and pelvis.distance_to(bandit.position) < 3.0,"He lies a little way off, the way he was struck")
+	check((pelvis-bandit.position).dot(Vector3.FORWARD) > .15 and pelvis.distance_to(bandit.position) < 3.3,"He lies a little way off, the way he was struck")
 	print("RAGDOLL_REST ",bodies.map(func(b): return snappedf(b.linear_velocity.length(),.01)))
 	check(bodies.all(func(b): return b.linear_velocity.length() < .3),"He comes to rest")
 	var body_pelvis = bodies.filter(func(b): return b.bone_name == "pelvis")[0]
@@ -166,7 +166,7 @@ func test():
 	game.resume_game()
 
 	# Thrown by a blast; then, once the body is gone, its physics are too.
-	var thrown = victim(origin+Vector3(-2,0,-1.5),"bandit_archer")
+	var thrown = victim(origin+Vector3(-2,0,-3),"bandit_archer")
 	thrown.hit(100000,"physical",0.0,Fragment.impact(Vector3.FORWARD,true))
 	var flung: Array = Ragdoll.bodies(thrown.visual.ragdoll)
 	await frames(20)
@@ -174,10 +174,25 @@ func test():
 	var carried = Vector3.ZERO
 	for b in flung: carried += (b.global_position-thrown.position)/flung.size()
 	print("RAGDOLL_BLAST ",carried)
-	check(carried.dot(Vector3.FORWARD) > .8 and carried.y > .9,"A blast throws him off his feet")
-	await frames(8*60-150)
+	check(carried.dot(Vector3.FORWARD) > 1.0 and carried.y > .9,"A blast hurls him off his feet")
+	# The wall stands 2 metres behind him.
+	var wall: float = origin.z-5.0
+	var rebound = false
+	var nearest = INF
+	for i in 100:
+		await frames(1)
+		var mean = Vector3.ZERO
+		for b in flung:
+			mean += b.linear_velocity/flung.size()
+			nearest = minf(nearest,b.global_position.z-wall)
+		if mean.z > .2: rebound = true
+		if i == 12: await snapshot("rebound")
+	print("RAGDOLL_WALL nearest ",nearest," rebound ",rebound)
+	check(rebound,"Hurled into a wall, he bounces off it")
+	check(nearest > 0.0,"No part of him passes through the wall")
+	await frames(8*60-310)
 	check(not bandit.visible and bandit.visual.ragdoll == null and bodies.all(func(b): return not is_instance_valid(b) or b.is_queued_for_deletion()),"A body that has gone leaves no physics behind")
-	await frames(150)
+	await frames(210)
 	check(flung.all(func(b): return not is_instance_valid(b)),"Nor does the thrown one")
 
 	# Dying of a curse there is no blow: he crumples where he stands.

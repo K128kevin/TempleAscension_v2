@@ -1883,6 +1883,15 @@ func snap_facing() -> void:
 	shown_yaw = null
 	rotation.y = 0
 
+# The run this unit's carrying calls for (as locomotion() chooses it).
+func run_action() -> String:
+	if ranger_carry(): return "RangerRun"
+	if weapon_kind == "staff" and not is_stone: return "WizardRun"
+	if weapon_kind == "bow": return "BowRun"
+	if enemy_kind in SHIELD_BEARERS and clips.has("ScutumRun"): return "ScutumRun"
+	if weapon_kind == "sword" and clips.has("SwordRun"): return "SwordRun"
+	return "Run"
+
 # `travel_speed`, when given, is how fast the unit moves over the ground
 # (metres a second): the stride is played at that pace, so the planted foot
 # keeps still on the ground rather than skating.

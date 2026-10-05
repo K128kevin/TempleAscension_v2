@@ -578,7 +578,10 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 	var crit: bool = randf()*100.0<Data.crit_chance(game.run)+mastery.x if crit_override<0 else crit_override==1
 	if crit: amount *= Data.CRIT_MULTIPLIER*(1.0+mastery.y*.01)*(1.0+enemy.weak_stacks*enemy.weak_bonus*.01)
 	var poison: Dictionary = Book.values("poisons",rank("poisons"))
+	# (A blow of a blade, not the bow's or the staff's, is heard as one.)
+	game.melee_struck = enemy if type=="physical" and not weapon in [2,4] else null
 	enemy.hit(amount,type,bonus,death_impact,"crit" if crit else ("skill" if skill else "normal"))
+	game.melee_struck = null
 	if rhythm.y>0:
 		offense_stacks = mini(int(rhythm.y),offense_stacks+1)
 		offense_time = rhythm.z
@@ -659,6 +662,10 @@ func execute(job: Dictionary) -> void:
 			for enemy in arc_targets(origin,direction,v.y,v.z):
 				strike(enemy,attack_damage(v.x),"physical",0.0,StoneFragment.impact(enemy.position-origin,true))
 			ground_blow(origin+direction*.9,v.z,SHAKE_SLAM,direction,v.y,"rock-impact",true)
+			# The blade's charge leaps out across the ground with the front.
+			var sparks = Crackle.outward(origin+direction*.9+Vector3.UP*game.world.lift(origin),direction,v.y,v.z)
+			game.world.add_child(sparks)
+			waves.append(sparks)
 		"leap":
 			for enemy in targets(origin,LEAP_RADIUS):
 				strike(enemy,attack_damage(v.x),"physical",0.0,StoneFragment.impact(enemy.position-origin,true))

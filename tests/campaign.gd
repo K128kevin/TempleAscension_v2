@@ -17,8 +17,8 @@ func start(owner_game):
 	check(game.player.hp==80 and game.run.energy==0 and game.heal_cd==20 and not game.run.has("flasks"),"Healing spell instantly restores 60 percent for 60 energy with a 20-second cooldown and no charges")
 	game.heal()
 	check(game.run.energy==0,"Healing spell cooldown prevents another cast")
-	game.run.energy=10; game.dash()
-	check(game.run.energy==0 and game.dash_time>0 and game.player.invulnerable>0,"Dash spends ten energy and has no cooldown")
+	game.run.energy=10; game.dash_cooldown=0; game.dash()
+	check(game.run.energy==10 and game.dash_time>0 and game.player.invulnerable>0 and is_equal_approx(game.dash_cooldown,3.0),"Dash costs no energy and recharges for 3 seconds")
 	game.player.busy=0; game.player.invulnerable=0; game.dash_time=0
 	game.player.hp=game.player.max_hp; game.hurt_player(5)
 	check(game.player.visual.state in ["ShieldHit","ShieldHitHead"] and game.player.visual.reaction_time>0,"Light damage plays a hit flinch, shield held steady")
@@ -31,7 +31,7 @@ func start(owner_game):
 	game.player.visual.play("Idle"); game.player.busy=1.0; game.hurt_player(5)
 	check(game.player.visual.state=="Idle","Hit reactions never interrupt attacks")
 	game.player.busy=0; game.player.hp=game.player.max_hp
-	game.run.energy=10; game.dash()
+	game.dash_cooldown=0; game.dash()
 	var hp: float = game.player.hp
 	game.hurt_player(100)
 	check(game.player.hp==hp,"Evade prevents damage")

@@ -22,7 +22,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Shift + left click | Attack toward cursor without moving |
 | Right click | Cast active skill slot 1 |
 | Hold left mouse | Continuously repath toward the cursor (a hold begun on the ground keeps walking when dragged over a statue) |
-| Space | Dash: spend 10 energy |
+| Space | Dash: no energy cost, recharges for 3 seconds |
 | R | Toggle between running and walking (a slower pace) |
 | Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
 | 1 – 4 | Cast the other four assigned active skills |
@@ -344,7 +344,7 @@ Percentages of damage are of a normal attack.
 | | 5 | Vampiric Strike | 25 | 80% → 125% plus 3% → 12% of the target's total health, healing the same share of your own |
 | | 5 | Shadow Strike | 25 | 25% → 70%, then 100% → 220% over 5 seconds; refreshes Cursed Blade on the target |
 | | 10 | Execute | 45 | 200% → 450%, only on an enemy below 20% → 40% health |
-| Passive | 0 | Dash Attack | | Enemies the dash passes through take 50% → 200% damage and are pushed back; the dash costs 15 → 5 extra energy |
+| Passive | 0 | Dash Attack | | Enemies the dash passes through take 50% → 200% damage and are pushed back; the dash recharges 0.4 → 2 seconds sooner (0.4 a rank) |
 | | 0 | Shield Expertise | | 5% → 50% chance to block any attack with the shield, for 25% → 80% less damage |
 | | 0 | Endurance | | Energy recovers 10% → 75% faster |
 | | 5 | Quick Strikes | | Normal attacks 20% → 170% faster |

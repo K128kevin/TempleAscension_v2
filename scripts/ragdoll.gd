@@ -31,11 +31,18 @@ const PARTS = [
 # hinge folds about its Z. Every bone of the rig lies along its own Y, and its
 # knees and elbows fold about their own X.
 const JOINT_FRAME = Basis(Vector3(0,1,0),Vector3(0,0,1),Vector3(1,0,0))
-# How much of the blow's velocity the chest and head take over the rest of
-# him, toppling him away from it.
+# How much more of the blow the chest and head take than the rest of him,
+# toppling him away from it (a share of its velocity, of TOPPLE_MOST metres a
+# second at most: thrown hard, he is thrown whole).
 const TOPPLE = {"spine_03":.7,"Head":1.0}
+const TOPPLE_MOST = 2.5
+# How fast a man is thrown, in metres a second, the way the blow went
+# (StoneFragment.impact gives its direction): knocked back by an ordinary
+# blow; hurled by a blast (Leap, Thunder Slam, Shockwave, Power Shot: an
+# impact faster than BLAST), to rebound from whatever wall he meets.
 const BLAST = 4.0
-const BLAST_SHARE = .6
+const PUSH = 2.0
+const BLAST_PUSH = 6.0
 static var flesh: PhysicsMaterial
 
 # The bodies of `skeleton`, jointed and still: null if it is not a man's.
@@ -87,7 +94,7 @@ static func body(skeleton: Skeleton3D, part: Dictionary) -> PhysicalBone3D:
 	if flesh == null:
 		flesh = PhysicsMaterial.new()
 		flesh.friction = .9
-		flesh.bounce = 0.0
+		flesh.bounce = .35
 	bone.friction = flesh.friction
 	bone.bounce = flesh.bounce
 	# A body has no muscle to hold it, but is not a puppet's loose sticks.
@@ -97,16 +104,20 @@ static func body(skeleton: Skeleton3D, part: Dictionary) -> PhysicalBone3D:
 	bone.collision_mask = WORLD_LAYER
 	return bone
 
+# (Hurled, a limb crosses more than a wall's thickness in a step.)
+static func sweep(bone: PhysicalBone3D) -> void:
+	PhysicsServer3D.body_set_enable_continuous_collision_detection(bone.get_rid(),true)
+
 # Lets go of him, with the velocity of the blow that felled him (as a
 # statue's stones are thrown: StoneFragment.impact).
 static func drop(simulator: PhysicalBoneSimulator3D, impact: Vector3) -> void:
 	simulator.physical_bones_start_simulation()
-	# A blast that scatters a statue's stones throws a man off his feet, not
-	# across the hall.
-	if impact.length() > BLAST: impact *= BLAST_SHARE
+	impact = impact.normalized()*(BLAST_PUSH if impact.length() > BLAST else PUSH)
+	var topple: Vector3 = impact.limit_length(TOPPLE_MOST)
 	for bone in simulator.get_children():
 		if bone is PhysicalBone3D:
-			bone.linear_velocity = impact*(1.0+TOPPLE.get(String(bone.bone_name),0.0))
+			sweep(bone)
+			bone.linear_velocity = impact+topple*TOPPLE.get(String(bone.bone_name),0.0)
 
 static func bodies(simulator: PhysicalBoneSimulator3D) -> Array:
 	return simulator.get_children().filter(func(bone): return bone is PhysicalBone3D)

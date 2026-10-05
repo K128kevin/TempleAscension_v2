@@ -753,6 +753,15 @@ While it is heard, a few small arcs of electricity jump about the spot it struck
 an arrow striking stone, copied unchanged from it. As there, it plays when one of
 the hero's arrows hits a statue, at the same level as `weapon-impact.mp3`.
 
+`assets/audio/sword-hit-flesh.mp3` is a blade striking flesh, supplied by the user
+(`sword_hit_bandit.mp3`), unedited: it plays when a melee weapon (spear, sword, axe
+or dagger, skills included) hits a bandit. `assets/audio/arrow-flesh-1.wav` to
+`arrow-flesh-3.wav` are the three arrow hits of a recording supplied by the user
+(`source_art/audio/arrow-hits.mp3`), cut apart at the silences between them by
+`tools/make_sounds.py` and each faded out at its end; one of them, by chance,
+plays when one of the hero's arrows hits a bandit. Both play at the level of
+`weapon-impact.mp3`, which every other hit keeps.
+
 `assets/audio/rock-impact.mp3` is PMSFX's "Rock Crash, Designed Rock Impact Crash,
 Big Cinematic" (PMSFX_ROCKCrsh_Designed_Rock_Impact_Carsh_Big_Cinematic_41RI2_2442.mp3),
 unedited, supplied by the user: a 0.9 s crash of breaking rock. It plays as Thunder Slam's

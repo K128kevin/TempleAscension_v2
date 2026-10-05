@@ -368,8 +368,8 @@ func test():
 		check(victim.hp<10000 or not game.projectiles.is_empty() or not game.fireballs.is_empty(),"Class skill executes after windup: "+class_id)
 		game.skills.pending.clear(); game.player.busy=0
 		game.skills.cast_slot(0,victim.position)
-		game.run.energy=10; game.dash()
-		check(is_equal_approx(game.run.energy,0.0),"Evade costs 10 energy")
+		game.run.energy=10; game.dash_cooldown=0; game.dash()
+		check(is_equal_approx(game.run.energy,10.0) and game.dash_cooldown>0,"Evade costs no energy, and recharges")
 		check(game.skills.pending.is_empty() and game.scheduled.is_empty(),"Evade cancels unfinished skill and basic attack jobs")
 		victim.dead=true
 	if "--live-attacks" in OS.get_cmdline_user_args(): await live_attacks(game)

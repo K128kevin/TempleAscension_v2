@@ -7,6 +7,7 @@ const Save = preload("res://scripts/save.gd")
 const Temple = preload("res://scripts/temple.gd")
 const Actor = preload("res://scripts/actor.gd")
 const Art = preload("res://scripts/assets.gd")
+const Crackle = preload("res://scripts/crackle.gd")
 const STEP = 1.0/60
 var game
 var origin: Vector3
@@ -67,7 +68,7 @@ func ready():
 	game.player.hp = Data.max_health(game.run); game.player.max_hp = game.player.hp
 	game.scheduled.clear(); game.skills.reset()
 	game.run.energy = Data.max_energy(game.run)
-	game.leap_left = 0; game.dash_time = 0; game.dash_attack = false; game.combat_age = 10
+	game.leap_left = 0; game.dash_time = 0; game.dash_cooldown = 0; game.dash_attack = false; game.combat_age = 10
 	# Damage checks are exact; critical hits are tested on their own.
 	game.skills.crit_override = 0
 	game.player.visual.position = Vector3.ZERO
@@ -126,6 +127,14 @@ func test():
 	game.skills.cast("ground_slam",origin+forward*5); wait(.6)
 	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(past_reach)==0 and lost(off)>0,"Thunder Slam rank 5: 250% damage in a 120° arc out to 9 metres")
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillSlam","The slam sends out a shockwave of dust, shakes the screen, and has its own swing")
+	var sparks: Array = game.skills.waves.filter(func(w): return w is Crackle)
+	var spread_out = sparks.size()==1 and not sparks[0].arcs.is_empty() and is_equal_approx(sparks[0].reach,9.0)
+	if spread_out:
+		for arc in sparks[0].arcs:
+			for p in [arc.a,arc.b]:
+				var flat = Vector3(p.x,0,p.z)
+				spread_out = spread_out and flat.length()<=9.01 and (flat.length()<.7 or rad_to_deg(flat.angle_to(sparks[0].way))<=60.5)
+	check(spread_out,"Arcs of electricity, as Lightning Shot's, leap out with it across its arc and no further")
 	var wave = game.skills.waves[0]
 	var ring: ShaderMaterial = wave.ground.material_override
 	check(wave.plasma and wave.get_children().filter(func(c): return c is CPUParticles3D).size()==1,"The blade's charge no longer shoots out over the ground: only a column of dust is thrown up")
@@ -135,7 +144,7 @@ func test():
 	check(float(ring.get_shader_parameter("front"))>front_then+.2 and wave.wall.scale.x>2.0,"One front races out across the slam's arc, a wall of haze standing on it")
 	check(cracks_then>.6 and float(ring.get_shader_parameter("crack_strength"))<cracks_then and Vector3(ring.get_shader_parameter("crack_glow")).z>.9,"The ground is cracked where it struck, the cracks glowing blue with the blade's charge and dying away")
 	wait(3.0)
-	check(game.skills.waves.is_empty(),"The shockwave passes within a couple of seconds")
+	check(game.skills.waves.is_empty(),"The shockwave and its arcs pass within a couple of seconds")
 	clear()
 
 	# War Cry: every enemy near takes more damage for a while.
@@ -336,31 +345,39 @@ func test():
 		check(game.run.energy==70,"The %d key casts the skill bound to it" % (slot))
 		wait(.8)
 
-	# Dash Attack: the dash strikes and pushes back whoever it passes through,
-	# for extra energy.
+	# The dash: free, recharging for three seconds; Dash Attack makes it strike
+	# and push back whoever it passes through, and recharge sooner.
 	hero({"cleave":1})
+	game.dash_cooldown = 0
 	game.dash()
-	check(game.run.energy==90 and not game.dash_attack,"Without Dash Attack a dash costs 10 energy")
+	check(game.run.energy==100 and game.dash_time>0 and not game.dash_attack and is_equal_approx(game.dash_cooldown,3.0),"Without Dash Attack a dash costs no energy and recharges for 3 seconds")
+	game.dash_time = 0; game.player.busy = 0; game.player.invulnerable = 0
+	game.dash()
+	check(game.dash_time<=0,"It cannot be used again while it recharges")
+	var left: float = game.dash_cooldown
+	game._process(.5)
+	check(is_equal_approx(game.dash_cooldown,left-.5),"It recharges as time passes")
+	game.dash_cooldown = .01; game._process(.02)
+	game.dash()
+	check(game.dash_time>0,"and can be used once it has")
+	game.dash_time = 0; game.player.busy = 0; game.player.invulnerable = 0
 	var dealt_by_rank: Array = []
 	for r in [1,5]:
 		hero({"dash_attack":r})
 		var met = dummy(3.0)
 		var spared = dummy(3.0,90.0)
-		var cost: float = 25.0 if r==1 else 15.0
-		game.run.energy = cost-1; game.dash()
-		check(game.run.energy==cost-1 and game.dash_time<=0,"Dash Attack rank %d raises the dash to %d energy" % [r,cost])
-		game.run.energy = 100; game.dash()
-		game.dash_direction = forward; game.dash_speed = 41.0; game.player.face(origin+forward)
-		check(game.run.energy==100-cost and game.dash_attack,"and the dash will strike")
+		game.dash_cooldown = 0; game.run.energy = 0; game.dash()
+		game.dash_direction = forward; game.dash_length = game.DASH_REACH; game.player.face(origin+forward)
+		check(game.run.energy==0 and game.dash_attack and is_equal_approx(game.dash_cooldown,3.0-.4*r),"Dash Attack rank %d: the dash still costs nothing, strikes, and recharges %.1f seconds sooner" % [r,.4*r])
 		var before: Vector3 = met.position
-		play(.5)
+		play(.8)
 		dealt_by_rank.append(lost(met))
 		check(lost(met)>0 and lost(spared)==0,"Rank %d's dash hits the enemy it passes through (%.1f), not one off its path" % [r,lost(met)])
 		check(met.position.distance_to(before)>.4,"and pushes it back (%.2fm)" % met.position.distance_to(before))
 		check(game.dash_struck.size()==1 and not game.dash_attack,"each enemy once, and the striking ends with the dash")
 		clear()
 	check(dealt_by_rank[0]>=5.0 and dealt_by_rank[0]<=7.5 and dealt_by_rank[1]>=20.0 and dealt_by_rank[1]<=30.0,"Rank 1 hits for 50%% of a normal attack, rank 5 for 200%% (%.1f, %.1f)" % [dealt_by_rank[0],dealt_by_rank[1]])
-	check(Book.values("dash_attack",1)==({"x":50.0,"y":15.0,"z":0.0}) and Book.values("dash_attack",3)==({"x":100.0,"y":11.0,"z":0.0}),"Dash Attack's damage and extra cost run 50/75/100/150/200% and 15/13/11/8/5")
+	check(Book.values("dash_attack",1)==({"x":50.0,"y":.4,"z":0.0}) and Book.values("dash_attack",3)==({"x":100.0,"y":1.2,"z":0.0}) and is_equal_approx(Book.values("dash_attack",5).y,2.0),"Dash Attack's damage and recharge cut run 50/75/100/150/200% and 0.4 seconds a rank")
 
 	# Critical hits: 20%, and 0.25% more a point of Dexterity, for double damage,
 	# rolled for every struck_dummy hit.

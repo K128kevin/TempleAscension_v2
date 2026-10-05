@@ -1,7 +1,7 @@
 shader_type spatial;
 // War Cry's ring (scripts/war_cry.gd): the red glow that leaves the hero's
-// blade racing out over the ground as a ring of light, a hot bright band at
-// its front with a dimmer red wash left behind it over the area the cry
+// blade racing out over the ground as a ring of light, a hazy band at its
+// front a little brighter than the dim red wash left behind it over the area the cry
 // covers, flickering like heat; and a low wall of red haze standing on the
 // front (`wall`). Drawn on a disc laid on the ground, UV.x how far out a
 // point is (0 at the hero, 1 at the cry's reach; up the wall, its height) and
@@ -43,19 +43,20 @@ void fragment() {
 		float up = UV.x;
 		float fade = pow(1.0-up,2.2)*smoothstep(0.0,.08,up+.02);
 		light = mix(glow,hot,.2*(1.0-up));
-		cover = fade*.55*flicker;
+		cover = fade*.22*flicker;
 	} else {
 		float out_ = UV.x;
-		// The band at the front: a sharp leading edge and a softer trailing one.
+		// The band at the front: a soft leading edge and a softer trailing one,
+		// as hazy as the wash behind it, only a little brighter.
 		float d = out_-front;
-		float lead = exp(-pow(max(d,0.0)/(band*.35),2.0));
+		float lead = exp(-pow(max(d,0.0)/(band*.7),2.0));
 		float trail = exp(-pow(max(-d,0.0)/band,2.0));
 		float ring = d >= 0.0 ? lead : trail;
 		// The wash it leaves on the ground behind it, and none past the reach.
 		float wash = step(out_,front)*.16*(.5+.5*out_/max(front,.001));
 		float inside = 1.0-smoothstep(.985,1.0,out_);
-		light = mix(glow,hot,ring*ring*.35);
-		cover = clamp(ring*.95+wash*.9,0.0,1.0)*flicker*inside;
+		light = mix(glow,hot,ring*ring*.2);
+		cover = clamp(ring*.34+wash*.9,0.0,1.0)*flicker*inside;
 	}
 	ALBEDO = light;
 	ALPHA = clamp(cover*strength,0.0,1.0);

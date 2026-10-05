@@ -69,7 +69,7 @@ func ready():
 	game.player.hp = Data.max_health(game.run); game.player.max_hp = game.player.hp
 	game.scheduled.clear(); game.skills.reset()
 	game.run.energy = Data.max_energy(game.run)
-	game.leap_left = 0; game.dash_time = 0; game.dash_attack = false; game.combat_age = 10
+	game.leap_left = 0; game.dash_time = 0; game.dash_cooldown = 0; game.dash_attack = false; game.combat_age = 10
 	# Damage checks are exact; critical hits are tested on their own.
 	game.skills.crit_override = 0
 	game.player.visual.position = Vector3.ZERO
@@ -257,8 +257,16 @@ func test():
 	game.arrow_struck = line[0]
 	check(line[0].impact_sound()=="arrow-stone-impact" and line[1].impact_sound()=="weapon-impact","An arrow striking a statue rings on the stone, as in the original; other hits sound as weapons'")
 	line[0].human = true
-	check(line[0].impact_sound()=="weapon-impact","but not on a living foe")
-	line[0].human = false; game.arrow_struck = null
+	var heard: Dictionary = {}
+	for i in 60: heard[line[0].impact_sound()] = true
+	check(heard.keys().all(func(k): return k in ["arrow-flesh-1","arrow-flesh-2","arrow-flesh-3"]) and heard.size()==3,"On a bandit it is one of the three arrow hits, by chance (%s)" % [heard.keys()])
+	for k in heard: check(ResourceLoader.exists("res://assets/audio/%s.wav" % k),"%s is there to be heard" % k)
+	game.arrow_struck = null
+	game.melee_struck = line[0]
+	check(line[0].impact_sound()=="sword-hit-flesh" and ResourceLoader.exists("res://assets/audio/sword-hit-flesh.mp3"),"A blade going into a bandit has its own sound")
+	line[0].human = false
+	check(line[0].impact_sound()=="weapon-impact","and into a statue, a weapon's impact as before")
+	game.melee_struck = null
 	hero({"lightning_shot":1})
 	for e in line: e.hp = e.max_hp
 	game.skills.cast("lightning_shot",at)
@@ -364,6 +372,7 @@ func test():
 	game.player.busy = 0; game.combat_age = 10; foe.awake = false
 	game.skills.cast("hide_in_shadows",at); play(.6)
 	game.run.energy = 100
+	game.dash_cooldown = 0
 	game.dash()
 	check(not game.skills.hidden,"Dashing ends it")
 	clear()

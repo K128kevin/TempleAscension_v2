@@ -85,11 +85,11 @@ func playtest() -> void:
 	game.hud.modal_body.get_child(2).pressed.emit()
 	check(game.mode=="playing","Resume button works")
 	game.player.invulnerable = 0
-	game.run.energy = 100
 	game.run.energy = 10
+	game.dash_cooldown = 0
 	await key(KEY_SPACE,true)
 	await key(KEY_SPACE,false)
-	check(game.run.energy==0 and game.dash_time>0,"Space input spends ten energy to dash")
+	check(game.run.energy>=10 and game.dash_time>0 and game.dash_cooldown>0,"Space input dashes, for no energy")
 	for other in game.enemies: other.awake=false
 	game.player.busy=0; game.combat_age=10
 	game.run.owned[2] = true
