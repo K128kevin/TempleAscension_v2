@@ -411,7 +411,7 @@ func _process(dt: float) -> void:
 	if shake_left>0:
 		# A jolt that rings down: the camera thrown about its place.
 		shake_left = maxf(0,shake_left-dt)
-		var ring = shake_left/SHAKE_TIME
+		var ring = shake_left/shake_time
 		var jolt = shake_strength*ring*ring
 		world.camera.position += Vector3(sin(combat_age*139.0)*jolt,cos(combat_age*119.0)*jolt*.7,sin(combat_age*101.0)*jolt)
 		if shake_left<=0: shake_strength = 0.0
@@ -819,6 +819,8 @@ func tick_scheduled(dt: float) -> void:
 					if offset.length()<=reach+(.5 if enemy.kind=="boss" else .25) and job.direction.dot(offset.normalized()) >= (0 if job.special and job.weapon==1 else .707) and world.clear_line(player.position,enemy.position): hit_list.append(enemy)
 				hit_list.sort_custom(func(a,b): return player.position.distance_squared_to(a.position)<player.position.distance_squared_to(b.position))
 				if not (job.special and job.weapon==1) and hit_list.size()>1: hit_list.resize(1)
+				# A blow that lands shakes the screen, very slightly.
+				if not hit_list.is_empty(): shake(MELEE_SHAKE,MELEE_SHAKE_TIME)
 				for enemy in hit_list:
 					skills.strike(enemy,job.damage,"physical",0.0,Vector3.ZERO,job.special,job.weapon)
 					player.landed_on(enemy)
@@ -836,13 +838,21 @@ func start_leap(direction: Vector3, distance: float, seconds: float, crouch: flo
 	leap_speed = distance/leap_duration
 	player.invulnerable = seconds
 
-# The screen shaken: the camera jolted `strength` metres, settling over half a second.
+# The screen shaken: the camera jolted `strength` metres, settling over
+# `seconds` (a blow's shaking, SHAKE_TIME; one of his own blows landing,
+# MELEE_SHAKE, a brief tremor). A lesser jolt never cuts short a greater one
+# still ringing.
 var shake_left = 0.0
 var shake_strength = 0.0
+var shake_time = SHAKE_TIME
 const SHAKE_TIME = .7
-func shake(strength: float) -> void:
-	shake_strength = maxf(shake_strength,strength)
-	shake_left = SHAKE_TIME
+const MELEE_SHAKE = .035
+const MELEE_SHAKE_TIME = .18
+func shake(strength: float, seconds: float = SHAKE_TIME) -> void:
+	if shake_left>0 and strength<shake_strength*pow(shake_left/shake_time,2.0): return
+	shake_strength = strength
+	shake_left = seconds
+	shake_time = seconds
 
 # The share of a dash's ground covered with `left` seconds of it to go.
 static func dash_share(left: float) -> float:

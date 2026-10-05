@@ -11,9 +11,9 @@
   sword-hit-flesh.wav A blade striking a bandit: a recording supplied by the
                       user (source_art/audio/bandit-sword-hit.mp3), its
                       silence before the blow and after it cut away, its
-                      blow given a little more weight (brought up as it
-                      lands, gently saturated, and the whole a little
-                      louder), faded out at its end.
+                      blow given more weight (brought up as it lands, its
+                      peaks saturated, and the whole about 6 dB louder),
+                      faded out at its end.
   arrow-flesh-1..3.wav  An arrow striking a bandit: the three hits of a
                       recording supplied by the user
                       (source_art/audio/arrow-hits.mp3), cut apart at the
@@ -133,9 +133,9 @@ BLADE_FADE = .08
 # into saturation, and the peak it is set to (the recording's own is .72).
 BLADE_BLOW = .14
 BLADE_BLOW_SPAN = .06
-BLADE_PUNCH = .4
-BLADE_DRIVE = 1.3
-BLADE_PEAK = .82
+BLADE_PUNCH = .8
+BLADE_DRIVE = 1.9
+BLADE_PEAK = .89
 
 
 def blade_hit():

@@ -507,6 +507,28 @@ func test():
 	clear()
 
 	# Attack speed: Dexterity (0.3% a point) for every swing and bowshot, Quick
+	# A normal blow that lands shakes the screen, very slightly and briefly;
+	# one that meets no one does not, and none cuts short a greater shaking.
+	hero({})
+	game.shake_left = 0; game.shake_strength = 0
+	game.attack(false,origin+forward*1.6)
+	play(.84)
+	check(game.shake_left==0,"A swing at nothing does not shake the screen")
+	var jolted = dummy(1.6)
+	ready()
+	game.attack(false,jolted.position)
+	var jolt_landed = false
+	for i in 60:
+		play(STEP)
+		if lost(jolted)>0:
+			jolt_landed = true
+			break
+	check(jolt_landed and game.shake_left>0 and is_equal_approx(game.shake_strength,game.MELEE_SHAKE) and game.MELEE_SHAKE<=.05 and game.shake_time<=.2,"One that lands on an enemy does, very slightly (%.3f m, %.2f s)" % [game.shake_strength,game.shake_time])
+	game.shake(game.skills.SHAKE_SLAM)
+	game.shake(game.MELEE_SHAKE,game.MELEE_SHAKE_TIME)
+	check(is_equal_approx(game.shake_strength,game.skills.SHAKE_SLAM) and is_equal_approx(game.shake_time,game.SHAKE_TIME),"and never cuts short a slam's")
+	clear()
+
 	# Strikes for normal melee attacks.
 	hero({})
 	check(is_equal_approx(game.attack_profile().duration,.84),"A sword swing takes .84 seconds")
