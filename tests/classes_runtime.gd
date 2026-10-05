@@ -1,5 +1,6 @@
 extends SceneTree
 const Data = preload("res://scripts/data.gd")
+const Items = preload("res://scripts/items.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const Save = preload("res://scripts/save.gd")
 var game
@@ -26,7 +27,7 @@ func test():
 	for class_id in Data.CLASSES:
 		game.run = Data.new_run(class_id)
 		game.load_floor()
-		check(game.mode=="playing" and game.run.weapon=={"warrior":1,"ranger":2,"wizard":4}[class_id],"Playable starting class and equipment: "+class_id)
+		check(game.mode=="playing" and Data.weapon(game.run)=={"warrior":1,"ranger":2,"wizard":4}[class_id],"Playable starting class and equipment: "+class_id)
 		var victim = game.enemies[0]
 		var origin: Vector3 = game.world.spawn
 		var at: Vector3 = game.world.move(origin,Vector3(0,0,-1.4))
@@ -53,8 +54,7 @@ func test():
 			game.player.position = origin; game.leap_left = 0
 			game.player.busy = 0; game.player.cooldown = 0
 			game.run.energy = Data.max_energy(game.run)
-			game.run.weapon = 1 if class_id=="warrior" else (2 if class_id=="ranger" else 4)
-			game.player.visual.equip(Data.WEAPONS[game.run.weapon])
+			Items.outfit(game.run,class_id); game.refit()
 			# Execute needs a wounded enemy.
 			var full: float = 10000.0 if s.effect=="execute" else 100000.0
 			victim.hp = full; victim.max_hp = 100000; victim.slow_time=0; victim.mark_time=0; victim.end_stun(); victim.dots.clear()
@@ -79,11 +79,14 @@ func test():
 		game.player.position=origin
 		var owned_id = "cleave" if class_id=="warrior" else ("power_shot" if class_id=="ranger" else "firebolt")
 		game.run.hotbar=[owned_id,"","","",""]
-		game.run.weapon = 4 if class_id!="wizard" else 1
-		# (The ranger carries his bow as well, and takes it up for the skill.)
-		check(game.skills.reason(owned_id).begins_with("Requires") or (class_id=="ranger" and game.skills.reason(owned_id).is_empty()),"Wrong weapon disables skill with explanation: "+class_id)
-		game.run.weapon = 1 if class_id=="warrior" else (2 if class_id=="ranger" else 4)
-		game.player.visual.equip(Data.WEAPONS[game.run.weapon])
+		# The warrior with a bow in hand and no blade in his bag; the ranger with
+		# his dagger in hand (he carries his bow as well, and takes it up for
+		# the skill); the wizard with nothing at all (his spells need no weapon).
+		if class_id=="warrior": Items.arm(game.run,"bow")
+		elif class_id=="ranger": Items.take_up(game.run,["dagger"])
+		else: game.run.equipment.main = ""
+		check(game.skills.reason(owned_id).begins_with("Requires")==(class_id=="warrior") and (class_id=="warrior" or game.skills.reason(owned_id).is_empty()),"Wrong weapon disables skill with explanation: "+class_id)
+		Items.outfit(game.run,class_id); game.refit()
 		game.world.zoom=15; game.world.follow(origin,1)
 		await snapshot(class_id+"-game")
 		game.combat_age=10; victim.awake=false
@@ -97,7 +100,11 @@ func test():
 		await snapshot(class_id+"-character")
 		game.ProgressionUI.skills(game)
 		var roster: int = Book.all().values().filter(func(s): return s.class_id==class_id).size()
-		check(game.hud.panels.stats_open() and game.hud.panels.skills_open() and game.hud.panels.nodes.size()==roster,"Both panels can be open, the tree showing the class's whole roster: "+class_id)
+		check(not game.hud.panels.stats_open() and game.hud.panels.skills_open() and game.hud.panels.nodes.size()==roster,"The window turns to its skills tab, the tree showing the class's whole roster: "+class_id)
+		game.ProgressionUI.equipment(game)
+		game.hud.tick(0)
+		check(game.hud.panels.inventory_open() and game.hud.panels.slots.size()==Items.SLOTS.size()+Items.BAG_SIZE and game.hud.panels.figure.worn==game.run.equipment,"The inventory tab shows the hero's figure, his seven slots and his bag's ten places: "+class_id)
+		await snapshot(class_id+"-inventory")
 		await snapshot(class_id+"-skills")
 		check(game.mode=="character" and game.world.process_mode==Node.PROCESS_MODE_DISABLED,"Character and skill panels pause combat")
 		game.resume_game()

@@ -335,3 +335,237 @@ static func target_ring() -> Sprite3D:
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	ring.visible = false
 	return ring
+
+# --- Items (scripts/items.gd) -----------------------------------------------------
+
+const Items = preload("res://scripts/items.gd")
+# Where a hero's kit divides between the equipment slots, by class, at rest
+# (assets/shaders/hero_body.gdshader): how high what is on his feet reaches,
+# where what is on his legs ends (the skirts of the ranger's tunic, below
+# his belt, go with his trousers), and how far out along the arm what is on
+# his hands begins.
+# (`only_from`: how far down what is on his legs comes, pictured by itself:
+# the warrior's kilt ends above his knees.)
+const BODY_PARTS = {"warrior":{"feet_top":.17,"waist":1.035,"arm_from":.47,"only_from":.62},"ranger":{"feet_top":.5,"waist":1.0,"arm_from":.47,"only_from":0.0},"wizard":{"feet_top":.36,"waist":1.0,"arm_from":.5,"only_from":0.0}}
+const BODY_SLOTS = ["chest","legs","feet","hands"]
+# The pieces of each class's kit that are meshes of their own, by slot (the
+# rest is painted on the body).
+const PIECES = {
+	"warrior":{"head":["HeroHelmet"],"chest":["HeroArmor"],"legs":["HeroKilt","HeroBelt"],"feet":[],"hands":["HeroBracers"]},
+	"ranger":{"head":["RangerCloak","RangerBrooch"],"chest":["RangerBelt","RangerPouch"],"legs":[],"feet":["RangerBoots","RangerBootsFeet"],"hands":["RangerBracers"]},
+	"wizard":{"head":["WizardHood"],"chest":["WizardRobe","WizardSash","WizardSashEnd0","WizardSashEnd1"],"legs":[],"feet":["WizardBoots","WizardBootsFeet"],"hands":["WizardBracers"]}}
+# The class that wears each weight of armor.
+const WEARER = {"heavy":"warrior","medium":"ranger","light":"wizard"}
+
+# A hero's body drawn part by part, kit or skin (a new material each time:
+# the caller sets which parts are bare and how each is coloured). `shell`:
+# for a raised piece painted with the body.
+static func hero_body(hero_class: String, shell: bool = false) -> ShaderMaterial:
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/hero_body.gdshader")
+	var key = "hero_kit_"+hero_class
+	m.set_shader_parameter("kit",load("res://assets/textures/%s.png" % key))
+	m.set_shader_parameter("kit_normal",load("res://assets/textures/%s_normal.png" % key))
+	m.set_shader_parameter("kit_rough",load("res://assets/textures/%s_rough.png" % key))
+	m.set_shader_parameter("skin",load("res://assets/models/character/warrior_T_Superhero_Male_Dark.png"))
+	m.set_shader_parameter("skin_normal",load("res://assets/models/character/warrior_T_Superhero_Male_Normal.png"))
+	m.set_shader_parameter("skin_rough",load("res://assets/models/character/warrior_T_Superhero_Male_Roughness.png"))
+	m.set_shader_parameter("shell",shell)
+	m.set_shader_parameter("rest_pose",not shell)
+	if hero_class in ["ranger","wizard"]: m.set_shader_parameter("specular",.25)
+	for key_name in BODY_PARTS[hero_class]: m.set_shader_parameter(key_name,BODY_PARTS[hero_class][key_name])
+	return m
+
+# A raised piece of a class's kit in another make's colour.
+static func kit_shell(hero_class: String, tint: Color) -> ShaderMaterial:
+	var key = "kit_shell_%s%s" % [hero_class,tint.to_html()]
+	if materials.has(key): return materials[key]
+	var m = hero_body(hero_class,true)
+	m.set_shader_parameter("tint_chest",tint)
+	m.set_shader_parameter("recolor",Vector4(1,0,0,0))
+	materials[key] = m
+	return m
+
+# One of the game's shader materials in another make's colour.
+static func recolored(source: ShaderMaterial, tint: Color) -> ShaderMaterial:
+	var key = "recolored%d%s" % [source.get_instance_id(),tint.to_html()]
+	if materials.has(key): return materials[key]
+	var m: ShaderMaterial = source.duplicate()
+	m.set_shader_parameter("tint",tint)
+	m.set_shader_parameter("recolor",1.0)
+	materials[key] = m
+	return m
+
+# The finish of a weapon or shield as an item has it (its `look`); null leaves
+# the model its own.
+static func finish(look: Dictionary) -> Material:
+	var made: Material = null
+	match look.get("finish","own"):
+		"sword": made = sword_material()
+		"sica": made = sica_material()
+		"dagger": made = dagger_material()
+		"bow": made = bow_wood()
+		"lion": made = gladiator_shield()
+		"arms": made = arms_material(look.get("metal_from",.5))
+		"staff":
+			made = wizard_staff()
+			if look.has("tint") or look.has("crystal"):
+				var key = "staff%s%s" % [look.get("tint",Color.WHITE).to_html(),look.get("crystal",Color.WHITE).to_html()]
+				if not materials.has(key):
+					var m: ShaderMaterial = made.duplicate()
+					if look.has("tint"): m.set_shader_parameter("silver",look.tint)
+					if look.has("crystal"): m.set_shader_parameter("crystal",look.crystal)
+					materials[key] = m
+				return materials[key]
+	if made is ShaderMaterial and look.has("tint") and look.finish != "arms": return recolored(made,look.tint)
+	return made
+
+# A weapon's or shield's model as an item has it, standing along +Y from its
+# butt, at its true size.
+static func weapon_model(look: Dictionary) -> Node3D:
+	var node: Node3D = model(look.model,look.size,finish(look))
+	if look.get("finish","") == "hasta":
+		# The legionary's spear: iron, ash and hide by its parts (scripts/town_guard.gd).
+		for mesh in node.find_children("*","MeshInstance3D",true,false):
+			var part = ShaderMaterial.new()
+			part.shader = load("res://assets/shaders/spear.gdshader")
+			part.set_shader_parameter("part",{"Head":0,"Socket":0,"Rivet":0,"Butt":0,"Shaft":1,"Grip":2}.get(String(mesh.name),1))
+			part.set_shader_parameter("blade",mesh.name == "Head")
+			mesh.material_override = part
+	return node
+
+# A weapon as it is held: its haft in the fist and its edge leading the cut.
+# A model's haft is taken to run up its middle, its edge to either side (its
+# X), as a sword's does, and the one-handed swings lead with the model's -Z.
+# A look whose model is otherwise says so: "haft", where across the model
+# (its X, in the model's own units) the haft stands, and "turn", the angle
+# about the haft that brings its edge round to lead. The node is sized as the
+# look is (its scale), like weapon_model's.
+static func held_model(look: Dictionary) -> Node3D:
+	var made: Node3D = weapon_model(look)
+	if not look.has("haft") and not look.has("turn"): return made
+	var node = Node3D.new()
+	node.scale = look.size
+	made.scale = Vector3.ONE
+	node.add_child(made)
+	# (Turned as it is sized, not as the unit model is: the node's scale is
+	# undone about the turn.)
+	var sized := Basis.from_scale(look.size)
+	var turned: Basis = sized.inverse()*Basis(Vector3.UP,look.get("turn",0.0))*sized
+	made.transform = Transform3D(turned,turned*Vector3(-look.get("haft",0.0),0,0))
+	return node
+
+# The hero model's meshes by name, kept to make loose pieces from.
+static var hero_meshes: Dictionary = {}
+static func hero_mesh(mesh_name: String) -> Mesh:
+	if hero_meshes.is_empty():
+		var rig: Node = load("res://assets/models/character/warrior.glb").instantiate()
+		for mesh in rig.find_children("*","MeshInstance3D",true,false): hero_meshes[String(mesh.name)] = mesh.mesh
+		rig.free()
+	return hero_meshes.get(mesh_name)
+
+# The material of one mesh of a class's kit, as Visual dresses it: `tint` (or
+# null) is another make's colour.
+static func piece_material(mesh_name: String, hero_class: String, tint = null) -> Material:
+	if "Helmet" in mesh_name or "Kilt" in mesh_name:
+		var key = "piece%s" % mesh_name
+		if not materials.has(key):
+			var m = ShaderMaterial.new()
+			m.shader = load("res://assets/shaders/%s.gdshader" % ("gladiator_helm" if "Helmet" in mesh_name else "kilt"))
+			m.set_shader_parameter("rest_pose",true)
+			if "Kilt" in mesh_name: m.set_shader_parameter("fold_from",.03)
+			materials[key] = m
+		return materials[key] if tint == null else recolored(materials[key],tint)
+	if "Cloak" in mesh_name or "Hood" in mesh_name or "Robe" in mesh_name:
+		var colour: Color = tint if tint != null else (Color(.1,.19,.1) if "Cloak" in mesh_name else Color(.13,.16,.27))
+		var key = "piece%s%s" % [mesh_name,colour.to_html()]
+		if not materials.has(key):
+			var m = ShaderMaterial.new()
+			m.shader = load("res://assets/shaders/cloak.gdshader")
+			m.set_shader_parameter("cloth_color",colour)
+			m.set_shader_parameter("rest_pose",true)
+			m.set_shader_parameter("tatter",1.0 if "Cloak" in mesh_name else .35)
+			m.set_shader_parameter("hem_height",.3 if "Cloak" in mesh_name else (.14 if "Robe" in mesh_name else -1.0))
+			materials[key] = m
+		return materials[key]
+	if mesh_name.begins_with("WizardSash"): return two_sided(leather(),Color(.62,.55,.5))
+	if "Pouch" in mesh_name: return leather()
+	if "Brooch" in mesh_name: return bronze()
+	return hero_kit(hero_class) if tint == null else kit_shell(hero_class,tint)
+
+# An item as a thing by itself (lying where it fell, or pictured in the
+# inventory): a weapon's or shield's model, or the pieces of the kit an
+# armor item is (and, where it is only painted on the body, that part of the
+# body's surface). It stands as it is worn or held, its foot at the origin;
+# `bounds` (metadata) is the box it fills.
+static func item_model(id: String) -> Node3D:
+	var item: Dictionary = Items.get_item(id)
+	var look: Dictionary = item.get("look",{})
+	if item.slot in ["weapon","shield"]:
+		var held: Node3D = weapon_model(look)
+		var tall: float = Items.length(look)
+		held.set_meta("bounds",AABB(Vector3(-look.size.x*.5,0,-look.size.z*.5) if look.size != Vector3.ONE else Vector3(-.05,0,-.05),Vector3(look.size.x,tall,look.size.z) if look.size != Vector3.ONE else Vector3(.1,tall,.1)))
+		return held
+	var hero_class: String = WEARER[item.weight]
+	var tint = look.get("tint")
+	var root = Node3D.new()
+	var box = AABB()
+	var first = true
+	var names: Array = PIECES[hero_class][item.slot].duplicate()
+	# (The cloak's brooch and the tunic's pouch are too small to stand for it.)
+	names = names.filter(func(n): return not ("Brooch" in n or "Pouch" in n))
+	for mesh_name in names:
+		var mesh: Mesh = hero_mesh(mesh_name)
+		if mesh == null: continue
+		var piece = MeshInstance3D.new()
+		piece.mesh = rest_pose_mesh(mesh) if mesh is ArrayMesh else mesh
+		piece.material_override = piece_material(mesh_name,hero_class,tint)
+		if item.slot == "hands":
+			# One of the pair (they are made on arms held wide apart).
+			var one: ShaderMaterial = hero_body(hero_class,true)
+			one.set_shader_parameter("rest_pose",true)
+			one.set_shader_parameter("keep_side",1.0)
+			if tint != null:
+				one.set_shader_parameter("tint_chest",tint)
+				one.set_shader_parameter("recolor",Vector4(1,0,0,0))
+			piece.material_override = one
+		root.add_child(piece)
+		box = piece.get_aabb() if first else box.merge(piece.get_aabb())
+		first = false
+	if item.slot in BODY_SLOTS and (first or item.slot in ["chest","legs"]):
+		# Painted on the body: that part of the body's own surface.
+		var body = MeshInstance3D.new()
+		var mesh: Mesh = hero_mesh("SuperHero_Male")
+		body.mesh = rest_pose_mesh(mesh)
+		var skin: ShaderMaterial = hero_body(hero_class)
+		var slot_index: int = BODY_SLOTS.find(item.slot)
+		skin.set_shader_parameter("only",slot_index)
+		if tint != null:
+			skin.set_shader_parameter("tint_"+item.slot,tint)
+			var which = Vector4.ZERO
+			which[slot_index] = 1.0
+			skin.set_shader_parameter("recolor",which)
+		body.material_override = skin
+		root.add_child(body)
+		var parts: Dictionary = BODY_PARTS[hero_class]
+		var region: AABB = {"chest":AABB(Vector3(-parts.arm_from,parts.waist,-.2),Vector3(parts.arm_from*2,1.5-parts.waist,.4)),"legs":AABB(Vector3(-.25,parts.feet_top,-.2),Vector3(.5,parts.waist-parts.feet_top,.4)),
+			"feet":AABB(Vector3(-.2,0,-.15),Vector3(.4,parts.feet_top,.32)),"hands":AABB(Vector3(-.93,1.3,-.1),Vector3(1.86,.2,.2))}[item.slot]
+		box = region if first else box.merge(region)
+	if item.slot == "hands": box = AABB(Vector3(BODY_PARTS[hero_class].arm_from-.04,1.34,-.1),Vector3(.3,.16,.2))
+	root.set_meta("bounds",box)
+	return root
+
+# An item as it lies on the ground: weapons, shields, and what is worn on the
+# body flat on their backs; a helm, boots and a bracer standing. Its middle
+# is over the origin and its underside on the ground.
+static func laid(id: String) -> Node3D:
+	var item: Dictionary = Items.get_item(id)
+	var thing: Node3D = item_model(id)
+	var box: AABB = thing.get_meta("bounds")
+	var flat: bool = item.slot in ["weapon","shield","chest","legs"] or (item.slot == "head" and item.weight != "heavy")
+	var turn: Basis = Basis(Vector3.RIGHT,-PI/2) if flat else Basis.IDENTITY
+	var lying: AABB = Transform3D(turn,Vector3.ZERO)*box
+	var holder = Node3D.new()
+	holder.add_child(thing)
+	thing.transform = Transform3D(turn*thing.basis,-Vector3(lying.get_center().x,lying.position.y-.01,lying.get_center().z))
+	return holder

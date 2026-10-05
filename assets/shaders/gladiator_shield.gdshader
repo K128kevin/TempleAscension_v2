@@ -78,6 +78,11 @@ void vertex() {
 	local = VERTEX;
 }
 
+// An item of another make (scripts/items.gd `tint`): its colours redrawn in
+// that one, keeping their light and dark.
+uniform vec3 tint : source_color = vec3(1.0);
+uniform float recolor = 0.0;
+
 void fragment() {
 	vec2 q = vec2(local.x, local.y - 0.5) * 2.0;
 	vec2 rc = relief(q);
@@ -97,4 +102,5 @@ void fragment() {
 	vec3 n = normalize(vec3(-(hx - rc.x) / e * 0.02, -(hy - rc.x) / e * 0.02, 1.0));
 	vec3 world_n = normalize((MODEL_MATRIX * vec4(n.x, n.y, sign(local.z + 1e-4) * n.z, 0.0)).xyz);
 	NORMAL = normalize(mix(NORMAL, normalize((VIEW_MATRIX * vec4(world_n, 0.0)).xyz), 0.8));
+	ALBEDO = mix(ALBEDO, dot(ALBEDO, vec3(0.299, 0.587, 0.114)) * tint * 1.8, recolor);
 }

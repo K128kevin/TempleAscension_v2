@@ -25,7 +25,8 @@ func _initialize(): call_deferred("run")
 func unit_specs() -> Array:
 	var specs = []
 	var weapons = Data.WEAPONS
-	for w in weapons.size():
+	# (The plain weapon of each kind with clips of its own: Motion.NORMAL.)
+	for w in Motion.NORMAL.size():
 		var kind: String = weapons[w]
 		var cls = {"bow":"ranger","staff":"wizard"}.get(kind,"warrior")
 		var normal = Motion.NORMAL[w]
@@ -139,6 +140,10 @@ func record(spec, plan: Array, speed: float = 0.0) -> Dictionary:
 				# (One swing of the sword's chain taking over from the last.)
 				"play_on":
 					v.play_on(s[2],s[3],0.0)
+					busy = s[3]
+				# (One faded into: the axe's first cut after its backhand.)
+				"play_from":
+					v.play_from(s[2],s[3],0.0)
 					busy = s[3]
 				"react": v.react(s[2],s[3])
 				"move": moving = true

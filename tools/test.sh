@@ -14,6 +14,7 @@ run "$godot_bin" --headless --path . --script tests/progression_regression.gd --
 run "$godot_bin" --headless --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-runtime.log"
 run "$godot_bin" --headless --path . --script tests/warrior_skills.gd --log-file "$PWD/test-results/warrior-skills.log"
 run "$godot_bin" --headless --path . --script tests/ranger_skills.gd --log-file "$PWD/test-results/ranger-skills.log"
+run "$godot_bin" --headless --path . --script tests/items.gd --log-file "$PWD/test-results/items.log"
 run "$godot_bin" --headless --path . --script tests/overworld.gd --log-file "$PWD/test-results/overworld.log"
 run "$godot_bin" --headless --path . --script tests/daylight.gd --log-file "$PWD/test-results/daylight.log"
 run "$godot_bin" --headless --path . --script tests/dungeons.gd --log-file "$PWD/test-results/dungeons.log"
@@ -47,6 +48,7 @@ if [ "${RENDER_TEST:-0}" = "1" ]; then
   run "$godot_bin" --fixed-fps 60 --path . --script tests/bandit_ragdoll.gd --log-file "$PWD/test-results/bandit-ragdoll-render.log" -- --render-ragdoll
   run "$godot_bin" --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-render.log" -- --render-shields
   run "$godot_bin" --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-render.log" -- --render-classes
+  run "$godot_bin" --path . --script tests/items.gd --log-file "$PWD/test-results/items-render.log" -- --render-items
   run "$godot_bin" --path . --script tests/bow_regression.gd --log-file "$PWD/test-results/bow-render.log" -- --render-bow
   run "$godot_bin" --path . --script tests/torch_regression.gd --log-file "$PWD/test-results/torch-render.log" -- --render-torches
   run "$godot_bin" --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-render.log" -- --render-scenery

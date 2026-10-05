@@ -105,6 +105,8 @@ const WARRIOR_CLIPS = {"cleave":["SkillCleave",1.0,.52],"strike":["SkillStrike",
 # on from (and into) them as they are (Game.swing_sword), the blade glowing
 # as they land: blood red and shadowy purple.
 const SWORD_CHAIN_SKILLS = {"vampiric":Color(.95,.03,.06),"shadow":Color(.55,.12,1.0)}
+# (Marks such a skill's clip while it is cast: the normal attack's next swing.)
+const CHAINED = "<normal attack>"
 # Shield Charge: how fast he goes, and how far the ones in his way are thrown.
 const CHARGE_SPEED = 11.0
 # Firebolt is the Oracle's fireball: how far it flies, and its blast.
@@ -147,8 +149,7 @@ func reason(id: String) -> String:
 	if s.effect=="passive": return "Passive skills apply automatically."
 	# (The ranger carries his bow and his dagger both, and takes up whichever
 	# the skill is made with.)
-	var needed: int = Book.weapon_for(id,int(game.run.weapon))
-	if not Book.compatible(id,int(game.run.weapon)) and (needed<0 or not game.run.owned[needed]): return "Requires %s." % {"shield":"sword and shield","bow_dagger":"bow or dagger"}.get(s.requirement,s.requirement)
+	if not Book.in_reach(game.run,id): return "Requires %s." % {"shield":"a shield","bow_dagger":"bow or dagger","melee":"a melee weapon"}.get(s.requirement,s.requirement)
 	if cooldowns.get(id,0.0)>0: return "Recharging: %d seconds." % ceili(cooldowns[id])
 	if game.run.energy<cost(id): return "Not enough energy."
 	if s.effect=="hide":
@@ -160,19 +161,19 @@ func reason(id: String) -> String:
 
 func cost(id: String) -> float:
 	var s: Dictionary = Book.all()[id]
-	return Book.cost(id,rank(id))*(1.0-Data.passive(game.run,"efficient_casting")*.01 if s.requirement=="staff" else 1.0)
+	return Book.cost(id,rank(id))*(1.0-Data.passive(game.run,"efficient_casting")*.01 if s.class_id=="wizard" else 1.0)
 
 # How close the hero comes to a unit he is ordered to use the skill on.
 func reach(id: String) -> float:
 	if not Book.all().has(id): return 13.0
 	match Book.all()[id].effect:
-		"cleave","strike","bash","vampiric","shadow","execute","flurry","triple","ambush": return MELEE_REACH
+		"cleave","strike","bash","vampiric","shadow","execute","flurry","triple","ambush": return melee_reach()
 		# (With the dagger in hand; with the bow it is a shot.)
-		"weaken": return MELEE_REACH if int(game.run.weapon)==5 else 13.0
+		"weaken": return melee_reach() if Data.weapon(game.run)==5 else 13.0
 		"sand": return SAND_REACH-.4
 		"frenzy","hide","vanish": return 1000.0
 		"leap": return LEAP_RANGE
-		"slam": return maxf(MELEE_REACH,Book.values(id,maxi(1,rank(id))).z-1.0)
+		"slam": return maxf(melee_reach(),Book.values(id,maxi(1,rank(id))).z-1.0)
 		"charge": return Book.values(id,maxi(1,rank(id))).x-1.0
 		"shockwave": return Book.values(id,maxi(1,rank(id))).y-.5
 		"cry": return Book.values(id,maxi(1,rank(id))).x-.5
@@ -187,7 +188,7 @@ func cast_slot(slot: int, at: Vector3) -> bool:
 func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	if game.mode!="playing" or game.player.dead or (game.player.busy>0 and not free): return false
 	if free:
-		if not Book.all().has(id) or not Book.compatible(id,int(game.run.weapon)): return false
+		if not Book.all().has(id) or not Book.fits(game.run,id): return false
 	else:
 		var problem = reason(id)
 		if not problem.is_empty():
@@ -214,8 +215,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 			game.scheduled.clear()
 			enter_shadows(true)
 		return true
-	var needed: int = Book.weapon_for(id,int(game.run.weapon))
-	if needed>=0 and not free: game.take_up(needed)
+	if not free and not Book.fits(game.run,id) and Book.takes_up(id): game.take_up(Book.kinds(id))
 	var direction: Vector3 = at-game.player.position
 	direction.y = 0
 	if direction.length()<.01: direction = game.player.forward()
@@ -250,7 +250,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		# Dexterity and Frenzy quicken his every attack.
 		var quick: float = haste()*(1.0+Data.attack_haste(game.run)*.01)
 		var v: Dictionary = Book.values(id,level)
-		var with_dagger: bool = int(game.run.weapon)==5
+		var with_dagger: bool = Data.weapon(game.run)==5
 		if RANGER_CLIPS.has(s.effect):
 			var own: Array = RANGER_CLIPS[s.effect]
 			clip = own[0] if game.player.visual.clips.has(own[0]) else "ArcherShot"
@@ -284,20 +284,25 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		if not game.player.visual.clips.has(clip): clip = "Cast"
 		contact = duration*contacts[0]
 	elif s.requirement in ["melee","shield"]:
-		clip = "SwordSlash" if game.run.weapon==1 else ("SpearJab" if game.run.weapon==0 else "AxeChop")
 		# Dexterity quickens every melee swing.
 		var haste: float = (1.0+Data.attack_haste(game.run)*.01)*(DASH_CLEAVE_SPEED if free else 1.0)
-		duration = maxf(Data.MELEE_MINIMUM,.84/haste)
-		contact = duration*.52
-		# With the sword, each skill has its own swing.
-		if game.run.weapon==1 and WARRIOR_CLIPS.has(s.effect) and game.player.visual.clips.has(WARRIOR_CLIPS[s.effect][0]):
+		# The swing is the weapon's own: a one-handed sword's, mace's or axe's
+		# (a shield's skills too), a two-handed weapon's, or the spear's
+		# (Motion.FAMILIES); each skill has a clip in each.
+		var family: String = Data.family(game.run)
+		var normal: Dictionary = Motion.family(family)
+		clip = normal.clips[0] if game.player.visual.clips.has(normal.clips[0]) else normal.get("fallback",normal.clips[0])
+		duration = maxf(Data.MELEE_MINIMUM,normal.seconds/haste)
+		contact = duration*normal.contacts[0]
+		var own_clip: String = Motion.skill_clip(family,s.effect)
+		if WARRIOR_CLIPS.has(s.effect) and game.player.visual.clips.has(own_clip):
 			var own: Array = WARRIOR_CLIPS[s.effect]
-			clip = own[0]
+			clip = own_clip
 			duration = maxf(Data.MELEE_MINIMUM,own[1]/haste)
 			contact = duration*own[2]
-		elif game.run.weapon==1 and SWORD_CHAIN_SKILLS.has(s.effect) and game.player.visual.clips.has(Motion.SWORD_OPENER):
+		elif SWORD_CHAIN_SKILLS.has(s.effect):
 			# (The swing's time and its blow's moment are the normal attack's.)
-			clip = Motion.SWORD_OPENER
+			clip = CHAINED
 	if s.effect=="leap":
 		var gap: float = game.player.position.distance_to(at)
 		# He lands beside a unit standing at the target, not on it.
@@ -322,14 +327,14 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		aim_total = contact
 		aim_left = contact
 		powering = true
-	elif clip==Motion.SWORD_OPENER:
-		game.swing_sword(duration)
+	elif clip==CHAINED:
+		game.swing(duration)
 		game.player.visual.tint_blade(SWORD_CHAIN_SKILLS[s.effect],duration)
 	else: game.player.visual.play(clip,duration)
 	# Cleave and the strikes struck with the normal attack's swings whistle as
 	# its swings do, a moment before the blow.
 	if s.effect=="cleave" or SWORD_CHAIN_SKILLS.has(s.effect):
-		game.scheduled.append({"time":maxf(.01,contact-.12),"type":"swing","sound":"swing-spear" if game.run.weapon==0 else "swing-blade"})
+		game.scheduled.append({"time":maxf(.01,contact-.12),"type":"swing","sound":game.swing_sound()})
 	game.player.busy = duration
 	game.player.cooldown = duration
 	if contacts.size()>1:
@@ -490,14 +495,19 @@ func arc_targets(origin: Vector3, direction: Vector3, degrees: float, distance: 
 # The one unit a single-target blow lands on: in reach before the hero, the
 # nearest to where the blow is aimed.
 func single_target(at: Vector3, direction: Vector3):
-	var hits = arc_targets(game.player.position,direction,90.0,MELEE_REACH)
+	var hits = arc_targets(game.player.position,direction,90.0,melee_reach())
 	hits.sort_custom(func(a,b): return a.position.distance_squared_to(at)<b.position.distance_squared_to(at))
 	return null if hits.is_empty() else hits[0]
 
-# `percent` of a normal attack's damage (in hand, the dagger's too, by
-# Strength; the bow's by Dexterity).
+# How far (centre to centre) a blow of the weapon in hand reaches.
+func melee_reach() -> float:
+	return Motion.reach(Data.family(game.run))
+
+# `percent` of a normal attack's damage: the damage of the weapon the blow is
+# made with (in hand, the dagger's too, raised by Strength; the bow's by
+# Dexterity).
 func attack_damage(percent: float, tag: String = "melee") -> float:
-	return Data.damage_tag(game.run,tag,randf_range(10,15))*percent*.01
+	return Data.damage_tag(game.run,tag,Data.roll(game.run,tag))*percent*.01
 
 # What a damaging skill hits for at `level` (its current rank, or the first
 # while unlearned), from the hero's attributes and passives as they stand:
@@ -510,8 +520,7 @@ func damage_summary(id: String, level: int) -> Dictionary:
 	level = maxi(1,level)
 	var v: Dictionary = Book.values(id,level)
 	# The weapon the skill is made with: the ranger takes up the one it needs.
-	var weapon: int = Book.weapon_for(id,int(game.run.weapon))
-	if weapon<0: weapon = int(game.run.weapon)
+	var weapon: int = Book.made_with(game.run,id,Data.weapon(game.run))
 	var tag: String = "melee" if s.class_id=="warrior" else Data.scaling_tag(weapon)
 	# The percent of a normal attack one hit deals.
 	var percent = -1.0
@@ -552,7 +561,8 @@ func figure(amount: float) -> String:
 
 # The least and most `percent` of a normal attack hits for, in words.
 func span(percent: float, tag: String) -> String:
-	return "%d–%d" % [roundi(Data.damage_tag(game.run,tag,10.0)*percent*.01),roundi(Data.damage_tag(game.run,tag,15.0)*percent*.01)]
+	var between: Array = Data.span(game.run,tag)
+	return "%d–%d" % [roundi(Data.damage_tag(game.run,tag,between[0])*percent*.01),roundi(Data.damage_tag(game.run,tag,between[1])*percent*.01)]
 
 # Whether Execute may be used on `victim`: below `limit` percent of its
 # health, or anywhere in the debug playground, where any target will do.
@@ -575,7 +585,7 @@ func rhythm_boost() -> float:
 # Element of Surprise raises the whole; and Poisons leave their own.
 func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0, death_impact: Vector3 = Vector3.ZERO, skill: bool = true, weapon: int = -1, crit_bonus: float = 0.0) -> void:
 	if not is_instance_valid(enemy) or enemy.dead or enemy.dormant: return
-	if weapon<0: weapon = int(game.run.weapon)
+	if weapon<0: weapon = Data.weapon(game.run)
 	var rhythm: Dictionary = Book.values("offensive_rhythm",rank("offensive_rhythm"))
 	amount *= rhythm_boost()
 	if surprise_time>0: amount *= 1.0+surprise_bonus*.01
@@ -591,6 +601,9 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 	var curse: Dictionary = Book.values("cursed_blade",rank("cursed_blade"))
 	if curse.y>0 and not enemy.dead: enemy.add_dot("curse",amount*curse.x*.01,CURSE_SECONDS,int(curse.y))
 	if poison.y>0 and weapon in [2,5] and not enemy.dead: enemy.add_dot("poison",amount*poison.x*.01,POISON_SECONDS,int(poison.y))
+	# What his equipment restores with each hit landed.
+	var leech: float = Data.Items.bonus(game.run,"leech")
+	if leech>0 and not game.player.dead: game.player.hp = minf(Data.max_health(game.run),game.player.hp+leech)
 
 # An attack reaching the hero, after armor: a shield in hand may block part of
 # it, as Shield Expertise improves (Spiked Shield answering the attacker), Defensive Rhythm lowers it and
@@ -657,7 +670,7 @@ func execute(job: Dictionary) -> void:
 	var direction: Vector3 = job.direction
 	match s.effect:
 		"cleave":
-			for enemy in arc_targets(origin,direction,v.x,CLEAVE_REACH):
+			for enemy in arc_targets(origin,direction,v.x,CLEAVE_REACH+melee_reach()-MELEE_REACH):
 				strike(enemy,attack_damage(v.y))
 				game.player.landed_on(enemy)
 		"slam":
@@ -689,7 +702,7 @@ func execute(job: Dictionary) -> void:
 			game.float_text(game.player.position+Vector3.UP*2.3,"War Cry!",Color(1,.8,.4))
 		"charge":
 			# The blow at the end of the run: whoever is still before him.
-			for enemy in arc_targets(origin,direction,100.0,MELEE_REACH):
+			for enemy in arc_targets(origin,direction,100.0,melee_reach()):
 				if not enemy in charge.get("hit",[]): charge_hit(enemy,direction,v)
 			charge.clear()
 		"strike","bash","vampiric","shadow","execute":
@@ -747,7 +760,7 @@ func execute(job: Dictionary) -> void:
 		"tranq": loose(direction,0.0,{"kind":"tranq","seconds":v.x})
 		"lightning": loose(direction,v.x,{"kind":"lightning","percent":v.x,"leaps":v.y})
 		"weaken":
-			if int(game.run.weapon)==5:
+			if Data.weapon(game.run)==5:
 				var marked = single_target(at,direction)
 				if marked == null: return
 				strike(marked,attack_damage(100.0,"melee"))
@@ -766,7 +779,7 @@ func execute(job: Dictionary) -> void:
 		"flurry":
 			var stabbed = single_target(at,direction)
 			if stabbed == null: return
-			strike(stabbed,attack_damage(v.y,Data.scaling_tag(int(game.run.weapon))))
+			strike(stabbed,attack_damage(v.y,Data.scaling_tag(Data.weapon(game.run))))
 			game.player.landed_on(stabbed)
 		"triple":
 			var main = single_target(at,direction)
@@ -774,7 +787,7 @@ func execute(job: Dictionary) -> void:
 			# Those around him, on every side, nearest him first.
 			var beside: Array = arc_targets(origin,direction,360.0,TRIPLE_AROUND).filter(func(e): return e != main)
 			beside.sort_custom(func(a,b): return a.position.distance_squared_to(origin)<b.position.distance_squared_to(origin))
-			for enemy in [main]+beside.slice(0,int(v.y)): strike(enemy,attack_damage(v.x,Data.scaling_tag(int(game.run.weapon))))
+			for enemy in [main]+beside.slice(0,int(v.y)): strike(enemy,attack_damage(v.x,Data.scaling_tag(Data.weapon(game.run))))
 			game.player.landed_on(main)
 		"sand":
 			passing.append([RangerFx.sand(game.world,origin+Vector3.UP*1.2,direction),1.0])

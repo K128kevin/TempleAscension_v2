@@ -2,6 +2,7 @@ extends SceneTree
 ## The warrior's three skill trees in play: every skill's listed numbers, on an
 ## open plane with passive stand-in enemies.
 const Data = preload("res://scripts/data.gd")
+const Items = preload("res://scripts/items.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const Save = preload("res://scripts/save.gd")
 const Temple = preload("res://scripts/temple.gd")
@@ -57,8 +58,7 @@ func hero(ranks: Dictionary, weapon: int = 1):
 	# As the hero who spent his first point on Cleave, which waits on RMB.
 	game.run.skill_points = 0
 	if ranks.has("cleave"): game.run.hotbar[0] = "cleave"
-	game.run.weapon = weapon; game.run.owned[weapon] = true
-	game.player.visual.equip(Data.WEAPONS[weapon])
+	game.arm(Data.WEAPONS[weapon])
 	ready()
 
 func ready():
@@ -250,7 +250,7 @@ func test():
 	game.skills.cast("shield_bash",bashed.position); wait(.5)
 	check(absf(bashed.stagger_time-10.0)<.1 and absf(game.skills.cooldowns.shield_bash-19.5)<.1,"Shield Bash rank 5: a 10-second stun on a 20-second cooldown")
 	hero({"shield_bash":1},0)
-	check(game.skills.reason("shield_bash")=="Requires sword and shield.","Shield Bash needs the shield")
+	check(game.skills.reason("shield_bash")=="Requires a shield.","Shield Bash needs the shield")
 	clear()
 	# A stunned enemy does nothing until the stun ends.
 	hero({"shield_bash":1})
@@ -587,8 +587,26 @@ func test():
 	check(is_equal_approx(game.attack_profile().duration,.84/2.7),"Quick Strikes rank 5: 170% faster")
 	game.run.stats[1] = 1000
 	check(is_equal_approx(game.attack_profile().duration,Data.MELEE_MINIMUM),"No swing is quicker than a fifth of a second")
-	game.run.weapon = 2; game.run.stats[1] = 25; game.run.skills = {"quick_strikes":5}
+	game.arm("bow"); game.run.stats[1] = 25; game.run.skills = {"quick_strikes":5}
 	check(is_equal_approx(game.attack_profile().duration,.78/1.06),"Dexterity quickens a bowshot too; Quick Strikes does not")
+	clear()
+
+	# A one-handed axe is not thrust: its two cuts, back and forth.
+	hero({})
+	game.player.visual.play(game.player.visual.idle_action())
+	Items.put(game.run,"main","bronze_hatchet")
+	game.refit()
+	target = dummy(1.6)
+	var axe_swings: Array = []
+	var axe_landed: Array = []
+	for i in 6:
+		game.attack(false,target.position)
+		axe_swings.append(game.player.visual.state)
+		axe_landed.append(is_equal_approx(game.player.busy,.84) and is_equal_approx(game.scheduled[-1].time,.84*.52))
+		while game.player.busy > 0: play(STEP)
+	check(axe_swings == ["SwordOpen","SwordCut2L","SwordCut1R","SwordCut2L","SwordCut1R","SwordCut2L"],"Swinging on, the axe cuts down one way and then the other, back and forth, and is never thrust: %s" % [axe_swings])
+	check(not false in axe_landed,"Each of the axe's cuts takes the same time and lands at the same moment of it")
+	game.player.visual.play(game.player.visual.idle_action())
 	clear()
 
 	# The sword's normal attack: three swings that follow one another while he
@@ -644,7 +662,7 @@ func test():
 	panels.add_stat(0); panels.add_stat(3)
 	check(game.run.stats==[6,5,5,6,5] and game.run.points==23 and game.player.max_hp==110,"Its + buttons spend points on any attribute")
 	panels.skill_plus.pressed.emit()
-	check(panels.skills_open() and panels.stats_open() and panels.nodes.size()==19,"The right + opens the tree beside it: nineteen warrior skills")
+	check(panels.skills_open() and not panels.stats_open() and panels.nodes.size()==19,"The right + turns the window to the tree: nineteen warrior skills")
 	game.hud.tick(0)
 	check(panels.nodes.leap.state=="locked" and panels.nodes.cleave.state=="learned" and panels.nodes.powerful_strike.state=="open","Skills behind a requirement show as locked")
 	panels.nodes.leap.button.pressed.emit()
@@ -654,7 +672,7 @@ func test():
 	for i in 4: panels.nodes.cleave.button.pressed.emit()
 	game.hud.tick(0)
 	check(game.run.skills.cleave==5 and game.run.skill_points==0 and panels.nodes.cleave.state=="maxed" and panels.nodes.leap.state=="open","Five points in the tree open its next row")
-	check(not panels.skill_plus.visible and not panels.stat_plus.visible,"The + buttons are gone while their panels are open")
+	check(not panels.skill_plus.visible and panels.stat_plus.visible,"The skills' + is gone while their tab is open with no point left; the attributes' stays, with points to spend")
 	panels.hovered = "powerful_strike"
 	panels.assign("powerful_strike",2)
 	check(game.run.hotbar==["cleave","","powerful_strike","",""],"A learned skill can be moved to another slot")

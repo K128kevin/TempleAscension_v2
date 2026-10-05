@@ -2,6 +2,7 @@ extends SceneTree
 ## The ranger's three skill trees in play: every skill's listed numbers, on an
 ## open plane with passive stand-in enemies.
 const Data = preload("res://scripts/data.gd")
+const Items = preload("res://scripts/items.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const Save = preload("res://scripts/save.gd")
 const Temple = preload("res://scripts/temple.gd")
@@ -58,8 +59,9 @@ func hero(ranks: Dictionary, weapon: int = 2):
 	# As the hero who spent his first point on Power Shot, which waits on RMB.
 	game.run.skill_points = 0
 	if ranks.has("power_shot"): game.run.hotbar[0] = "power_shot"
-	game.run.weapon = weapon
-	game.player.visual.equip(Data.WEAPONS[weapon])
+	# (His bow in hand and his dagger in his bag, or the other way about.)
+	if weapon==5: Items.take_up(game.run,["dagger"])
+	game.refit()
 	ready()
 
 func ready():
@@ -104,7 +106,7 @@ func test():
 	check(mine.size()==20 and Book.trees("ranger")==["attack","utility","passive"],"The ranger has twenty skills in Attacks, Utility and Passive")
 	check(mine.filter(func(s): return s.tree=="attack").size()==7 and mine.filter(func(s): return s.tree=="utility").size()==7 and mine.filter(func(s): return s.tree=="passive").size()==6,"Seven attacks, seven utility skills, six passives")
 	var fresh = Data.new_run("ranger")
-	check(fresh.owned[2] and fresh.owned[5] and fresh.weapon==2 and fresh.skills.is_empty() and fresh.skill_points==1 and Save.valid(fresh),"A new ranger carries a bow and a dagger, and has a skill point to spend")
+	check(fresh.equipment.main=="yew_longbow" and "hunting_dagger" in fresh.bag and fresh.skills.is_empty() and fresh.skill_points==1 and Save.valid(fresh),"A new ranger carries a bow and a dagger, and has a skill point to spend")
 	check(not Book.locked(fresh,"volley").is_empty() and not Book.locked(fresh,"frenzy").is_empty() and Book.locked(fresh,"flurry").is_empty(),"Skills open by the points spent in their own tree")
 	for clip in ["DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SneakIdle","SkillVolley"]:
 		check(game.player.visual.clips.has(clip),"The ranger's clip is there: "+clip)
@@ -206,7 +208,7 @@ func test():
 	# Flurry: he takes up the dagger for it.
 	hero({"flurry":1})
 	foe = dummy(1.6)
-	check(game.skills.reason("flurry").is_empty() and game.skills.cast("flurry",foe.position) and game.run.weapon==5 and game.player.visual.weapon_kind=="dagger","Cast with the bow in hand, Flurry takes up the dagger")
+	check(game.skills.reason("flurry").is_empty() and game.skills.cast("flurry",foe.position) and Data.weapon(game.run)==5 and "yew_longbow" in game.run.bag and game.player.visual.weapon_kind=="dagger","Cast with the bow in hand, Flurry takes up the dagger")
 	check(game.player.visual.state=="SkillFlurry2" and is_equal_approx(game.run.energy,75.0),"Flurry costs 25 energy and has its own motion")
 	play(1.2)
 	check(within(foe,2,100),"Rank 1 stabs twice for 100%% (%.1f)" % lost(foe))
@@ -215,7 +217,7 @@ func test():
 	check(game.player.visual.state=="SkillFlurry4","Rank 5's four stabs have their own motion")
 	play(1.5)
 	check(within(foe,4,275),"Rank 5 stabs four times for 275%% (%.1f)" % lost(foe))
-	game.run.owned[5] = false; game.run.weapon = 2
+	game.run.equipment.main = "yew_longbow"; game.run.bag = Items.empty_bag()
 	check(game.skills.reason("flurry")=="Requires dagger.","Without a dagger, Flurry cannot be used")
 	clear()
 
@@ -315,7 +317,7 @@ func test():
 	# Weakening Strike: with either weapon; critical strikes on the target deal more.
 	hero({"weakening_strike":1})
 	foe = dummy(6)
-	check(game.skills.cast("weakening_strike",at) and is_equal_approx(game.run.energy,85.0) and game.run.weapon==2,"Weakening Strike costs 15 energy, and with the bow is a shot")
+	check(game.skills.cast("weakening_strike",at) and is_equal_approx(game.run.energy,85.0) and Data.weapon(game.run)==2,"Weakening Strike costs 15 energy, and with the bow is a shot")
 	play(1.0)
 	check(within(foe,1,100) and foe.weak_stacks==1 and is_equal_approx(foe.weak_bonus,10.0),"It hits and leaves one stack")
 	game.player.busy = 0; game.skills.cast("weakening_strike",at); play(1.0)
@@ -331,7 +333,7 @@ func test():
 	clear()
 	hero({"weakening_strike":5},5)
 	foe = dummy(1.6)
-	check(game.skills.cast("weakening_strike",foe.position) and game.run.weapon==5 and game.player.visual.state=="DaggerSlash","With the dagger in hand it is a cut")
+	check(game.skills.cast("weakening_strike",foe.position) and Data.weapon(game.run)==5 and game.player.visual.state=="DaggerSlash","With the dagger in hand it is a cut")
 	play(.8)
 	check(within(foe,1,100) and foe.weak_stacks==1 and is_equal_approx(foe.weak_bonus,15.0) and Book.values("weakening_strike",5).y==5,"which hits and weakens as the shot does (rank 5: 15% a stack, five stacks)")
 	clear()
@@ -492,9 +494,9 @@ func test():
 	game.resume_game()
 	game.combat_age = 0
 	game.swap_weapon()
-	check(game.run.weapon==5 and game.player.visual.weapon_kind=="dagger","X takes up the dagger")
+	check(Data.weapon(game.run)==5 and game.player.visual.weapon_kind=="dagger","X takes up the dagger")
 	game.swap_weapon()
-	check(game.run.weapon==2 and game.player.visual.weapon_kind=="bow","and the bow again")
+	check(Data.weapon(game.run)==2 and game.player.visual.weapon_kind=="bow","and the bow again")
 
 	# A save from before these skills: the ranger's points are refunded, the dagger his.
 	var old = Data.new_run("ranger")
@@ -503,7 +505,7 @@ func test():
 	old.skills = {"power_shot":1}; old.skill_points = 0
 	old.level = 1
 	var migrated = Save.migrate(old)
-	check(Save.valid(old) and migrated.version==Data.new_run().version and migrated.owned.size()==6 and migrated.owned[5] and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
+	check(Save.valid(old) and migrated.version==Data.new_run().version and "hunting_dagger" in migrated.bag and migrated.equipment.main=="yew_longbow" and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
 	game.run.skills = {"power_shot":1}; game.run.skill_points = 0
 	check(Save.valid(game.run),"The character is save-valid throughout")
 	FileAccess.open("res://test-results/ranger-skills.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))

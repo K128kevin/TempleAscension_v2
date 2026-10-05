@@ -1,6 +1,7 @@
 extends SceneTree
 const Save=preload("res://scripts/save.gd")
 const Data=preload("res://scripts/data.gd")
+const Items = preload("res://scripts/items.gd")
 var game
 var passed: Array=[]
 var failed: Array=[]
@@ -39,9 +40,11 @@ func test():
 		key(KEY_C)
 		check(game.mode=="character" and game.hud.panels.stats_open(),"C opens the attribute panel")
 		key(KEY_K)
-		check(game.hud.panels.stats_open() and game.hud.panels.skills_open(),"Both panels can be open at once")
+		check(not game.hud.panels.stats_open() and game.hud.panels.skills_open(),"K turns the same window to its skills tab")
+		key(KEY_I)
+		check(game.mode=="character" and game.hud.panels.inventory_open(),"I turns it to the inventory")
 		key(KEY_ESCAPE)
-		check(game.mode=="playing" and not game.hud.panels.any_open(),"Escape closes both and resumes")
+		check(game.mode=="playing" and not game.hud.panels.any_open(),"Escape closes it and resumes")
 	else:
 		check(Save.directory==base.path_join("debug"),"Debug uses an isolated save")
 		key(KEY_F8)
@@ -49,13 +52,13 @@ func test():
 		key(KEY_G); game.hurt_player(10000)
 		check(not game.player.dead and game.player.hp==100,"God mode protects player")
 		key(KEY_H); key(KEY_J)
-		game.player.busy=0; game.combat_age=10; game.equip(2)
-		check(game.run.owned[3] and game.run.weapon==2,"Debug grants weapons usable through equipment")
+		game.player.busy=0; game.combat_age=10
+		check(Items.PLAIN.axe in game.run.bag and Items.PLAIN.bow in game.run.bag and game.move_item("bag:%d" % game.run.bag.find(Items.PLAIN.bow),"main").is_empty() and Data.weapon(game.run)==2,"Debug grants weapons usable through the inventory")
 		Data.gain_xp(game.run,Data.xp_at_level(4))
 		var points=game.run.points
 		for i in 3:
 			key(KEY_1+i,true)
-			check(game.run.floor==i and game.run.points==points and game.run.weapon==2,"Floor jump preserves character budget and equipment")
+			check(game.run.floor==i and game.run.points==points and Data.weapon(game.run)==2,"Floor jump preserves character budget and equipment")
 		key(KEY_O)
 		check(game.outdoors() and game.player.position==game.Overworld.START and game.run.points==points and game.enemies.is_empty(),"Debug jumps to the desert, where a character starts")
 		key(KEY_U)

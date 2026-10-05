@@ -1,5 +1,6 @@
 extends Node
 const Data = preload("res://scripts/data.gd")
+const Items = preload("res://scripts/items.gd")
 const Save = preload("res://scripts/save.gd")
 var checks: Array = []
 var failures: Array = []
@@ -11,8 +12,8 @@ func start(owner_game):
 	game = owner_game
 	game.set_process(false)
 	check(game.run.floor==0 and game.player.position==Vector3(0,0,9),"A run inside the temple starts at its entrance")
-	check(game.player.visual.clips.size()==82,"All locomotion, weapon and hit reaction clips are present (with the ranger's and wizard's own idle, run and crouch, the shield bearers' guarded swing and reactions, the walks, the warrior's skill swings and his sword's chain of swings)")
-	check(game.run.class_id=="warrior" and game.run.weapon==1 and game.run.skills.is_empty() and game.run.skill_points==1,"Warrior starts with a sword and one skill point to spend")
+	check(game.player.visual.clips.size()==112,"All locomotion, weapon and hit reaction clips are present (with the ranger's and wizard's own idle, run and crouch, the shield bearers' guarded swing and reactions, the walks, the warrior's skill swings and his sword's chain of swings, the two-handed weapons' and the spear's own, and the left hand's blows)")
+	check(game.run.class_id=="warrior" and Data.weapon(game.run)==1 and game.run.skills.is_empty() and game.run.skill_points==1,"Warrior starts with a sword and one skill point to spend")
 	game.player.hp=20; game.run.energy=60; game.heal()
 	check(game.player.hp==80 and game.run.energy==0 and game.heal_cd==20 and not game.run.has("flasks"),"Healing spell instantly restores 60 percent for 60 energy with a 20-second cooldown and no charges")
 	game.heal()
@@ -54,7 +55,6 @@ func start(owner_game):
 			check(not game.world.path(game.world.spawn,enemy.position).is_empty(),"Enemy is reachable: "+enemy.uid)
 			for offset in [Vector3(0,0,1.3),Vector3(1.3,0,0),Vector3(-1.3,0,0),Vector3(0,0,-1.3)]:
 				if game.world.fits(enemy.position+offset): game.player.position=enemy.position+offset; break
-			game.run.weapon=1
 			for swing in 30:
 				if enemy.dead: break
 				game.player.tick(1.2) # Finish the previous swing and its recovery.
@@ -63,12 +63,13 @@ func start(owner_game):
 			check(enemy.dead,"Defeat through weapon combat: "+enemy.uid)
 			total+=1
 		check(game.remaining()==0 and game.world.exit_seal.visible,"Combat opens stairs on floor %d" % (floor_index+1))
-		for pickup in game.pickups.duplicate():
-			game.player.position=pickup.node.position; game.player.position.y=0
-			game.tick_pickups(.016)
-		check(game.pickups.is_empty() and game.run.gems.is_empty(),"Weapon loot can be collected; no permanent gems")
-		check(not game.run.owned[2] and not game.run.owned[3],"Bow and axe do not drop")
-		if floor_index==1: check(game.run.owned[4],"Staff drop remains available")
+		# What fell is picked up (as far as the bag has room for it).
+		var fallen: int = game.pickups.size()
+		var room: int = game.run.bag.count("")
+		for pickup in game.pickups.duplicate(): game.take_pickup(pickup)
+		check(game.pickups.size()==maxi(0,fallen-room) and game.run.bag.count("")==maxi(0,room-fallen) and game.run.gems.is_empty(),"Dropped items can be picked up into the bag; no permanent gems")
+		for item in game.run.bag: check(item.is_empty() or (Items.usable("warrior",item) and Items.ALL[item].has("rarity")),"Only items the class can use drop: "+item)
+		game.run.bag = Items.empty_bag()
 		var points: int = game.run.points
 		var xp: int = game.run.xp
 		game.player.position=game.world.exit_point

@@ -5,6 +5,7 @@ extends RefCounted
 ## five ranks each, with every rank's values listed, and a skill opens once
 ## enough points are spent in its tree. The wizard's are the earlier roster in
 ## v2/docs/PLAN.md, still opened by level, where rank changes one primary value.
+const Items = preload("res://scripts/items.gd")
 static var definitions: Dictionary = {}
 const TREES = ["aoe","single","passive"]
 const RANGER_TREES = ["attack","utility","passive"]
@@ -71,14 +72,14 @@ static func all() -> Dictionary:
 	# id, title, class, unlock, behavior, requirement, scaling, cost,
 	# first-rank value, increment, radius, duration, description, tree
 	var rows = [
-		["firebolt", "Firebolt", "wizard", 1, "firebolt", "staff", "spell", 12, 1.5, .25, 13, 0, "Hurl a fireball that bursts where it lands, burning everything in the blast.", "single"],
-		["frost_nova", "Frost Nova", "wizard", 1, "nova", "staff", "spell", 20, 1, .2, 3.5, 3, "Damage nearby foes and slow them by 60%.", "aoe"],
-		["arcane_lance", "Arcane Lance", "wizard", 4, "lance", "staff", "spell", 22, 1.6, .25, 14, 0, "An arcane projectile that pierces enemies.", "single"],
-		["barrier", "Barrier", "wizard", 4, "barrier", "staff", "", 22, 35, 15, 0, 8, "Absorb the listed damage for up to eight seconds.", "single"],
-		["chain_lightning", "Chain Lightning", "wizard", 8, "chain", "staff", "spell", 28, 1.4, .2, 12, 0, "Lightning jumps to up to four nearby enemies.", "aoe"],
-		["blink", "Blink", "wizard", 8, "blink", "staff", "", 18, 5, .5, 0, 0, "Teleport the listed distance, stopping before walls.", "single"],
-		["blizzard", "Blizzard", "wizard", 12, "blizzard", "staff", "spell", 32, .6, .1, 4, 5, "Five pulses of frost damage and slowing in the target area.", "aoe"],
-		["meteor", "Meteor", "wizard", 18, "meteor", "staff", "spell", 40, 3.5, .5, 4, 1.2, "Call a fiery impact after a visible warning.", "aoe"],
+		["firebolt", "Firebolt", "wizard", 1, "firebolt", "any", "spell", 12, 1.5, .25, 13, 0, "Hurl a fireball that bursts where it lands, burning everything in the blast.", "single"],
+		["frost_nova", "Frost Nova", "wizard", 1, "nova", "any", "spell", 20, 1, .2, 3.5, 3, "Damage nearby foes and slow them by 60%.", "aoe"],
+		["arcane_lance", "Arcane Lance", "wizard", 4, "lance", "any", "spell", 22, 1.6, .25, 14, 0, "An arcane projectile that pierces enemies.", "single"],
+		["barrier", "Barrier", "wizard", 4, "barrier", "any", "", 22, 35, 15, 0, 8, "Absorb the listed damage for up to eight seconds.", "single"],
+		["chain_lightning", "Chain Lightning", "wizard", 8, "chain", "any", "spell", 28, 1.4, .2, 12, 0, "Lightning jumps to up to four nearby enemies.", "aoe"],
+		["blink", "Blink", "wizard", 8, "blink", "any", "", 18, 5, .5, 0, 0, "Teleport the listed distance, stopping before walls.", "single"],
+		["blizzard", "Blizzard", "wizard", 12, "blizzard", "any", "spell", 32, .6, .1, 4, 5, "Five pulses of frost damage and slowing in the target area.", "aoe"],
+		["meteor", "Meteor", "wizard", 18, "meteor", "any", "spell", 40, 3.5, .5, 4, 1.2, "Call a fiery impact after a visible warning.", "aoe"],
 		["attunement", "Attunement", "wizard", 1, "passive", "any", "", 0, .8, .8, 0, 0, "Additional energy regenerated per second.", "passive"],
 		["efficient_casting", "Efficient Casting", "wizard", 4, "passive", "any", "", 0, 8, 8, 0, 0, "Percent less energy spent on spell skills.", "passive"],
 		["elemental_mastery", "Elemental Mastery", "wizard", 12, "passive", "any", "spell", 0, 5, 5, 0, 0, "Percent additional spell damage.", "passive"],
@@ -124,24 +125,46 @@ static func describe(id: String, rank: int) -> String:
 static func figure(amount: float) -> String:
 	return String.num(snappedf(amount,.01)).trim_suffix(".0")
 
+# Whether a skill can be made with a weapon of that kind in hand (its number
+# in Data.WEAPONS). A "shield" skill needs a shield in the off hand besides:
+# fits() has the whole of it.
 static func compatible(id: String, weapon: int) -> bool:
 	match all()[id].requirement:
-		"melee": return weapon in [0,1,3]
-		"shield": return weapon==1
+		"melee","shield": return weapon in [0,1,3,6]
 		"bow": return weapon==2
-		"staff": return weapon==4
 		"dagger": return weapon==5
 		"bow_dagger": return weapon in [2,5]
 	return true
 
-# The weapon a skill is made with, for the one who would take it up to use
-# it: the bow or the dagger, or -1 for a skill made with whatever is in hand.
-static func weapon_for(id: String, weapon: int) -> int:
-	if compatible(id,weapon): return -1
-	match all()[id].requirement:
-		"bow","bow_dagger": return 2
-		"dagger": return 5
-	return -1
+# The kinds of weapon a skill is made with ([] for any).
+const MADE_WITH = {"melee":["sword","mace","axe","spear"],"bow":["bow"],"dagger":["dagger"],"bow_dagger":["bow","dagger"]}
+static func kinds(id: String) -> Array:
+	return MADE_WITH.get(all()[id].requirement,[])
+
+# Whether the hero can use the skill with what he holds now: a weapon of the
+# kind it is made with in the main hand, or for a shield's skill a shield in
+# the off hand.
+static func fits(run: Dictionary, id: String) -> bool:
+	var need: String = all()[id].requirement
+	if need == "shield": return not Items.shield(run).is_empty()
+	return not MADE_WITH.has(need) or Items.kind(run) in MADE_WITH[need]
+
+# Whether the skill takes up the weapon it is made with from the bag: the
+# ranger's do (he carries his bow and his dagger both). The warrior's need a
+# melee weapon in hand already: with a bow he has only his normal attack.
+static func takes_up(id: String) -> bool:
+	return all()[id].class_id == "ranger" and not kinds(id).is_empty()
+
+# Whether he could, taking up a weapon from his bag.
+static func in_reach(run: Dictionary, id: String) -> bool:
+	return fits(run,id) or (takes_up(id) and Items.bagged(run,kinds(id)) >= 0)
+
+# The kind of weapon (its number in Data.WEAPONS) the skill would be made
+# with: the one in hand if it serves, else the one he would take up.
+static func made_with(run: Dictionary, id: String, in_hand: int) -> int:
+	if fits(run,id) or not takes_up(id): return in_hand
+	var found: int = Items.bagged(run,kinds(id))
+	return in_hand if found < 0 else ["spear","sword","bow","axe","staff","dagger","mace"].find(Items.ALL[run.bag[found]].kind)
 
 # What the skill costs at `rank` (a cost of -1 is the rank's x).
 static func cost(id: String, rank: int) -> float:

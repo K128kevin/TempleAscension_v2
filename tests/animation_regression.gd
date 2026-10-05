@@ -88,6 +88,15 @@ func run():
 	var swung = analyse(chained,[.35,.4+.84*chain_clips.size()+1.0])
 	check(swung.pop < .03,"The sword's swings run on into one another: nothing leaps between frames (%.3fm at %s)" % [swung.pop,swung.pop_at])
 	check(swung.slide < .06,"The sword's swings run on into one another: planted feet keep still (%.3fm)" % swung.slide)
+	# The axe's: the two cuts back and forth, the first faded into from the
+	# backhand's end (it is keyed to follow the thrust).
+	var axe_chain = [[0.0,"stop"]]
+	var axe_clips = ["SwordOpen","SwordCut2L","SwordCut1R","SwordCut2L","SwordCut1R"]
+	for i in axe_clips.size(): axe_chain.append([.4+.84*i,"play" if i == 0 else ("play_on" if axe_clips[i].begins_with("SwordCut2") else "play_from"),axe_clips[i],1.26,"play"])
+	axe_chain.append([.4+.84*axe_clips.size()+1.0,"stop"])
+	var axe_swung = analyse(await record(specs["hero_sword"],axe_chain),[.35,.4+.84*axe_clips.size()+1.0])
+	check(axe_swung.pop < .03,"The axe's cuts run back and forth into one another: nothing leaps between frames (%.3fm at %s)" % [axe_swung.pop,axe_swung.pop_at])
+	check(axe_swung.slide < .06,"The axe's cuts run back and forth: planted feet keep still (%.3fm)" % axe_swung.slide)
 	var stepped: float = chained.frames[-1].root.z-chained.frames[0].root.z
 	check(absf(stepped-.5*chain_clips.size()) < .05,"Each swing of the chain takes the same step forward (%.2fm over %d)" % [stepped,chain_clips.size()])
 	for case in [["hero_sword","SwordOpen",1.26],["hero_sword","SwordSwing",.84],["hero_sword","SwordSlash",.84],["centurion","ShieldStab",.84]]:

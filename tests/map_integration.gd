@@ -1,6 +1,7 @@
 extends SceneTree
 const Save = preload("res://scripts/save.gd")
 const Data = preload("res://scripts/data.gd")
+const Items = preload("res://scripts/items.gd")
 var passed: Array[String] = []
 var failed: Array[String] = []
 func _initialize(): call_deferred("test")
@@ -48,7 +49,7 @@ func test():
 	var killed: String = game.enemies[0].uid
 	game.enemies[0].hit(10000)
 	game.player.position = game.world.exit_point
-	game.run.drops = [{"kind":"weapon","value":2,"id":"roundtrip-bow","position":[game.world.spawn.x,game.world.spawn.z]}]
+	game.run.drops = [{"item":"hunters_recurve","position":[game.world.spawn.x,game.world.spawn.z]}]
 	game.save_run()
 	var cells: Dictionary = game.world.layout.cells.duplicate()
 	var saved_position: Vector3 = game.player.position
@@ -56,7 +57,7 @@ func test():
 	check(game.world.layout.cells==cells and game.player.position==saved_position,"Save/continue preserves exact generated map and position")
 	check(killed in game.run.dead and game.enemies[0].dead and game.pickups.size()==1,"Save/continue preserves defeated statues and pending drops")
 	var old = Data.new_run(); old.version=1; old.seed=123; old.stats=[6,7,8,9]
-	old.owned=[true,true,true,false]; old.dead=["0:0"]; old.position=[-17,-54]
+	old.owned=[true,true,true,false]; old.weapon=0; old.dead=["0:0"]; old.position=[-17,-54]
 	old.gems=["already-collected"]
 	old.drops=[{"kind":"gem","value":1,"id":"old-loot","position":[-17,-54]}]
 	Save.write(old)
@@ -64,7 +65,7 @@ func test():
 	check(not loaded.is_empty() and loaded.version==Data.new_run().version,"Legacy saves migrate on load")
 	game.run = loaded; game.load_floor()
 	check(game.run.version==Data.new_run().version and game.player.position==game.world.spawn,"Legacy run migrates safely to the generated entrance")
-	check(game.run.stats==[5,5,5,5,5] and game.run.points>0 and game.run.owned[2] and "0:0" in game.run.dead,"Migration preserves weapons and kills while refunding old stat bonuses")
+	check(game.run.stats==[5,5,5,5,5] and game.run.points>0 and Data.weapon(game.run)==1 and "0:0" in game.run.dead,"Migration keeps the kills, refunds old stat bonuses and gives the class's starting equipment")
 	check(game.pickups.is_empty(),"Legacy permanent gem drops are retired")
 	game.save_run(); game.continue_run()
 	check(game.run.version==Data.new_run().version and game.world.fits(game.player.position),"Migrated save round-trips normally")

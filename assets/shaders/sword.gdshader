@@ -25,6 +25,11 @@ void vertex() {
 	local_normal = NORMAL;
 }
 
+// An item of another make (scripts/items.gd `tint`): its colours redrawn in
+// that one, keeping their light and dark.
+uniform vec3 tint : source_color = vec3(1.0);
+uniform float recolor = 0.0;
+
 void fragment() {
 	float y = local_position.y;
 	vec3 brass = vec3(0.78, 0.58, 0.25);
@@ -59,4 +64,5 @@ void fragment() {
 			NORMAL = normalize(NORMAL + tilt * groove);
 		}
 	}
+	ALBEDO = mix(ALBEDO, dot(ALBEDO, vec3(0.299, 0.587, 0.114)) * tint * 1.8, recolor);
 }

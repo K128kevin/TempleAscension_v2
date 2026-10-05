@@ -3,6 +3,7 @@ const Oracle = preload("res://scripts/actor.gd")
 const Data=preload("res://scripts/data.gd")
 const Motion=preload("res://scripts/combat_animation.gd")
 const Book=preload("res://scripts/skill_data.gd")
+const Items=preload("res://scripts/items.gd")
 var passed: Array=[]
 var failed: Array=[]
 func _initialize(): call_deferred("test")
@@ -24,22 +25,27 @@ func playback(visual, clip: String, duration: float, contacts: Array, context: S
 			previous = contact
 		visual.animator.advance((.99-previous)*duration)
 		check(visual.animator.is_playing() and absf(phase(visual)-.99)<.001,"Full recovery fits attack duration: %s / %d" % [context,repeat])
-func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
-	game.run=Data.new_run(class_id); game.run.weapon=weapon
-	game.player.visual.equip(Data.WEAPONS[weapon])
+# `kind`: the plain weapon of that kind in hand ("unarmed": none).
+func held_attacks(game, victim, class_id: String, kind: String, dt: float):
+	game.run=Data.new_run(class_id); game.arm(kind)
+	# (The sword's chain of swings: any one-handed sword, mace or axe.)
+	var weapon: int=1 if Data.family(game.run)=="one" else Data.weapon(game.run)
 	game.player.cooldown=0; game.player.busy=0; game.scheduled.clear()
 	game.player.visual.play(game.player.visual.idle_action())
 	game.skills.reset()
 	game.left_held=true; game.right_held=false; game.target=victim
 	game.order_pending=true; game.ordered_special=false; game.route.clear()
-	victim.dead=false; victim.hp=1000000
+	# (Held where it stands but for the blows' own shoves, which it gives way
+	# to as an enemy does: the hero steps in after it.)
+	victim.dead=false; victim.hp=1000000; victim.stagger_time=1000000
 	victim.position=game.world.move(game.world.spawn,Vector3(0,0,-1.4))
 	game.player.position=game.world.spawn
 	var starts=0; var contacts=0; var clock=0.0; var last_start=-100.0
 	var profile=game.attack_profile()
-	var context="%s %s at %d FPS" % [class_id,Data.WEAPONS[weapon],roundi(1/dt)]
+	var context="%s %s at %d FPS" % [class_id,kind,roundi(1/dt)]
 	while starts<4 or not game.scheduled.is_empty():
 		game.player.tick(dt)
+		victim.tick(dt)
 		var old_hp: float=victim.hp; var old_projectiles: int=game.projectiles.size()
 		game.tick_scheduled(dt)
 		if victim.hp<old_hp or game.projectiles.size()>old_projectiles:
@@ -60,7 +66,7 @@ func held_attacks(game, victim, class_id: String, weapon: int, dt: float):
 		if starts>=4: game.left_held=false; game.order_pending=false; game.target=null
 		clock+=dt
 		if clock>10: check(false,"Held attack test timed out: "+context); break
-	check(starts==4 and contacts==4,"Four held attacks produce four animated contacts: "+context)
+	check(starts==4 and contacts==4,"Four held attacks produce four animated contacts: %s (%d starts, %d contacts, foe %.2f m off)" % [context,starts,contacts,game.player.position.distance_to(victim.position)])
 	if weapon==1: check(game.player.visual.state=="SwordCut1L" and game.sword_swing==0,"Held, the sword's swings follow one another round the chain: "+context)
 	victim.dead=true
 func live_attacks(game):
@@ -74,7 +80,7 @@ func live_attacks(game):
 		game.player.position=game.world.spawn
 		game.invincible_test=true; game.save_timer=-1000000
 		var completed=[0]
-		var clip: String=Motion.NORMAL[game.run.weapon].clip
+		var clip: String=Motion.NORMAL[Data.weapon(game.run)].clip
 		game.player.visual.animator.animation_finished.connect(func(name):
 			if name==game.player.visual.clips[clip]: completed[0]+=1)
 		for i in 5: await process_frame
@@ -100,10 +106,11 @@ func test():
 	for enemy in game.enemies: enemy.dead=true
 	var victim=game.enemies[0]
 	game.player.visual.animator.callback_mode_process=AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
-	for weapon in 5:
-		var profile=Motion.profile(weapon,false,0)
-		game.run.weapon=weapon; game.run.energy=100
-		game.player.visual.equip(Data.WEAPONS[weapon])
+	# Every kind of weapon a hero may hold (its plain item), and bare hands.
+	for kind in ["spear","sword","bow","axe","staff","dagger","mace","unarmed"]:
+		game.arm(kind); game.run.energy=100
+		var swung: String=Data.family(game.run)
+		var profile=game.attack_profile()
 		game.player.position=game.world.spawn; game.player.cooldown=0; game.player.busy=0
 		game.target=null; game.route.clear(); game.scheduled.clear()
 		for p in game.projectiles: p.node.queue_free()
@@ -111,16 +118,16 @@ func test():
 		victim.dead=false; victim.hp=10000; victim.position=game.world.spawn+Vector3(0,0,1.4)
 		game.attack(false,victim.position)
 		# (The sword's first swing of its chain: Motion.SWORD_CHAIN.)
-		check(game.player.visual.state==(Motion.SWORD_OPENER if weapon==1 else profile.clip),"Basic uses dedicated animation: "+profile.clip)
+		check(game.player.visual.state in profile.clips and game.player.visual.clips.has(game.player.visual.state),"Basic uses its family's own animation: %s (%s)" % [kind,game.player.visual.state])
 		var count=game.scheduled.size()
 		game.attack(false,victim.position)
 		check(game.scheduled.size()==count and game.run.energy==100,"Repeated input cannot restart basic attack; basics cost no energy")
 		game.tick_scheduled(.2)
-		check(victim.hp==10000 and game.projectiles.is_empty(),"Damage waits for contact: "+profile.clip)
+		check(victim.hp==10000 and game.projectiles.is_empty(),"Damage waits for contact: "+kind)
 		game.tick_scheduled(profile.times[0]-.2+.001)
-		if weapon in [2,4]: check(game.projectiles.size()==1,"Ranged basic releases at contact")
-		else: check(victim.hp<10000,"Melee basic lands at contact")
-		check(Motion.profile(weapon,false,100).duration>=profile.duration*.65-.001,"Speed bonus respects animation readability floor")
+		if swung in ["bow","staff"]: check(game.projectiles.size()==1,"Ranged basic releases at contact: "+kind)
+		else: check(victim.hp<10000,"Melee basic lands at contact: "+kind)
+		check(Motion.timed(swung,100).duration>=profile.duration*.65-.001,"Speed bonus respects animation readability floor")
 		victim.dead=true
 	# Fast and slow playback of every weapon clip, including multi-release bow.
 	for weapon in 5:
@@ -129,9 +136,14 @@ func test():
 			var profile=Motion.profile(weapon,special,0)
 			for duration in [.25,1.75]:
 				playback(game.player.visual,profile.clip,duration,profile.contacts,"%s %.2fs" % [profile.clip,duration])
+	# And every family's own clips, as the heroes swing them.
+	for swung in Motion.FAMILIES:
+		for clip in Motion.FAMILIES[swung].clips+([Motion.FAMILIES[swung].off] if Motion.FAMILIES[swung].has("off") else []):
+			check(game.player.visual.clips.has(clip),"The hero has the %s family's clip %s" % [swung,clip])
+			for duration in [.25,1.75]: playback(game.player.visual,clip,duration,Motion.FAMILIES[swung].contacts if not clip.begins_with("Sword") and clip!="OffCut" else [Motion.FAMILIES[swung].contacts[0]*Motion.SWORD_SWING_SHARE],"%s %.2fs" % [clip,duration])
 	for class_id in Data.CLASSES:
-		for weapon in Data.WEAPONS.size():
-			for dt in [1.0/15,1.0/60]: held_attacks(game,victim,class_id,weapon,dt)
+		for kind in Items.WIELDS[class_id].filter(func(k): return k!="shield")+["unarmed"]:
+			for dt in [1.0/15,1.0/60]: held_attacks(game,victim,class_id,kind,dt)
 	# All active class skills share the same restart and duration contract.
 	for id in Book.all():
 		var skill: Dictionary=Book.all()[id]
@@ -144,7 +156,7 @@ func test():
 		game.player.position=game.world.spawn
 		# Execute needs a wounded enemy in reach.
 		victim.dead=skill.effect!="execute"; victim.hp=victim.max_hp*.1
-		game.player.visual.equip(Data.WEAPONS[game.run.weapon])
+		game.refit()
 		check(game.skills.cast(id,victim.position),"Skill enters timed playback: "+id)
 		var duration: float=game.player.busy
 		var contact: float=game.skills.pending[0].time/duration
@@ -352,7 +364,7 @@ func test():
 		var first: String = {"warrior":"cleave","ranger":"power_shot","wizard":"firebolt"}[class_id]
 		Data.Skills.learn(game.run,first); game.run.hotbar[0]=first
 		game.skills.reset(); game.player.cooldown=0; game.player.busy=0
-		game.player.visual.equip(Data.WEAPONS[game.run.weapon])
+		game.refit()
 		for p in game.projectiles: p.node.queue_free()
 		game.projectiles.clear()
 		for f in game.fireballs: f.queue_free()

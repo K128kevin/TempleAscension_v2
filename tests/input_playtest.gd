@@ -92,16 +92,17 @@ func playtest() -> void:
 	check(game.run.energy>=10 and game.dash_time>0 and game.dash_cooldown>0,"Space input dashes, for no energy")
 	for other in game.enemies: other.awake=false
 	game.player.busy=0; game.combat_age=10
-	game.run.owned[2] = true
+	game.run.bag[0] = "yew_longbow"
 	await key(KEY_I,true); await key(KEY_I,false)
-	check(game.mode=="character","I opens equipment and pauses combat")
-	game.hud.modal_body.get_child(4).pressed.emit()
+	check(game.mode=="character" and game.hud.panels.inventory_open(),"I opens the inventory and pauses combat")
+	# (A right click on the bow in the bag takes it in hand.)
+	game.hud.panels.quick_move("bag:0")
 	await key(KEY_ESCAPE,true); await key(KEY_ESCAPE,false)
-	check(game.run.weapon==2,"Equipment screen equips unlocked bow")
+	check(game.run.equipment.main=="yew_longbow" and game.player.visual.weapon_kind=="bow","The inventory equips a bow from the bag")
 	game.save_run()
 	var where: Vector3 = game.player.position
 	game.continue_run()
-	check(game.player.position.distance_to(where)<.01 and game.run.weapon==2,"Save/continue restores position and equipment")
+	check(game.player.position.distance_to(where)<.01 and game.run.equipment.main=="yew_longbow","Save/continue restores position and equipment")
 	await frames(15)
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png("res://test-results/combat.png")

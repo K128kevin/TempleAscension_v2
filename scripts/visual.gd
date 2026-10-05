@@ -11,6 +11,8 @@ const Bandit = preload("res://scripts/bandit.gd")
 const SwordTrail = preload("res://scripts/sword_trail.gd")
 const BladeCharge = preload("res://scripts/blade_charge.gd")
 const BladeGlow = preload("res://scripts/blade_glow.gd")
+const Items = preload("res://scripts/items.gd")
+const TwoHandGrip = preload("res://scripts/two_hand_grip.gd")
 # A slain statue breaks apart into individual physics-driven stone fragments:
 # a front sweeps down the body, the stone above it cracking loose (the statue
 # shader's shatter) and each fragment let go as the front reaches it. A blast
@@ -57,7 +59,7 @@ var planter
 # Keeps the hands that hold something closed on it (scripts/hand_grip.gd).
 var grip
 # Locomotion clips: the feet follow the animation, played at the ground speed.
-const LOCOMOTION = ["Run","Crouch","SwordRun","ScutumRun","BowRun","BowCrouch","RangerRun","RangerCrouch","WizardRun","WizardCrouch","Walk","SwordWalk","RangerWalk","WizardWalk"]
+const LOCOMOTION = ["DualRun","DualWalk","Run","Crouch","SwordRun","ScutumRun","BowRun","BowCrouch","RangerRun","RangerCrouch","WizardRun","WizardCrouch","Walk","SwordWalk","RangerWalk","WizardWalk","HeavyRun","HeavyWalk","PikeRun","PikeWalk"]
 # The hero walks rather than runs (the R key; scripts/game.gd).
 var walking = false
 # The walks that carry a weapon are made from the plain walk as the hero is
@@ -88,14 +90,14 @@ var ground_speed = 0.0
 # (Actor.tick).
 # (The sword chain's swings each walk him a stride on over the swing's share
 # of the clip, Motion.SWORD_SWING_SHARE; its recovery stands still.)
-const ROOT_ADVANCE = {"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustR":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustL":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]],"SkillCleave":[[0.0,0.0],[.32,0.0],[.52,.38],[.66,.4],[1.0,.4]],"SkillBash":[[0.0,0.0],[.3,0.0],[.5,.38],[.66,.4],[1.0,.4]],"SkillShockwave":[[0.0,0.0],[.36,.1],[.56,.45],[.74,.5],[1.0,.5]]}
+const ROOT_ADVANCE = {"OffCut":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustR":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustL":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]],"SkillCleave":[[0.0,0.0],[.32,0.0],[.52,.38],[.66,.4],[1.0,.4]],"SkillBash":[[0.0,0.0],[.3,0.0],[.5,.38],[.66,.4],[1.0,.4]],"SkillShockwave":[[0.0,0.0],[.36,.1],[.56,.45],[.74,.5],[1.0,.5]],"PikeCleave":[[0.0,0.0],[.34,0.0],[.54,.36],[.68,.4],[1.0,.4]],"HeavyCleave":[[0.0,0.0],[.32,0.0],[.52,.38],[.66,.4],[1.0,.4]]}
 var travelled = 0.0
 var pending_travel = 0.0
 
 # Each locomotion clip's own ground speed at life size (metres a second, at
 # normal playback): how fast its planted foot sweeps back under the body
 # (measured by tools/anim_audit.gd --strides).
-const STRIDE_SPEED = {"Run":6.35,"SwordRun":6.64,"ScutumRun":6.64,"BowRun":6.64,"RangerRun":6.64,"WizardRun":6.64,"Walk":1.0,"SwordWalk":1.0,"RangerWalk":1.0,"WizardWalk":1.0}
+const STRIDE_SPEED = {"Run":6.35,"SwordRun":6.64,"ScutumRun":6.64,"BowRun":6.64,"RangerRun":6.64,"WizardRun":6.64,"HeavyRun":6.35,"PikeRun":6.35,"DualRun":6.64,"DualWalk":1.0,"HeavyWalk":1.0,"PikeWalk":1.0,"Walk":1.0,"SwordWalk":1.0,"RangerWalk":1.0,"WizardWalk":1.0}
 # The Lion Guardian goes on four legs (tools/make_lion.py): its own rig and
 # clips, with none of a man's hands, feet or gear. Its gallop, played at its
 # own pace, covers this many metres a second.
@@ -144,6 +146,25 @@ const STATUE_KITS = {"gladiator":"warrior","centurion":"warrior","boss":"warrior
 # actor sets `bandit_look` before setup().
 var bandit = false
 var bandit_look: Dictionary = {}
+# A hero: his class, his model's meshes by name, and what he has on and in
+# his hands (scripts/items.gd; wear()). `held` is the look of the weapon in
+# the main hand ({}: the plain weapon of its kind), `off_held` the item in the
+# off hand, `family` how the weapon is swung.
+var hero_class = ""
+var parts: Dictionary = {}
+var worn: Dictionary = {}
+var held: Dictionary = {}
+var off_held: Dictionary = {}
+var family = ""
+var body_material: ShaderMaterial
+# A second weapon, in the left hand.
+var off_item: Node3D
+var off_attachment: BoneAttachment3D
+# Where along the weapon (shares of its model's height) its edge or head
+# runs: what leaves a wake as it cuts, and what glows.
+var edge: Array = [.42,1.02]
+# A two-handed weapon's second hand is kept on its haft (scripts/two_hand_grip.gd).
+var two_hands = null
 # The bandits' sica: shorter than the hero's sword.
 const SICA_SIZE = Vector3(.19,.86,.09)
 
@@ -153,6 +174,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	quadruped = stone and enemy_kind == "lion"
 	var character = "guardian_%s" % enemy_kind if stone and enemy_kind in ["gladiator","archer","centurion","wizard","boss"] else ("guardian" if stone else "warrior")
 	bandit = not stone and hero_class == "bandit"
+	if not stone and not bandit: self.hero_class = hero_class
 	if bandit:
 		if bandit_look.is_empty(): bandit_look = Bandit.look(0)
 		character = "bandit_%s" % bandit_look.who
@@ -180,6 +202,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			dress_bandit(mesh)
 			continue
 		skin_meshes.append(mesh)
+		parts[String(mesh.name)] = mesh
 		if stone:
 			if mesh.skin != null and mesh.mesh is ArrayMesh:
 				mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
@@ -292,6 +315,9 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			# The wizard and ranger wear bodies without the parts their robe or
 			# cloak covers; only the warrior wears the scale armor (the ranger
 			# has a wool tunic).
+			# (Its place at rest is kept with it, for the parts of it each
+			# equipment slot covers: assets/shaders/hero_body.gdshader.)
+			if mesh.skin != null and mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 			if "WizardBody" in mesh.name: mesh.visible = hero_class == "wizard"
 			elif "RangerBody" in mesh.name: mesh.visible = hero_class == "ranger"
 			elif hero_class in ["wizard","ranger"] and "SuperHero" in mesh.name: mesh.visible = false
@@ -299,14 +325,17 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			elif "HeroArmor" in mesh.name: mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit(hero_class)
 	for clip in animator.get_animation_list():
-		for expected in ["DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SkillVolley","SneakIdle","SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
+		for expected in ["HeavyIdle","HeavySwing1","HeavySwing2","HeavyCleave","HeavyStrike","HeavyExecute","HeavySlam","HeavyShockwave","HeavyCry","HeavyLeap","PikeIdle","PikeThrust1","PikeThrust2","PikeCleave","PikeStrike","PikeExecute","PikeSlam","PikeShockwave","PikeCry","PikeLeap","DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SkillVolley","SneakIdle","SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
-				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["SneakIdle","Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
+				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["HeavyIdle","PikeIdle","SneakIdle","Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
 	if quadruped:
 		play(idle_action())
 		return
 	derive_walks()
+	derive_carries()
+	derive_mirrors()
+	derive_duals()
 	lower_roll()
 	# The fists that close on a grip, from the stance clips that hold one: the
 	# sword hand's, and the hand the ranger carries his bow in.
@@ -325,6 +354,12 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		animator.seek(0,true)
 		animator.advance(0)
 		grip.capture(skeleton,pair[0])
+	if not stone:
+		two_hands = TwoHandGrip.new()
+		two_hands.name = "TwoHandGrip"
+		skeleton.add_child(two_hands)
+		skeleton.move_child(two_hands,3)
+		two_hands.setup(skeleton)
 	skeleton.skeleton_updated.connect(shown_pose_updated)
 	if not stone and hero_class == "ranger": setup_cloak()
 	elif not stone and hero_class == "wizard": setup_cloak("cape_")
@@ -429,14 +464,221 @@ func derive_walks() -> void:
 			library.add_animation(name,made)
 		clips[name] = prefix+name
 
+# What a hero has on and in his hands (scripts/items.gd: slot to item id).
+# Each armor slot's piece of his class's kit is shown or taken off (the kit
+# is partly meshes of its own, partly painted on the body, which shows his
+# skin where nothing is worn), an item of another make in its own colour;
+# and his weapons are taken in hand.
+func wear(equipment: Dictionary) -> void:
+	if hero_class.is_empty(): return
+	worn = equipment.duplicate()
+	var pieces: Dictionary = Art.PIECES[hero_class]
+	var bare = Vector4.ZERO
+	var redone = Vector4.ZERO
+	var tints: Dictionary = {}
+	# (His class's own kit, whole, is drawn as it always was.)
+	var plain = true
+	var dressed = true
+	for slot in Items.ARMOR_SLOTS:
+		var item: Dictionary = Items.get_item(equipment.get(slot,""))
+		var on: bool = not item.is_empty() and item.get("weight","") == Items.ARMOR_OF[hero_class]
+		var tint = item.get("look",{}).get("tint") if on else null
+		if not on or tint != null: plain = false
+		if not on: dressed = false
+		var part: int = Art.BODY_SLOTS.find(slot)
+		if part >= 0:
+			if not on: bare[part] = 1.0
+			if tint != null:
+				redone[part] = 1.0
+				tints[slot] = tint
+		for mesh_name in pieces[slot]:
+			var mesh: MeshInstance3D = parts.get(mesh_name)
+			if mesh == null: continue
+			mesh.visible = on
+			if not on: continue
+			var finish: Material = mesh.material_override
+			if finish is ShaderMaterial and finish.shader.resource_path.ends_with("cloak.gdshader"):
+				finish.set_shader_parameter("cloth_color",tint if tint != null else (Color(.1,.19,.1) if hero_class == "ranger" else Color(.13,.16,.27)))
+			elif finish is ShaderMaterial and (finish.shader.resource_path.ends_with("gladiator_helm.gdshader") or finish.shader.resource_path.ends_with("kilt.gdshader")):
+				finish.set_shader_parameter("tint",tint if tint != null else Color.WHITE)
+				finish.set_shader_parameter("recolor",1.0 if tint != null else 0.0)
+			elif not ("Sash" in mesh_name or "Pouch" in mesh_name or "Brooch" in mesh_name):
+				mesh.material_override = Art.hero_kit(hero_class) if tint == null else Art.kit_shell(hero_class,tint)
+	# Bareheaded, his hair shows.
+	if parts.has("Hair_SimpleParted"): parts["Hair_SimpleParted"].visible = bare_headed()
+	# The ranger's and the wizard's own bodies are cut away under their cloak,
+	# robe and boots: with any of the kit off, the whole body is worn instead.
+	var cut: MeshInstance3D = parts.get({"ranger":"RangerBody","wizard":"WizardBody"}.get(hero_class,""))
+	var whole: MeshInstance3D = parts.get("SuperHero_Male")
+	if cut != null: cut.visible = dressed
+	if whole != null: whole.visible = cut == null or not dressed
+	if not plain and body_material == null: body_material = Art.hero_body(hero_class)
+	if body_material != null:
+		body_material.set_shader_parameter("bare",bare)
+		body_material.set_shader_parameter("recolor",redone)
+		for slot in Art.BODY_SLOTS: body_material.set_shader_parameter("tint_"+slot,tints.get(slot,Color.WHITE))
+	for body in [cut,whole]:
+		if body != null and not is_stone: body.material_override = Art.hero_kit(hero_class) if plain else body_material
+	held = Items.get_item(equipment.get("main","")).get("look",{})
+	off_held = Items.get_item(equipment.get("off",""))
+	var swung: String = Items.family(Items.get_item(equipment.get("main","")))
+	arm({"one":"sword","fist":""}.get(swung,swung),swung)
+	if shadowed: set_shadowed(true)
+	# (Sitting by his fire, his arms are laid by.)
+	if resting:
+		for item in [weapon_item,shield_item,off_item]:
+			if is_instance_valid(item): item.visible = false
+
+func bare_headed() -> bool:
+	return not hero_class.is_empty() and not worn.is_empty() and Items.get_item(worn.get("head","")).get("weight","") != Items.ARMOR_OF[hero_class]
+
+# The plain weapon of a kind in hand (a statue's, a bandit's; a hero's sword
+# with his round shield).
+func equip(weapon: String) -> void:
+	held = {}
+	off_held = Items.get_item("lion_shield") if weapon == "sword" and not is_stone and not bandit else {}
+	arm(weapon,{"sword":"one","dagger":"dagger","bow":"bow","staff":"staff"}.get(weapon,""))
+
+# A two-handed weapon is carried through the run and the walk as its stance
+# holds it: each family's own run and walk are the plain ones with both arms
+# held as in its stance clip, so the hands keep their places on the haft.
+const CARRIES = {"Heavy":"HeavyIdle","Pike":"PikeIdle"}
+func derive_carries() -> void:
+	if hero_class.is_empty(): return
+	for prefix in CARRIES:
+		if not clips.has(CARRIES[prefix]): continue
+		var stance: Animation = animator.get_animation(clips[CARRIES[prefix]])
+		var library_name: String = clips[CARRIES[prefix]].get_slice("/",0) if "/" in clips[CARRIES[prefix]] else ""
+		var library: AnimationLibrary = animator.get_animation_library(library_name)
+		for gait in ["Run","Walk"]:
+			if not clips.has(gait): continue
+			var made_name: String = prefix+gait
+			if not library.has_animation(made_name):
+				var made: Animation = animator.get_animation(clips[gait]).duplicate(true)
+				for track in made.get_track_count():
+					if made.track_get_type(track) != Animation.TYPE_ROTATION_3D: continue
+					var bone: String = String(made.track_get_path(track)).get_slice(":",1)
+					if not (bone.begins_with("clavicle") or bone.begins_with("upperarm") or bone.begins_with("lowerarm") or bone.begins_with("hand")): continue
+					var source = stance.find_track(made.track_get_path(track),Animation.TYPE_ROTATION_3D)
+					if source < 0: continue
+					var kept: Quaternion = stance.rotation_track_interpolate(source,0.0)
+					for key in made.track_get_key_count(track): made.track_set_key_value(track,key,kept)
+				made.loop_mode = Animation.LOOP_LINEAR
+				library.add_animation(made_name,made)
+			clips[made_name] = (library_name+"/" if library_name != "" else "")+made_name
+
+# A blow of the left hand is a right-hand clip seen in a mirror: for a weapon
+# in each hand (the off hand's cut, stab and slash), and bare fists.
+const MIRRORED = {"OffCut":"SwordOpen","OffStab":"DaggerStab","OffSlash":"DaggerSlash"}
+func derive_mirrors() -> void:
+	if hero_class.is_empty(): return
+	for made_name in MIRRORED:
+		var source_name: String = MIRRORED[made_name]
+		if not clips.has(source_name): continue
+		var library_name: String = clips[source_name].get_slice("/",0) if "/" in clips[source_name] else ""
+		var library: AnimationLibrary = animator.get_animation_library(library_name)
+		if not library.has_animation(made_name): library.add_animation(made_name,mirrored(animator.get_animation(clips[source_name])))
+		clips[made_name] = (library_name+"/" if library_name != "" else "")+made_name
+
+# With a weapon in each hand, the left arm is carried as the right is (the
+# sword's stance, run and walk hold it in a shield's guard): each is that
+# clip with the left arm's part taken from its mirror.
+const DUALS = {"DualIdle":"SwordIdle","DualRun":"SwordRun","DualWalk":"SwordWalk"}
+func derive_duals() -> void:
+	if hero_class.is_empty(): return
+	for made_name in DUALS:
+		var source_name: String = DUALS[made_name]
+		if not clips.has(source_name): continue
+		var library_name: String = clips[source_name].get_slice("/",0) if "/" in clips[source_name] else ""
+		var library: AnimationLibrary = animator.get_animation_library(library_name)
+		if not library.has_animation(made_name):
+			var source: Animation = animator.get_animation(clips[source_name])
+			var other: Animation = mirrored(source)
+			var made: Animation = source.duplicate(true)
+			for track in made.get_track_count():
+				var bone: String = String(made.track_get_path(track)).get_slice(":",1)
+				if not bone.ends_with("_l") or bone.begins_with("thigh") or bone.begins_with("calf") or bone.begins_with("foot") or bone.begins_with("ball"): continue
+				var from = other.find_track(made.track_get_path(track),made.track_get_type(track))
+				if from < 0 or not made.track_get_type(track) in [Animation.TYPE_ROTATION_3D,Animation.TYPE_POSITION_3D]: continue
+				for key in range(made.track_get_key_count(track)-1,-1,-1): made.track_remove_key(track,key)
+				for key in other.track_get_key_count(from):
+					if made.track_get_type(track) == Animation.TYPE_ROTATION_3D: made.rotation_track_insert_key(track,other.track_get_key_time(from,key),other.track_get_key_value(from,key))
+					else: made.position_track_insert_key(track,other.track_get_key_time(from,key),other.track_get_key_value(from,key))
+			made.loop_mode = Animation.LOOP_LINEAR
+			library.add_animation(made_name,made)
+		clips[made_name] = (library_name+"/" if library_name != "" else "")+made_name
+
+# What the left hand's own frame is against the right's reflected: a thing
+# held in the left hand as its like is in the right is placed through it.
+func left_of(held_right: Transform3D) -> Transform3D:
+	var flip = Basis.from_scale(Vector3(-1,1,1))
+	var right = skeleton.find_bone("hand_r")
+	var left = skeleton.find_bone("hand_l")
+	var fix: Basis = (flip*skeleton.get_bone_global_rest(right).basis.orthonormalized()*flip).inverse()*skeleton.get_bone_global_rest(left).basis.orthonormalized()
+	return Transform3D(fix.inverse()*(flip*held_right.basis*flip),fix.inverse()*(flip*held_right.origin))
+
+# The bone across the body from `bone` (its own, for one down the middle).
+func across(bone: int) -> int:
+	var bone_name: String = skeleton.get_bone_name(bone)
+	var other = -1
+	if bone_name.ends_with("_l"): other = skeleton.find_bone(bone_name.trim_suffix("_l")+"_r")
+	elif bone_name.ends_with("_r"): other = skeleton.find_bone(bone_name.trim_suffix("_r")+"_l")
+	return other if other >= 0 else bone
+
+# `clip` as a mirror shows it, left for right. Each bone takes the pose of
+# the one across the body, reflected through the body's middle plane; how
+# each bone's own axes lie against its opposite's is taken from the rest
+# pose, so nothing is assumed of how the rig was built.
+func mirrored(clip: Animation) -> Animation:
+	var made: Animation = clip.duplicate(true)
+	var flip = Basis.from_scale(Vector3(-1,1,1))
+	# For each bone: what turns its opposite's reflected frame into its own.
+	var fix: Dictionary = {}
+	for bone in skeleton.get_bone_count():
+		var twin: int = across(bone)
+		fix[bone] = (flip*skeleton.get_bone_global_rest(twin).basis.orthonormalized()*flip).inverse()*skeleton.get_bone_global_rest(bone).basis.orthonormalized()
+	for track in clip.get_track_count():
+		var path = String(clip.track_get_path(track))
+		var bone: int = skeleton.find_bone(path.get_slice(":",1))
+		if bone < 0: continue
+		var twin: int = across(bone)
+		var parent: int = skeleton.get_bone_parent(bone)
+		var before: Basis = fix[parent].inverse() if parent >= 0 else Basis.IDENTITY
+		# This track's keys are the twin's pose: written to the bone's own track.
+		var target = made.find_track(NodePath("%s:%s" % [path.get_slice(":",0),skeleton.get_bone_name(twin)]),clip.track_get_type(track))
+		if target < 0: continue
+		var twin_parent: int = skeleton.get_bone_parent(twin)
+		var twin_before: Basis = fix[twin_parent].inverse() if twin_parent >= 0 else Basis.IDENTITY
+		var kind: int = clip.track_get_type(track)
+		if not kind in [Animation.TYPE_ROTATION_3D,Animation.TYPE_POSITION_3D]: continue
+		# (The two tracks need not be keyed at the same times.)
+		for key in range(made.track_get_key_count(target)-1,-1,-1): made.track_remove_key(target,key)
+		for key in clip.track_get_key_count(track):
+			var value = clip.track_get_key_value(track,key)
+			var time: float = clip.track_get_key_time(track,key)
+			if kind == Animation.TYPE_ROTATION_3D:
+				var turned: Basis = twin_before*(flip*Basis(value)*flip)*fix[twin]
+				made.rotation_track_insert_key(target,time,turned.orthonormalized().get_rotation_quaternion())
+			else: made.position_track_insert_key(target,time,twin_before*(flip*value))
+	return made
+
 # The ranger's quiver, on his back while he carries the bow.
 var quivers: Array = []
-func equip(weapon: String) -> void:
+# Takes `weapon` in hand: for a statue or a bandit its kind ("sword",
+# "spear", "bow", "axe", "staff"); for a hero how his weapon is held ("sword":
+# any one-handed sword, mace or axe; "heavy": a two-handed one; "pike": the
+# spear in both hands; "bow", "staff", "dagger"; "": bare hands), the weapon
+# itself being `held`, with `off_held` in the other hand. `swung` is its
+# family (Items.family), for a hero.
+func arm(weapon: String, swung: String = "") -> void:
+	family = swung
 	for quiver in quivers:
 		if is_instance_valid(quiver): quiver.visible = weapon == "bow"
 	carry_in_hand = null
 	if is_instance_valid(shield_attachment): shield_attachment.queue_free()
 	shield_item = null
+	if is_instance_valid(off_attachment): off_attachment.queue_free()
+	off_item = null
 	bow_strings.clear()
 	if is_instance_valid(nocked_arrow): nocked_arrow.queue_free()
 	nocked_arrow = null
@@ -448,78 +690,95 @@ func equip(weapon: String) -> void:
 	blade_charge = null
 	if is_instance_valid(blade_glow): blade_glow.queue_free()
 	blade_glow = null
+	if two_hands != null: two_hands.weight = 0.0
 	# The hero's hard cuts leave a wake behind the blade, and Thunder Slam
 	# charges it.
-	if weapon in ["sword","dagger"] and not is_stone:
+	if weapon in ["sword","dagger","heavy","pike"] and not is_stone:
 		sword_trail = SwordTrail.new()
 		add_child(sword_trail)
 		# (Carried on the blade once there is one.)
 		blade_charge = BladeCharge.new()
-		# War Cry's red glow on the sword.
-		if weapon == "sword": blade_glow = BladeGlow.new()
+		# War Cry's red glow on the weapon.
+		if weapon != "dagger": blade_glow = BladeGlow.new()
 	if is_instance_valid(equipment):
 		equipment.queue_free()
 		equipment = null
-	if weapon.is_empty(): return
-	var hand = BoneAttachment3D.new()
-	hand.bone_name = "hand_l" if weapon == "bow" else "hand_r"
-	skeleton.add_child(hand)
-	equipment = hand
-	var sizes = {"sword":Vector3(.19,1.3,.09),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22),"dagger":Vector3(.09,.5,.045)}
-	weapon_size = sizes[weapon]
-	var weapon_finish = Art.statue_material() if is_stone else (Art.sword_material() if weapon=="sword" else (Art.dagger_material() if weapon=="dagger" else (Art.bow_wood() if weapon=="bow" else null)))
-	# The Oracle carries a slender staff crowned with a diamond (tools/prepare_staff.py).
-	var oracle = weapon=="staff" and enemy_kind=="wizard"
-	if oracle: weapon_size = ORACLE_STAFF_SIZE
-	# The hero wizard's staff is the same slender staff, in twisted silver
-	# with a crystal (after his concept art).
-	var silver_staff = weapon=="staff" and not is_stone
-	if silver_staff:
-		weapon_size = ORACLE_STAFF_SIZE
-		weapon_finish = Art.wizard_staff()
-	# The Crowned Statue wields a great sword.
-	if weapon=="sword" and enemy_kind=="boss": weapon_size *= BOSS_SWORD_SCALE
-	# A bandit's sword is a sica, curved and shorter.
-	var sica = bandit and weapon=="sword"
-	if sica:
-		weapon_size = SICA_SIZE
-		weapon_finish = Art.sica_material()
-	var item = Art.model("oracle_staff" if oracle or silver_staff else ("sica" if sica else weapon), weapon_size,weapon_finish)
-	weapon_item = item
-	hand.add_child(item)
-	# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
-	item.rotation.x = PI / 2
-	# The grip sits a fixed share up each hilt; the larger sword's hilt is longer.
-	item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22,"dagger":-.10}.get(weapon,-.17)*(SICA_SIZE.y/sizes.sword.y if sica else 1.0))
-	weapon_rest = item.transform
-	if oracle or silver_staff:
-		item.top_level = true
-		if oracle: oracle_staff_flame()
-	if weapon in ["spear","bow"]:
-		item.top_level = true
-		if weapon == "bow":
-			for mesh in item.find_children("*","MeshInstance3D",true,false):
-				for i in mesh.mesh.get_blend_shape_count():
-					if mesh.mesh.get_blend_shape_name(i)=="Draw": bow_strings.append({"mesh":mesh,"index":i})
-			nocked_arrow = Art.model("arrow",Art.ARROW_SIZE,Art.statue_material() if is_stone else null)
-			add_child(nocked_arrow)
-			nocked_arrow.top_level = true
-			nocked_arrow.visible = false
-		align_weapon()
-	# The hero's sword comes with a shield; among statues only shield bearers carry one.
-	if (weapon=="sword" and not is_stone and not bandit) or enemy_kind in SHIELD_BEARERS:
+	var shielded: bool = enemy_kind in SHIELD_BEARERS or off_held.get("slot","") == "shield"
+	if not weapon.is_empty():
+		var hand = BoneAttachment3D.new()
+		hand.bone_name = "hand_l" if weapon == "bow" else "hand_r"
+		skeleton.add_child(hand)
+		equipment = hand
+		var sizes = {"sword":Vector3(.19,1.3,.09),"spear":Vector3(.14,2.3,.09),"axe":Vector3(.55,1.25,.12),"bow":Vector3(.25,1.3,.10),"staff":Vector3(.32,1.9,.22),"dagger":Vector3(.09,.5,.045),"heavy":Vector3(.55,1.25,.12),"pike":Vector3(.14,2.3,.09)}
+		weapon_size = sizes[weapon]
+		var weapon_finish = Art.statue_material() if is_stone else (Art.sword_material() if weapon=="sword" else (Art.dagger_material() if weapon=="dagger" else (Art.bow_wood() if weapon=="bow" else null)))
+		# The Oracle carries a slender staff crowned with a diamond (tools/prepare_staff.py).
+		var oracle = weapon=="staff" and enemy_kind=="wizard"
+		if oracle: weapon_size = ORACLE_STAFF_SIZE
+		# The hero wizard's staff is the same slender staff, in twisted silver
+		# with a crystal (after his concept art).
+		var silver_staff = weapon=="staff" and not is_stone
+		if silver_staff:
+			weapon_size = ORACLE_STAFF_SIZE
+			weapon_finish = Art.wizard_staff()
+		# The Crowned Statue wields a great sword.
+		if weapon=="sword" and enemy_kind=="boss": weapon_size *= BOSS_SWORD_SCALE
+		# A bandit's sword is a sica, curved and shorter.
+		var sica = bandit and weapon=="sword"
+		if sica:
+			weapon_size = SICA_SIZE
+			weapon_finish = Art.sica_material()
+		var item: Node3D
+		edge = [.42,1.02]
+		if not held.is_empty():
+			# A hero's own weapon, as the item is made.
+			weapon_size = held.size
+			item = Art.held_model(held)
+			# (As shares of the model's own height: the hasta's is in metres.)
+			var tall: float = Items.length(held)/held.size.y
+			if held.has("edge"): edge = [held.edge[0]*tall,held.edge[1]*tall]
+			elif tall != 1.0: edge = [.42*tall,1.02*tall]
+		else: item = Art.model("oracle_staff" if oracle or silver_staff else ("sica" if sica else {"heavy":"axe","pike":"spear"}.get(weapon,weapon)), weapon_size,weapon_finish)
+		weapon_item = item
+		hand.add_child(item)
+		# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
+		item.rotation.x = PI / 2
+		# The grip sits a fixed share up each hilt; the larger sword's hilt is longer.
+		item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22,"dagger":-.10,"heavy":-.40,"pike":-.70}.get(weapon,-.17)*(SICA_SIZE.y/sizes.sword.y if sica else 1.0))
+		if not held.is_empty(): item.position.z = -held.grip
+		weapon_rest = item.transform
+		if oracle or silver_staff:
+			item.top_level = true
+			if oracle: oracle_staff_flame()
+		if weapon in ["spear","bow"]:
+			item.top_level = true
+			if weapon == "bow":
+				for mesh in item.find_children("*","MeshInstance3D",true,false):
+					for i in mesh.mesh.get_blend_shape_count():
+						if mesh.mesh.get_blend_shape_name(i)=="Draw": bow_strings.append({"mesh":mesh,"index":i})
+				nocked_arrow = Art.model("arrow",Art.ARROW_SIZE,Art.statue_material() if is_stone else null)
+				add_child(nocked_arrow)
+				nocked_arrow.top_level = true
+				nocked_arrow.visible = false
+			align_weapon()
+	# A hero's shield is the item in his off hand; among statues only shield bearers carry one.
+	if shielded:
 		var scutum = enemy_kind in SHIELD_BEARERS
 		var tower = enemy_kind=="centurion"
 		shield_attachment = BoneAttachment3D.new()
 		shield_attachment.bone_name = "lowerarm_l"
 		skeleton.add_child(shield_attachment)
-		var finish = Art.statue_material() if is_stone else (Art.metal() if scutum else Art.gladiator_shield())
-		var shield = Art.model("scutum" if scutum else "shield",TOWER_SIZE if tower else (SCUTUM_SIZE if scutum else SHIELD_SIZE),finish)
+		var shield: Node3D
+		var board: Vector3 = TOWER_SIZE if tower else (SCUTUM_SIZE if scutum else SHIELD_SIZE)
+		if scutum: shield = Art.model("scutum",board,Art.statue_material() if is_stone else Art.metal())
+		else:
+			board = off_held.look.size
+			shield = Art.weapon_model(off_held.look)
 		shield_item = shield
 		shield_attachment.add_child(shield)
 		# The imported shield pivots at its bottom edge. Center its back against
 		# the outer forearm, keeping the wrist inside its face rather than at a rim.
-		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(TOWER_SIZE if tower else SCUTUM_SIZE)
+		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(board)
 		else: shield.rotation.y = PI
 		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5+(TOWER_DROP if tower else 0.0),0)
 		shield_rest = shield.position
@@ -527,19 +786,33 @@ func equip(weapon: String) -> void:
 		# A scutum is laid along the forearm every frame (strap_scutum), in
 		# the world's own space.
 		strapped = scutum
-		strap_size = TOWER_SIZE if tower else SCUTUM_SIZE
+		strap_size = board
 		# Crossed by the forearm a little above its middle, so its top
 		# stays below the chin.
 		strap_hold = .6+(TOWER_DROP if tower else 0.0)
 		shield.top_level = scutum
+	elif off_held.get("slot","") == "weapon":
+		# A second weapon, held in the left hand as the first is in the right.
+		off_attachment = BoneAttachment3D.new()
+		off_attachment.bone_name = "hand_l"
+		skeleton.add_child(off_attachment)
+		off_item = Art.held_model(off_held.look)
+		off_attachment.add_child(off_item)
+		off_item.transform = left_of(Transform3D(Basis(Vector3.RIGHT,PI/2),Vector3(0,.075,-off_held.look.grip)))*Transform3D(Basis.from_scale(off_held.look.size),Vector3.ZERO)
+	# Both hands on a two-handed weapon's haft.
+	if weapon in ["heavy","pike"] and not is_stone:
+		# (The left hand a fixed way along the haft from the right: below it
+		# on a sword's or an axe's, ahead of it on the spear's.)
+		two_hands.along = -.2 if weapon == "heavy" else .55
+		two_hands.weight = 1.0 if clips.has(CARRIES[weapon.capitalize()]) else 0.0
 	# The weapon hand (the bow hand for an archer) and a shield hand stay
 	# closed on their grips.
 	if grip != null:
 		grip.hands = []
-		if weapon in ["sword","axe","spear","staff","dagger"]: grip.hands.append("r")
-		if weapon == "bow" or is_instance_valid(shield_item): grip.hands.append("l")
+		if weapon in ["sword","axe","spear","staff","dagger","heavy","pike"]: grip.hands.append("r")
+		if weapon in ["bow","heavy","pike"] or is_instance_valid(shield_item) or is_instance_valid(off_item): grip.hands.append("l")
 	if shadowed: set_shadowed(true)
-	if state in ["Idle","SwordIdle","ScutumSwordIdle","SpearShieldIdle","BowIdle","SpearIdle","RangerIdle","SneakIdle"]: play(idle_action())
+	if state in ["Idle","DualIdle","SwordIdle","ScutumSwordIdle","SpearShieldIdle","BowIdle","SpearIdle","RangerIdle","SneakIdle","WizardIdle","HeavyIdle","PikeIdle"]: play(idle_action())
 
 # Clips in which an archer holds the bow out in the left hand, ready or
 # shooting. Otherwise the ranger carries it at his side in the same left hand,
@@ -574,7 +847,7 @@ const REST_BEND = 1.43
 func rest(on: bool) -> void:
 	if on and not clips.has("Rest"): make_rest_clip()
 	resting = on and clips.has("Rest")
-	for item in [weapon_item,shield_item]:
+	for item in [weapon_item,shield_item,off_item]:
 		if is_instance_valid(item): item.visible = not resting
 	play(idle_action())
 
@@ -624,7 +897,8 @@ func idle_action() -> String:
 	if sneaking and clips.has("SneakIdle"): return "SneakIdle"
 	if ranger_carry(): return "RangerIdle"
 	if not is_stone and weapon_kind == "staff": return "WizardIdle" if clips.has("WizardIdle") else "Idle"
-	var wanted = {"bow":"BowIdle","spear":"SpearIdle","sword":"SwordIdle"}.get(weapon_kind,"Idle")
+	var wanted = {"bow":"BowIdle","spear":"SpearIdle","sword":"SwordIdle","heavy":"HeavyIdle","pike":"PikeIdle"}.get(weapon_kind,"Idle")
+	if weapon_kind == "sword" and is_instance_valid(off_item) and clips.has("DualIdle"): wanted = "DualIdle"
 	if enemy_kind in SHIELD_BEARERS: wanted = "ScutumSwordIdle" if weapon_kind=="sword" else "SpearShieldIdle"
 	return wanted if clips.has(wanted) else "Idle"
 
@@ -731,7 +1005,7 @@ func align_walking_staff() -> void:
 	var up = (Vector3.UP+facing.z*.12).normalized()
 	var side = facing.x.cross(up).normalized()
 	var across = up.cross(side).normalized()
-	var size = Vector3(ORACLE_STAFF_SIZE.x,WIZARD_STAFF_LENGTH,ORACLE_STAFF_SIZE.z)*rig.scale.x
+	var size = Vector3(weapon_size.x,weapon_size.y*WIZARD_STAFF_LENGTH/ORACLE_STAFF_SIZE.y,weapon_size.z)*rig.scale.x
 	weapon_item.global_basis = Basis(across,up,side)*Basis.from_scale(size)
 	weapon_item.global_position = hand-up*size.y*WIZARD_GRIP
 
@@ -1451,7 +1725,10 @@ static func slam_charge(u: float) -> float:
 static var skill_contacts: Dictionary = {}
 static func skill_contact(clip: String) -> float:
 	if skill_contacts.is_empty():
-		for swing in preload("res://scripts/skills.gd").WARRIOR_CLIPS.values(): skill_contacts[swing[0]] = swing[2]
+		# (Each skill's swing lands at the same moment with every weapon.)
+		for swing in preload("res://scripts/skills.gd").WARRIOR_CLIPS.values():
+			for prefix in ["Skill","Heavy","Pike"]: skill_contacts[prefix+swing[0].trim_prefix("Skill")] = swing[2]
+		for swing in ["HeavySwing1","HeavySwing2"]: skill_contacts[swing] = Motion.FAMILIES.heavy.contacts[0]
 	return skill_contacts.get(clip,-1.0)
 
 # The sword chain (Motion.SWORD_CHAIN): whether one of its swings is still
@@ -1814,7 +2091,7 @@ func advance(dt: float) -> void:
 			var through = animator.current_animation_position/maxf(.001,animator.current_animation_length)
 			for span in Motion.DAGGER_WAKES[state]: cutting = cutting or (through >= span[0] and through <= span[1])
 		var blade: Transform3D = weapon_item.global_transform
-		var tip: Vector3 = global_transform.affine_inverse()*(blade*Vector3(0,1.02,0))
+		var tip: Vector3 = global_transform.affine_inverse()*(blade*Vector3(0,edge[1],0))
 		# A skill's swing: where its own clip is playing, how far through.
 		var contact = skill_contact(state)
 		var u = -1.0
@@ -1825,17 +2102,17 @@ func advance(dt: float) -> void:
 			var wake: Array = SKILL_WAKES.get(state,SKILL_WAKE)
 			cutting = not dead and speed > SKILL_WAKE_SPEED and u >= contact-wake[0] and u <= contact+wake[1]
 		blade_tip_was = tip
-		sword_trail.step(dt,cutting,blade*Vector3(0,.42,0),blade*Vector3(0,1.02,0))
+		sword_trail.step(dt,cutting,blade*Vector3(0,edge[0],0),blade*Vector3(0,edge[1],0))
 		if is_instance_valid(blade_charge):
-			if blade_charge.get_parent() != weapon_item: blade_charge.attach(weapon_item,.42,1.02)
-			slam_u = u if state == "SkillSlam" and not dead else -1.0
+			if blade_charge.get_parent() != weapon_item: blade_charge.attach(weapon_item,edge[0],edge[1])
+			slam_u = u if state.ends_with("Slam") and not dead else -1.0
 			if slam_u < 0.0: slam_struck = false
 			blade_charge.step(dt,slam_charge(slam_u))
 			slam_strike_check()
 		if is_instance_valid(blade_glow):
-			if blade_glow.get_parent() != weapon_item: blade_glow.attach(weapon_item,.42,1.02)
+			if blade_glow.get_parent() != weapon_item: blade_glow.attach(weapon_item,edge[0],edge[1])
 			tint_left = maxf(0.0,tint_left-dt)
-			var cry: float = cry_glow(u if state == "SkillCry" and not dead else -1.0,skill_contact("SkillCry"))
+			var cry: float = cry_glow(u if state.ends_with("Cry") and not dead else -1.0,skill_contact("SkillCry"))
 			var tinted: float = 0.0 if dead or tint_span <= 0.0 else swing_glow(1.0-tint_left/tint_span)
 			blade_glow.tint(BladeGlow.GLOW if cry >= tinted else blade_tint)
 			blade_glow.step(maxf(cry,tinted))
@@ -1890,7 +2167,9 @@ func run_action() -> String:
 	if weapon_kind == "staff" and not is_stone: return "WizardRun"
 	if weapon_kind == "bow": return "BowRun"
 	if enemy_kind in SHIELD_BEARERS and clips.has("ScutumRun"): return "ScutumRun"
+	if weapon_kind == "sword" and is_instance_valid(off_item) and clips.has("DualRun"): return "DualRun"
 	if weapon_kind == "sword" and clips.has("SwordRun"): return "SwordRun"
+	if weapon_kind in ["heavy","pike"] and clips.has(weapon_kind.capitalize()+"Run"): return weapon_kind.capitalize()+"Run"
 	return "Run"
 
 # Running at `travel_speed` metres a second whatever else is under way (the
@@ -1915,7 +2194,8 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 		wanted = "Walk"
 		if ranger_carry(): wanted = "RangerWalk"
 		elif weapon_kind == "staff" and not is_stone: wanted = "WizardWalk"
-		elif weapon_kind == "sword": wanted = "SwordWalk"
+		elif weapon_kind == "sword": wanted = "DualWalk" if is_instance_valid(off_item) and clips.has("DualWalk") else "SwordWalk"
+		elif weapon_kind in ["heavy","pike"]: wanted = weapon_kind.capitalize()+"Walk"
 		if not clips.has(wanted): wanted = "Walk"
 	elif moving and ranger_carry(): wanted = "RangerCrouch" if crouch else "RangerRun"
 	elif moving and weapon_kind=="staff" and not is_stone: wanted = "WizardCrouch" if crouch else "WizardRun"
@@ -1923,7 +2203,9 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 	# Carry the sword low while running so the blade never swings through the head.
 	# Shield bearers keep the tall shield held upright while they run.
 	elif moving and not crouch and enemy_kind in SHIELD_BEARERS and clips.has("ScutumRun"): wanted = "ScutumRun"
+	elif moving and not crouch and weapon_kind=="sword" and is_instance_valid(off_item) and clips.has("DualRun"): wanted = "DualRun"
 	elif moving and not crouch and weapon_kind=="sword" and clips.has("SwordRun"): wanted = "SwordRun"
+	elif moving and not crouch and weapon_kind in ["heavy","pike"] and clips.has(weapon_kind.capitalize()+"Run"): wanted = weapon_kind.capitalize()+"Run"
 	var rate = clampf(speed_scale, .1, 4.0)
 	# (A negative speed walks backward: the stride plays in reverse.)
 	if moving and travel_speed != 0.0 and STRIDE_SPEED.has(wanted):

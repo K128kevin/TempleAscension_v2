@@ -531,6 +531,41 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   own meshes are untouched.
   `scripts/skills.gd` picks each skill's
   clip, duration and contact point (`WARRIOR_CLIPS`).
+- A two-handed sword, axe or maul has its own clips (HeavyIdle, HeavySwing1,
+  HeavySwing2, HeavyCleave, HeavyStrike, HeavyExecute, HeavySlam, HeavyShockwave,
+  HeavyCry, HeavyLeap), authored by `tools/import_heavy.py`, and the spear in both
+  hands its own (PikeIdle, PikeThrust1, PikeThrust2 and the same seven skills as
+  `Pike...`), by `tools/import_pike.py`: keyed frame by frame as the sword's skill
+  swings are, each from its own stance and back to it, each skill's blow landing at
+  the same moment of its clip as the sword's (`scripts/skills.gd` WARRIOR_CLIPS).
+  The weapon is carried by the right hand; the left holds the haft 0.2 m below it
+  (0.55 m ahead of it on the spear), and `scripts/two_hand_grip.gd` keeps it there
+  as one clip fades into another. Each script reads the model from `HERO_GLB` (by
+  default the game's own) and can author a few clips alone (`HEAVY_ONLY`,
+  `PIKE_ONLY`). Run `import_pike.py` last: it re-seats every other clip's strip so
+  none is exported a frame late.
+  Their run and walk are made when the figure is set up (`Visual.derive_carries`):
+  the plain run and walk with both arms held as the stance holds them. So are a
+  left hand's blows, for a weapon in each hand (`Visual.derive_mirrors`: OffCut,
+  OffStab and OffSlash are SwordOpen, DaggerStab and DaggerSlash mirrored left for
+  right through the body's middle plane, from the rest pose alone), and the stance,
+  run and walk with a second weapon (`Visual.derive_duals`: the sword's, with the
+  left arm carried as the right is rather than in a shield's guard).
+  `tools/preview_clip.gd` renders any clip as a sheet of poses, seen from the side
+  and the front, with a weapon in hand as the game holds it.
+- The flanged mace (`assets/models/props/mace.glb`) is built by `tools/make_mace.py`:
+  a haft, pommel, grip and collars turned on a lathe, and seven flanges cut as flat
+  blades; nothing imported. The other items' models are ones the game already had
+  (the adventurers pack's two-handed sword and one-handed axe, the battle axe, the
+  guards' hasta, the bandits' sica, the Oracle's staff and the mage's), each with
+  one of the game's own finishes (`Art.finish`).
+- Items are pictured for the inventory by `tools/render_item_icons.gd`
+  (`assets/ui/items/<id>.png`), each from the same model that lies on the ground
+  when it drops (`Art.item_model`): a weapon's or shield's own, or for armor the
+  pieces of its class's kit (and, where a piece is only painted on the body, that
+  part of the body's surface: `assets/shaders/hero_body.gdshader`, which also
+  draws the hero's skin wherever he wears nothing). `tools/preview_gear.gd`
+  renders a hero in any equipment, front and back.
 - The hero's walk (the R key) is the animation library's `Walk_Loop`, retargeted as
   the clip `Walk` by `tools/import_walk.py`. The walks that carry a weapon
   (SwordWalk, RangerWalk, WizardWalk) are made from it when the figure is set up
@@ -549,6 +584,8 @@ animation licenses sit beside it. Rebuild with Blender:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_walk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_skills.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_ranger.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_heavy.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_pike.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_bandits.py

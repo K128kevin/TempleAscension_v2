@@ -26,7 +26,9 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | R | Toggle between running and walking (a slower pace) |
 | Q | Healing spell: instantly restore 60% maximum health for 60 energy, 20-second cooldown |
 | 1 – 4 | Cast the other four assigned active skills |
-| C / K / I | Attribute panel (left) / skill tree panel (right) / equipment |
+| C / K / I | The character window, on the right: its attributes, skills and inventory tabs |
+| Left click an item's name | Pick the item up off the ground (walking to it first if it is not at hand) |
+| X | The other weapon: a ranger's bow for his blade and back; anyone's weapon for the first in the bag he can use |
 | Mouse wheel, trackpad scroll or pinch | Zoom (in close enough to look at the models) |
 | E | Ascend, claim the crown, or rest at a safe entrance |
 | Walk through the temple's door | Enter the temple's first floor from the desert, or leave it again |
@@ -50,11 +52,22 @@ Floor, remaining statues and difficulty
 appear at top right. Unassigned, incompatible, and recharging skills are disabled
 with an explanation.
 
-Gaining a level puts a small + button at each lower corner: the left one opens the
-attribute panel on the left side of the screen, the right one the skill tree
-panel on the right. Each stays until its points are spent. C and K open and
-close the same panels; both can be open at once, Escape closes them, and the
-game is paused while either is open (as it is in the equipment screen).
+Attributes, skills and inventory are three tabs of one character window on the
+right side of the screen. C, K and I open it at each (or turn it to that tab,
+or close it from there); its tabs can be clicked; Escape closes it; and the
+game is paused while it is open. Gaining a level puts a small + button at each
+lower corner: the left one opens the window at the attributes, the right one
+at the skills. Each stays until its points are spent.
+
+The inventory tab shows a figure of the hero as he is dressed and armed (drag
+across it to turn it), with his head, chest and legs slots to its left, his
+hands and feet to its right, and his main hand and off hand under it. Below
+are the ten places of his bag, five wide and two tall. Drag an item onto a
+slot to put it on, off a slot to take it off, between places to rearrange, or
+out of the window to drop it on the ground; a right click (or a double click)
+puts on an item in the bag or takes off one that is worn. A square lights only
+where the dragged item fits. Hovering an item shows what it is and does, and
+why the hero's class cannot use it if it cannot.
 
 The temple's dark interiors are illuminated mainly by torch stations, placed so every
 hallway and room stays readable, with
@@ -227,7 +240,8 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | G | Toggle invulnerability (persists across floors until toggled off) |
 | F9 | Kill every enemy, award ordinary kill XP, drop loot, and unlock stairs/crown |
 | F | Refill health and energy |
-| H / J | Grant battle axe / bow; equip through I |
+| H / J | Grant a battle axe / a bow, into the bag; equip through I (if the class can use it) |
+| F6 | Drop a random one of the items enemies drop (any class's) at the hero's feet |
 | Y | Reset skills: unlearn every skill, refund all skill points and empty the hotbar; attributes stay |
 | Ctrl + 1–3 | Jump directly to that floor, retaining stats and weapons |
 | N | Jump to the next floor without progression awards; on summit, defeat boss |
@@ -322,8 +336,10 @@ Every class's skills sit in three trees, shown side by side in the skill panel
 (K): Area of Effect, Single Target and Passive. Click a skill to spend a point
 on it; hovering shows what it does at its current and next rank. A learned
 active skill takes the first empty slot; right-click it, or press 1 to 4 while
-pointing at it, to put it on RMB or 1 to 4, in or out of combat. Passives work automatically. Bow skills need a bow, spells a
-staff, and Shield Bash needs sword/shield. All classes can equip every owned family.
+pointing at it, to put it on RMB or 1 to 4, in or out of combat. Passives work automatically. The warrior's attacks need a
+melee weapon in hand (a sword, mace, axe or spear), Shield Bash and Shield Charge a shield; bow skills need a bow and
+dagger skills a dagger; a wizard's spells need nothing. A ranger's skill made with a weapon that is in the bag takes
+it up (see Items); a warrior holding a bow can use none of his skills, only his normal attack, a bowshot.
 
 The warrior's skills follow the leveling and skills design document. Each has
 five ranks, limited only by skill points, and opens once 0, 5, 10 or 15 points
@@ -390,9 +406,9 @@ range, and slams from within Thunder Slam's.
 
 ### The ranger
 
-The ranger carries a bow and a dagger, and fights with either: **X** changes
-between them at any time (in combat too), and a skill made with the other takes it
-up. The bow does its damage by Dexterity, the dagger by Strength. The dagger's normal attack is quick (half a
+The ranger carries a bow and a dagger (one in hand, the other in his bag), and
+fights with either: **X** changes between them at any time (in combat too), and a
+skill made with the other takes it up. The bow does its damage by Dexterity, the dagger by Strength. The dagger's normal attack is quick (half a
 second), a stab and a slash by turns. His skills sit in three trees (Attacks,
 Utility, Passive), each skill opening once enough points are spent in its own tree,
 as the warrior's do.
@@ -446,15 +462,14 @@ dungeons (enemy levels 1, 3, 5 and 8) bring a character to about level ten, and 
 temple's three floors (levels 11, 15 and 19) to the cap of 25 before the summit.
 
 Floor travel grants no points or XP. Permanent attribute gems have been removed.
-Each class starts with only its own weapon: sword for Warrior, bow and dagger for
-Ranger, and staff for Wizard. Bow and axe drops are disabled for now; the staff drop on
-floor three remains.
+Each class starts with its own armor and weapons (see Items), and finds more on
+the enemies it kills.
 Repeated death callbacks, reloads and retrying an already-rewarded enemy cannot
 award its XP again. XP and skill investment survive death and travel.
 
 Free respec is available in the attribute panel (C) at a safe floor entrance, out of combat; it
-refunds earned attribute/skill points and clears the hotbar. Equipment can change
-out of combat; skill assignments at any time. "In combat" means an enemy is
+refunds earned attribute/skill points and clears the hotbar. Equipment and skill
+assignments can change at any time. "In combat" means an enemy is
 after the hero (awake to him and hunting him); his own attacks and skills do
 not put him in combat. Maximum resource increases do not heal;
 refunds clamp current resources. The Q healing spell has no charges; it spends 60
@@ -479,8 +494,8 @@ summary. Elapsed playtime and best-time records are neither tracked nor displaye
 Each new run generates a different temple. Retrying or continuing a save restores
 the same rooms, passages, stairs and statue positions for that run and floor.
 Death restarts the current floor while preserving class, XP, attributes, skills and weapons.
-Living enemies reset when a save is loaded; defeated enemies and loose drops
-persist. A save also records whether the hero is outside the temple or on one
+Living enemies reset when a save is loaded; defeated enemies, items lying on the
+ground, and what the hero wears and carries persist. A save also records whether the hero is outside the temple or on one
 of its floors, and where; saves from before the outdoor world (version 6 and
 earlier) continue inside the temple. Autosaves run every eight seconds and on important progression events.
 Writes use a temporary file and a backup. A damaged current save falls back to its
@@ -490,7 +505,8 @@ a level above the cap of 25 comes down to 25, and every attribute and skill poin
 refunded to spend again under the new rules. Saves from before the ranger's new
 skills (version 7) gain the dagger slot; a ranger's skill points are refunded and
 he is given his dagger. Version 1/2 saves migrate to a Warrior (or Ranger if a bow was equipped).
-Old stat/gem bonuses are
+Saves from before items (version 10) are given their class's starting equipment, with any
+other weapon they owned and can use in the bag. Old stat/gem bonuses are
 refunded into a level-based point budget; use the + buttons (or C and K) to rebuild. Legacy gem
 drops are retired. Fixed-layout saves move safely to the generated entrance.
 Saves use Godot's native user-data directory,
@@ -498,6 +514,100 @@ separate from earlier games:
 
 - macOS: `~/Library/Application Support/Godot/app_userdata/Temple Ascension 3D/`
 - Windows: `%APPDATA%/Godot/app_userdata/Temple Ascension 3D/`
+
+## Items
+
+The whole of it, with every item's numbers and its chance to drop from each
+kind of enemy for each class, is in **[docs/ITEMS.md](docs/ITEMS.md)**; all of
+it is defined in `scripts/items.gd`.
+
+A hero wears armor on his **head, chest, legs, feet and hands**, and holds
+things in his **main hand** and **off hand**: one two-handed weapon, two
+one-handed weapons, or a one-handed weapon and a shield. His bag holds ten
+more items. What he wears and holds shows on him, in the world and in the
+inventory.
+
+| Class | Armor | Weapons |
+|---|---|---|
+| Warrior | Heavy | Swords, maces, axes, spears, bows, shields |
+| Ranger | Medium | Bows, daggers, swords |
+| Wizard | Light | Staves, daggers |
+
+- **Armor** takes its percent off every blow, the pieces adding up (75% at
+  most). The starting sets, which are the kits the heroes have always worn:
+  heavy 26% (helm 5, cuirass 9, kilt 6, sandals 3, manica 3), medium 17%
+  (3, 6, 4, 2, 2), light 10% (2, 4, 2, 1, 1).
+- **A weapon's damage range** is what a normal attack hits for and the
+  baseline of every skill made with it (a 200% skill deals 200% of that
+  roll), before Strength or Dexterity. The starting sword, bow and dagger
+  are all 10–15, as attacks were before items.
+- **Wizards** are the exception: their spells and their staff's bolts have a
+  fixed baseline of 10–15 raised by Intelligence, whatever they hold. A staff
+  has no damage range; it can carry **spell damage** (the starting staff +5%).
+- **Two weapons**: each blow adds half the off hand's damage range, and the
+  hands strike by turns. **Bare hands** hit for 1–3.
+- A **spear** reaches 2.9 m and a **two-handed** sword or axe 2.3 m, against
+  1.9 m for the rest.
+- The ranger starts with his bow in hand and his dagger in his bag. **X**
+  changes between them, and a skill made with the one in the bag takes it up.
+  A warrior's skills do not: with a bow in hand he cannot use them (his
+  normal attack is a bowshot) until X puts a melee weapon back in it.
+
+### How each weapon is swung
+
+- **One-handed swords, maces and axes** are swung as the sword always was: its
+  chain of three swings, and a swing of its own for each of the warrior's
+  skills. An axe is not thrust: the one-handed axe's normal attack is the two
+  cuts only, down one way and then the other, back and forth in an X.
+- **Two-handed swords and axes** are held in both hands in their own stance,
+  run and walk. The normal attack is two heavy blows by turns (a cut down from
+  the right shoulder, then the return from the low left), and Cleave, Powerful
+  Strike, Execute, Thunder Slam, Shockwave, War Cry and Leap each have their
+  own two-handed motion (`tools/import_heavy.py`).
+- **The spear** likewise, in both hands: two thrusts by turns (level, then
+  low and rising), and its own sweep, lunge, plunge, slam, butt-strike, cry
+  and leap for the same seven skills (`tools/import_pike.py`).
+- Vampiric and Shadow Strike are struck with the weapon's own normal swing,
+  the weapon glowing. Shield Bash and Shield Charge are the shield's, whatever
+  one-handed weapon is beside it.
+- **A weapon in each hand**: the right hand's blow and the left's by turns,
+  the left's a mirror of the right's; standing and running, the left arm
+  carries its weapon as the right does.
+- **Daggers, bows and staves** keep the motions they had (any class that can
+  hold them), and bare hands jab with each fist by turns.
+
+### What drops
+
+Any enemy that grants experience can drop one item as it dies: bandits 8% of
+the time, gladiators, archers and lions 10%, Oracles and centurions 14%, and
+the Crowned Statue always (a rare one). The item is one the hero's class can
+use, common items five times as likely as rare ones (weights: common 10,
+uncommon 5, rare 2). It lies on the ground as its own model with its name over
+it; click the name to pick it up.
+
+| Item | Rarity | Kind | Used by | What it gives |
+|---|---|---|---|---|
+| Bandit's Sica | Common | Sword · One-handed | Warrior, Ranger | 12–17 damage; +5% attack speed |
+| Bronze Hatchet | Common | Axe · One-handed | Warrior | 13–19 damage; +3% critical strike chance |
+| Flanged Mace | Uncommon | Mace · One-handed | Warrior | 15–19 damage; +3 Strength |
+| Centurion's Greatsword | Uncommon | Sword · Two-handed | Warrior, Ranger | 22–32 damage; +2 Strength |
+| Executioner's Axe | Rare | Axe · Two-handed | Warrior | 25–37 damage; +5% critical strike chance |
+| Legionary's Hasta | Uncommon | Spear · Two-handed | Warrior | 18–26 damage; +2 Dexterity |
+| Hunter's Recurve | Uncommon | Bow · Two-handed | Warrior, Ranger | 13–18 damage; +4% critical strike chance |
+| Viper's Fang | Uncommon | Dagger · One-handed | Ranger, Wizard | 12–17 damage; Restores 2 health on each hit |
+| Oracle's Staff | Rare | Staff · Two-handed | Wizard | Spells take their damage from Intelligence; +20% spell damage; +3 Intelligence |
+| Ashwood Staff | Common | Staff · Two-handed | Wizard | Spells take their damage from Intelligence; +10% spell damage |
+| Bandit's Buckler | Common | Shield · Off hand | Warrior | 18% chance to block; Blocked attacks deal 30% less |
+| Bronze Aspis | Rare | Shield · Off hand | Warrior | 32% chance to block; Blocked attacks deal 28% less; +3 Vitality |
+| Bronze Arena Helm | Uncommon | Heavy armor · Head | Warrior | 8% less damage taken; +2 Vitality |
+| Bronze Scale Cuirass | Rare | Heavy armor · Chest | Warrior | 13% less damage taken; +25 maximum health |
+| Blackened Manica | Common | Heavy armor · Hands | Warrior | 5% less damage taken; +2 Strength |
+| Dusk Cloak | Uncommon | Medium armor · Head | Ranger | 5% less damage taken; +5% movement speed |
+| Stalker's Jerkin | Rare | Medium armor · Chest | Ranger | 9% less damage taken; +3 Dexterity |
+| Swiftfoot Boots | Common | Medium armor · Feet | Ranger | 3% less damage taken; +4% movement speed |
+| Crimson Hood | Uncommon | Light armor · Head | Wizard | 4% less damage taken; +2 Intelligence |
+| Ember Robe | Rare | Light armor · Chest | Wizard | 7% less damage taken; +10% spell damage |
+| Seer's Bracers | Common | Light armor · Hands | Wizard | 2% less damage taken; +3 Willpower |
 
 ## Adaptation decisions
 
@@ -583,7 +693,10 @@ matching export templates, and update the custom-template paths in
 
 The headless campaign test exercises combat, all floors, drops, XP progression,
 boss phases, ending and save recovery using isolated saves. Additional checks
-cover class creation, all 40 skills, the warrior's three trees with every listed
+cover the item system (`tests/items.gd`: the catalogue, class rules, the slots
+and the bag, weapon damage under attacks and skills, armor, drops and picking
+up, items on the hero's figure, every class's attacks with every kind of
+weapon, and the inventory), class creation, all 40 skills, the warrior's three trees with every listed
 rank in play (`tests/warrior_skills.gd`), rank limits, shared stat formulas, migration,
 XP reward deduplication, 200 generated maps, the outdoor world (`tests/overworld.gd`:
 the start, the crossing time, the sealed rim, the town's buildings on every side

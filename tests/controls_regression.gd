@@ -1,6 +1,7 @@
 extends SceneTree
 const Save = preload("res://scripts/save.gd")
 const Data = preload("res://scripts/data.gd")
+const Items = preload("res://scripts/items.gd")
 var game
 var passed: Array = []
 var failed: Array = []
@@ -134,9 +135,7 @@ func run_tests():
 	victim.visible = true
 	for weapon in 4:
 		game.run = Data.new_run("ranger" if weapon==2 else "warrior")
-		game.run.owned[weapon] = true
-		game.run.weapon = weapon
-		game.player.visual.equip(Data.WEAPONS[weapon])
+		game.arm(Data.WEAPONS[weapon])
 		for d in directions:
 			reset()
 			victim.dead = false
@@ -179,8 +178,7 @@ func run_tests():
 		victim.dead = true
 	# Shift attacks aim at floor even when no enemy is under the cursor.
 	reset()
-	game.run.weapon=1
-	game.player.visual.equip("sword")
+	game.arm("sword")
 	victim.dead = false
 	victim.position = origin-right*1.5
 	victim.hp = 10000

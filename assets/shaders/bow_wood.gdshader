@@ -28,6 +28,11 @@ void vertex() {
 	bow_position = VERTEX;
 }
 
+// An item of another make (scripts/items.gd `tint`): its colours redrawn in
+// that one, keeping their light and dark.
+uniform vec3 tint : source_color = vec3(1.0);
+uniform float recolor = 0.0;
+
 void fragment() {
 	vec3 p = bow_position;
 	vec3 base = texture(palette, UV).rgb;
@@ -81,4 +86,5 @@ void fragment() {
 	float det = dot(sx, r1);
 	vec3 gradient = (dFdx(h) * r1 + dFdy(h) * r2) * sign(det) / max(abs(det), 0.000001);
 	NORMAL = normalize(NORMAL - gradient);
+	ALBEDO = mix(ALBEDO, dot(ALBEDO, vec3(0.299, 0.587, 0.114)) * tint * 1.8, recolor);
 }

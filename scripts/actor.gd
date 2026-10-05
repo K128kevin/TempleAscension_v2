@@ -124,7 +124,8 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 	if kind == "player":
 		max_hp = Data.max_health(game.run)
 		hp = max_hp
-		visual.setup(false,Color.WHITE,Data.WEAPONS[game.run.weapon],1.0,"",game.run.class_id)
+		visual.setup(false,Color.WHITE,"",1.0,"",game.run.class_id)
+		visual.wear(game.run.equipment)
 	else:
 		config = Data.ENEMIES[kind]
 		role = config.get("as",kind)
@@ -391,7 +392,7 @@ func playground_kill() -> void:
 		game.sound.play("stone-crumble",-8)
 
 # Playground: stand back up, whole, with a freshly built model.
-func playground_revive(weapon: String = "") -> void:
+func playground_revive(gear: Dictionary = {}) -> void:
 	dead = false
 	death_age = 0
 	hp = max_hp
@@ -400,7 +401,9 @@ func playground_revive(weapon: String = "") -> void:
 	visual.queue_free()
 	visual = Visual.new()
 	add_child(visual)
-	if kind == "player": visual.setup(false,Color.WHITE,weapon,1.0,"",game.run.class_id)
+	if kind == "player":
+		visual.setup(false,Color.WHITE,"",1.0,"",game.run.class_id)
+		visual.wear(gear if not gear.is_empty() else game.run.equipment)
 	else: dress()
 
 func release_attack() -> void:
@@ -538,7 +541,8 @@ func begin_strike(point: Vector3) -> void:
 func standoff(other) -> float:
 	# (Far enough that a lunging body, its shield and its blade stop short of
 	# the other's.)
-	var mine = 1.05 if kind == "player" else 1.0*config.size
+	# (A long weapon keeps its bearer further off.)
+	var mine = 1.05+maxf(0.0,Motion.reach(Data.family(game.run))-1.9)*.75 if kind == "player" else 1.0*config.size
 	if other == null or other.kind == "player": return mine
 	return mine+maxf(0.0,(other.config.size-1.0)*.5)
 

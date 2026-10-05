@@ -2,6 +2,7 @@ extends CanvasLayer
 const Data = preload("res://scripts/data.gd")
 const Panels = preload("res://scripts/panels.gd")
 const SkillIcon = preload("res://scripts/skill_icon.gd")
+const Items = preload("res://scripts/items.gd")
 var game
 # The attribute and skill panels and their + buttons.
 var panels
@@ -55,6 +56,10 @@ var enemy_bars: Array[ProgressBar] = []
 var bar_of: Dictionary = {}
 # The name of a townsperson under the cursor (only Anya has one).
 var npc_name: Label
+# The name of every item lying on the ground in sight, over it: a button,
+# which picks the item up (the hero walking to it first if he must).
+var item_labels: Array[Button] = []
+var item_label_styles: Dictionary = {}
 # One amber cast bar over each Oracle while it casts a fireball.
 var cast_bars: Array = []
 var modal: PanelContainer
@@ -267,6 +272,7 @@ func bar(color: Color, parent: Node) -> ProgressBar:
 func tick(dt: float) -> void:
 	game.debug.refresh()
 	show_enemy_bars()
+	show_item_labels()
 	show_effects()
 	show_ready()
 	show_cast_bars()
@@ -293,7 +299,9 @@ func tick(dt: float) -> void:
 	# (Its details come from the skill panel's tip, as a skill's do.)
 	weapon_slots[0].tooltip_text = ""
 	weapon_slots[0].add_theme_stylebox_override("normal",idle_style)
-	var weapon_icon_path = "res://assets/ui/weapon-%s.png" % Data.WEAPONS[r.weapon]
+	# (The weapon in hand, as its item is pictured.)
+	var weapon_icon_path = "res://assets/ui/items/%s.png" % r.equipment.main
+	if not ResourceLoader.exists(weapon_icon_path): weapon_icon_path = "res://assets/ui/weapon-%s.png" % Data.WEAPONS[Data.weapon(r)]
 	weapon_icons[0].texture = load(weapon_icon_path) if ResourceLoader.exists(weapon_icon_path) else load("res://assets/textures/seal.png")
 	weapon_icons[0].modulate = Color.WHITE
 	weapon_names[0].text = "Attack"
@@ -508,6 +516,56 @@ func enemy_bar() -> ProgressBar:
 	background.set_corner_radius_all(2)
 	p.add_theme_stylebox_override("background",background)
 	return p
+
+func item_label() -> Button:
+	var b = Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size",13)
+	b.add_theme_constant_override("outline_size",3)
+	b.add_theme_color_override("font_outline_color",Color(.025,.02,.015))
+	root.add_child(b)
+	# (Under the rest of the interface: the orbs and the hotbar cover them.)
+	root.move_child(b,0)
+	b.pressed.connect(func():
+		if b.has_meta("pickup"): game.pick_up(b.get_meta("pickup")))
+	return b
+
+# Over each item on the ground the hero can see, its name in its rarity's
+# colour; none while the game is paused or over.
+func show_item_labels() -> void:
+	var camera: Camera3D = game.world.camera
+	var shown: Array = []
+	if game.mode == "playing" and not game.player.dead:
+		for pickup in game.pickups:
+			if is_instance_valid(pickup.node) and pickup.node.visible and not camera.is_position_behind(pickup.node.position): shown.append(pickup)
+	while item_labels.size() < shown.size(): item_labels.append(item_label())
+	for i in item_labels.size():
+		var b: Button = item_labels[i]
+		b.visible = i < shown.size()
+		if not b.visible:
+			b.remove_meta("pickup")
+			continue
+		var pickup: Dictionary = shown[i]
+		var id: String = pickup.drop.item
+		b.set_meta("pickup",pickup)
+		if b.text != Items.get_item(id).name:
+			b.text = Items.get_item(id).name
+			var tone: Color = Items.color(id)
+			for look in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]: b.add_theme_color_override(look,tone if look=="font_color" else tone.lightened(.3))
+			var key: String = Items.rarity(id)
+			if not item_label_styles.has(key):
+				var plain = panel_style(Color(.03,.03,.035,.82),tone.darkened(.35))
+				plain.set_content_margin_all(2)
+				plain.content_margin_left = 7; plain.content_margin_right = 7
+				plain.set_corner_radius_all(3)
+				var lit: StyleBoxFlat = plain.duplicate()
+				lit.bg_color = Color(.14,.13,.11,.95)
+				lit.border_color = tone
+				item_label_styles[key] = [plain,lit]
+			b.add_theme_stylebox_override("normal",item_label_styles[key][0])
+			for look in ["hover","pressed"]: b.add_theme_stylebox_override(look,item_label_styles[key][1])
+			b.reset_size()
+		b.position = camera.unproject_position(pickup.node.position+Vector3.UP*.45)-Vector2(b.size.x*.5,b.size.y)
 
 # The last floor's bars, taken down as a new one is entered.
 func clear_enemy_bars() -> void:

@@ -1,10 +1,15 @@
 extends RefCounted
-## The attribute panel (left side of the screen) and the skill tree panel
-## (right side), and the + buttons that stay above the orbs while there are
-## points to spend: attributes on the left, skills on the right.
+## The character window, on the right side of the screen: one panel with a
+## tab each for the hero's attributes, his skill trees and his inventory
+## (what he wears and holds, round a figure of him, over the ten places of
+## his bag); and the + buttons that stay above the orbs while there are
+## points to spend, which open it at the attributes or the skills.
 const Data = preload("res://scripts/data.gd")
 const Book = preload("res://scripts/skill_data.gd")
 const SkillIcon = preload("res://scripts/skill_icon.gd")
+const Items = preload("res://scripts/items.gd")
+const Visual = preload("res://scripts/visual.gd")
+const Art = preload("res://scripts/assets.gd")
 # A skill's square in the tree.
 const NODE = 44
 const SLOT_NAMES = ["RMB","1","2","3","4"]
@@ -17,7 +22,36 @@ var stat_plus: Button
 var skill_plus: Button
 var stat_note: Label
 var skill_note: Label
+# The window, the tab it shows ("stats", "skills" or "bag"; "" while shut),
+# and each tab's button and body. `stats`, `tree` and `bag` are the window
+# while it shows that tab (null otherwise).
+const TABS = ["stats","skills","bag"]
+const TAB_TITLES = {"stats":"Attributes · C","skills":"Skills · K","bag":"Inventory · I"}
+var window: PanelContainer
+var tab = ""
+var tab_buttons: Dictionary = {}
+var bodies: Dictionary = {}
 var stats: PanelContainer
+var bag: PanelContainer
+# An equipment slot's or a bag place's square in the inventory, by place
+# ("head", "main", "bag:3": Items.at): {"frame","icon","name","place"}.
+const SLOT = 54
+var slots: Dictionary = {}
+var slot_styles: Dictionary = {}
+# The figure of the hero in the inventory: its viewport, the turntable it
+# stands on, and the figure itself (dressed as he is).
+var figure_port: SubViewport
+var figure_stand: Node3D
+var figure: Node3D
+var figure_class = ""
+var bag_summary: Label
+# Behind the window while the inventory shows: an item dragged out onto it is
+# dropped on the ground.
+var drop_zone: Control
+# The item the cursor is on (its place), and its tip.
+var hovered_item = ""
+var item_tip: PanelContainer
+var item_tip_lines: Dictionary = {}
 var stat_title: Label
 var stat_xp: Label
 var stat_xp_bar: ProgressBar
@@ -103,47 +137,107 @@ func frame(width: float) -> PanelContainer:
 	hud.root.add_child(p)
 	return p
 
-# A panel's title row with a close button; returns the row.
-func header(parent: Node, title: String, closer: Callable) -> HBoxContainer:
-	var row = HBoxContainer.new()
-	parent.add_child(row)
-	var name_label = text(title,14,hud.gold,row)
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(small_button("×",13,func():
-		closer.call()
-		settle()))
-	return row
-
-func stats_open() -> bool: return is_instance_valid(stats)
-func skills_open() -> bool: return is_instance_valid(tree)
-func any_open() -> bool: return stats_open() or skills_open()
+func stats_open() -> bool: return is_instance_valid(window) and tab=="stats"
+func skills_open() -> bool: return is_instance_valid(window) and tab=="skills"
+func inventory_open() -> bool: return is_instance_valid(window) and tab=="bag"
+func any_open() -> bool: return is_instance_valid(window)
 
 func close_stats() -> void:
-	if stats_open(): stats.queue_free()
-	stats = null
-
+	if stats_open(): close()
 func close_skills() -> void:
-	if skills_open(): tree.queue_free()
-	tree = null
-	nodes.clear()
-	tree_totals.clear()
-	unhover()
+	if skills_open(): close()
+func close_inventory() -> void:
+	if inventory_open(): close()
 
 func close() -> void:
-	close_stats()
-	close_skills()
+	if is_instance_valid(window): window.queue_free()
+	if is_instance_valid(drop_zone): drop_zone.queue_free()
+	window = null
+	drop_zone = null
+	stats = null
+	tree = null
+	bag = null
+	tab = ""
+	figure = null
+	figure_port = null
+	nodes.clear()
+	slots.clear()
+	tree_totals.clear()
+	bodies.clear()
+	tab_buttons.clear()
+	unhover()
+	unhover_item()
 
-# With the last panel closed, play resumes.
+# With the window closed, play resumes.
 func settle() -> void:
 	if game.mode=="character" and not any_open() and not is_instance_valid(hud.modal): game.resume_game()
 
-func open_stats() -> void:
-	if stats_open(): return
-	stats = frame(244)
-	var body = VBoxContainer.new()
+func open_stats() -> void: open("stats")
+func open_skills() -> void: open("skills")
+func open_inventory() -> void: open("bag")
+
+# Opens the window at a tab, or turns it to that tab if it is open.
+func open(wanted: String) -> void:
+	if not is_instance_valid(window): build()
+	tab = wanted
+	for t in TABS:
+		bodies[t].visible = t==tab
+		for look in ["normal","hover","pressed"]: tab_buttons[t].add_theme_stylebox_override(look,tab_styles["on" if t==tab else ("off" if look=="normal" else "over")])
+		tab_buttons[t].add_theme_color_override("font_color",hud.gold if t==tab else dim)
+	stats = window if tab=="stats" else null
+	tree = window if tab=="skills" else null
+	bag = window if tab=="bag" else null
+	if tab=="bag" and not is_instance_valid(drop_zone): make_drop_zone()
+	elif tab!="bag" and is_instance_valid(drop_zone):
+		drop_zone.queue_free()
+		drop_zone = null
+	if tab!="skills": unhover()
+	if tab!="bag": unhover_item()
+	window.reset_size()
+	refresh()
+
+var tab_styles: Dictionary = {}
+func build() -> void:
+	window = frame(0)
+	var all = VBoxContainer.new()
+	all.add_theme_constant_override("separation",8)
+	window.add_child(all)
+	if tab_styles.is_empty():
+		for look in [["on",Color(.16,.13,.07),hud.gold],["off",Color(.06,.062,.066),Color(.3,.27,.2)],["over",Color(.12,.11,.09),Color(.5,.44,.3)]]:
+			var style = hud.panel_style(look[1],look[2])
+			style.set_content_margin_all(4)
+			style.content_margin_left = 10; style.content_margin_right = 10
+			tab_styles[look[0]] = style
+	var row = HBoxContainer.new()
+	row.add_theme_constant_override("separation",4)
+	all.add_child(row)
+	for t in TABS:
+		var b = Button.new()
+		b.text = TAB_TITLES[t]
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size",13)
+		b.pressed.connect(func(): open(t))
+		row.add_child(b)
+		tab_buttons[t] = b
+	var gap = Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.custom_minimum_size.x = 12
+	row.add_child(gap)
+	row.add_child(small_button("×",13,func():
+		close()
+		settle()))
+	for t in TABS:
+		var body = VBoxContainer.new()
+		all.add_child(body)
+		bodies[t] = body
+	build_stats(bodies.stats)
+	build_skills(bodies.skills)
+	build_bag(bodies.bag)
+
+func build_stats(body: VBoxContainer) -> void:
 	body.add_theme_constant_override("separation",4)
-	stats.add_child(body)
-	stat_title = header(body,"",close_stats).get_child(0)
+	body.custom_minimum_size.x = 250
+	stat_title = text("",14,hud.gold,body)
 	stat_xp = text("",11,dim,body)
 	stat_xp_bar = hud.bar(Color(.36,.58,.9),body)
 	stat_xp_bar.custom_minimum_size = Vector2(0,4)
@@ -175,17 +269,10 @@ func open_stats() -> void:
 	stat_reset.tooltip_text = "Free at a floor's entrance, out of combat"
 	body.add_child(stat_reset)
 	text("Shift-click + spends 5 · C closes",10,dim,body)
-	refresh()
 
-func open_skills() -> void:
-	if skills_open(): return
-	tree = frame(0)
-	var body = VBoxContainer.new()
+func build_skills(body: VBoxContainer) -> void:
 	body.add_theme_constant_override("separation",6)
-	tree.add_child(body)
-	var head = header(body,"SKILLS",close_skills)
-	tree_points = text("",12,hud.gold,head)
-	head.move_child(tree_points,1)
+	tree_points = text("",12,hud.gold,body)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",10)
 	body.add_child(columns)
@@ -221,7 +308,239 @@ func open_skills() -> void:
 			for s in class_skills:
 				if s.tree==t and gate(s)==g: row.add_child(square(s.id))
 	text("Click: learn · Right-click or 1–4: assign to that slot",10,dim,body).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+# --- The inventory ---------------------------------------------------------------
+
+# The figure of the hero stands in the middle, his head, chest and legs to
+# its left and his hands and feet to its right, as he wears them; under it
+# his two hands' weapons; and below, his bag.
+func build_bag(body: VBoxContainer) -> void:
+	body.add_theme_constant_override("separation",8)
+	if slot_styles.is_empty():
+		for look in [["empty",Color(.3,.27,.2)],["common",Color(.5,.46,.36)],["uncommon",Items.RARITY_COLORS.uncommon.darkened(.25)],["rare",Items.RARITY_COLORS.rare.darkened(.15)],["no",Color(.75,.22,.16)],["yes",Color(.5,.85,.5)]]:
+			var style = hud.panel_style(Color(.055,.055,.06,.98),look[1])
+			style.set_content_margin_all(0)
+			style.set_corner_radius_all(3)
+			if look[0] in ["no","yes"]: style.set_border_width_all(2)
+			slot_styles[look[0]] = style
+	var top = HBoxContainer.new()
+	top.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_theme_constant_override("separation",8)
+	body.add_child(top)
+	var left = VBoxContainer.new()
+	left.add_theme_constant_override("separation",8)
+	left.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_child(left)
+	for place in ["head","chest","legs"]: left.add_child(slot(place))
+	var middle = VBoxContainer.new()
+	middle.add_theme_constant_override("separation",6)
+	top.add_child(middle)
+	middle.add_child(make_figure())
+	var hands = HBoxContainer.new()
+	hands.alignment = BoxContainer.ALIGNMENT_CENTER
+	hands.add_theme_constant_override("separation",10)
+	middle.add_child(hands)
+	for place in ["main","off"]: hands.add_child(slot(place))
+	var right = VBoxContainer.new()
+	right.add_theme_constant_override("separation",8)
+	right.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_child(right)
+	for place in ["hands","feet"]: right.add_child(slot(place))
+	bag_summary = text("",11,hud.cream,body)
+	bag_summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var grid = GridContainer.new()
+	grid.columns = Items.BAG_COLUMNS
+	grid.add_theme_constant_override("h_separation",6)
+	grid.add_theme_constant_override("v_separation",6)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	body.add_child(grid)
+	for i in Items.BAG_SIZE: grid.add_child(slot("bag:%d" % i))
+	text("Drag to equip, unequip or rearrange · Right-click: equip / take off\nDrag an item out of the window to drop it · X: other weapon",10,dim,body).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+# One square: an equipment slot (its name shown while it is empty) or a
+# place in the bag. It is dragged from and dropped on.
+func slot(place: String) -> Control:
+	var square_frame = Panel.new()
+	square_frame.custom_minimum_size = Vector2(SLOT,SLOT)
+	var icon = TextureRect.new()
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.position = Vector2(3,3); icon.size = Vector2(SLOT-6,SLOT-6)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	square_frame.add_child(icon)
+	var name_label = text("",9,Color(.42,.41,.38),square_frame)
+	name_label.position = Vector2(1,0); name_label.size = Vector2(SLOT-2,SLOT)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	square_frame.set_drag_forwarding(func(_at): return drag_from(place),func(_at,data): return can_drop(place,data),func(_at,data): drop_on(place,data))
+	square_frame.gui_input.connect(func(event):
+		if event is InputEventMouseButton and event.pressed and (event.button_index==MOUSE_BUTTON_RIGHT or (event.button_index==MOUSE_BUTTON_LEFT and event.double_click)): quick_move(place))
+	square_frame.mouse_entered.connect(func(): hovered_item = place)
+	square_frame.mouse_exited.connect(func():
+		if hovered_item==place: unhover_item())
+	slots[place] = {"frame":square_frame,"icon":icon,"name":name_label,"place":place,"shown":"?"}
+	return square_frame
+
+# An item's picture (tools/render_item_icons.gd makes them from its model).
+func item_icon(id: String) -> Texture2D:
+	var path = "res://assets/ui/items/%s.png" % id
+	return load(path) if ResourceLoader.exists(path) else null
+
+# The hero as he is dressed and armed, standing on a turntable (drag across
+# him to turn him round).
+func make_figure() -> Control:
+	var holder = SubViewportContainer.new()
+	holder.custom_minimum_size = Vector2(190,268)
+	holder.stretch = true
+	figure_port = SubViewport.new()
+	figure_port.own_world_3d = true
+	figure_port.transparent_bg = true
+	figure_port.msaa_3d = Viewport.MSAA_4X
+	figure_port.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	holder.add_child(figure_port)
+	var scene = Node3D.new()
+	figure_port.add_child(scene)
+	var surroundings = WorldEnvironment.new()
+	surroundings.environment = Environment.new()
+	surroundings.environment.background_mode = Environment.BG_CLEAR_COLOR
+	surroundings.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	surroundings.environment.ambient_light_color = Color(.9,.88,.84)
+	surroundings.environment.ambient_light_energy = .55
+	scene.add_child(surroundings)
+	var key = DirectionalLight3D.new()
+	key.rotation_degrees = Vector3(-35,150,0)
+	key.light_energy = 1.25
+	scene.add_child(key)
+	var rim = DirectionalLight3D.new()
+	rim.rotation_degrees = Vector3(-20,-40,0)
+	rim.light_color = Color(.6,.7,1)
+	rim.light_energy = .5
+	scene.add_child(rim)
+	var camera = Camera3D.new()
+	camera.fov = 30
+	scene.add_child(camera)
+	camera.look_at_from_position(Vector3(0,1.05,4.6),Vector3(0,.95,0))
+	figure_stand = Node3D.new()
+	figure_stand.rotation.y = .35
+	scene.add_child(figure_stand)
+	figure = Visual.new()
+	figure_stand.add_child(figure)
+	figure_class = game.run.class_id
+	figure.setup(false,Color.WHITE,"",1.0,"",figure_class)
+	figure.wear(game.run.equipment)
+	holder.gui_input.connect(func(event):
+		if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_LEFT and is_instance_valid(figure_stand): figure_stand.rotation.y += event.relative.x*.012)
+	holder.tooltip_text = "Drag to turn"
+	return holder
+
+func make_drop_zone() -> void:
+	drop_zone = Control.new()
+	drop_zone.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hud.root.add_child(drop_zone)
+	hud.root.move_child(drop_zone,0)
+	drop_zone.set_drag_forwarding(func(_at): return null,func(_at,data): return data is Dictionary and data.has("item_from"),func(_at,data):
+		game.discard_item(data.item_from)
+		refresh())
+
+# What is dragged from a square: its item (nothing from an empty one).
+func drag_from(place: String):
+	var id: String = Items.at(game.run,place)
+	if id.is_empty(): return null
+	var shown = TextureRect.new()
+	shown.texture = item_icon(id)
+	shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shown.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	shown.size = Vector2(SLOT,SLOT)
+	shown.position = -shown.size*.5
+	var carried = Control.new()
+	carried.add_child(shown)
+	if shown.texture == null: text(Items.get_item(id).name,11,Items.color(id),carried)
+	slots[place].frame.set_drag_preview(carried)
+	unhover_item()
+	return {"item_from":place}
+
+# Whether what is dragged may be put down on this square (tried on a copy).
+func can_drop(place: String, data) -> bool:
+	if not (data is Dictionary and data.has("item_from")): return false
+	var trial = {"class_id":game.run.class_id,"equipment":game.run.equipment.duplicate(),"bag":game.run.bag.duplicate()}
+	return Items.move(trial,data.item_from,place).is_empty()
+
+func drop_on(place: String, data) -> void:
+	var problem: String = game.move_item(data.item_from,place)
+	if not problem.is_empty(): game.toast(problem)
 	refresh()
+
+# A right click (or a double click): an item in the bag is put on, one worn
+# or held goes into the bag.
+func quick_move(place: String) -> void:
+	var id: String = Items.at(game.run,place)
+	if id.is_empty(): return
+	var to = ""
+	if Items.in_bag(place): to = Items.slot_for(game.run,id)
+	else:
+		var room: int = Items.free_bag_slot(game.run)
+		if room < 0:
+			game.toast("No room in the bag.")
+			return
+		to = "bag:%d" % room
+	var problem: String = game.move_item(place,to)
+	if not problem.is_empty(): game.toast(problem)
+	unhover_item()
+	refresh()
+
+func unhover_item() -> void:
+	hovered_item = ""
+	if is_instance_valid(item_tip): item_tip.visible = false
+
+# The hovered item's details, beside the window.
+func show_item_tip(place: String) -> void:
+	var id: String = Items.at(game.run,place)
+	if id.is_empty() or not slots.has(place):
+		if is_instance_valid(item_tip): item_tip.visible = false
+		return
+	if not is_instance_valid(item_tip):
+		item_tip = frame(250)
+		item_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var body = VBoxContainer.new()
+		body.add_theme_constant_override("separation",3)
+		item_tip.add_child(body)
+		for line in [["title",15,hud.gold],["kind",11,dim],["stats",12,hud.cream],["note",12,Color(1,.5,.4)],["hint",11,green]]:
+			var l = text("",line[1],line[2],body)
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.custom_minimum_size.x = 230
+			item_tip_lines[line[0]] = l
+	var about: Dictionary = Items.describe(id,game.run.class_id)
+	var lines = {"title":about.title,"kind":about.kind,"stats":"\n".join(about.stats),"note":about.note}
+	lines.hint = "Right-click: %s" % ("put on" if Items.in_bag(place) else "take off") if about.note.is_empty() else ""
+	for key in item_tip_lines:
+		item_tip_lines[key].text = lines[key]
+		item_tip_lines[key].visible = not lines[key].is_empty()
+	item_tip_lines.title.add_theme_color_override("font_color",Items.RARITY_COLORS[about.rarity])
+	item_tip.visible = true
+	item_tip.move_to_front()
+	item_tip.reset_size()
+	var height: float = item_tip.get_combined_minimum_size().y
+	var at: Rect2 = slots[place].frame.get_global_rect()
+	item_tip.position = Vector2(window.position.x-258,clampf(at.position.y,8,hud.root.size.y-height-8))
+
+func refresh_bag() -> void:
+	var r: Dictionary = game.run
+	for place in slots:
+		var s: Dictionary = slots[place]
+		var id: String = Items.at(r,place)
+		if s.shown == id: continue
+		s.shown = id
+		s.icon.texture = item_icon(id) if not id.is_empty() else null
+		# An empty equipment slot says what goes there; an item with no picture, its name.
+		s.name.text = (Items.SLOT_TITLES[place] if not Items.in_bag(place) else "") if id.is_empty() else (Items.get_item(id).name if s.icon.texture == null else "")
+		s.name.add_theme_color_override("font_color",Color(.42,.41,.38) if id.is_empty() else Items.color(id))
+		s.frame.add_theme_stylebox_override("panel",slot_styles["empty" if id.is_empty() else Items.rarity(id)])
+	if is_instance_valid(figure):
+		if figure.worn != r.equipment: figure.wear(r.equipment)
+	var span: Array = Data.span(r,Data.scaling_tag(Data.weapon(r)))
+	var tag: String = Data.scaling_tag(Data.weapon(r))
+	bag_summary.text = "Armor: %s%% less damage taken\n%s: %d–%d" % [Items.figure(Data.armor(r)),"Spell damage" if tag=="spell" else "Attack damage",roundi(Data.damage_tag(r,tag,span[0])),roundi(Data.damage_tag(r,tag,span[1]))]
 
 # Skills that open together share a row: by points in the tree, then by level.
 func gate(s: Dictionary) -> int:
@@ -262,6 +581,8 @@ func tick(dt: float) -> void:
 	skill_plus.visible = shown and r.skill_points>0 and not skills_open()
 	stat_note.visible = stat_plus.visible
 	skill_note.visible = skill_plus.visible
+	# The figure in the inventory breathes.
+	if inventory_open() and is_instance_valid(figure): figure.advance(dt)
 	stat_note.text = "%d attribute point%s" % [r.points,"" if r.points==1 else "s"]
 	skill_note.text = "%d skill point%s" % [r.skill_points,"" if r.skill_points==1 else "s"]
 	# The buttons breathe so they are noticed.
@@ -272,11 +593,17 @@ func tick(dt: float) -> void:
 
 func refresh() -> void:
 	var r: Dictionary = game.run
+	if any_open():
+		# On the right of the screen (beside the playground's panel, there).
+		var right: float = hud.root.size.x-24-(200 if game.playground != null else 0)
+		window.position = Vector2(right-window.get_combined_minimum_size().x,84)
+		for t in TABS:
+			var spend: int = r.points if t=="stats" else (r.skill_points if t=="skills" else 0)
+			tab_buttons[t].text = TAB_TITLES[t]+(" •" if spend>0 else "")
+	if inventory_open():
+		refresh_bag()
+		if not hovered_item.is_empty(): show_item_tip(hovered_item)
 	if stats_open():
-		# Beside the debug panel when it is showing.
-		var left = 24.0
-		if game.debug.enabled and is_instance_valid(game.debug.panel) and game.debug.panel.visible: left = game.debug.panel.position.x+game.debug.panel.size.x+10
-		stats.position = Vector2(left,84)
 		var capped: bool = r.level>=Data.MAX_LEVEL
 		stat_title.text = "%s · LEVEL %d" % [r.class_id.to_upper(),r.level]
 		stat_xp.text = "Maximum level" if capped else "%d / %d XP to level %d" % [r.xp-Data.xp_at_level(r.level),Data.XP_STEPS[r.level-1],r.level+1]
@@ -287,11 +614,9 @@ func refresh() -> void:
 		for i in 5:
 			stat_values[i].text = str(r.stats[i])
 			stat_buttons[i].disabled = r.points<=0
-		stat_summary.text = "Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%" % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(game.skills.basic_speed(int(r.weapon))),game.skills.figure(Data.crit_chance(r))]
+		stat_summary.text = "Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%" % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(game.skills.basic_speed(Data.weapon(r))),game.skills.figure(Data.crit_chance(r))]
 		stat_reset.disabled = not game.safe_checkpoint()
 	if skills_open():
-		var right: float = hud.root.size.x-24-(200 if game.playground != null else 0)
-		tree.position = Vector2(right-tree.get_combined_minimum_size().x,140)
 		tree_points.text = "%d point%s to spend" % [r.skill_points,"" if r.skill_points==1 else "s"]
 		tree_points.add_theme_color_override("font_color",hud.gold if r.skill_points>0 else dim)
 		for t in tree_totals:
@@ -338,8 +663,8 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 
 # The normal attack's tip: what the weapon in hand hits for.
 func attack_lines() -> Dictionary:
-	var weapon = int(game.run.weapon)
-	var lines = {"title":"%s · Attack" % Data.WEAPONS[weapon].capitalize(),"kind":"LMB · No energy cost"}
+	var weapon = Data.weapon(game.run)
+	var lines = {"title":"%s · Attack" % (Items.main(game.run).name if not Items.main(game.run).is_empty() else "Bare hands"),"kind":"LMB · No energy cost"}
 	lines.merge(game.skills.crit_numbers(weapon))
 	lines.damage = "Damage: "+game.skills.span(100.0,Data.scaling_tag(weapon))
 	return lines
@@ -351,7 +676,7 @@ func skill_lines(id: String, on_hotbar: bool) -> Dictionary:
 	var active: bool = s.effect!="passive"
 	var lines = {"title":"%s · %d/%d" % [s.title,rank,s.max_rank]}
 	lines.kind = "Passive" if not active else "Active · %d energy" % game.skills.cost(id)
-	if active and s.requirement!="any": lines.kind += " · needs %s" % {"melee":"a melee weapon","shield":"sword and shield","bow":"a bow","staff":"a staff","dagger":"a dagger","bow_dagger":"a bow or dagger"}[s.requirement]
+	if active and s.requirement!="any": lines.kind += " · needs %s" % {"melee":"a melee weapon","shield":"a shield","bow":"a bow","dagger":"a dagger","bow_dagger":"a bow or dagger"}[s.requirement]
 	lines.now = Book.describe(id,maxi(1,rank))
 	# What it hits for now, by the hero's attributes and passives.
 	lines.merge(game.skills.damage_summary(id,rank))

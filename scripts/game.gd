@@ -12,6 +12,7 @@ const Book = preload("res://scripts/skill_data.gd")
 const Save = preload("res://scripts/save.gd")
 const RangerFx = preload("res://scripts/ranger_fx.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
+const Items = preload("res://scripts/items.gd")
 var run: Dictionary
 var world
 var player
@@ -158,9 +159,7 @@ func load_floor() -> void:
 	run.erase("seconds") # Discard elapsed time from legacy saves.
 	run.erase("skill_cooldowns") # Ignore obsolete skill recharge timers in saved runs.
 	run.erase("evade_cooldown")
-	var migrating = int(run.version)<2
-	if int(run.version)<10: run = Save.migrate(run)
-	run.drops = run.drops.filter(func(drop): return drop.value not in [2,3])
+	if int(run.version)<11: run = Save.migrate(run)
 	if skills: skills.reset()
 	run_generation += 1
 	if is_instance_valid(world):
@@ -172,6 +171,7 @@ func load_floor() -> void:
 	fireballs.clear()
 	novas.clear()
 	pickups.clear()
+	pickup_goal = null
 	scheduled.clear()
 	carriers.clear()
 	target = null
@@ -182,6 +182,7 @@ func load_floor() -> void:
 	right_held = false
 	crown_available = false
 	dash_time = 0
+	swings = 0
 	dash_attack = false
 	dash_struck.clear()
 	dash_cooldown = 0
@@ -228,8 +229,6 @@ func load_floor() -> void:
 		player.visual.rest(true)
 	world.update_visibility(player.position,.1)
 	world.follow(player.position,1)
-	var rng = RandomNumberGenerator.new()
-	rng.seed = int(run.seed)+int(run.floor)*193
 	# No statue stands outside the temple.
 	if outdoors(): pass
 	elif not Data.summit(run):
@@ -248,16 +247,6 @@ func load_floor() -> void:
 				enemy.dead = true
 				enemy.hp = 0
 				enemy.visible = false
-		var carrier_ids: Array[int] = []
-		for i in types.size(): carrier_ids.append(i)
-		for i in range(carrier_ids.size()-1,0,-1):
-			var j = rng.randi_range(0,i)
-			var swap = carrier_ids[i]
-			carrier_ids[i] = carrier_ids[j]
-			carrier_ids[j] = swap
-		# (The staff is found on the fountain court's floor.)
-		if run.place=="temple" and run.floor==Temple.Layout.COURT_FLOOR:
-			carriers["%d:%d" % [run.floor,carrier_ids[-1]]] = {"kind":"weapon","value":4,"id":"weapon:%d" % run.floor}
 	else:
 		boss = spawn_enemy("boss","boss",world.boss_point)
 		# Four groups of five centurions stand in reserve in the corners; the
@@ -278,17 +267,6 @@ func load_floor() -> void:
 			crown_available = true
 			crown_position = boss.position
 			place_crown()
-	if migrating:
-		# Keep collected upgrades, defeated statues and pending loot when moving
-		# a pre-generator save onto its new floor. Never strand a drop in void.
-		for id in carriers:
-			var reward: Dictionary = carriers[id]
-			var pending = false
-			for drop in run.drops:
-				if drop.id==reward.id: pending = true
-			if id in run.dead and not pending and not reward.id in run.gems and not (reward.kind=="weapon" and run.owned[reward.value]):
-				run.drops.append(reward.duplicate(true))
-		for drop in run.drops: drop.position = [world.spawn.x,world.spawn.z]
 	for drop in run.drops: create_pickup(drop)
 	world.exit_seal.visible = remaining()==0 and has_way_on()
 	mode = "playing"
@@ -471,16 +449,17 @@ func show_ui(on: bool) -> void:
 	hud.visible = on
 	if is_instance_valid(world) and is_instance_valid(world.camera): world.camera.set_cull_mask_value(20,on)
 
-# C and K open and close the attribute panel (left) and the skill panel (right);
-# I, the equipment screen. The game is paused while any of them is open.
+# C, K and I open the character window at its attributes, its skills and its
+# inventory (or turn it to that tab), and close it from there. The game is
+# paused while it is open.
 func toggle_screen(key: int) -> void:
 	if key==KEY_C:
-		if hud.panels.stats_open(): hud.panels.close_stats()
+		if hud.panels.stats_open(): hud.panels.close()
 		else: ProgressionUI.character(self)
 	elif key==KEY_K:
-		if hud.panels.skills_open(): hud.panels.close_skills()
+		if hud.panels.skills_open(): hud.panels.close()
 		else: ProgressionUI.skills(self)
-	elif is_instance_valid(hud.modal): hud.close_dialog()
+	elif hud.panels.inventory_open(): hud.panels.close()
 	else: ProgressionUI.equipment(self)
 	if mode=="character" and not hud.panels.any_open() and not is_instance_valid(hud.modal): resume_game()
 
@@ -543,7 +522,7 @@ func toggle_walk() -> void:
 # How fast the hero goes over the ground: walking or running, halved when slowed.
 func player_pace() -> float:
 	# (Swift Footed quickens the ranger; hidden in the shadows he creeps.)
-	var pace = (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)*(1.0+Data.passive(run,"swift_footed")*.01)
+	var pace = (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)*(1.0+Data.passive(run,"swift_footed")*.01)*(1.0+Items.bonus(run,"speed")*.01)
 	return pace*(1.0-skills.hide_slow*.01) if skills.hidden else pace
 
 # Everyone an attack can land on. Normally the statues; in the playground every
@@ -610,6 +589,7 @@ func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
 	# double tap fires once.)
 	if special and skills.powering: return
 	order_pending = false
+	pickup_goal = null
 	hold_timer = .08
 	pursuit_timer = .15
 	if Input.is_physical_key_pressed(KEY_SHIFT):
@@ -698,6 +678,10 @@ func player_control(dt: float) -> void:
 	if player.busy <= 0:
 		while not route.is_empty() and player.position.distance_to(route[0]) < .06:
 			route.remove_at(0)
+		# Walking to something on the ground to pick it up.
+		if pickup_goal != null and player.position.distance_to(pickup_goal.node.position) <= PICKUP_REACH:
+			route.clear()
+			take_pickup(pickup_goal)
 		if not route.is_empty():
 			var offset: Vector3 = route[0]-player.position
 			var step: float = minf(offset.length(),pace*dt)
@@ -720,20 +704,22 @@ func player_control(dt: float) -> void:
 		player.visual.rest(false)
 	player.visual.locomotion(moved,player.busy>0 or (not moved and player.visual.swing_phase() >= 0.0),skills.hidden,1.0,pace)
 
+# How near the hero comes to strike: as far as the weapon in hand reaches
+# (a bow's or a staff's shot, a spear's length, a sword's).
 func attack_range(special: bool, slot: int = 0) -> float:
 	if special: return skills.reach(run.hotbar[slot])
-	if run.weapon in [2,4]: return 12.5
-	return 1.9
+	return CombatAnimation.reach(Data.family(run))
 
-# The normal attack's clip and timing. Dexterity quickens a swing and a
-# bowshot alike, Quick Strikes a melee swing (down to Data.MELEE_MINIMUM).
+# The normal attack's clip and timing, by how the weapon in hand is swung
+# (CombatAnimation.FAMILIES). Dexterity quickens a swing and a bowshot alike,
+# Quick Strikes a melee swing (down to Data.MELEE_MINIMUM).
 func attack_profile() -> Dictionary:
-	var weapon: int = run.weapon
+	var swung: String = Data.family(run)
 	# (Frenzy quickens the ranger's bow and dagger alike.)
 	var frenzy: float = (skills.haste()-1.0)*100.0
-	if weapon==2: return CombatAnimation.profile(weapon,false,(1.0+Data.attack_haste(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.cooldown(run)*.5,.35)
-	if weapon==4: return CombatAnimation.profile(weapon,false,0,Data.cooldown(run)*.5,.35)
-	return CombatAnimation.profile(weapon,false,(1.0+Data.melee_attack_speed(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.MELEE_MINIMUM,0.0)
+	if swung=="bow": return CombatAnimation.timed(swung,(1.0+Data.attack_haste(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.cooldown(run)*.5,.35)
+	if swung=="staff": return CombatAnimation.timed(swung,0,Data.cooldown(run)*.5,.35)
+	return CombatAnimation.timed(swung,(1.0+Data.melee_attack_speed(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.MELEE_MINIMUM,0.0)
 
 # Which swing of the sword's chain (CombatAnimation.SWORD_CHAIN) was last begun.
 # Coming back up a dungeon's stair; and whether the shut temple door has
@@ -743,7 +729,9 @@ var sealed_told = false
 var sword_swing = 0
 # How many swings the chain has run to: each steps with the other foot.
 var sword_steps = 0
-var dagger_attacks = 0
+# How many normal attacks he has made (their clips, and with a weapon in
+# each hand the hands, go by turns).
+var swings = 0
 func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	if player.cooldown>0 or player.busy>0 or player.dead or mode!="playing": return
 	if special:
@@ -759,29 +747,45 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	player.busy = animation.duration
 	player.face(point)
 	player.begin_strike(point)
-	var damage = Data.damage(run,randf_range(10,15))
-	var weapon: int = run.weapon
-	if weapon not in [2,4]: scheduled.append({"time":maxf(.01,animation.times[0]-.12),"type":"swing","sound":"swing-spear" if weapon==0 else "swing-blade"})
-	if weapon == 1 and player.visual.clips.has(CombatAnimation.SWORD_OPENER): swing_sword(animation.duration)
-	elif weapon == 5 and player.visual.clips.has(CombatAnimation.DAGGER_ATTACKS[1]):
-		# The dagger: a stab and a slash by turns.
-		dagger_attacks += 1
-		player.visual.play(CombatAnimation.DAGGER_ATTACKS[dagger_attacks%2],animation.duration)
-	else: player.visual.play(animation.clip,animation.duration)
-	if weapon in [2,4]:
+	# The weapon's own damage (a wizard's bolt, his spells'), as his
+	# attributes raise it.
+	var weapon: int = Data.weapon(run)
+	var swung: String = Data.family(run)
+	var tag: String = Data.scaling_tag(weapon)
+	var damage = Data.damage_tag(run,tag,Data.roll(run,tag))
+	var shot: bool = swung in ["bow","staff"]
+	if not shot: scheduled.append({"time":maxf(.01,animation.times[0]-.12),"type":"swing","sound":swing_sound()})
+	swing(animation.duration)
+	if shot:
 		for release_time in animation.times:
-			scheduled.append({"time":release_time,"type":"arcane" if weapon==4 else "arrow","at":point,"damage":damage*(2.0/3.0 if special else 1.0),"special":special})
-	elif weapon==3 and special:
-		var offset = point-player.position
-		offset.y = 0
-		leap_duration = animation.times[0]
-		leap_left = leap_duration
-		leap_direction = offset.normalized()
-		leap_speed = minf(8.1,offset.length())/leap_duration
-		player.invulnerable = leap_duration
-		scheduled.append({"time":leap_duration,"type":"blast","at":player.position,"damage":damage*1.5,"follow_player":true})
+			scheduled.append({"time":release_time,"type":"arcane" if swung=="staff" else "arrow","at":point,"damage":damage,"special":false})
 	else:
-		scheduled.append({"time":animation.times[0],"type":"melee","at":point,"damage":damage*(2.5 if special and weapon==0 else (1.25 if special else 1.0)),"weapon":weapon,"special":special,"direction":player.forward()})
+		scheduled.append({"time":animation.times[0],"type":"melee","at":point,"damage":damage,"weapon":weapon,"special":false,"direction":player.forward(),"reach":attack_range(false)})
+
+# What a swing of the weapon in hand sounds like.
+func swing_sound() -> String:
+	return "swing-spear" if Data.family(run)=="pike" else "swing-blade"
+
+# Plays the normal attack's next swing, taking `seconds` (the normal attack,
+# and Vampiric and Shadow Strike, which are struck with the same swings):
+# the sword's chain; a two-handed weapon's or the spear's blows by turns;
+# the dagger's stab and slash; and with a weapon in each hand, the right
+# hand's blow and the left's by turns.
+func swing(seconds: float) -> void:
+	var swung: String = Data.family(run)
+	var move: Dictionary = CombatAnimation.family(swung)
+	var has = func(clip: String) -> bool: return player.visual.clips.has(clip)
+	var both: bool = move.has("off") and not Items.off_weapon(run).is_empty() and has.call(move.off)
+	swings += 1
+	# (The sword's clips are a swing and then its recovery.)
+	var whole: float = seconds/CombatAnimation.SWORD_SWING_SHARE if swung=="one" else seconds
+	if swung=="one" and not both and has.call(CombatAnimation.SWORD_OPENER): swing_sword(seconds)
+	elif both and swings%2==0: player.visual.play(move.off,whole)
+	else:
+		var turn: int = (swings-1)/2 if both else swings-1
+		var clip: String = move.clips[turn%move.clips.size()]
+		if not has.call(clip): clip = move.get("fallback",clip)
+		player.visual.play(clip,whole)
 
 # The sword's next swing, its swing taking `seconds`: the swings run on into
 # one another while he keeps swinging (the normal attack, and Vampiric and
@@ -794,9 +798,17 @@ func swing_sword(seconds: float) -> void:
 		# Each clip carries on a moment into the next swing's motion: the
 		# next takes over at that same moment of it, and still ends on time.
 		var into: float = maxf(0.0,phase-share)
-		sword_swing = (sword_swing+1)%CombatAnimation.SWORD_CHAIN.size()
+		# (The axe's chain has no thrust: Items.kind, CombatAnimation.chain.)
+		var chain: Array = CombatAnimation.chain(Items.kind(run))
+		var last: int = sword_swing
+		sword_swing = (sword_swing+1)%chain.size()
 		sword_steps += 1
-		player.visual.play_on(CombatAnimation.SWORD_CHAIN[sword_swing]+CombatAnimation.SWORD_FEET[sword_steps%2],seconds/(share-into),into)
+		var clip: String = chain[sword_swing]+CombatAnimation.SWORD_FEET[sword_steps%2]
+		# A swing the last was not keyed to run on into (the axe's first cut
+		# after its backhand) is faded into instead.
+		var keyed: bool = CombatAnimation.SWORD_CHAIN.find(chain[sword_swing]) == (CombatAnimation.SWORD_CHAIN.find(chain[last])+1)%CombatAnimation.SWORD_CHAIN.size()
+		if keyed: player.visual.play_on(clip,seconds/(share-into),into)
+		else: player.visual.play_from(clip,seconds/(share-into),into)
 	else:
 		sword_swing = 0
 		sword_steps = 0
@@ -818,7 +830,7 @@ func tick_scheduled(dt: float) -> void:
 			"blast": blast(player.position if job.get("follow_player",false) else job.at,2.88,job.damage,true,true)
 			"melee":
 				var hit_list: Array = []
-				var reach: float = 2.44 if job.special else 1.9
+				var reach: float = job.get("reach",1.9)
 				for enemy in targets(player):
 					if enemy.dead or enemy.dormant: continue
 					var offset: Vector3 = enemy.position-player.position
@@ -943,28 +955,59 @@ func out_of_combat() -> bool:
 func safe_checkpoint() -> bool:
 	return not outdoors() and player.position.distance_to(world.spawn)<3 and out_of_combat()
 
-# The ranger carries his bow and his dagger both: he takes up either at any
-# time (X changes between them; a skill made with the other takes it up).
-func take_up(index: int) -> void:
-	if index<0 or index>=Data.WEAPONS.size() or not run.owned[index] or int(run.weapon)==index: return
-	run.weapon = index
-	player.visual.equip(Data.WEAPONS[index])
+# The hero takes up the first weapon in his bag of one of `kinds`, the one
+# in hand going back in its place (the ranger carries his bow and his dagger
+# both: X changes between them, and a skill made with the other takes it up).
+func take_up(kinds: Array) -> bool:
+	if not Items.take_up(run,kinds): return false
+	refit()
+	return true
 
+# X: the other weapon. A ranger's bow for his blade and back; anyone's
+# weapon for the first in the bag he can use.
 func swap_weapon() -> void:
-	if mode!="playing" or player.dead or player.busy>0 or run.class_id!="ranger": return
-	var other: int = 5 if int(run.weapon)==2 else 2
-	if not run.owned[other]: return
-	take_up(other)
-	toast("%s in hand." % Data.WEAPONS[other].capitalize())
+	if mode!="playing" or player.dead or player.busy>0: return
+	var holding: String = Items.kind(run)
+	var kinds: Array = Items.WIELDS[run.class_id].filter(func(k): return k != "shield")
+	if run.class_id=="ranger": kinds = ["dagger","sword"] if holding=="bow" else ["bow"]
+	if not take_up(kinds): return
+	toast("%s in hand." % Items.main(run).name)
 
-func equip(index: int) -> void:
-	if index<0 or index>=Data.WEAPONS.size() or not run.owned[index]: toast("You do not own that weapon."); return
-	if not out_of_combat(): toast("Change equipment out of combat."); return
-	if player.busy>0: return
-	run.weapon = index
-	player.visual.equip(Data.WEAPONS[index])
+# Arms the hero with the plain weapon of a kind ("sword", with the round
+# shield; "bow"; "dagger"...), whatever his class: debug tools and tests.
+func arm(kind: String) -> void:
+	Items.arm(run,kind,kind=="sword")
+	refit()
+
+# What he wears or holds has changed (the inventory, a weapon taken up):
+# his figure is dressed and armed to match, and his health and energy keep
+# within what he now has.
+func refit() -> void:
+	swings = 0
+	player.visual.wear(run.equipment)
+	player.max_hp = Data.max_health(run)
+	player.hp = minf(player.hp,player.max_hp)
+	run.energy = minf(run.energy,Data.max_energy(run))
+
+# A drag in the inventory: what is at `from` to `to` (Items.move). Returns
+# "" if done, or why not.
+func move_item(from: String, to: String) -> String:
+	if player.dead: return "Not now."
+	var problem: String = Items.move(run,from,to)
+	if not problem.is_empty(): return problem
+	skills.cancel_aim()
+	refit()
 	save_run()
-	toast("%s equipped. Check skill requirements in K." % Data.WEAPONS[index].capitalize())
+	return ""
+
+# Dragged out of the inventory: the item is dropped at his feet.
+func discard_item(from: String) -> void:
+	var id: String = Items.at(run,from)
+	if id.is_empty() or player.dead: return
+	Items.put(run,from,"")
+	drop_item(id,player.position+player.forward()*.9)
+	refit()
+	save_run()
 
 func awaken(enemy) -> void:
 	if enemy.awake or enemy.dead or enemy.dormant: return
@@ -982,7 +1025,8 @@ func hurt_player(damage: float, type: String = "physical", source = null) -> voi
 		if is_instance_valid(source): source.landed_attack()
 		return
 	if player.dead or player.invulnerable>0 or invincible_test or (debug.enabled and debug.invulnerable): return
-	damage = Data.mitigate(damage,10.0,0.0,Data.enemy_level(run),type)
+	# The armor he wears takes its share off every blow.
+	damage *= 1.0-Data.armor(run)*.01
 	damage = skills.defend(damage,source)
 	# Struck, the ranger is hidden no longer.
 	skills.leave_shadows()
@@ -1022,13 +1066,11 @@ func enemy_died(enemy) -> void:
 		if levels>0:
 			float_text(player.position+Vector3.UP*2.2,"LEVEL %d" % run.level,Color(1,.86,.45))
 			toast("Level %d: %d attribute points and %d skill point%s to spend." % [run.level,run.points,run.skill_points,"" if run.skill_points==1 else "s"])
+		# It may drop an item (scripts/items.gd; never a second time on a retry).
+		var found: String = loot_forced if not loot_forced.is_empty() else ("" if loot_off else Items.roll_drop(run.class_id,enemy.kind,randf(),randf()))
+		loot_forced = ""
+		if not found.is_empty(): drop_item(found,enemy.position)
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
-	if carriers.has(enemy.uid):
-		var drop: Dictionary = carriers[enemy.uid].duplicate()
-		if not drop.id in run.gems and not (drop.kind=="weapon" and run.owned[drop.value]):
-			drop.position = [enemy.position.x,enemy.position.z]
-			run.drops.append(drop)
-			create_pickup(drop)
 	if enemy.kind=="boss":
 		crown_available = true
 		crown_position = enemy.position
@@ -1045,34 +1087,65 @@ func enemy_died(enemy) -> void:
 		toast("The bandits are routed. %s" % ("The temple's door will open to you now." if Data.temple_open(run) else "Their fellows %s remain." % ("in the cave in the northern desert" if run.place=="basement" else "beneath the arena")))
 	save_run()
 
-func create_pickup(drop: Dictionary) -> void:
-	if drop.kind=="gem" or drop.value in [2,3]: return
-	var color: Color = Data.GEM_COLORS[drop.value] if drop.kind=="gem" else Color(1,.72,.25)
-	var id: String = "gem" if drop.kind=="gem" else Data.WEAPONS[drop.value]
-	var node = Art.model(id,Vector3(.45,.65,.35) if drop.kind=="gem" else Vector3(.6,1.3,.22),Art.material("marble",color))
-	world.add_child(node)
-	node.position = Vector3(drop.position[0],.3,drop.position[1])
-	var seal = Art.seal(1.7,color)
-	world.add_child(seal)
-	seal.position = Vector3(drop.position[0],.05,drop.position[1])
-	pickups.append({"node":node,"seal":seal,"drop":drop})
+# Tests fix what falls: the next enemy slain drops `loot_forced`; nothing
+# drops while `loot_off`.
+var loot_forced = ""
+var loot_off = false
+# The thing on the ground he is walking to, to pick it up.
+var pickup_goal = null
+# How near he must be to pick something up, and how near to do so at once
+# (without walking) when its name is clicked.
+const PICKUP_REACH = 1.5
+const PICKUP_NEAR = 2.4
 
-func tick_pickups(dt: float) -> void:
-	for i in range(pickups.size()-1,-1,-1):
-		var p: Dictionary = pickups[i]
-		p.node.rotation.y += dt
-		p.node.visible = world.can_see(p.node.position)
-		p.seal.visible = p.node.visible
-		if player.position.distance_to(p.node.position)>1.3: continue
-		var drop: Dictionary = p.drop
-		sound.play("gem-pickup")
-		run.owned[drop.value] = true
-		toast("%s acquired · I: equipment" % Data.WEAPONS[drop.value].capitalize())
-		run.drops.erase(drop)
-		p.node.queue_free()
-		p.seal.queue_free()
-		pickups.remove_at(i)
-		save_run()
+# An item falls to the ground at `at` (near it, where there is floor).
+func drop_item(id: String, at: Vector3) -> void:
+	var spot: Vector3 = world.move(at,Vector3(randf_range(-.5,.5),0,randf_range(-.5,.5)))
+	var drop = {"item":id,"position":[spot.x,spot.z]}
+	run.drops.append(drop)
+	create_pickup(drop)
+
+# An item lying on the ground: its own model, laid down, with its name over
+# it (scripts/hud.gd shows the names; clicking one picks the item up).
+func create_pickup(drop: Dictionary) -> void:
+	if not Items.exists(drop.get("item","")): return
+	var node = Node3D.new()
+	world.add_child(node)
+	var at = Vector3(drop.position[0],0,drop.position[1])
+	node.position = at+Vector3.UP*world.lift(at)
+	# (Each lies its own way round, the same each time it is seen.)
+	node.rotation.y = fposmod(at.x*12.9898+at.z*78.233,TAU)
+	node.add_child(Art.laid(drop.item))
+	pickups.append({"node":node,"drop":drop})
+
+func tick_pickups(_dt: float) -> void:
+	for p in pickups: p.node.visible = world.can_see(p.node.position)
+
+# The player clicked an item's name: he picks it up if it is at his feet, or
+# walks to it and picks it up there.
+func pick_up(pickup: Dictionary) -> void:
+	if mode!="playing" or player.dead or not pickup in pickups: return
+	if player.position.distance_to(pickup.node.position) <= PICKUP_NEAR:
+		take_pickup(pickup)
+		return
+	target = null
+	order_pending = false
+	pickup_goal = pickup
+	route = world.path(player.position,pickup.node.position)
+
+func take_pickup(pickup: Dictionary) -> void:
+	pickup_goal = null
+	if not pickup in pickups: return
+	var id: String = pickup.drop.item
+	if not Items.stow(run,id):
+		toast("Your bag is full.")
+		return
+	sound.play("gem-pickup")
+	toast("%s picked up · I: inventory" % Items.get_item(id).name)
+	run.drops.erase(pickup.drop)
+	pickup.node.queue_free()
+	pickups.erase(pickup)
+	save_run()
 
 # Metres per second: arrows, and the casters' bolts and ice.
 const ARROW_SPEED = 20.6
@@ -1312,7 +1385,7 @@ func pause_game() -> void:
 	left_held = false
 	right_held = false
 	save_run()
-	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1–4 skills · Space evade · Q healing spell\nC attributes · K skills · I equipment · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 or Alt+Enter fullscreen (Ctrl+Cmd+F on a Mac)")
+	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1–4 skills · Space evade · Q healing spell\nC attributes · K skills · I inventory · X other weapon · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 or Alt+Enter fullscreen (Ctrl+Cmd+F on a Mac)")
 	hud.button("Resume",resume_game)
 	hud.button("Continue saved ascent",continue_run)
 	hud.button("New ascent / Difficulty",new_run_menu)

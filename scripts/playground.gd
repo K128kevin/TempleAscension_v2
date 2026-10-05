@@ -86,7 +86,7 @@ func build_world() -> void:
 		hero.setup(game,"player","hero:"+class_id,center+Vector3((i-1)*2.5,0,3))
 		hero.rotation.y = PI
 		# Enough of a statue's profile to be targeted, hovered and hit.
-		hero.config = {"title":class_id.capitalize(),"size":1.0,"range":1.9,"interval":.5,"damage":0.0,"weapon":Data.WEAPONS[int(run.weapon)]}
+		hero.config = {"title":class_id.capitalize(),"size":1.0,"range":1.9,"interval":.5,"damage":0.0,"weapon":Data.WEAPONS[Data.weapon(run)]}
 		heroes.append(hero)
 		units.append(hero)
 	for i in KINDS.size():
@@ -114,7 +114,7 @@ func hero_run(class_id: String) -> Dictionary:
 		var s: Dictionary = Book.all()[id]
 		if s.class_id != class_id: continue
 		run.skills[id] = 1
-		if s.effect != "passive" and Book.compatible(id,int(run.weapon)): actives.append(id)
+		if s.effect != "passive" and Book.fits(run,id): actives.append(id)
 	actives.sort_custom(func(a,b): return Book.all()[a].points+Book.all()[a].unlock < Book.all()[b].points+Book.all()[b].unlock)
 	run.hotbar = []
 	for i in 5: run.hotbar.append(actives[i] if actives.size()>i else "")
@@ -191,8 +191,7 @@ func focus() -> Vector3:
 
 func toggle_death() -> void:
 	if selected.dead:
-		var weapon = Data.WEAPONS[int(hero_runs[selected.uid.trim_prefix("hero:")].weapon)] if selected.kind=="player" else ""
-		selected.playground_revive(weapon)
+		selected.playground_revive(hero_runs[selected.uid.trim_prefix("hero:")].equipment if selected.kind=="player" else {})
 		if selected.kind != "player": selected.visual.play(selected.visual.idle_action())
 	else:
 		selected.playground_kill()

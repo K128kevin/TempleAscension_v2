@@ -45,17 +45,19 @@ const ENEMIES = {
 	"bandit_archer":{"title":"Bandit Archer","as":"archer","human":"bandit","hp":27.0,"damage":15.0,"speed":3.6,"range":10.6,"interval":1.3,"weapon":"bow","size":1.0,"color":Color(.5,.4,.3)},
 	"boss":{"title":"The Crowned Statue","hp":1875.0,"damage":101.25,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
+const Items = preload("res://scripts/items.gd")
 const CLASSES = ["warrior","ranger","wizard"]
-# (The dagger is the ranger's second weapon, carried with his bow.)
-const WEAPONS = ["spear","sword","bow","axe","staff","dagger"]
-# The shields a hero may carry with the sword: x percent chance to block an
-# attack, and y percent less damage from one that is blocked. (The warrior
-# starts with the round shield.)
-const SHIELDS = {"round_shield":{"title":"Round Shield","block":25.0,"mitigation":20.0}}
+# The kinds of weapon, by number (weapon()): what is in the main hand, the
+# last with nothing there. (What a hero wears and holds is scripts/items.gd.)
+const WEAPONS = ["spear","sword","bow","axe","staff","dagger","mace","unarmed"]
+const UNARMED = 7
 const SPECIALS = ["Jab","Slash","Rapid Fire","Whirl","Arcane Bolt","Stab"]
 const COSTS = [15.0,20.0,18.0,35.0,12.0,15.0]
 const STATS = ["Strength","Dexterity","Intelligence","Vitality","Willpower"]
 const STAT_HELP = ["+2% melee damage (dagger too)","+2% bow damage; +0.3% attack speed; +0.25% critical strike chance","+2% spell damage","+10 maximum health","+3 maximum energy; +0.1 energy/sec"]
+# A wizard's spells are worked from a set baseline (a hit's least and most
+# before Intelligence), not from the weapon in hand; a staff may raise them.
+const SPELL_SPAN = [10.0,15.0]
 const GEM_COLORS = [Color(1,.20,.24),Color(.2,1,.63),Color(.2,.58,1),Color(.8,.9,1)]
 const DIFFICULTIES = ["Easy","Moderate","Hard"]
 const HEALTH_SCALE = [.9,1.1,1.4]
@@ -74,7 +76,9 @@ const MELEE_MINIMUM = .2
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	return {"version":10,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"owned":[false,class_id=="warrior",class_id=="ranger",false,class_id=="wizard",class_id=="ranger"],"weapon":{"warrior":1,"ranger":2,"wizard":4}.get(class_id,1),"shield":"round_shield" if class_id=="warrior" else "","difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	var run = {"version":11,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	Items.outfit(run,class_id)
+	return run
 
 # The floor the run is on (in the world outside, the temple's first).
 static func area(run: Dictionary) -> Dictionary:
@@ -124,26 +128,60 @@ static func new_character(class_id: String = "warrior") -> Dictionary:
 static func passive(run: Dictionary, id: String) -> float:
 	return Skills.value(id,int(run.skills.get(id,0)))
 
+# An attribute as it counts: the points spent on it, and what the hero's
+# equipment adds.
+static func stat(run: Dictionary, index: int) -> int:
+	return int(run.stats[index])+int(Items.bonus(run,Items.ATTRIBUTES[index]))
+
+# The kind of weapon in the main hand, as its number in WEAPONS.
+static func weapon(run: Dictionary) -> int:
+	return WEAPONS.find(Items.kind(run))
+
+# How the weapon in hand is swung: "one", "heavy", "pike", "bow", "staff",
+# "dagger" or "fist" (Items.family).
+static func family(run: Dictionary) -> String:
+	return Items.family(Items.main(run))
+
 static func max_health(run: Dictionary) -> float:
-	return 100.0+(run.stats[3]-5)*10.0
+	return 100.0+(stat(run,3)-5)*10.0+Items.bonus(run,"health")
 
 static func max_energy(run: Dictionary) -> float:
-	return 100.0+(run.stats[4]-5)*3.0+passive(run,"arcane_reserve")
+	return 100.0+(stat(run,4)-5)*3.0+passive(run,"arcane_reserve")+Items.bonus(run,"energy")
 
 static func energy_regen(run: Dictionary) -> float:
-	return (max_energy(run)*.1+(run.stats[4]-5)*.1+passive(run,"attunement"))*(1.0+passive(run,"endurance")*.01)
+	return (max_energy(run)*.1+(stat(run,4)-5)*.1+passive(run,"attunement"))*(1.0+passive(run,"endurance")*.01)
 
 # (Strength serves every weapon in hand, the dagger's too; Dexterity the bow.)
-static func scaling_tag(weapon: int) -> String:
-	return "ranged" if weapon==2 else ("spell" if weapon==4 else "melee")
+static func scaling_tag(kind: int) -> String:
+	return "ranged" if kind==2 else ("spell" if kind==4 else "melee")
 
+# `base` damage of `tag` as the hero's attributes raise it: 2% for each point
+# of Strength (melee), Dexterity (ranged) or Intelligence (spells), and for
+# spells Elemental Mastery and whatever spell damage his equipment adds.
 static func damage_tag(run: Dictionary, tag: String, base: float) -> float:
 	var index: int = {"melee":0,"ranged":1,"spell":2}[tag]
 	var bonus = passive(run,"elemental_mastery")*.01 if tag=="spell" else 0.0
-	return base*(1.0+(run.stats[index]-5)*.02)*(1.0+bonus)
+	var gear = Items.bonus(run,"spell_damage")*.01 if tag=="spell" else 0.0
+	return base*(1.0+(stat(run,index)-5)*.02)*(1.0+bonus)*(1.0+gear)
 
 static func damage(run: Dictionary, roll: float = 12.5) -> float:
-	return damage_tag(run,scaling_tag(int(run.weapon)),roll)
+	return damage_tag(run,scaling_tag(weapon(run)),roll)
+
+# The baseline of a hit of `tag`, its least and most before attributes: the
+# damage of the weapon it is made with (Items.damage_span), which the normal
+# attack deals and every skill deals a percentage of. A wizard's spells (and
+# his staff's bolts) are not the weapon's: theirs is SPELL_SPAN.
+static func span(run: Dictionary, tag: String) -> Array:
+	return SPELL_SPAN if tag=="spell" else Items.damage_span(run,tag)
+
+# One hit's baseline, by chance within its span.
+static func roll(run: Dictionary, tag: String) -> float:
+	var between: Array = span(run,tag)
+	return randf_range(between[0],between[1])
+
+# Percent less damage the hero takes, for the armor he wears.
+static func armor(run: Dictionary) -> float:
+	return Items.armor(run)
 
 static func cooldown(_run: Dictionary) -> float: return .5
 
@@ -151,7 +189,7 @@ static func cooldown(_run: Dictionary) -> float: return .5
 # point of Dexterity.
 const HASTE_PER_DEXTERITY = .3
 static func attack_haste(run: Dictionary) -> float:
-	return (run.stats[1]-5)*HASTE_PER_DEXTERITY
+	return (stat(run,1)-5)*HASTE_PER_DEXTERITY+Items.bonus(run,"haste")
 
 # Percent chance that a hit the hero lands is a critical hit, for double
 # damage: 20%, and 0.25% more for each point of Dexterity.
@@ -159,7 +197,7 @@ const CRIT_BASE = 20.0
 const CRIT_PER_DEXTERITY = .25
 const CRIT_MULTIPLIER = 2.0
 static func crit_chance(run: Dictionary) -> float:
-	return CRIT_BASE+(run.stats[1]-5)*CRIT_PER_DEXTERITY
+	return CRIT_BASE+(stat(run,1)-5)*CRIT_PER_DEXTERITY+Items.bonus(run,"crit")
 
 # The ranger's mastery of the weapon a hit is made with (Bow and Dagger
 # Specialization): its x percent more chance to crit, and y percent more
@@ -169,11 +207,9 @@ static func specialization(run: Dictionary, weapon: int) -> Dictionary:
 	if id.is_empty(): return {"x":0.0,"y":0.0,"z":0.0}
 	return Skills.values(id,int(run.skills.get(id,0)))
 
-# The shield in hand (the sword is carried with one), or {} with none. (A
-# character from before shields had stats carries the round shield.)
+# The shield in the off hand (its "block" and "mitigation"), or {} with none.
 static func shield(run: Dictionary) -> Dictionary:
-	if int(run.weapon)!=1: return {}
-	return SHIELDS.get(run.get("shield","round_shield"),{})
+	return Items.shield(run)
 
 # Percent chance to block an attack, and percent less damage a blocked attack
 # deals: the shield's own, and Shield Expertise's on top. Nothing without a shield.

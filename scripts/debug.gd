@@ -1,6 +1,7 @@
 extends Node
 ## Opt-in playtest controls, matching the original game's DebugMenu.
 const Data = preload("res://scripts/data.gd")
+const Items = preload("res://scripts/items.gd")
 var game
 var enabled = false
 var invulnerable = false
@@ -13,6 +14,7 @@ const ACTIONS = [
 	[KEY_F,"refill","F · Refill health / energy"],
 	[KEY_H,"axe","H · Grant battle axe"],
 	[KEY_J,"bow","J · Grant bow"],
+	[KEY_F6,"loot","F6 · Drop a random item"],
 	[KEY_Y,"skills","Y · Reset skills"],
 	[KEY_N,"next","N · Next floor"],
 	[KEY_B,"boss","B · Boss + level 25"],
@@ -39,8 +41,8 @@ func apply_start(args: PackedStringArray) -> void:
 				destination = int(value)-1
 	if "--boss" in args: destination = Data.FLOORS-1
 	if destination>=0: prepare_floor(destination)
-	if "--axe" in args: game.run.owned[3] = true
-	if "--bow" in args: game.run.owned[2] = true
+	if "--axe" in args: Items.stow(game.run,Items.PLAIN.axe)
+	if "--bow" in args: Items.stow(game.run,Items.PLAIN.bow)
 	if destination>=0 or "--axe" in args or "--bow" in args:
 		game.run.health = Data.max_health(game.run)
 		game.run.energy = Data.max_energy(game.run)
@@ -144,9 +146,14 @@ func execute(action: String, floor_index: int = 0) -> void:
 			game.run.energy = Data.max_energy(game.run)
 			game.toast("[Debug] Health and energy refilled")
 		"axe", "bow":
-			var index = 3 if action=="axe" else 2
-			game.run.owned[index] = true
-			game.toast("[Debug] %s granted · I: equipment" % Data.WEAPONS[index].capitalize())
+			# (Into the bag; whether the class can use it is the inventory's affair.)
+			var granted: String = Items.PLAIN[action]
+			if Items.stow(game.run,granted): game.toast("[Debug] %s granted · I: inventory" % Items.get_item(granted).name)
+			else: game.toast("[Debug] The bag is full")
+		"loot":
+			# One of the items enemies drop (any class's), at the hero's feet.
+			var all: Array = Items.ALL.keys().filter(func(id): return Items.ALL[id].has("rarity"))
+			game.drop_item(all[randi()%all.size()],game.player.position+game.player.forward()*1.2)
 		"skills":
 			Data.reset_skills(game.run)
 			game.run.energy = minf(game.run.energy,Data.max_energy(game.run))
