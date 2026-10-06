@@ -213,17 +213,17 @@ func test():
 	victim = foe(6.0)
 	dealt = blows(victim,16)
 	check(dealt[0] >= 10.0*1.05-.001 and dealt[1] <= 15.0*1.05+.001,"The staff's bolts hit for the baseline, not for a weapon's damage (%.1f to %.1f)" % dealt)
-	game.run.skills = {"firebolt":1}
-	var with_silver: String = game.skills.damage_summary("firebolt",1).damage
+	game.run.skills = {"fireball":1}
+	var with_silver: String = game.skills.damage_summary("fireball",1).damage
 	game.run.bag[0] = "oracle_staff"
 	check(game.move_item("bag:0","main") == "" and Data.stat(game.run,2) == 8 and is_equal_approx(Data.damage_tag(game.run,"spell",100.0),100.0*1.06*1.2),"The Oracle's Staff: +3 Intelligence and 20% more spell damage")
-	check(game.skills.damage_summary("firebolt",1).damage != with_silver,"and a spell's tip shows it (%s, was %s)" % [game.skills.damage_summary("firebolt",1).damage,with_silver])
+	check(game.skills.damage_summary("fireball",1).damage != with_silver,"and a spell's tip shows it (%s, was %s)" % [game.skills.damage_summary("fireball",1).damage,with_silver])
 	game.run.bag[1] = "viper_fang"
 	check(game.move_item("bag:1","main") == "" and game.player.visual.weapon_kind == "dagger" and is_equal_approx(Data.damage_tag(game.run,"spell",100.0),100.0),"With a dagger in hand, his spells are his Intelligence's alone")
 	ready(); victim = foe(6.0)
-	check(game.skills.reason("firebolt") == "" and game.skills.cast("firebolt",victim.position),"and can still be cast")
+	check(game.skills.reason("fireball") == "" and game.skills.cast("fireball",victim.position),"and can still be cast")
 	play(2.0)
-	check(victim.hp < victim.max_hp,"Firebolt burns what it reaches")
+	check(victim.hp < victim.max_hp,"Fireball burns what it reaches")
 	ready(); victim = foe(1.4)
 	dealt = blows(victim,12)
 	check(dealt[0] >= 12.0-.001 and dealt[1] <= 17.0+.001 and game.player.visual.state in ["DaggerStab","DaggerSlash"],"His dagger stabs for its own damage (%.1f to %.1f)" % dealt)
@@ -402,11 +402,14 @@ func test():
 	game.hud.tick(0)
 	check(game.hud.item_labels.filter(func(b): return b.visible).is_empty(),"and its name is gone")
 	# From further off he walks to it first.
-	game.drop_item("flanged_mace",origin+Vector3(0,0,-6))
+	# (Laid exactly, not where chance would put it, so he always has a path.)
+	var spot: Vector3 = game.world.move(origin,Vector3(0,0,-6))
+	var mace = {"item":"flanged_mace","position":[spot.x,spot.z]}
+	game.run.drops.append(mace); game.create_pickup(mace)
 	lying = game.pickups[0]
 	game.pick_up(lying)
 	check(game.pickups.size() == 1 and game.pickup_goal == lying and not game.route.is_empty(),"Clicked from afar, he sets out for it")
-	for i in 400:
+	for i in 900:
 		game.player.tick(STEP); game.player_control(STEP)
 		if game.pickups.is_empty(): break
 	check(game.pickups.is_empty() and "flanged_mace" in game.run.bag and game.player.position.distance_to(origin) > 3.0,"and picks it up when he reaches it")
@@ -470,7 +473,7 @@ func test():
 	old["owned"] = [false,true,true,false,false,false]; old["weapon"] = 1; old["shield"] = "round_shield"
 	old.drops = [{"kind":"weapon","value":4,"id":"weapon:1","position":[0,9]}]
 	var migrated = Save.migrate(old)
-	check(Save.valid(old) and Save.valid(migrated) and migrated.version == 11 and migrated.equipment == Data.new_run("warrior").equipment and "yew_longbow" in migrated.bag and migrated.drops.is_empty() and not migrated.has("owned"),"An earlier save is given its class's starting equipment, and a bow it owned in its bag")
+	check(Save.valid(old) and Save.valid(migrated) and migrated.version == Data.new_run().version and migrated.equipment == Data.new_run("warrior").equipment and "yew_longbow" in migrated.bag and migrated.drops.is_empty() and not migrated.has("owned"),"An earlier save is given its class's starting equipment, and a bow it owned in its bag")
 
 	# --- The inventory.
 	hero("warrior")

@@ -6,6 +6,7 @@ const Art = preload("res://scripts/assets.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const Bandit = preload("res://scripts/bandit.gd")
 const Vfx = preload("res://scripts/vfx.gd")
+const WizardFx = preload("res://scripts/wizard_fx.gd")
 var game
 var visual
 var kind = "player"
@@ -72,6 +73,15 @@ var daze = ""
 var daze_bonus = 0.0
 var wander_way = Vector3.ZERO
 var wander_time = 0.0
+# The wizard's ice: chilled (slowed) for this long. His Lightning Rod: a jolt
+# leaps from it to the enemies about it whenever it is hurt, for `rod_percent`
+# of his spell damage, at most once every ROD_PAUSE seconds.
+var chill_time = 0.0
+var rod_time = 0.0
+var rod_percent = 0.0
+var rod_pause = 0.0
+var rod_mark: Node3D
+const ROD_PAUSE = .5
 # Weakening Strike: each stack makes critical strikes on it deal `weak_bonus`
 # percent more, for WEAK_SECONDS from the last.
 const WEAK_SECONDS = 6.0
@@ -198,6 +208,12 @@ func tick(dt: float) -> void:
 	if held_travel > 0.0 and not strike_landed: visual.owed += forward()*held_travel
 	visual.owed += forward()*catch_up
 	slow_time = maxf(0,slow_time-dt)
+	chill_time = maxf(0,chill_time-dt)
+	rod_time = maxf(0,rod_time-dt)
+	rod_pause = maxf(0,rod_pause-dt)
+	if rod_time<=0 and is_instance_valid(rod_mark):
+		rod_mark.queue_free()
+		rod_mark = null
 	mark_time = maxf(0,mark_time-dt)
 	weak_time = maxf(0,weak_time-dt)
 	if weak_time<=0: weak_stacks = 0
@@ -208,6 +224,7 @@ func tick(dt: float) -> void:
 	if stunned and stagger_time<=0: end_stun()
 	if is_instance_valid(stun_mark):
 		if daze in ["stun","ambush"]: stun_mark.rotation.y += dt*4.0
+		elif daze in ["freeze","prison"]: pass
 		else: stun_mark.position.y = config.get("size",1.0)*2.2+sin(death_age_clock*3.0)*.08
 	death_age_clock += dt
 	hit_stun = maxf(0,hit_stun-dt)
@@ -660,7 +677,7 @@ func ambush(seconds: float, percent: float) -> void:
 
 # Held for `seconds` by a daze of `how`: its attack broken off, its mark
 # over its head.
-const DAZE_MARKS = {"stun":Color(1,.88,.35,.95),"ambush":Color(1,.3,.2,.95),"sleep":Color(.6,.8,1),"confuse":Color(.95,.82,.55)}
+const DAZE_MARKS = {"stun":Color(1,.88,.35,.95),"ambush":Color(1,.3,.2,.95),"sleep":Color(.6,.8,1),"confuse":Color(.95,.82,.55),"freeze":Color(.65,.88,1),"prison":Color(.65,.88,1)}
 func held(how: String, seconds: float) -> void:
 	stunned = true
 	daze = how
@@ -675,6 +692,11 @@ func held(how: String, seconds: float) -> void:
 	busy = 0
 	if is_instance_valid(stun_mark): stun_mark.queue_free()
 	var size: float = config.get("size",1.0)
+	if how in ["freeze","prison"]:
+		# Ice closed about it, from the floor up (scripts/wizard_fx.gd).
+		stun_mark = WizardFx.ice_block(size,how=="prison")
+		add_child(stun_mark)
+		return
 	if how in ["stun","ambush"]:
 		# A halo turning over its head: gold, or red for an ambush.
 		stun_mark = Art.seal(.8*size,DAZE_MARKS[how])
@@ -696,6 +718,7 @@ func held(how: String, seconds: float) -> void:
 	stun_mark.position = Vector3.UP*size*2.2
 
 func end_stun() -> void:
+	if daze in ["freeze","prison"] and is_instance_valid(stun_mark) and not dead: WizardFx.shatter(game.world,position+Vector3.UP*.9*config.get("size",1.0),1.2*config.get("size",1.0))
 	stunned = false
 	daze = ""
 	daze_bonus = 0.0
@@ -719,11 +742,42 @@ func weaken(percent: float, cap: int) -> void:
 	weak_bonus = percent
 	weak_time = WEAK_SECONDS
 
-# Slow Shot: it moves `percent` slower for `seconds`.
+# Slow Shot: it moves `percent` slower for `seconds`. (Slowed twice over, the
+# deeper slow holds while both last.)
 func slow(percent: float, seconds: float) -> void:
 	if dead or dormant: return
-	slow_factor = clampf(1.0-percent*.01,.05,1.0)
+	var factor = clampf(1.0-percent*.01,.05,1.0)
+	slow_factor = minf(slow_factor,factor) if slow_time>0 else factor
 	slow_time = maxf(slow_time,seconds)
+
+# The wizard's ice: chilled, it is slowed and marked so for `seconds`.
+func chill(percent: float, seconds: float) -> void:
+	if dead or dormant: return
+	slow(percent,seconds)
+	chill_time = maxf(chill_time,seconds)
+
+func chilled() -> bool:
+	return chill_time>0
+
+# Frozen solid (Ice Bolt's chance, Ice Prison): held fast for `seconds`,
+# whatever is done to it; in a prison it takes `percent` more.
+func freeze(seconds: float, percent: float = 0.0) -> void:
+	if dead or dormant or laser_time>0: return
+	held("prison" if percent>0 else "freeze",seconds)
+	daze_bonus = percent
+	visual.locomotion(false,false)
+	game.float_text(position+Vector3.UP*1.9,"Frozen",Color(.65,.88,1))
+
+# Lightning Rod: for `seconds`, each hurt on it sends a jolt of `percent` out
+# to the enemies about it (Skills.rod_jolt).
+func make_rod(percent: float, seconds: float) -> void:
+	if dead or dormant: return
+	rod_percent = percent
+	rod_time = maxf(rod_time,seconds)
+	if not is_instance_valid(rod_mark):
+		rod_mark = WizardFx.rod_mark(config.get("size",1.0))
+		add_child(rod_mark)
+	game.float_text(position+Vector3.UP*1.9,"Lightning Rod",Color(.7,.85,1))
 
 # The hero is lost to it (he hides in the shadows): it stands down where it
 # is, until it sees him again.
@@ -757,7 +811,8 @@ func tick_dots(dt: float) -> void:
 		return
 	var dealt: float = Data.mitigate(total,armor(),0.0,int(game.run.level),"physical")
 	hp -= dealt
-	if dealt>0 and daze != "ambush": end_stun()
+	if dealt>0 and not daze in ["ambush","freeze","prison"]: end_stun()
+	if dealt>0 and rod_time>0: game.skills.rod_jolt(self)
 	# Shown as one number a kind every half second rather than one a frame.
 	for k in by_kind:
 		if total>0: dot_shown[k] = dot_shown.get(k,0.0)+dealt*by_kind[k]/total
@@ -799,10 +854,12 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	damage = Data.mitigate(damage,armor(),0.0,int(game.run.level),type)+bonus
 	if mark_time>0: damage *= 1.2
 	if rally_time>0: damage *= 1.0+rally_bonus*.01
-	# Stunned by an ambush, it takes more, and the stun holds.
-	if daze=="ambush": damage *= 1.0+daze_bonus*.01
+	# Stunned by an ambush, or frozen in an ice prison, it takes more, and
+	# the stun holds (as a plain freeze does).
+	if daze in ["ambush","prison"]: damage *= 1.0+daze_bonus*.01
 	hp -= damage
-	if damage>0 and daze != "ambush": end_stun()
+	if damage>0 and not daze in ["ambush","freeze","prison"]: end_stun()
+	if damage>0 and rod_time>0 and not dead: game.skills.rod_jolt(self)
 	game.sound.play(impact_sound(),-15)
 	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),HIT_COLORS[look],look=="crit")
 	if human and damage>0: bleed(death_impact,hp<=0)

@@ -47,9 +47,9 @@ func test():
 			if Book.all()[id].class_id==class_id and Book.all()[id].effect!="passive": game.run.skills[id] = 1
 		for id in game.run.skills:
 			var s: Dictionary = Book.all()[id]
-			# (The ranger's, each with its own conditions, are played through in
-			# tests/ranger_skills.gd.)
-			if class_id=="ranger": continue
+			# (The ranger's and the wizard's, each with its own conditions, are
+			# played through in tests/ranger_skills.gd and tests/wizard_skills.gd.)
+			if class_id in ["ranger","wizard"]: continue
 			game.skills.reset(); game.scheduled.clear()
 			game.player.position = origin; game.leap_left = 0
 			game.player.busy = 0; game.player.cooldown = 0
@@ -69,15 +69,11 @@ func test():
 			game.skills.tick(1.0)
 			if s.tag!="" and s.effect!="cry": check(victim.hp<full,"Skill deals damage: "+id)
 			elif s.effect=="cry": check(victim.rally_time>0,"War Cry cows the enemy: "+id)
-			elif s.effect=="barrier": check(game.skills.barrier>0,"Barrier supplies absorption")
-			elif s.effect=="snare": check(victim.slow_time>0,"Snare slows enemies")
-			elif s.effect=="mark": check(victim.mark_time>0,"Marked Prey applies vulnerability")
-			elif s.effect=="blink": check(game.player.position.distance_to(origin)>.5 and game.world.fits(game.player.position),"Blink moves without crossing walls")
 			if s.effect=="bash": check(victim.stunned and game.skills.cooldowns.shield_bash>0,"Shield Bash stuns and recharges")
 		game.skills.reset(); game.leap_left = 0; victim.end_stun(); victim.dots.clear()
 		game.player.busy=0; game.player.cooldown=0
 		game.player.position=origin
-		var owned_id = "cleave" if class_id=="warrior" else ("power_shot" if class_id=="ranger" else "firebolt")
+		var owned_id = "cleave" if class_id=="warrior" else ("power_shot" if class_id=="ranger" else "fireball")
 		game.run.hotbar=[owned_id,"","","",""]
 		# The warrior with a bow in hand and no blade in his bag; the ranger with
 		# his dagger in hand (he carries his bow as well, and takes it up for

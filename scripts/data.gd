@@ -76,7 +76,7 @@ const MELEE_MINIMUM = .2
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	var run = {"version":11,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	var run = {"version":12,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 	Items.outfit(run,class_id)
 	return run
 
@@ -146,10 +146,10 @@ static func max_health(run: Dictionary) -> float:
 	return 100.0+(stat(run,3)-5)*10.0+Items.bonus(run,"health")
 
 static func max_energy(run: Dictionary) -> float:
-	return 100.0+(stat(run,4)-5)*3.0+passive(run,"arcane_reserve")+Items.bonus(run,"energy")
+	return 100.0+(stat(run,4)-5)*3.0+Items.bonus(run,"energy")
 
 static func energy_regen(run: Dictionary) -> float:
-	return (max_energy(run)*.1+(stat(run,4)-5)*.1+passive(run,"attunement"))*(1.0+passive(run,"endurance")*.01)
+	return (max_energy(run)*.1+(stat(run,4)-5)*.1)*(1.0+passive(run,"endurance")*.01)
 
 # (Strength serves every weapon in hand, the dagger's too; Dexterity the bow.)
 static func scaling_tag(kind: int) -> String:
@@ -157,12 +157,11 @@ static func scaling_tag(kind: int) -> String:
 
 # `base` damage of `tag` as the hero's attributes raise it: 2% for each point
 # of Strength (melee), Dexterity (ranged) or Intelligence (spells), and for
-# spells Elemental Mastery and whatever spell damage his equipment adds.
+# spells whatever spell damage his equipment adds.
 static func damage_tag(run: Dictionary, tag: String, base: float) -> float:
 	var index: int = {"melee":0,"ranged":1,"spell":2}[tag]
-	var bonus = passive(run,"elemental_mastery")*.01 if tag=="spell" else 0.0
 	var gear = Items.bonus(run,"spell_damage")*.01 if tag=="spell" else 0.0
-	return base*(1.0+(stat(run,index)-5)*.02)*(1.0+bonus)*(1.0+gear)
+	return base*(1.0+(stat(run,index)-5)*.02)*(1.0+gear)
 
 static func damage(run: Dictionary, roll: float = 12.5) -> float:
 	return damage_tag(run,scaling_tag(weapon(run)),roll)

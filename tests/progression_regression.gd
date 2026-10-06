@@ -23,8 +23,8 @@ func test():
 			check(s.tree in Book.trees(class_id),"Every skill sits in one of the class's three trees: "+s.id)
 			if class_id=="warrior": check(s.max_rank==5 and s.ranks.size()==5 and s.points in [0,5,10,15] and Book.rank_cap(s.id,1)==5,"Warrior skills have five listed ranks behind a tree requirement: "+s.id)
 			elif class_id=="ranger": check(s.max_rank in [1,5] and s.ranks.size()==s.max_rank and s.points in [0,5,10] and Book.rank_cap(s.id,1)==s.max_rank,"Ranger skills have their listed ranks behind a tree requirement: "+s.id)
-			else: check(Book.rank_cap(s.id,s.unlock-1)==0 and Book.rank_cap(s.id,s.unlock)==1 and Book.rank_cap(s.id,s.unlock+3)==2,"Level/rank gate: "+s.id)
-		check(active=={"warrior":11,"ranger":14}.get(class_id,8) and passive=={"warrior":8,"ranger":6}.get(class_id,4),"The class's active skills and passives: "+class_id)
+			else: check(s.max_rank in [1,5] and s.ranks.size()==s.max_rank and s.points in [0,5,10] and s.tree in ["ice","fire","lightning"] and Book.rank_cap(s.id,1)==s.max_rank,"Wizard spells have their listed ranks behind a tree requirement, in their element's tree: "+s.id)
+		check(active=={"warrior":11,"ranger":14}.get(class_id,14) and passive=={"warrior":8,"ranger":6}.get(class_id,5),"The class's active skills and passives: "+class_id)
 		Data.gain_xp(run,Data.xp_at_level(15))
 		check(run.level==15 and run.points==70 and run.skill_points==15 and Data.max_health(run)==100,"Level 15 awards 70 attributes and 15 total skills without implicit stats: "+class_id)
 		check(Save.valid(run),"Progression state validates: "+class_id)
@@ -60,7 +60,7 @@ func test():
 	# A skill opens once enough points are spent in its own tree.
 	var fresh = Data.new_run()
 	fresh.skills = {"cleave":1}; fresh.skill_points = 1
-	check(not Book.learn(fresh,"meteor"),"Cannot learn another class's skill")
+	check(not Book.learn(fresh,"fireball"),"Cannot learn another class's skill")
 	check(not Book.learn(fresh,"leap") and fresh.skill_points==1,"Leap is locked without five points in Area of Effect")
 	check(Book.learn(fresh,"cleave") and fresh.skills.cleave==2 and fresh.skill_points==0,"Ranks are bought with skill points, not held back by level")
 	check(not Book.learn(fresh,"cleave"),"No skill points, no rank")

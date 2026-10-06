@@ -8,6 +8,7 @@ const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const RangerFx = preload("res://scripts/ranger_fx.gd")
 const Crackle = preload("res://scripts/crackle.gd")
 const Motion = preload("res://scripts/combat_animation.gd")
+const WizardFx = preload("res://scripts/wizard_fx.gd")
 var game
 var pending: Array = []
 var zones: Array = []
@@ -85,6 +86,67 @@ const POWER_DRAW = .78
 # one it hits takes the blow too.
 const POWER_BURST = 2.5
 const POWER_HOLD = .76
+# The wizard. A channelled spell being held (Freeze Floor, Frost Blast):
+# its id, rank and hotbar slot, the stream it pours out, and where its frost
+# last iced the floor. Ice Storm, Blazing Speed and Lightning Shield while
+# they last (the shield's absorption is `barrier`); Pyromaniac's burn on him;
+# and the ice lying on the floor ({"at","radius","left","slow","node"}).
+var channel: Dictionary = {}
+# Tests hold or let go of a channel (-1: as the button is).
+var channel_hold_override = -1
+# The slot the spell now being cast was cast from (-1: by name).
+var casting_slot = -1
+var storm_time = 0.0
+var storm_percent = 0.0
+var storm_node: Node3D
+var blazing_time = 0.0
+var blaze_node: Node3D
+var shield_time = 0.0
+var shield_percent = 0.0
+var shield_node: Node3D
+var burn_left = 0.0
+var burn_rate = 0.0
+var burn_node: Node3D
+var patches: Array = []
+# What every ice spell does besides: the chill, the chance of a freeze, and
+# the ice left on the floor.
+const CHILL_SLOW = 40.0
+const CHILL_SECONDS = 3.0
+const FREEZE_SECONDS = 3.0
+const PATCH_RADIUS = .9
+const PATCH_SECONDS = 6.0
+const FLOOR_SECONDS = 10.0
+const SPELL_REACH = 13.0
+const SPIKES_RADIUS = 2.0
+const FROST_REACH = 10.0
+const FROST_RADIUS = 3.0
+const STORM_RADIUS = 4.0
+const STORM_COOLDOWN = 60.0
+const BLAST_RADIUS = 5.0
+const TORNADO_RADIUS = 2.0
+const TORNADO_SECONDS = 6.0
+const BLAZING_RUN = 75.0
+const BLAZING_COOLDOWN = 60.0
+const SHIELD_SECONDS = 60.0
+const SHIELD_COOLDOWN = 60.0
+const SHOCK_COOLDOWN = 45.0
+const ROD_SECONDS = 10.0
+const ROD_LEAP = 5.0
+const ROD_LEAPS = 3
+const ROD_FADE = .7
+const IGNITION_RADIUS = 2.0
+const BURN_SECONDS = 3.0
+const BURN_SHARE = .1
+# Each spell's casting (tools/import_wizard.py): its clip, how long it plays,
+# and how far through it the spell leaves his hand.
+const CAST_CLIPS = {"icebolt":["CastBolt",.6,.5],"fireball":["CastBolt",.6,.5],"bolt":["CastBolt",.6,.5],
+	"prison":["CastPoint",.7,.5],"rod":["CastPoint",.7,.5],"shock":["CastPoint",.7,.5],
+	"spikes":["CastGround",.9,.55],"tornado":["CastGround",.9,.55],
+	"blastwave":["CastSelf",1.0,.5],"icestorm":["CastSelf",1.0,.5],"lshield":["CastSelf",1.0,.5],"blazing":["CastSelf",1.0,.5],
+	"freezefloor":["CastChannel",1.2,0.0],"frostblast":["CastChannel",1.2,0.0]}
+# Spells cast on himself, and the single-target ones that need an enemy before him.
+const SELF_SPELLS = ["blastwave","icestorm","lshield","blazing"]
+const AIMED_SPELLS = ["prison","rod","shock","bolt"]
 # How far (centre to centre) the warrior's blows reach, and how far he leaps.
 const MELEE_REACH = 1.9
 const CLEAVE_REACH = 2.6
@@ -137,6 +199,14 @@ func reset() -> void:
 		if is_instance_valid(f[0]): f[0].queue_free()
 	passing.clear()
 	if is_instance_valid(frenzy_aura): frenzy_aura.queue_free()
+	end_channel()
+	for node in [storm_node,blaze_node,shield_node,burn_node]:
+		if is_instance_valid(node): node.queue_free()
+	storm_node = null; blaze_node = null; shield_node = null; burn_node = null
+	storm_time = 0; storm_percent = 0; blazing_time = 0; shield_time = 0; shield_percent = 0; burn_left = 0; burn_rate = 0
+	for p in patches:
+		if is_instance_valid(p.node): p.node.queue_free()
+	patches.clear()
 	cancel_aim()
 
 func rank(id: String) -> int:
@@ -157,11 +227,15 @@ func reason(id: String) -> String:
 		if not game.out_of_combat(): return "Hide in Shadows needs you out of combat."
 	if s.effect=="vanish" and hidden: return "Already hidden."
 	if s.effect=="ambush" and not hidden: return "Surprise Attack needs you hidden in shadows."
+	if storm_time>0 and s.class_id=="wizard" and s.tree!="ice": return "Only frost spells while the Ice Storm rages."
 	return ""
 
+# What a skill costs (a channelled spell: a second of it). Blazing Speed makes
+# fire spells free while it lasts.
 func cost(id: String) -> float:
 	var s: Dictionary = Book.all()[id]
-	return Book.cost(id,rank(id))*(1.0-Data.passive(game.run,"efficient_casting")*.01 if s.class_id=="wizard" else 1.0)
+	if blazing_time>0 and Book.element(id)=="fire": return 0.0
+	return Book.cost(id,rank(id))
 
 # How close the hero comes to a unit he is ordered to use the skill on.
 func reach(id: String) -> float:
@@ -171,7 +245,8 @@ func reach(id: String) -> float:
 		# (With the dagger in hand; with the bow it is a shot.)
 		"weaken": return melee_reach() if Data.weapon(game.run)==5 else 13.0
 		"sand": return SAND_REACH-.4
-		"frenzy","hide","vanish": return 1000.0
+		"frenzy","hide","vanish","blastwave","icestorm","lshield","blazing": return 1000.0
+		"spikes","tornado","freezefloor","frostblast","icebolt","fireball","bolt","prison","rod","shock": return SPELL_REACH
 		"leap": return LEAP_RANGE
 		"slam": return maxf(melee_reach(),Book.values(id,maxi(1,rank(id))).z-1.0)
 		"charge": return Book.values(id,maxi(1,rank(id))).x-1.0
@@ -181,7 +256,10 @@ func reach(id: String) -> float:
 
 func cast_slot(slot: int, at: Vector3) -> bool:
 	if slot<0 or slot>=game.run.hotbar.size(): return false
-	return cast(game.run.hotbar[slot],at)
+	casting_slot = slot
+	var done: bool = cast(game.run.hotbar[slot],at)
+	casting_slot = -1
+	return done
 
 # `free` casts cost no energy and need not be learned: the Cleave that Dash
 # Attack adds to the end of a dash.
@@ -220,7 +298,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	direction.y = 0
 	if direction.length()<.01: direction = game.player.forward()
 	at = game.player.position+direction.normalized()*minf(direction.length(),LEAP_RANGE if s.effect=="leap" else 14.0)
-	if not game.world.clear_line(game.player.position,at) and s.effect not in ["blink","retreat","hide"]+SWINGS+RANGER_BLOWS:
+	if not game.world.clear_line(game.player.position,at) and s.effect not in ["blink","retreat","hide"]+SWINGS+RANGER_BLOWS+SELF_SPELLS+Book.CHANNELS:
 		game.toast("The target is behind a wall.")
 		return false
 	if s.effect=="execute":
@@ -229,8 +307,16 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		if victim == null or not executable(victim,limit):
 			game.toast("Execute needs an enemy below %d%% health." % limit)
 			return false
-	if not free: game.run.energy -= cost(id)
+	if s.class_id=="wizard" and s.effect in AIMED_SPELLS and aimed_target(at,direction.normalized()) == null:
+		game.toast("%s needs an enemy before you." % s.title)
+		return false
+	# (A channelled spell is paid for as it is held.)
+	if not free and not Book.channeled(id): game.run.energy -= cost(id)
 	if s.effect in ["bash","shockwave"]: cooldowns[id] = Book.values(id,level).z
+	if s.effect=="icestorm": cooldowns[id] = STORM_COOLDOWN
+	if s.effect=="blazing": cooldowns[id] = BLAZING_COOLDOWN
+	if s.effect=="lshield": cooldowns[id] = SHIELD_COOLDOWN
+	if s.effect=="shock": cooldowns[id] = SHOCK_COOLDOWN
 	if s.effect=="sand": cooldowns[id] = SAND_COOLDOWN
 	if s.effect=="tranq": cooldowns[id] = TRANQ_COOLDOWN
 	# Any attack brings him out of the shadows (the ambush, as it lands).
@@ -283,6 +369,12 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 				contacts = [.55]
 		if not game.player.visual.clips.has(clip): clip = "Cast"
 		contact = duration*contacts[0]
+	elif s.class_id=="wizard" and CAST_CLIPS.has(s.effect):
+		# Each spell is cast with its own gesture (tools/import_wizard.py).
+		var own: Array = CAST_CLIPS[s.effect]
+		clip = own[0] if game.player.visual.clips.has(own[0]) else "Cast"
+		duration = own[1]
+		contact = duration*own[2]
 	elif s.requirement in ["melee","shield"]:
 		# Dexterity quickens every melee swing.
 		var haste: float = (1.0+Data.attack_haste(game.run)*.01)*(DASH_CLEAVE_SPEED if free else 1.0)
@@ -337,6 +429,9 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		game.scheduled.append({"time":maxf(.01,contact-.12),"type":"swing","sound":game.swing_sound()})
 	game.player.busy = duration
 	game.player.cooldown = duration
+	if Book.channeled(id):
+		begin_channel(id,level,at)
+		return true
 	if contacts.size()>1:
 		for i in contacts.size(): pending.append({"time":duration*contacts[i],"id":id,"rank":level,"at":at,"direction":direction.normalized(),"blow":i,"blows":contacts.size(),"span":duration/contacts.size()})
 	else: pending.append({"time":contact,"id":id,"rank":level,"at":at,"direction":direction.normalized()})
@@ -374,13 +469,188 @@ func effects() -> Array:
 	if defense_stacks>0:
 		var cut: float = Book.values("defensive_rhythm",rank("defensive_rhythm")).x
 		out.append(effect("defensive_rhythm","Defensive Rhythm",defense_stacks,defense_time,"Taking %d%% less damage." % roundi(defense_stacks*cut)))
-	if barrier>0 and barrier_time>0: out.append(effect("barrier","Barrier",0,barrier_time,"Absorbing the next %d damage." % ceili(barrier)))
+	if barrier>0 and barrier_time>0: out.append(effect("lightning_shield" if shield_time>0 else "barrier","Lightning Shield" if shield_time>0 else "Barrier",0,barrier_time,"Absorbing the next %d damage%s." % [ceili(barrier),", and shocking whoever strikes you" if shield_time>0 else ""]))
+	if storm_time>0: out.append(effect("ice_storm","Ice Storm",0,storm_time,"Frost whirls about you: your frost spells deal double damage, and you can cast nothing else."))
+	if blazing_time>0: out.append(effect("blazing_speed","Blazing Speed",0,blazing_time,"Running 75%% faster; fire spells cost nothing."))
+	if burn_left>0: out.append(effect("burning","Burning",0,burn_left,"Pyromaniac's fire: %d damage a second." % ceili(burn_rate),true))
 	if game.slowed>0: out.append(effect("chilled","Chilled",0,game.slowed,"Frozen to the bone: moving at half speed.",true,game.CHILL_SECONDS))
 	return out
 
 func effect(id: String, title: String, stacks: int, left: float, text: String, debuff: bool = false, total: float = -1.0) -> Dictionary:
 	if total<0: total = maxf(lasting.get(id,left),left) if left>0 else 0.0
 	return {"id":id,"name":title,"stacks":stacks,"left":left,"total":total,"debuff":debuff,"text":text}
+
+# --- The wizard's channels -------------------------------------------------------
+
+# Freeze Floor or Frost Blast begun: held for as long as its button is (and
+# his energy lasts), its frost poured out toward wherever he points.
+func begin_channel(id: String, level: int, at: Vector3) -> void:
+	end_channel()
+	var s: Dictionary = Book.all()[id]
+	channel = {"id":id,"rank":level,"slot":casting_slot,"at":at,"laid":Vector3.INF,"tick":0.0,"stream":WizardFx.stream(game.world,s.effect=="frostblast")}
+	game.player.visual.hold_at(0.0,0.0)
+
+func channeling() -> bool:
+	return not channel.is_empty()
+
+# Whether the button the channel was cast from is still held.
+func channel_held() -> bool:
+	if channel_hold_override>=0: return channel_hold_override==1
+	var slot: int = channel.get("slot",-1)
+	if slot==0: return game.right_held
+	if slot>0: return Input.is_physical_key_pressed(KEY_1+slot-1)
+	return true
+
+func end_channel() -> void:
+	if channel.is_empty(): return
+	if is_instance_valid(channel.stream): channel.stream.stop()
+	channel.clear()
+	if is_instance_valid(game.player):
+		game.player.busy = 0.0
+		game.player.cooldown = 0.0
+		if not game.player.dead: game.player.visual.play(game.player.visual.idle_action())
+
+# The channel held another `dt`: aimed afresh, paid for, and poured out.
+func tick_channel(dt: float) -> void:
+	var s: Dictionary = Book.all()[channel.id]
+	var rate: float = cost(channel.id)
+	if not channel_held() or game.player.dead or game.run.energy<rate*dt or (storm_time>0 and s.tree!="ice"):
+		end_channel()
+		return
+	game.run.energy -= rate*dt
+	game.player.busy = maxf(game.player.busy,.3)
+	game.player.cooldown = game.player.busy
+	var origin: Vector3 = game.player.position
+	var at: Vector3 = game.aim_point() if channel_hold_override<0 else channel.at
+	var direction: Vector3 = at-origin
+	direction.y = 0
+	if direction.length()<.3: direction = game.player.forward()
+	direction = direction.normalized()
+	game.player.face(origin+direction)
+	var reach: float = minf(FROST_REACH,maxf(1.0,Vector2(at.x-origin.x,at.z-origin.z).length()))
+	# Short of any wall in the way.
+	while reach>1.0 and not game.world.clear_line(origin,origin+direction*reach): reach -= .5
+	var hands: Vector3 = origin+Vector3.UP*1.25+direction*.5
+	if is_instance_valid(channel.stream): channel.stream.aim(hands,direction,reach)
+	var v: Dictionary = Book.values(channel.id,channel.rank)
+	if s.effect=="freezefloor":
+		# Ice laid where the ray falls, a patch every half metre it moves.
+		var spot: Vector3 = origin+direction*reach
+		if channel.laid==Vector3.INF or spot.distance_to(channel.laid)>.5:
+			channel.laid = spot
+			lay_ice(spot,PATCH_RADIUS,FLOOR_SECONDS,v.x)
+	else:
+		# Frost Blast: its damage a second, dealt in quarter-second breaths, to
+		# everyone within FROST_RADIUS of the stream.
+		channel.tick += dt
+		if channel.tick>=.25:
+			channel.tick -= .25
+			var line_end: Vector3 = origin+direction*reach
+			for enemy in game.targets(game.player):
+				if enemy.dead or enemy.dormant: continue
+				var nearest: Vector3 = Geometry3D.get_closest_point_to_segment(enemy.position,origin+direction*.5,line_end)
+				if nearest.distance_to(enemy.position)<=FROST_RADIUS and game.world.clear_line(origin,enemy.position): spell_hit(enemy,v.x*.25,"frost")
+
+# --- What the elements do -----------------------------------------------------------
+
+# A spell's hit on `enemy`, `percent` of his spell baseline, of `element`
+# ("frost", "fire" or "lightning"): Ice Storm doubles frost; Frostburn raises
+# fire on the chilled and Pyromaniac doubles it (and burns him); then ice
+# chills and ices the floor, lightning may ignite and leaps along ice.
+func spell_hit(enemy, percent: float, element: String, impact: Vector3 = Vector3.ZERO, conducted: bool = false) -> void:
+	if not is_instance_valid(enemy) or enemy.dead or enemy.dormant: return
+	var amount: float = attack_damage(percent,"spell")
+	if element=="frost" and storm_time>0: amount *= 2.0
+	if element=="fire":
+		if enemy.chilled(): amount *= 1.0+Data.passive(game.run,"frostburn")*.01
+		if rank("pyromaniac")>0:
+			amount *= 2.0
+			burn(amount*BURN_SHARE)
+	var before: float = enemy.hp
+	strike(enemy,amount,element,0.0,impact)
+	var dealt: float = before-enemy.hp
+	if element=="frost":
+		var chill: Dictionary = Book.values("improved_chill",rank("improved_chill"))
+		enemy.chill(CHILL_SLOW+chill.x,CHILL_SECONDS+chill.y)
+		lay_ice(enemy.position,PATCH_RADIUS,PATCH_SECONDS,0.0)
+	elif element=="lightning":
+		var spark: Dictionary = Book.values("ignition",rank("ignition"))
+		if spark.x>0 and randf()*100.0<spark.x:
+			WizardFx.ignite(game.world,enemy.position+Vector3.UP*.8,IGNITION_RADIUS)
+			for other in targets(enemy.position,IGNITION_RADIUS): spell_hit(other,spark.y,"fire")
+		if not conducted and rank("conductive_ice")>0: conduct(enemy,percent)
+
+# Pyromaniac's cost: `total` damage over BURN_SECONDS, on him.
+func burn(total: float) -> void:
+	if total<=0: return
+	burn_rate = (burn_rate*burn_left+total)/BURN_SECONDS
+	burn_left = BURN_SECONDS
+	lasting.burning = BURN_SECONDS
+	if not is_instance_valid(burn_node): burn_node = WizardFx.burning(game.player.visual)
+
+# Ice laid on the floor at `at`: enemies on it move `slow` percent slower.
+func lay_ice(at: Vector3, radius: float, seconds: float, slow: float) -> void:
+	var node: Node3D = WizardFx.patch(at+Vector3.UP*game.world.lift(at),radius,seconds)
+	game.world.add_child(node)
+	patches.append({"at":at,"radius":radius,"left":seconds,"slow":slow,"node":node})
+
+# Whether a unit stands on the ice.
+func on_ice(at: Vector3) -> bool:
+	return patches.any(func(p): return p.at.distance_to(at)<=p.radius+.3)
+
+# Conductive Ice: lightning that strikes an enemy standing on ice leaps to
+# every other enemy standing on the same stretch of it (patches that touch).
+func conduct(struck, percent: float) -> void:
+	var standing: Array = patches.filter(func(p): return p.at.distance_to(struck.position)<=p.radius+.3)
+	if standing.is_empty(): return
+	var sheet: Array = standing.duplicate()
+	var grew = true
+	while grew:
+		grew = false
+		for p in patches:
+			if p in sheet: continue
+			if sheet.any(func(q): return q.at.distance_to(p.at)<=q.radius+p.radius):
+				sheet.append(p)
+				grew = true
+	for enemy in game.targets(game.player):
+		if enemy==struck or enemy.dead or enemy.dormant: continue
+		if sheet.any(func(p): return p.at.distance_to(enemy.position)<=p.radius+.3):
+			WizardFx.jolt(game.world,struck.position+Vector3.UP,enemy.position+Vector3.UP)
+			spell_hit(enemy,percent,"lightning",Vector3.ZERO,true)
+
+# One of his bolts of ice striking `enemy`: the hit, and its chance to freeze.
+func ice_bolt_hit(enemy, p: Dictionary) -> void:
+	var extra: Dictionary = p.get("extra",{})
+	spell_hit(enemy,extra.get("percent",100.0),"frost",StoneFragment.impact(p.direction))
+	WizardFx.shatter(game.world,enemy.position+Vector3.UP,.8)
+	if not enemy.dead and randf()*100.0<extra.get("freeze",0.0): enemy.freeze(FREEZE_SECONDS)
+
+# Lightning Rod: the marked enemy was hurt: a jolt leaps from it to the
+# nearest enemy within ROD_LEAP, and on to ROD_LEAPS more, each weaker.
+func rod_jolt(rod) -> void:
+	if rod.rod_pause>0: return
+	rod.rod_pause = rod.ROD_PAUSE
+	var struck: Array = [rod]
+	var from = rod
+	var percent: float = rod.rod_percent
+	for leap in ROD_LEAPS+1:
+		var choices = targets(from.position,ROD_LEAP).filter(func(e): return not e in struck)
+		if choices.is_empty(): break
+		choices.sort_custom(func(a,b): return a.position.distance_squared_to(from.position)<b.position.distance_squared_to(from.position))
+		var next = choices[0]
+		WizardFx.jolt(game.world,from.position+Vector3.UP*1.1,next.position+Vector3.UP*1.1)
+		spell_hit(next,percent,"lightning")
+		struck.append(next)
+		from = next
+		percent *= ROD_FADE
+	game.sound.play("lightning-zap",-8)
+
+# The one enemy a pointed spell is cast on: the nearest to where it is aimed,
+# within its reach and in sight.
+func aimed_target(at: Vector3, direction: Vector3):
+	var choices: Array = targets(game.player.position,SPELL_REACH).filter(func(e): return direction.dot((e.position-game.player.position).normalized())>.2 or e.position.distance_to(at)<1.5)
+	choices.sort_custom(func(a,b): return a.position.distance_squared_to(at)<b.position.distance_squared_to(at))
+	return null if choices.is_empty() else choices[0]
 
 # How much faster the ranger attacks: Frenzy, while it lasts.
 func haste() -> float:
@@ -528,19 +798,22 @@ func damage_summary(id: String, level: int) -> Dictionary:
 		"cleave","charge","volley","flurry": percent = v.y
 		"leap","slam","shockwave","strike","bash","vampiric","shadow","execute","power","lightning","triple": percent = v.x
 		"rapid","slowshot","weaken": percent = 100.0
+		"icebolt","spikes","fireball","blastwave","bolt": percent = v.x
+		# (Each second of it.)
+		"frostblast","tornado": percent = v.x
+		"icestorm","lshield": percent = v.y
+		"rod": percent = v.x
 		"passive":
 			if id!="dash_attack": return {}
 			percent = v.x
 		_:
-			# (War Cry, Throw Sand and the like; the wizard's Barrier and Blink.)
-			if s.has("ranks") or s.tag.is_empty(): return {}
+			# (War Cry, Throw Sand and the like; Ice Prison, System Shock.)
+			return {}
 	var result = crit_numbers(weapon)
 	if s.effect=="charge":
 		percent *= charge_boost()
 		result.crit = "Critical strike chance: %s%%" % figure(Data.crit_chance(game.run)+Data.specialization(game.run,weapon).x+Data.block_chance(game.run))
-	# The wizard's spells hit for a set amount.
-	if percent<0: result.damage = "Damage: %d" % roundi(Data.damage_tag(game.run,s.tag,15.0*Book.value(id,level)))
-	else: result.damage = "Damage: "+span(percent,tag)
+	result.damage = "Damage: "+span(percent,tag)+(" a second" if s.effect in ["frostblast","tornado","icestorm"] else "")
 	return result
 
 # A critical strike with `weapon`: its chance, and the damage it does, in
@@ -623,6 +896,8 @@ func defend(damage: float, source) -> float:
 	var absorbed = minf(barrier,damage)
 	barrier -= absorbed
 	damage -= absorbed
+	# Lightning Shield answers whoever strikes it.
+	if shield_time>0 and absorbed>0 and is_instance_valid(source) and not source.dead: spell_hit(source,shield_percent,"lightning")
 	if blocked:
 		game.float_text(game.player.position+Vector3.UP*2.4,"Blocked",Color(.72,.84,1))
 		var spikes: float = Data.passive(game.run,"spiked_shield")
@@ -662,9 +937,7 @@ func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = V
 
 func execute(job: Dictionary) -> void:
 	var s: Dictionary = Book.all()[job.id]
-	var value = Book.value(job.id,job.rank)
 	var v: Dictionary = Book.values(job.id,job.rank)
-	var damage = Data.damage_tag(game.run,s.tag,15.0*value) if not s.tag.is_empty() and not s.has("ranks") else 0.0
 	var at: Vector3 = job.at
 	var origin: Vector3 = game.player.position
 	var direction: Vector3 = job.direction
@@ -732,23 +1005,87 @@ func execute(job: Dictionary) -> void:
 					if not executable(victim,v.y): return
 					strike(victim,blow)
 			game.player.landed_on(victim)
-		"barrier":
-			barrier = value; barrier_time = s.duration
-			lasting.barrier = s.duration
-		"blink":
-			game.player.position = game.world.move(origin,direction*minf(value,origin.distance_to(at)))
-		"firebolt":
-			# The Oracle's own fireball, from the staff to the target (as far
-			# as the spell reaches, and short of any wall), bursting there.
-			var reach: float = minf(FIREBALL_REACH,origin.distance_to(at)) if origin.distance_to(at) > .5 else FIREBALL_REACH
-			var landing: Vector3 = origin+direction*reach
-			while reach > 1.0 and not game.world.clear_line(origin,landing):
-				reach -= .5
-				landing = origin+direction*reach
-			var staff: Vector3 = game.player.visual.staff_tip() if game.player.visual.weapon_kind=="staff" else origin+Vector3.UP*1.5
-			game.fireball(staff,landing,FIREBALL_RADIUS,damage,clampf(reach/14.0,.4,.8),null,true)
-		"lance":
-			game.projectile(origin,origin+direction*13,damage,true,"arcane",true)
+		# --- The wizard's spells.
+		"icebolt":
+			var bolt_at: Vector3 = origin+direction*SPELL_REACH
+			var caught = aimed_target(at,direction)
+			if caught != null: bolt_at = caught.position
+			game.sound.play("fire-whoosh",-14)
+			game.projectile(origin,bolt_at,attack_damage(v.x,"spell"),true,"ice",false,null,true,{"kind":"icebolt","percent":v.x,"freeze":v.y})
+		"spikes":
+			var spot: Vector3 = origin+direction*minf(SPELL_REACH,origin.distance_to(at))
+			waves.append(WizardFx.spikes(spot+Vector3.UP*game.world.lift(spot),SPIKES_RADIUS))
+			game.world.add_child(waves[-1])
+			game.sound.play("rock-impact",-14)
+			for enemy in targets(spot,SPIKES_RADIUS): spell_hit(enemy,v.x,"frost",StoneFragment.impact(enemy.position-spot,true))
+			lay_ice(spot,SPIKES_RADIUS,PATCH_SECONDS,0.0)
+		"prison":
+			var caged = aimed_target(at,direction)
+			if caged == null: return
+			caged.freeze(v.x,v.y)
+			caged.chill(CHILL_SLOW,v.x)
+			lay_ice(caged.position,PATCH_RADIUS,PATCH_SECONDS,0.0)
+			game.sound.play("whirl-impact",-14)
+		"icestorm":
+			storm_time = v.x
+			storm_percent = v.y
+			lasting.ice_storm = v.x
+			if is_instance_valid(storm_node): storm_node.queue_free()
+			storm_node = WizardFx.storm(game.player.visual,STORM_RADIUS)
+			game.float_text(origin+Vector3.UP*2.3,"Ice Storm!",Color(.7,.9,1))
+		"fireball":
+			var reach: float = minf(SPELL_REACH,origin.distance_to(at)) if origin.distance_to(at) > .5 else SPELL_REACH
+			var caught = aimed_target(at,direction)
+			var landing: Vector3 = caught.position if caught != null else origin+direction*reach
+			while landing.distance_to(origin) > 1.0 and not game.world.clear_line(origin,landing): landing = origin+(landing-origin)*.9
+			var hand: Vector3 = origin+Vector3.UP*1.35+direction*.4
+			game.fireball(hand,landing,1.1,attack_damage(v.x,"spell"),clampf(landing.distance_to(origin)/16.0,.3,.7),null,true,"fire",v.x)
+		"blastwave":
+			waves.append(WizardFx.flame_ring(origin+Vector3.UP*game.world.lift(origin),BLAST_RADIUS))
+			game.world.add_child(waves[-1])
+			game.sound.play("fire-whoosh",-6)
+			game.shake(.12)
+			for enemy in targets(origin,BLAST_RADIUS): spell_hit(enemy,v.x,"fire",StoneFragment.impact(enemy.position-origin,true))
+		"tornado":
+			var spot: Vector3 = origin+direction*minf(SPELL_REACH,origin.distance_to(at))
+			var funnel = WizardFx.tornado(spot+Vector3.UP*game.world.lift(spot),TORNADO_RADIUS,TORNADO_SECONDS)
+			game.world.add_child(funnel)
+			waves.append(funnel)
+			game.sound.play("fire-whoosh",-8)
+			zones.append({"effect":"tornado","at":spot,"radius":TORNADO_RADIUS,"percent":v.x,"rod":v.y,"life":TORNADO_SECONDS,"tick":0.0,"rank":job.rank})
+		"blazing":
+			blazing_time = v.x
+			lasting.blazing_speed = v.x
+			if is_instance_valid(blaze_node): blaze_node.queue_free()
+			blaze_node = WizardFx.blaze(game.player.visual)
+			game.float_text(origin+Vector3.UP*2.3,"Blazing Speed!",Color(1,.6,.25))
+		"bolt":
+			var hit = aimed_target(at,direction)
+			if hit == null: return
+			waves.append(WizardFx.bolt(game.world,origin+Vector3.UP*1.4+direction*.4,hit.position+Vector3.UP*1.1))
+			game.sound.play("lightning-zap",-4)
+			spell_hit(hit,v.x,"lightning",StoneFragment.impact(hit.position-origin))
+		"lshield":
+			barrier = v.x
+			barrier_time = SHIELD_SECONDS
+			shield_time = SHIELD_SECONDS
+			shield_percent = v.y
+			lasting.lightning_shield = SHIELD_SECONDS
+			if is_instance_valid(shield_node): shield_node.queue_free()
+			shield_node = WizardFx.lightning_shield(game.player.visual)
+			game.sound.play("lightning-zap",-10)
+		"rod":
+			var marked = aimed_target(at,direction)
+			if marked == null: return
+			WizardFx.jolt(game.world,origin+Vector3.UP*1.4+direction*.4,marked.position+Vector3.UP*1.1)
+			marked.make_rod(v.x,ROD_SECONDS)
+			game.sound.play("lightning-zap",-10)
+		"shock":
+			var shocked = aimed_target(at,direction)
+			if shocked == null: return
+			waves.append(WizardFx.bolt(game.world,origin+Vector3.UP*1.4+direction*.4,shocked.position+Vector3.UP*1.1))
+			game.sound.play("lightning-zap",-4)
+			shocked.stun(v.x)
 		"rapid":
 			loose(direction,100.0)
 			# The next arrow's draw.
@@ -802,21 +1139,6 @@ func execute(job: Dictionary) -> void:
 			passing.append([RangerFx.burst(game.world,caught.position+Vector3.UP*1.3,Color(1,.35,.2,.8),1.0,14),.7])
 			game.player.landed_on(caught)
 		"hide": enter_shadows()
-		"nova": pulse(origin,s.radius,damage,"frost",s.duration)
-		"chain":
-			var current = origin
-			var used = []
-			for bounce in 4:
-				var choices = targets(current,12 if bounce==0 else 5)
-				choices = choices.filter(func(e): return not e in used)
-				if choices.is_empty(): break
-				choices.sort_custom(func(a,b): return a.position.distance_squared_to(at if bounce==0 else current)<b.position.distance_squared_to(at if bounce==0 else current))
-				var enemy = choices[0]
-				used.append(enemy)
-				strike(enemy,damage,"arcane")
-				current = enemy.position
-		"blizzard","meteor":
-			zones.append({"effect":s.effect,"at":at,"radius":float(s.radius),"damage":damage,"value":value,"life":float(s.duration),"tick":float(s.duration) if s.effect=="meteor" else 0.0,"pulses":5 if s.effect=="blizzard" else 3})
 
 # Shield Charge's blow on one unit: damage, thrown aside, the first stunned.
 func charge_hit(enemy, direction: Vector3, v: Dictionary) -> void:
@@ -857,6 +1179,8 @@ func tick(dt: float) -> void:
 		if waves[i].tick(dt):
 			waves[i].queue_free()
 			waves.remove_at(i)
+	if channeling(): tick_channel(dt)
+	tick_wizard(dt)
 	if not charge.is_empty() and not game.player.dead:
 		var step = minf(dt,charge.left)
 		charge.left -= dt
@@ -915,13 +1239,56 @@ func tick(dt: float) -> void:
 		if pending[i].time<=0:
 			var job: Dictionary = pending[i]; pending.remove_at(i)
 			if not game.player.dead: execute(job)
+	# Fire Tornado: its damage a second in quarter-second licks, and each
+	# second a chance to make someone in it a Lightning Rod.
 	for i in range(zones.size()-1,-1,-1):
 		var z: Dictionary = zones[i]
 		z.life -= dt; z.tick -= dt
 		if z.tick<=0:
-			var victims = targets(z.at,z.radius)
-			pulse(z.at,z.radius,z.damage,"frost" if z.effect=="blizzard" else "fire",1.5 if z.effect=="blizzard" else 0)
-			z.tick += 1.0
-			z.pulses -= 1
-			if z.effect=="meteor" or z.pulses<=0: z.life = 0
+			z.tick += .25
+			var inside: Array = targets(z.at,z.radius)
+			for enemy in inside: spell_hit(enemy,z.percent*.25,"fire")
+			z["second"] = z.get("second",0.0)+.25
+			if z.second>=1.0:
+				z.second -= 1.0
+				if rank("lightning_rod")>0 and not inside.is_empty() and randf()*100.0<z.rod: inside[randi()%inside.size()].make_rod(Book.values("lightning_rod",rank("lightning_rod")).x,ROD_SECONDS)
 		if z.life<=0: zones.remove_at(i)
+
+# The wizard's lasting spells, and his ice.
+func tick_wizard(dt: float) -> void:
+	storm_time = maxf(0,storm_time-dt)
+	if storm_time>0:
+		if not is_instance_valid(storm_node): storm_node = WizardFx.storm(game.player.visual,STORM_RADIUS)
+		storm_node.set_meta("tick",storm_node.get_meta("tick",0.0)+dt)
+		if storm_node.get_meta("tick")>=.25:
+			storm_node.set_meta("tick",storm_node.get_meta("tick")-.25)
+			for enemy in targets(game.player.position,STORM_RADIUS): spell_hit(enemy,storm_percent*.25,"frost")
+	elif is_instance_valid(storm_node):
+		storm_node.queue_free()
+		storm_node = null
+	blazing_time = maxf(0,blazing_time-dt)
+	if blazing_time<=0 and is_instance_valid(blaze_node):
+		blaze_node.queue_free()
+		blaze_node = null
+	shield_time = maxf(0,shield_time-dt)
+	if (shield_time<=0 or barrier<=0) and is_instance_valid(shield_node):
+		shield_node.queue_free()
+		shield_node = null
+		shield_time = 0
+	if burn_left>0 and not game.player.dead:
+		var step: float = minf(dt,burn_left)
+		burn_left -= dt
+		game.player.hp -= burn_rate*step
+		if game.player.hp<=0 and game.playground == null: game.hurt_player(.001)
+	if burn_left<=0 and is_instance_valid(burn_node):
+		burn_node.queue_free()
+		burn_node = null
+	for i in range(patches.size()-1,-1,-1):
+		var p: Dictionary = patches[i]
+		p.left -= dt
+		if p.left<=0:
+			patches.remove_at(i)
+			continue
+		if p.slow>0:
+			for enemy in game.targets(game.player):
+				if not enemy.dead and not enemy.dormant and enemy.position.distance_to(p.at)<=p.radius+.3: enemy.slow(p.slow,.3)

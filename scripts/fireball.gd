@@ -23,6 +23,9 @@ var source = null
 # Cast by the hero: the blast strikes the statues (a skill's hits, each with
 # its chance to crit), not the hero.
 var friendly = false
+# The hero's: a spell of `element` for `percent` of his baseline (Skills.spell_hit).
+var element = ""
+var percent = 0.0
 
 var core: MeshInstance3D
 var core_material: ShaderMaterial
@@ -121,7 +124,7 @@ func explode() -> void:
 	core.visible = false
 	carry_light.visible = false
 	trail.emitting = false
-	if friendly: game.area_damage(target,radius,damage,true,null,true)
+	if friendly: game.area_damage(target,radius,damage,true,null,true,element,percent)
 	else: game.area_damage(target,radius,damage,false,source)
 	burst_material = fire_material(1.0)
 	burst = billboard(burst_material,radius*.55)

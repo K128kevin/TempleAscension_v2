@@ -3,17 +3,19 @@ extends RefCounted
 ## (area of effect, single target, passive) and the ranger's (attacks,
 ## utility, passive) follow the leveling and skills design documents: up to
 ## five ranks each, with every rank's values listed, and a skill opens once
-## enough points are spent in its tree. The wizard's are the earlier roster in
-## v2/docs/PLAN.md, still opened by level, where rank changes one primary value.
+## enough points are spent in its tree. The wizard's (ice, fire, lightning)
+## follow the wizard skills document the same way; its passives sit in the
+## tree of the element they serve.
 const Items = preload("res://scripts/items.gd")
 static var definitions: Dictionary = {}
 const TREES = ["aoe","single","passive"]
 const RANGER_TREES = ["attack","utility","passive"]
-const TREE_TITLES = {"aoe":"Area of Effect","single":"Single Target","passive":"Passive","attack":"Attacks","utility":"Utility"}
+const WIZARD_TREES = ["ice","fire","lightning"]
+const TREE_TITLES = {"aoe":"Area of Effect","single":"Single Target","passive":"Passive","attack":"Attacks","utility":"Utility","ice":"Ice","fire":"Fire","lightning":"Lightning"}
 
 # The three trees a class's skills sit in.
 static func trees(class_id: String) -> Array:
-	return RANGER_TREES if class_id=="ranger" else TREES
+	return RANGER_TREES if class_id=="ranger" else (WIZARD_TREES if class_id=="wizard" else TREES)
 
 # id, title, tree, points required in that tree, behavior, requirement, energy
 # cost, description, and each rank's [x, y, z].
@@ -63,30 +65,50 @@ const RANGER = [
 	["poisons", "Poisons", "passive", 5, "passive", "any", 0, "Your dagger and arrows carry a corrosive poison: {x}% extra damage over 5 seconds, stacking up to {y} times.", [[10,1],[15,2],[25,3],[40,5],[65,8]]],
 	["penetrating_arrows", "Penetrating Arrows", "passive", 10, "passive", "any", 0, "Your arrows carry on through their targets, and may strike others behind them.", [[1]]]]
 
+# The wizard's, laid out as the warrior's: each tree is an element, and a
+# spell's percentages are of his spell baseline (Data.SPELL_SPAN by his
+# Intelligence), as a warrior's are of his weapon's damage. The cost of a
+# channelled spell (CHANNELS) is energy a second while it is held. Every ice
+# spell chills what it hits (slowed 40% for 3 seconds) and ices the floor
+# under it.
+const WIZARD = [
+	["ice_bolt", "Ice Bolt", "ice", 0, "icebolt", "any", 10, "Shoot a bolt of ice at the target for {x}% ice damage, with a {y}% chance to freeze it in place for 3 seconds.", [[100,4],[120,8],[140,12],[160,16],[180,20]]],
+	["freeze_floor", "Freeze Floor", "ice", 0, "freezefloor", "any", 10, "Channel a ray of frost that freezes the floor wherever you spray it, for 10 seconds: enemies on frozen floor move {x}% slower. Costs 10 energy a second while held.", [[40],[50],[60],[70],[80]]],
+	["ice_spikes", "Ice Spikes", "ice", 5, "spikes", "any", 35, "Raise spikes of ice out of the floor across 4 meters where you aim, for {x}% ice damage.", [[100],[120],[140],[160],[180]]],
+	["ice_prison", "Ice Prison", "ice", 5, "prison", "any", 45, "Freeze an enemy in a block of ice for {x} seconds: it can do nothing, and takes {y}% more damage.", [[2,20],[3,25],[4,35],[5,45],[6,60]]],
+	["improved_chill", "Improved Chill", "ice", 5, "passive", "any", 0, "Your ice spells' chill slows {x}% more, and lasts {y} seconds longer.", [[10,1],[15,2],[20,3],[30,4],[40,5]]],
+	["frost_blast", "Frost Blast", "ice", 10, "frostblast", "any", 20, "Channel frost from your hands 10 meters ahead, for {x}% frost damage a second to every enemy within 3 meters of the stream. Costs 20 energy a second while held.", [[70],[90],[110],[130],[150]]],
+	["ice_storm", "Ice Storm", "ice", 10, "icestorm", "any", 40, "Frost swirls about you for {x} seconds, dealing {y}% frost damage a second to every enemy within 4 meters. Your frost spells deal double damage while it lasts, and you can cast nothing else. 60-second cooldown.", [[6,60],[8,70],[10,80],[12,90],[15,100]]],
+	["fireball", "Fireball", "fire", 0, "fireball", "any", 10, "Hurl a ball of fire at the target for {x}% fire damage.", [[120],[160],[200],[240],[280]]],
+	["blast_wave", "Blast Wave", "fire", 5, "blastwave", "any", 45, "A wave of flame bursts out 5 meters in every direction, for {x}% fire damage to every enemy it touches.", [[125],[145],[170],[200],[235]]],
+	["frostburn", "Frostburn", "fire", 5, "passive", "any", 0, "Your fire spells deal {x}% more damage to chilled enemies.", [[50],[75],[100],[135],[175]]],
+	["fire_tornado", "Fire Tornado", "fire", 10, "tornado", "any", 45, "Conjure a tornado of fire 4 meters across where you aim: for 6 seconds it deals {x}% fire damage a second to everything it touches, and each second has a {y}% chance to make an enemy in it a Lightning Rod, if you know that spell.", [[50,10],[60,15],[70,20],[85,25],[100,30]]],
+	["blazing_speed", "Blazing Speed", "fire", 10, "blazing", "any", 50, "For {x} seconds you run 75% faster and your fire spells cost nothing. 60-second cooldown.", [[6]]],
+	["pyromaniac", "Pyromaniac", "fire", 10, "passive", "any", 0, "Your fire spells deal double damage, but each burns you for 10% of the damage it deals, over 3 seconds.", [[100]]],
+	["lightning_bolt", "Lightning Bolt", "lightning", 0, "bolt", "any", 10, "Hurl a bolt of lightning at the target for {x}% lightning damage.", [[100],[130],[160],[190],[220]]],
+	["lightning_shield", "Lightning Shield", "lightning", 0, "lshield", "any", 50, "A shield of lightning about you absorbs up to {x} damage and deals {y}% lightning damage to whoever strikes you, for 60 seconds. 60-second cooldown.", [[50,20],[70,25],[90,30],[120,40],[150,50]]],
+	["lightning_rod", "Lightning Rod", "lightning", 5, "rod", "any", 30, "Makes an enemy a Lightning Rod for 10 seconds: whenever it is hurt, a jolt of {x}% lightning damage leaps to the nearest enemy within 5 meters and on to up to 3 more, each leap 30% weaker; at most once every half second.", [[100],[125],[150],[175],[200]]],
+	["ignition", "Ignition", "lightning", 5, "passive", "any", 0, "Your lightning spells have a {x}% chance to set off an explosion of {y}% fire damage within 2 meters of the target.", [[5,75],[10,100],[17,130],[25,160],[35,200]]],
+	["system_shock", "System Shock", "lightning", 10, "shock", "any", 45, "Shocks an enemy, stunning it for {x} seconds; damage breaks the stun. 45-second cooldown.", [[5],[6],[8],[10],[12]]],
+	["conductive_ice", "Conductive Ice", "lightning", 10, "passive", "any", 0, "Your lightning leaps between enemies standing on one continuous stretch of ice.", [[1]]]]
+const CHANNELS = ["freezefloor","frostblast"]
+
 static func all() -> Dictionary:
 	if not definitions.is_empty(): return definitions
 	for r in WARRIOR:
 		definitions[r[0]] = {"id":r[0],"title":r[1],"class_id":"warrior","tree":r[2],"points":r[3],"unlock":1,"effect":r[4],"requirement":r[5],"tag":"" if r[4]=="passive" else "melee","cost":r[6],"description":r[7],"ranks":r[8],"max_rank":r[8].size()}
 	for r in RANGER:
 		definitions[r[0]] = {"id":r[0],"title":r[1],"class_id":"ranger","tree":r[2],"points":r[3],"unlock":1,"effect":r[4],"requirement":r[5],"tag":"" if r[4]=="passive" else "ranged","cost":r[6],"description":r[7],"ranks":r[8],"max_rank":r[8].size()}
-	# id, title, class, unlock, behavior, requirement, scaling, cost,
-	# first-rank value, increment, radius, duration, description, tree
-	var rows = [
-		["firebolt", "Firebolt", "wizard", 1, "firebolt", "any", "spell", 12, 1.5, .25, 13, 0, "Hurl a fireball that bursts where it lands, burning everything in the blast.", "single"],
-		["frost_nova", "Frost Nova", "wizard", 1, "nova", "any", "spell", 20, 1, .2, 3.5, 3, "Damage nearby foes and slow them by 60%.", "aoe"],
-		["arcane_lance", "Arcane Lance", "wizard", 4, "lance", "any", "spell", 22, 1.6, .25, 14, 0, "An arcane projectile that pierces enemies.", "single"],
-		["barrier", "Barrier", "wizard", 4, "barrier", "any", "", 22, 35, 15, 0, 8, "Absorb the listed damage for up to eight seconds.", "single"],
-		["chain_lightning", "Chain Lightning", "wizard", 8, "chain", "any", "spell", 28, 1.4, .2, 12, 0, "Lightning jumps to up to four nearby enemies.", "aoe"],
-		["blink", "Blink", "wizard", 8, "blink", "any", "", 18, 5, .5, 0, 0, "Teleport the listed distance, stopping before walls.", "single"],
-		["blizzard", "Blizzard", "wizard", 12, "blizzard", "any", "spell", 32, .6, .1, 4, 5, "Five pulses of frost damage and slowing in the target area.", "aoe"],
-		["meteor", "Meteor", "wizard", 18, "meteor", "any", "spell", 40, 3.5, .5, 4, 1.2, "Call a fiery impact after a visible warning.", "aoe"],
-		["attunement", "Attunement", "wizard", 1, "passive", "any", "", 0, .8, .8, 0, 0, "Additional energy regenerated per second.", "passive"],
-		["efficient_casting", "Efficient Casting", "wizard", 4, "passive", "any", "", 0, 8, 8, 0, 0, "Percent less energy spent on spell skills.", "passive"],
-		["elemental_mastery", "Elemental Mastery", "wizard", 12, "passive", "any", "spell", 0, 5, 5, 0, 0, "Percent additional spell damage.", "passive"],
-		["arcane_reserve", "Arcane Reserve", "wizard", 18, "passive", "any", "", 0, 10, 10, 0, 0, "Additional maximum energy.", "passive"]]
-	for r in rows:
-		definitions[r[0]] = {"id":r[0],"title":r[1],"class_id":r[2],"tree":r[13],"points":0,"unlock":r[3],"effect":r[4],"requirement":r[5],"tag":r[6],"cost":r[7],"base":r[8],"step":r[9],"radius":r[10],"duration":r[11],"description":r[12],"max_rank":3 if r[4]=="passive" else 5}
+	for r in WIZARD:
+		definitions[r[0]] = {"id":r[0],"title":r[1],"class_id":"wizard","tree":r[2],"points":r[3],"unlock":1,"effect":r[4],"requirement":r[5],"tag":"" if r[4]=="passive" else "spell","cost":r[6],"description":r[7],"ranks":r[8],"max_rank":r[8].size(),"element":r[2]}
 	return definitions
+
+# A wizard's spell is of its tree's element: "ice", "fire" or "lightning".
+static func element(id: String) -> String:
+	return all()[id].get("element","")
+
+static func channeled(id: String) -> bool:
+	return all().has(id) and all()[id].effect in CHANNELS
 
 # The highest rank that can be bought at `level`. Skills with listed ranks are
 # limited only by their tree; the others gain a rank every three levels.

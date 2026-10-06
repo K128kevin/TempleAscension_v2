@@ -14,6 +14,7 @@ run "$godot_bin" --headless --path . --script tests/progression_regression.gd --
 run "$godot_bin" --headless --path . --script tests/classes_runtime.gd --log-file "$PWD/test-results/classes-runtime.log"
 run "$godot_bin" --headless --path . --script tests/warrior_skills.gd --log-file "$PWD/test-results/warrior-skills.log"
 run "$godot_bin" --headless --path . --script tests/ranger_skills.gd --log-file "$PWD/test-results/ranger-skills.log"
+run "$godot_bin" --headless --path . --script tests/wizard_skills.gd --log-file "$PWD/test-results/wizard-skills.log"
 run "$godot_bin" --headless --path . --script tests/items.gd --log-file "$PWD/test-results/items.log"
 run "$godot_bin" --headless --path . --script tests/overworld.gd --log-file "$PWD/test-results/overworld.log"
 run "$godot_bin" --headless --path . --script tests/daylight.gd --log-file "$PWD/test-results/daylight.log"

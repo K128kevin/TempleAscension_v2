@@ -553,6 +553,15 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   left arm carried as the right is rather than in a shield's guard).
   `tools/preview_clip.gd` renders any clip as a sheet of poses, seen from the side
   and the front, with a weapon in hand as the game holds it.
+- The wizard's casting (CastBolt, CastPoint, CastGround, CastSelf and the looping
+  CastChannel) is authored by `tools/import_wizard.py` from his stance, the left
+  hand gesturing while the right keeps the staff upright; `scripts/skills.gd`
+  CAST_CLIPS gives each spell its clip and the moment it leaves his hand. His
+  spells' effects are `scripts/wizard_fx.gd`: particles, sprites, ribbons of
+  light and the imported crystal mesh (frost on the floor, bolts of ice, ice
+  closed round a frozen enemy, spikes, streams of frost, the storm; the ring of
+  Blast Wave over the shockwave's front in fire, the tornado's column, Blazing
+  Speed's heat, a burn; bolts, jolts, the shield's sparks, a rod's).
 - The flanged mace (`assets/models/props/mace.glb`) is built by `tools/make_mace.py`:
   a haft, pommel, grip and collars turned on a lathe, and seven flanges cut as flat
   blades; nothing imported. The other items' models are ones the game already had
@@ -586,6 +595,7 @@ animation licenses sit beside it. Rebuild with Blender:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_ranger.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_heavy.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_pike.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_wizard.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/prepare_guardian.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_bandits.py

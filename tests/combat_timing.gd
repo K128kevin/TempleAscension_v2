@@ -150,12 +150,14 @@ func test():
 		if skill.effect=="passive": continue
 		# (Those of the ranger's that take no time, need him hidden or out of
 		# combat, or replay or hold their clip are timed in tests/ranger_skills.gd.)
-		if skill.effect in ["frenzy","vanish","hide","ambush","rapid","power"]: continue
+		# (And the wizard's channelled spells, which are held rather than timed: tests/wizard_skills.gd.)
+		if skill.effect in ["frenzy","vanish","hide","ambush","rapid","power","freezefloor","frostblast"]: continue
 		game.run=Data.new_run(skill.class_id); game.run.skills[id]=1
 		game.player.busy=0; game.player.cooldown=0; game.skills.reset(); game.leap_left=0
 		game.player.position=game.world.spawn
-		# Execute needs a wounded enemy in reach.
-		victim.dead=skill.effect!="execute"; victim.hp=victim.max_hp*.1
+		# Execute needs a wounded enemy in reach; the wizard's pointed spells, an enemy before him.
+		victim.dead=skill.effect!="execute" and not skill.effect in ["prison","rod","shock","bolt"]; victim.hp=victim.max_hp*.1
+		victim.position=game.world.spawn+Vector3(0,0,1.4)
 		game.refit()
 		check(game.skills.cast(id,victim.position),"Skill enters timed playback: "+id)
 		var duration: float=game.player.busy
@@ -361,7 +363,7 @@ func test():
 		game.run=Data.new_run(class_id)
 		# The class's first skill, learned with the point it starts with and
 		# put on RMB.
-		var first: String = {"warrior":"cleave","ranger":"power_shot","wizard":"firebolt"}[class_id]
+		var first: String = {"warrior":"cleave","ranger":"power_shot","wizard":"fireball"}[class_id]
 		Data.Skills.learn(game.run,first); game.run.hotbar[0]=first
 		game.skills.reset(); game.player.cooldown=0; game.player.busy=0
 		game.refit()
@@ -376,7 +378,7 @@ func test():
 		check(victim.hp==10000 and game.projectiles.is_empty() and game.fireballs.is_empty(),"Class skill respects windup: "+class_id)
 		# (The ranger's Power Shot is aimed for three seconds at its first rank.)
 		game.skills.tick(3.0 if class_id=="ranger" else .5)
-		# (The wizard's Firebolt is the Oracle's fireball.)
+		# (The wizard's Fireball flies as the Oracle's does.)
 		check(victim.hp<10000 or not game.projectiles.is_empty() or not game.fireballs.is_empty(),"Class skill executes after windup: "+class_id)
 		game.skills.pending.clear(); game.player.busy=0
 		game.skills.cast_slot(0,victim.position)

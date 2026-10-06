@@ -522,7 +522,7 @@ func toggle_walk() -> void:
 # How fast the hero goes over the ground: walking or running, halved when slowed.
 func player_pace() -> float:
 	# (Swift Footed quickens the ranger; hidden in the shadows he creeps.)
-	var pace = (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)*(1.0+Data.passive(run,"swift_footed")*.01)*(1.0+Items.bonus(run,"speed")*.01)
+	var pace = (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)*(1.0+Data.passive(run,"swift_footed")*.01)*(1.0+Items.bonus(run,"speed")*.01)*(1.0+(skills.BLAZING_RUN if skills.blazing_time>0 else 0.0)*.01)
 	return pace*(1.0-skills.hide_slow*.01) if skills.hidden else pace
 
 # Everyone an attack can land on. Normally the statues; in the playground every
@@ -599,6 +599,8 @@ func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
 		return
 	var clicked = null if held and move_hold and not special else clicked_enemy()
 	if not held and not special: move_hold = clicked == null
+	# A move order, or another skill, lets a held spell go.
+	if not special or not skills.channeling() or skills.channel.get("slot",-1) != slot: skills.end_channel()
 	if clicked: order_attack(clicked,special,slot)
 	elif special:
 		target = null
@@ -645,6 +647,12 @@ func player_control(dt: float) -> void:
 			for enemy in skills.targets(player.position,1.0):
 				if not enemy in dash_struck: skills.dash_hit(enemy,dash_direction,dash_struck)
 		if dash_time<=0: dash_attack = false
+		return
+	# Channelling a spell, he turns with the cursor and does nothing else
+	# until he lets go (scripts/skills.gd tick_channel).
+	if skills.channeling():
+		route.clear()
+		player.visual.locomotion(false,true)
 		return
 	# The original game's mouse orders are authoritative. Shift plants the hero;
 	# a tap keeps its destination, while a held ground order follows the cursor.
@@ -921,6 +929,7 @@ func dash() -> void:
 	sound.play("dash-whoosh")
 	skills.pending.clear()
 	skills.cancel_aim()
+	skills.end_channel()
 	var offset = world.pointer()-player.position
 	set_dash_length(offset.length())
 	dash_time = dash_seconds
@@ -1164,12 +1173,15 @@ func projectile(from: Vector3, at: Vector3, damage: float, friendly: bool, type:
 	var finish: Material
 	if type=="arrow": finish = null if friendly else Art.statue_material()
 	else: finish = Art.material("gold" if friendly else "marble",Color(.35,.7,1) if type=="ice" else (Color(.65,.35,1) if type=="arcane" else (Color(1,.3,.05) if type=="fire" else Color(.9,.67,.45))))
-	var node = Art.model("arrow" if type=="arrow" else "gem",Art.ARROW_SIZE if type=="arrow" else Vector3(1.5,.5,.6),finish)
+	# (The hero's bolt of ice is a shard of it, long along its flight.)
+	if friendly and type=="ice": finish = preload("res://scripts/wizard_fx.gd").ice()
+	var node = Art.model("arrow" if type=="arrow" else "gem",Art.ARROW_SIZE if type=="arrow" else (Vector3(.14,.14,.8) if friendly and type=="ice" else Vector3(1.5,.5,.6)),finish)
 	world.add_child(node)
 	node.position = from + Vector3.UP
 	# The arrow's head is toward its local -Z; turn that into the flight.
 	node.rotation = Vector3(0,atan2(direction.x,direction.z)+(PI if type=="arrow" else 0.0),0)
 	if not extra.is_empty(): RangerFx.arrow(node,extra.get("kind",""))
+	if friendly and type=="ice": preload("res://scripts/wizard_fx.gd").ice_trail(node)
 	projectiles.append({"node":node,"direction":direction,"damage":damage,"friendly":friendly,"age":0.0,"type":type,"piercing":piercing,"hit":[],"source":source,"skill":skill,"extra":extra})
 
 func tick_projectiles(dt: float) -> void:
@@ -1199,6 +1211,7 @@ func tick_projectiles(dt: float) -> void:
 							arrow_struck = a
 							skills.arrow_hit(a,p)
 							arrow_struck = null
+						elif p.friendly and p.type=="ice": skills.ice_bolt_hit(a,p)
 						elif p.friendly: skills.strike(a,p.damage,kind,0.0,impact,p.skill)
 						else: a.hit(p.damage,kind,0.0,impact)
 						p.hit.append(a.uid)
@@ -1217,20 +1230,25 @@ func blast(at: Vector3, radius: float, damage: float, friendly: bool, skill: boo
 
 # The hero's own blasts are his hits (with their chance to crit); a puppet's
 # in the playground are not.
-func area_damage(at: Vector3, radius: float, damage: float, friendly: bool, source = null, skill: bool = false) -> void:
+# `element` with `percent`: a wizard's spell, hitting for that percent of
+# his baseline of that element (Skills.spell_hit) rather than for `damage`.
+func area_damage(at: Vector3, radius: float, damage: float, friendly: bool, source = null, skill: bool = false, element: String = "", percent: float = 0.0) -> void:
 	if puppet_attack(source): friendly = true
 	var candidates: Array = targets(source if puppet_attack(source) else player) if friendly else [player]
 	for a in candidates:
 		if a.dead or a.position.distance_to(at)>radius or not world.clear_line(at,a.position): continue
-		if friendly and not puppet_attack(source): skills.strike(a,damage,"physical",0.0,Vector3.ZERO,skill)
+		if friendly and not puppet_attack(source) and not element.is_empty(): skills.spell_hit(a,percent,element,StoneFragment.impact(a.position-at,true))
+		elif friendly and not puppet_attack(source): skills.strike(a,damage,"physical",0.0,Vector3.ZERO,skill)
 		elif friendly: a.hit(damage)
 		else: hurt_player(damage,"physical",source)
 
 # The Oracle's lobbed fireball; it deals area damage when it lands.
-func fireball(from: Vector3, at: Vector3, radius: float, damage: float, seconds: float, source = null, friendly: bool = false) -> void:
+func fireball(from: Vector3, at: Vector3, radius: float, damage: float, seconds: float, source = null, friendly: bool = false, element: String = "", percent: float = 0.0) -> void:
 	var ball = preload("res://scripts/fireball.gd").new()
 	world.add_child(ball)
 	ball.friendly = friendly
+	ball.element = element
+	ball.percent = percent
 	ball.setup(self,from,at,radius,damage,seconds)
 	ball.source = source
 	fireballs.append(ball)

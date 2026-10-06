@@ -4,7 +4,18 @@ const Items = preload("res://scripts/items.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=11: return d
+	if int(d.get("version",0))>=12: return d
+	if int(d.get("version",0))==11:
+		# The wizard's spells were replaced (ice, fire and lightning): a
+		# wizard's skill points are refunded.
+		var updated = d.duplicate(true)
+		updated.version = 12
+		if updated.get("class_id","")=="wizard":
+			updated.skills = {}
+			updated.skill_points = int(updated.get("level",1))
+			updated.hotbar = ["","","","",""]
+			updated["migration_notice"] = true
+		return updated
 	if int(d.get("version",0))==10:
 		# Items: what was a list of weapons owned and one in hand became
 		# equipment and a bag. A character from before is given its class's
@@ -19,7 +30,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 			if had[i] is bool and had[i] and not plain.is_empty() and Items.usable(updated.class_id,plain) and not plain in updated.equipment.values() and not plain in updated.bag: Items.stow(updated,plain)
 		for key in ["owned","weapon","shield"]: updated.erase(key)
 		updated.drops = []
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==9:
 		# The temple became three floors and a summit, with two dungeons to
 		# fight through before it. A character from before keeps the temple
@@ -115,7 +126,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<11:
+	if int(d.get("version",0))<12:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
