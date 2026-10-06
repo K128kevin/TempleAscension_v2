@@ -146,6 +146,15 @@ func test():
 	game.run.energy = 3.0
 	play(.5)
 	check(not game.skills.channeling(),"Out of energy, the channel breaks")
+	var sheets: Array = game.skills.patches.map(func(p): return p.node)
+	play(12.5)
+	check(game.skills.patches.is_empty() and sheets.all(func(n): return not is_instance_valid(n) or n.is_queued_for_deletion()),"The ice melts away after 12 seconds, its sheets with it")
+	game.skills.lay_ice(origin+forward*6,5.0,12.0,40.0)
+	game.skills.lay_ice(origin+forward*7,5.0,12.0,40.0)
+	check(game.skills.patches.size()==1,"Ice laid within half its width of a patch freezes that one afresh")
+	for i in 60: game.skills.lay_ice(origin+Vector3(i*3,0,0),.9,6.0,0.0)
+	play(1.1)
+	check(game.skills.patches.size()<=game.skills.MAX_PATCHES,"No more than %d patches of ice lie at once (%d)" % [game.skills.MAX_PATCHES,game.skills.patches.size()])
 	clear()
 
 	# Ice Spikes: everyone within 2 metres of the aim.
@@ -226,6 +235,16 @@ func test():
 	check(within(foe,1,240) and game.skills.burn_left>0 and game.player.hp<game.player.max_hp,"Pyromaniac doubles fire, and burns him (%.1f dealt, %.1f burnt)" % [lost(foe),game.player.max_hp-game.player.hp])
 	play(3.0)
 	check(absf((game.player.max_hp-game.player.hp)-lost(foe)*.1)<.5,"for a tenth of what it dealt, over 3 seconds")
+	clear()
+	# Bolts strike the first enemy in their way, as arrows do.
+	hero({"ice_bolt":1,"fireball":1})
+	var first = dummy(4)
+	var behind = dummy(8)
+	cast("ice_bolt",behind.position); play(1.5)
+	check(lost(first)>0 and lost(behind)==0,"An ice bolt strikes the first enemy in its way (%.1f, %.1f)" % [lost(first),lost(behind)])
+	first.hp = first.max_hp; first.end_stun(); ready()
+	cast("fireball",behind.position); play(2.0)
+	check(lost(first)>0 and lost(behind)==0,"A fireball bursts on the first enemy in its way (%.1f, %.1f)" % [lost(first),lost(behind)])
 	clear()
 
 	# Blast Wave: 5 metres all round.

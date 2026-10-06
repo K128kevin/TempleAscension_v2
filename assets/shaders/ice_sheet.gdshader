@@ -31,7 +31,7 @@ float noise(vec2 p) {
 float fbm(vec2 p) {
 	float total = 0.0;
 	float amplitude = 0.5;
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 3; i++) {
 		total += noise(p) * amplitude;
 		p = p * 2.03 + vec2(3.1, 7.7);
 		amplitude *= 0.5;
@@ -64,22 +64,21 @@ void vertex() {
 void fragment() {
 	vec2 p = world.xz;
 	float cloud = fbm(p * 1.3);
-	float grain = fbm(p * 7.0);
+	float grain = noise(p * 7.0);
 	// Its rim, made ragged by noise; melting eats it back.
 	float d = length(UV * 2.0 - 1.0);
 	float ragged = d + (fbm(p * 2.6) - 0.5) * min(0.45, 0.45 / radius);
 	float reach = mix(0.86, 0.0, melt) * mix(0.3, 1.0, grow);
 	float cover = 1.0 - smoothstep(reach - min(0.06, 0.06 / radius), reach, ragged);
-	// Cracks running through it, finer ones between.
+	// Cracks running through it.
 	float crack = 1.0 - smoothstep(0.0, 0.05, cracks(p * 1.7 + (cloud - 0.5) * 0.6));
-	float fine = (1.0 - smoothstep(0.0, 0.035, cracks(p * 4.3))) * 0.5;
 	// Rime: whiter, rougher frost in its cloudy parts (by where it lies, not
 	// by the disc, so no seam shows where patches overlap).
 	float rime = smoothstep(0.4, 0.75, cloud);
 	vec3 clear = vec3(0.64, 0.8, 0.9);
 	vec3 frosted = vec3(0.86, 0.93, 0.98);
 	vec3 color = mix(clear, frosted, clamp(rime * 0.8 + grain * 0.35, 0.0, 1.0));
-	color = mix(color, vec3(0.97, 0.99, 1.0), max(crack, fine) * 0.75);
+	color = mix(color, vec3(0.97, 0.99, 1.0), crack * 0.75);
 	// Glitter: a few points of the frost catch the light now and then.
 	vec2 sparkle_cell = floor(p * 14.0);
 	float sparkle = step(0.965, hash(sparkle_cell)) * pow(max(0.0, sin(flame_time * 2.4 + hash(sparkle_cell + 3.3) * 40.0)), 12.0);

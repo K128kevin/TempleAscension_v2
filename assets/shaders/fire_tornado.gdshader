@@ -49,10 +49,14 @@ void vertex() {
 	rise = UV.y;
 	float h = UV.y;
 	float t = flame_time;
-	// The column snakes, more the higher it goes, and its crown trails behind.
+	// The column twists about: its bend winds round it like a corkscrew and
+	// slowly turns, more the higher it goes, with a quicker wobble on top,
+	// and its crown trails behind as it travels.
 	float sway = pow(h, 1.4);
-	VERTEX.x += (sin(h * 2.7 + t * 1.3 + seed) * 0.45 + sin(h * 6.1 - t * 2.3 + seed * 2.0) * 0.12) * sway + lean.x * h * h;
-	VERTEX.z += (cos(h * 2.2 + t * 1.1 + seed * 1.7) * 0.45 + cos(h * 5.3 - t * 2.1) * 0.12) * sway + lean.y * h * h;
+	float turn = t * 1.4 + seed + h * 2.6;
+	float bend = 0.6 + sin(t * 0.7 + seed) * 0.2;
+	VERTEX.x += (cos(turn) * bend + sin(h * 6.1 - t * 2.3 + seed * 2.0) * 0.12) * sway + lean.x * h * h;
+	VERTEX.z += (sin(turn) * bend + cos(h * 5.3 - t * 2.1) * 0.12) * sway + lean.y * h * h;
 	// It breathes: the tube swells and pinches as it spins.
 	float pulse = 1.0 + sin(h * 9.0 - t * 4.0 + seed) * 0.07;
 	VERTEX.xz *= pulse;

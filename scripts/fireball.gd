@@ -94,7 +94,15 @@ func tick(dt: float) -> bool:
 	if not exploded:
 		var u = minf(1.0,age/flight_time)
 		# Straight from the staff's crown to the burst point.
+		var before: Vector3 = position
 		position = origin.lerp(target,u)
+		# The hero's bursts on the first enemy in its way, as an arrow strikes.
+		if friendly:
+			var struck = first_struck(before,position)
+			if struck != null:
+				target = struck.position+Vector3.UP*.35
+				explode()
+				return true
 		core_material.set_shader_parameter("flame_time",age)
 		carry_light.light_energy = 1.8*(1.0+sin(age*23.0)*.08)
 		visible = game.world.can_see(position)
@@ -114,6 +122,20 @@ func tick(dt: float) -> bool:
 	scorch.modulate.a = .6*clampf((LIFETIME_AFTER_IMPACT-t)/1.5,0.0,1.0)*minf(1.0,t*8.0)
 	visible = game.world.can_see(target)
 	return t<LIFETIME_AFTER_IMPACT
+
+# The enemy nearest the start of the flight from `before` to `after` that it
+# passes through (as Game.tick_projectiles finds an arrow's), or null.
+func first_struck(before: Vector3, after: Vector3):
+	var best = null
+	var nearest: float = INF
+	for a in game.targets(game.player):
+		if a.dead or a.dormant: continue
+		var middle: Vector3 = a.position+Vector3.UP
+		var closest: Vector3 = Geometry3D.get_closest_point_to_segment(middle,before,after)
+		if closest.distance_to(middle) < (1.1 if a.kind=="boss" else .8) and before.distance_to(closest)<nearest:
+			nearest = before.distance_to(closest)
+			best = a
+	return best
 
 func _process(_delta: float) -> void:
 	Vfx.hold_when_paused(game,[trail,sparks,smoke])

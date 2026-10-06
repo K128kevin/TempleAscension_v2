@@ -119,7 +119,13 @@ const PATCH_SECONDS = 6.0
 # and how far the ray moves before it lays the next.
 const FLOOR_SECONDS = 12.0
 const FLOOR_RADIUS = 5.0
-const FLOOR_SPACING = 1.5
+const FLOOR_SPACING = 2.5
+# Ice laid within this share of its radius of a patch as wide is that patch
+# frozen afresh rather than another laid over it, and no more than MAX_PATCHES
+# lie at once (the oldest thaws early): every patch is a sheet drawn over the
+# floor, and many stacked ones cost the frame dearly.
+const PATCH_REFRESH = .5
+const MAX_PATCHES = 40
 const SPELL_REACH = 15.0
 const SPIKES_RADIUS = 2.0
 const FROST_REACH = 10.0
@@ -599,9 +605,27 @@ func burn(total: float) -> void:
 
 # Ice laid on the floor at `at`: enemies on it move `slow` percent slower.
 func lay_ice(at: Vector3, radius: float, seconds: float, slow: float) -> void:
+	for p in patches:
+		if is_equal_approx(p.radius,radius) and p.at.distance_to(at)<=radius*PATCH_REFRESH and not p.get("thawing",false):
+			p.left = maxf(p.left,seconds)
+			p.slow = maxf(p.slow,slow)
+			if is_instance_valid(p.node): p.node.life = p.node.age+p.left
+			return
+	var frozen: Array = patches.filter(func(p): return not p.get("thawing",false))
+	if frozen.size()>=MAX_PATCHES:
+		var oldest: Dictionary = frozen[0]
+		for p in frozen:
+			if p.left<oldest.left: oldest = p
+		thaw(oldest,1.0)
 	var node: Node3D = WizardFx.patch(at+Vector3.UP*game.world.lift(at),radius,seconds,func(x,z): return game.world.lift(Vector3(x,0,z)))
 	game.world.add_child(node)
 	patches.append({"at":at,"radius":radius,"left":seconds,"slow":slow,"node":node})
+
+# A patch of ice thawed early: gone (melting away) within `seconds`.
+func thaw(p: Dictionary, seconds: float) -> void:
+	p.thawing = true
+	p.left = minf(p.left,seconds)
+	if is_instance_valid(p.node): p.node.life = minf(p.node.life,p.node.age+p.left)
 
 # Whether a unit stands on the ice.
 func on_ice(at: Vector3) -> bool:
@@ -1318,7 +1342,9 @@ func tick_wizard(dt: float) -> void:
 	for i in range(patches.size()-1,-1,-1):
 		var p: Dictionary = patches[i]
 		p.left -= dt
+		if is_instance_valid(p.node): p.node.tick(dt)
 		if p.left<=0:
+			if is_instance_valid(p.node): p.node.queue_free()
 			patches.remove_at(i)
 			continue
 		if p.slow>0:

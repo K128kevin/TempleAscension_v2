@@ -387,7 +387,8 @@ static func funnel_mesh(radius: float) -> ArrayMesh:
 	var rings = 24
 	for j in rings+1:
 		var h: float = float(j)/rings
-		var width: float = radius*(.22+.6*pow(h,.9)+.3*exp(-h*12.0))
+		# (A slender stem, flaring out toward its crown.)
+		var width: float = radius*(.1+.9*pow(h,1.8)+.12*exp(-h*14.0))
 		for i in sides+1:
 			var angle: float = TAU*i/sides
 			var out = Vector3(cos(angle),0,sin(angle))
