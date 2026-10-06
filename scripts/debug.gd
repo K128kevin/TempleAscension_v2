@@ -2,18 +2,21 @@ extends Node
 ## Opt-in playtest controls, matching the original game's DebugMenu.
 const Data = preload("res://scripts/data.gd")
 const Items = preload("res://scripts/items.gd")
+const ItemBrowser = preload("res://scripts/item_browser.gd")
 var game
 var enabled = false
 var invulnerable = false
 var panel: PanelContainer
 var toggle: Button
 var buttons: Dictionary = {}
+var browser
 const ACTIONS = [
 	[KEY_G,"god","G · Invulnerable"],
 	[KEY_F9,"kill","F9 · Kill all enemies"],
 	[KEY_F,"refill","F · Refill health / energy"],
 	[KEY_H,"axe","H · Grant battle axe"],
 	[KEY_J,"bow","J · Grant bow"],
+	[KEY_F5,"items","F5 · Item browser"],
 	[KEY_F6,"loot","F6 · Drop a random item"],
 	[KEY_Y,"skills","Y · Reset skills"],
 	[KEY_N,"next","N · Next floor"],
@@ -51,6 +54,8 @@ func setup(owner_game) -> void:
 	game = owner_game
 	if not enabled: return
 	var hud = game.hud
+	browser = ItemBrowser.new()
+	browser.setup(game)
 	panel = PanelContainer.new()
 	panel.add_theme_stylebox_override("panel",hud.panel_style(Color(.035,.04,.045,.96),hud.gold))
 	hud.root.add_child(panel)
@@ -87,10 +92,13 @@ func refresh() -> void:
 	if not enabled or not is_instance_valid(panel): return
 	if is_instance_valid(toggle): toggle.text = "DEBUG · God %s · P %s" % ["ON" if invulnerable else "OFF","hide" if panel.visible else "show"]
 	buttons.god.text = "G · Invulnerable: %s" % ("ON" if invulnerable else "OFF")
+	browser.refresh()
 	for action in buttons: buttons[action].disabled = not available(action)
 	panel.reset_size()
 
 func available(action: String) -> bool:
+	# (The item browser also works beside the open inventory.)
+	if action=="items": return enabled and game.mode in ["playing","character"]
 	return enabled and (game.mode=="playing" or action in ["panel","reset","restart","first","floor","boss","desert","town","basement","cave"])
 
 func handle_key(event: InputEventKey) -> bool:
@@ -104,9 +112,9 @@ func handle_key(event: InputEventKey) -> bool:
 		if game.playground != null: game.leave_playground()
 		elif game.mode=="playing": game.enter_playground()
 		return true
-	# In the playground only the panel toggle applies; floor and run shortcuts
-	# would tear it down.
-	if game.playground != null and key != KEY_P: return false
+	# In the playground only the panel toggle and the item browser apply; floor
+	# and run shortcuts would tear it down.
+	if game.playground != null and not key in [KEY_P,KEY_F5]: return false
 	if key==KEY_P:
 		execute("panel")
 		return true
@@ -138,6 +146,10 @@ func execute(action: String, floor_index: int = 0) -> void:
 	if not available(action): return
 	match action:
 		"panel": panel.visible = not panel.visible
+		"items":
+			browser.toggle()
+			refresh()
+			return
 		"god":
 			invulnerable = not invulnerable
 			game.toast("[Debug] Invulnerable %s" % ("on" if invulnerable else "off"))

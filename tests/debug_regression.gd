@@ -54,6 +54,26 @@ func test():
 		key(KEY_H); key(KEY_J)
 		game.player.busy=0; game.combat_age=10
 		check(Items.PLAIN.axe in game.run.bag and Items.PLAIN.bow in game.run.bag and game.move_item("bag:%d" % game.run.bag.find(Items.PLAIN.bow),"main").is_empty() and Data.weapon(game.run)==2,"Debug grants weapons usable through the inventory")
+		var browser=debug.browser
+		key(KEY_F5)
+		check(browser.is_open() and browser.list.get_child_count()==Items.ALL.size(),"F5 opens the item browser, listing every item")
+		var sorted=0
+		for which in ["starting","common","uncommon","rare"]:
+			browser.filter_buttons[which].pressed.emit()
+			var shown: Array=browser.list.get_children().map(func(r): return String(r.name))
+			sorted+=shown.size()
+			check(not shown.is_empty() and shown.all(func(id): return Items.ALL[id].get("rarity","starting")==which),"The %s filter lists only %s items" % [which,which])
+		check(sorted==Items.ALL.size(),"The rarity filters between them hold every item")
+		var free_before: int=game.run.bag.count("")
+		var rare: Button=browser.list.get_child(0)
+		rare.pressed.emit()
+		check(String(rare.name) in game.run.bag and game.run.bag.count("")==free_before-1,"Clicking an item puts it in the bag")
+		key(KEY_I)
+		check(game.mode=="character" and browser.is_open(),"The browser stays open beside the inventory")
+		game.run.bag[game.run.bag.find(String(rare.name))]=""
+		key(KEY_I)
+		key(KEY_F5)
+		check(not browser.is_open(),"F5 closes the browser")
 		Data.gain_xp(game.run,Data.xp_at_level(4))
 		var points=game.run.points
 		for i in 3:
