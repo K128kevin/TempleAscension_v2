@@ -560,9 +560,11 @@ func square(id: String) -> Button:
 	rank.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var slot = text("",9,hud.cream,b)
 	slot.position = Vector2(4,1)
-	# (The wizard's shift-click puts a learned spell on LMB instead.)
+	# A left click learns or raises a skill. The wizard's binds a learned
+	# spell to LMB instead, as a right click binds one to RMB, when there is
+	# no raising it (or always, with Shift held).
 	b.pressed.connect(func():
-		if Data.casts_left(game.run) and Input.is_physical_key_pressed(KEY_SHIFT) and int(game.run.skills.get(id,0))>0: assign(id,Data.LEFT_SLOT)
+		if left_binds(id): assign(id,Data.LEFT_SLOT)
 		else: learn(id))
 	b.gui_input.connect(func(event):
 		if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_RIGHT: assign(id,0))
@@ -571,6 +573,10 @@ func square(id: String) -> Button:
 		if hovered==id: unhover())
 	nodes[id] = {"button":b,"icon":icon,"rank":rank,"slot":slot,"state":""}
 	return b
+
+func left_binds(id: String) -> bool:
+	if not Data.casts_left(game.run) or int(game.run.skills.get(id,0))<=0 or Book.all()[id].effect=="passive": return false
+	return Input.is_physical_key_pressed(KEY_SHIFT) or not Book.can_learn(game.run,id)
 
 func unhover() -> void:
 	hovered = ""
@@ -689,8 +695,9 @@ func skill_lines(id: String, on_hotbar: bool) -> Dictionary:
 	if on_hotbar and lines.lock.is_empty(): lines.lock = game.skills.reason(id)
 	lines.hint = ""
 	if Book.can_learn(r,id): lines.hint = "Click to learn" if rank==0 else "Click to raise to rank %d" % (rank+1)
-	if active and rank>0: lines.hint += ("\n" if not lines.hint.is_empty() else "")+"Right-click or 1–4: assign to RMB or that key"
-	if active and rank>0 and Data.casts_left(r): lines.hint += "\nShift-click: assign to LMB"
+	if active and rank>0 and Data.casts_left(r):
+		lines.hint += ("\n" if not lines.hint.is_empty() else "")+("Shift-click, right-click or 1–4: assign to LMB, RMB or that key" if Book.can_learn(r,id) else "Click, right-click or 1–4: assign to LMB, RMB or that key")
+	elif active and rank>0: lines.hint += ("\n" if not lines.hint.is_empty() else "")+"Right-click or 1–4: assign to RMB or that key"
 	if on_hotbar: lines.hint = ""
 	return lines
 

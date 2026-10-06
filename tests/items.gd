@@ -210,9 +210,6 @@ func test():
 	game.run.stats[2] = 15
 	check(is_equal_approx(Data.damage_tag(game.run,"spell",100.0),120.0*1.05),"Intelligence raises it 2% a point")
 	game.run.stats[2] = 5
-	victim = foe(6.0)
-	dealt = blows(victim,16)
-	check(dealt[0] >= 10.0*1.05-.001 and dealt[1] <= 15.0*1.05+.001,"The staff's bolts hit for the baseline, not for a weapon's damage (%.1f to %.1f)" % dealt)
 	game.run.skills = {"fireball":1}
 	var with_silver: String = game.skills.damage_summary("fireball",1).damage
 	game.run.bag[0] = "oracle_staff"
@@ -224,9 +221,7 @@ func test():
 	check(game.skills.reason("fireball") == "" and game.skills.cast("fireball",victim.position),"and can still be cast")
 	play(2.0)
 	check(victim.hp < victim.max_hp,"Fireball burns what it reaches")
-	ready(); victim = foe(1.4)
-	dealt = blows(victim,12)
-	check(dealt[0] >= 12.0-.001 and dealt[1] <= 17.0+.001 and game.player.visual.state in ["DaggerStab","DaggerSlash"],"His dagger stabs for its own damage (%.1f to %.1f)" % dealt)
+	# (He has no normal attack, with staff or dagger: his left click casts a spell.)
 
 	# --- Armor, and what else equipment gives.
 	for class_id in Data.CLASSES:
@@ -269,6 +264,8 @@ func test():
 			hero(class_id,{"main":id,"off":""})
 			var look = game.player.visual
 			check(look.clips.has(look.idle_action()) and look.clips.has(look.run_action()),"A stance and a run for the %s with %s (%s, %s)" % [class_id,item.name,look.idle_action(),look.run_action()])
+			# (The wizard has no normal attack: his left click casts a spell.)
+			if Data.casts_left(game.run): continue
 			var move: Dictionary = Motion.family(swung)
 			victim = foe(5.0 if swung in ["bow","staff"] else 1.5)
 			var states: Array = []
@@ -470,6 +467,7 @@ func test():
 	var old = Data.new_run("warrior")
 	old.version = 10
 	old.erase("equipment"); old.erase("bag")
+	old.hotbar = ["","","","",""]
 	old["owned"] = [false,true,true,false,false,false]; old["weapon"] = 1; old["shield"] = "round_shield"
 	old.drops = [{"kind":"weapon","value":4,"id":"weapon:1","position":[0,9]}]
 	var migrated = Save.migrate(old)

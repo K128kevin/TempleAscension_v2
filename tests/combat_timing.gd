@@ -141,7 +141,8 @@ func test():
 		for clip in Motion.FAMILIES[swung].clips+([Motion.FAMILIES[swung].off] if Motion.FAMILIES[swung].has("off") else []):
 			check(game.player.visual.clips.has(clip),"The hero has the %s family's clip %s" % [swung,clip])
 			for duration in [.25,1.75]: playback(game.player.visual,clip,duration,Motion.FAMILIES[swung].contacts if not clip.begins_with("Sword") and clip!="OffCut" else [Motion.FAMILIES[swung].contacts[0]*Motion.SWORD_SWING_SHARE],"%s %.2fs" % [clip,duration])
-	for class_id in Data.CLASSES:
+	# (The wizard has no normal attack: his left click casts a spell.)
+	for class_id in Data.CLASSES.filter(func(c): return not Data.casts_left(Data.new_run(c))):
 		for kind in Items.WIELDS[class_id].filter(func(k): return k!="shield")+["unarmed"]:
 			for dt in [1.0/15,1.0/60]: held_attacks(game,victim,class_id,kind,dt)
 	# All active class skills share the same restart and duration contract.

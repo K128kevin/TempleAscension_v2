@@ -271,7 +271,7 @@ func test():
 	for e in line: e.hp = e.max_hp
 	game.skills.cast("lightning_shot",at)
 	play(1.2)
-	check(line.filter(func(e): return lost(e)>0).size()==2 and within(line[1],1,80),"Rank 1 leaps once, for 80%")
+	check(line.filter(func(e): return lost(e)>0).size()==2 and within(line[1],1,100*game.skills.LIGHTNING_FADE),"Rank 1 leaps once, for 75%%: 25%% weaker than its 100%% strike (%.1f)" % lost(line[1]))
 	clear()
 
 	# Frenzy.

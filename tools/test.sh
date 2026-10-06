@@ -2,9 +2,23 @@
 set -u
 # Every test runs even when an earlier one fails; failures are listed at the end.
 failed=""
+# A test that has not finished in TEST_TIMEOUT seconds (default 600) is
+# stopped and counted as failed, so a stalled engine cannot hang the suite.
 run() {
-  "$@" || failed="$failed
+  "$@" &
+  pid=$!
+  (
+    trap 'kill "$nap" 2>/dev/null; exit 0' TERM
+    sleep "${TEST_TIMEOUT:-600}" & nap=$!
+    wait "$nap" && kill "$pid" 2>/dev/null && echo "Timed out: $*" >&2
+  ) &
+  watchdog=$!
+  if wait "$pid"; then status=0; else status=$?; fi
+  kill "$watchdog" 2>/dev/null; wait "$watchdog" 2>/dev/null
+  if [ "$status" -ne 0 ]; then
+    failed="$failed
   $*"
+  fi
 }
 cd "$(dirname "$0")/.."
 godot_bin="${GODOT_BIN:-.tools/Godot.app/Contents/MacOS/Godot}"

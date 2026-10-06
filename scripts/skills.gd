@@ -118,8 +118,8 @@ const PATCH_SECONDS = 6.0
 # Freeze Floor's ice: how long it lasts, how wide each patch the ray lays,
 # and how far the ray moves before it lays the next.
 const FLOOR_SECONDS = 12.0
-const FLOOR_RADIUS = 5.0
-const FLOOR_SPACING = 2.5
+const FLOOR_RADIUS = 1.25
+const FLOOR_SPACING = .8
 # Ice laid within this share of its radius of a patch as wide is that patch
 # frozen afresh rather than another laid over it, and no more than MAX_PATCHES
 # lie at once (the oldest thaws early): every patch is a sheet drawn over the
@@ -134,7 +134,7 @@ const STORM_RADIUS = 4.0
 const STORM_COOLDOWN = 60.0
 const BLAST_RADIUS = 5.0
 const TORNADO_RADIUS = 2.0
-const TORNADO_SECONDS = 6.0
+const TORNADO_SECONDS = 8.0
 # Fire Tornado's wandering: metres a second, and how far from where it was
 # cast it may stray.
 const TORNADO_SPEED = 1.1
@@ -1050,7 +1050,7 @@ func execute(job: Dictionary) -> void:
 			waves.append(WizardFx.spikes(spot+Vector3.UP*game.world.lift(spot),SPIKES_RADIUS))
 			game.world.add_child(waves[-1])
 			game.sound.play("rock-impact",-14)
-			for enemy in targets(spot,SPIKES_RADIUS): spell_hit(enemy,v.x,"frost",StoneFragment.impact(enemy.position-spot,true))
+			for enemy in targets(spot,SPIKES_RADIUS+.5).filter(func(e): return e.position.distance_to(spot)<=SPIKES_RADIUS+bulk(e)): spell_hit(enemy,v.x,"frost",StoneFragment.impact(enemy.position-spot,true))
 			lay_ice(spot,SPIKES_RADIUS,PATCH_SECONDS,0.0)
 		"prison":
 			var caged = aimed_target(at,direction)

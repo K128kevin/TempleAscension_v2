@@ -138,7 +138,7 @@ func test():
 	play(.1)
 	check(not game.skills.channeling() and game.player.busy<=0,"Let go, the channel ends and he is free")
 	var left: float = game.skills.patches[0].left
-	check(left>10.0 and left<=12.0 and game.skills.patches[0].radius==5.0,"The ice lasts 12 seconds and spreads 5 metres around where the ray falls")
+	check(left>10.0 and left<=12.0 and game.skills.patches[0].radius==1.25,"The ice lasts 12 seconds and spreads 2.5 metres across where the ray falls")
 	hero({"freeze_floor":5}); game.skills.channel_hold_override = 1
 	cast("freeze_floor",at); play(.5)
 	check(is_equal_approx(walker.slow_factor,.2),"Rank 5 slows 80%")
@@ -149,8 +149,8 @@ func test():
 	var sheets: Array = game.skills.patches.map(func(p): return p.node)
 	play(12.5)
 	check(game.skills.patches.is_empty() and sheets.all(func(n): return not is_instance_valid(n) or n.is_queued_for_deletion()),"The ice melts away after 12 seconds, its sheets with it")
-	game.skills.lay_ice(origin+forward*6,5.0,12.0,40.0)
-	game.skills.lay_ice(origin+forward*7,5.0,12.0,40.0)
+	game.skills.lay_ice(origin+forward*6,1.25,12.0,40.0)
+	game.skills.lay_ice(origin+forward*6.5,1.25,12.0,40.0)
 	check(game.skills.patches.size()==1,"Ice laid within half its width of a patch freezes that one afresh")
 	for i in 60: game.skills.lay_ice(origin+Vector3(i*3,0,0),.9,6.0,0.0)
 	play(1.1)
@@ -255,25 +255,25 @@ func test():
 	check(within(round_him[0],1,125) and within(round_him[1],1,125) and within(round_him[2],1,125) and lost(round_him[3])==0,"Rank 1: 125%% to everyone within 5 metres, on every side (%.1f, %.1f, %.1f, %.1f)" % [lost(round_him[0]),lost(round_him[1]),lost(round_him[2]),lost(round_him[3])])
 	clear()
 
-	# Fire Tornado: 6 seconds of fire where he aims, wandering about it.
+	# Fire Tornado: 8 seconds of fire where he aims, wandering about it.
 	hero({"fire_tornado":1})
 	foe = dummy(6)
 	var aside = dummy(13)
-	check(cast("fire_tornado",at) and game.player.visual.state=="CastGround" and is_equal_approx(game.run.energy,55.0),"Fire Tornado costs 45")
+	check(cast("fire_tornado",at) and game.player.visual.state=="CastGround" and is_equal_approx(game.run.energy,35.0),"Fire Tornado costs 65")
 	play(.6)
 	check(game.skills.zones.size()==1,"It stands where he aimed")
 	var strayed: float = 0.0
-	for i in 26:
+	for i in 34:
 		play(.25)
 		if not game.skills.zones.is_empty(): strayed = maxf(strayed,game.skills.zones[0].at.distance_to(game.skills.zones[0].origin))
 	check(strayed>.5 and strayed<=game.skills.TORNADO_WANDER+.5,"It wanders, but no further than %.0f metres from where it was cast (%.1f)" % [game.skills.TORNADO_WANDER,strayed])
-	check(lost(foe)>0 and lost(foe)<=15*STAFF*.5*6+.01 and lost(aside)==0 and game.skills.zones.is_empty(),"Rank 1: 50%% a second for 6 seconds to what it touches (%.1f)" % lost(foe))
+	check(lost(foe)>0 and lost(foe)<=15*STAFF*.5*8+.01 and lost(aside)==0 and game.skills.zones.is_empty(),"Rank 1: 50%% a second for 8 seconds to what it touches (%.1f)" % lost(foe))
 	hero({"fire_tornado":5,"lightning_rod":1})
 	foe.hp = foe.max_hp
 	var rods = 0
 	for i in 6:
 		ready(); foe.rod_time = 0
-		cast("fire_tornado",at); play(6.6)
+		cast("fire_tornado",at); play(8.6)
 		if foe.rod_time>0: rods += 1
 	check(rods>=1,"Rank 5: each second a 30%% chance to make an enemy in it a Lightning Rod (%d of 6 tornadoes)" % rods)
 	clear()
@@ -371,6 +371,21 @@ func test():
 	check(Save.valid(old) and migrated.version==Data.new_run().version and migrated.skills.is_empty() and migrated.skill_points==1 and migrated.get("migration_notice",false),"A wizard's older save has its skill points refunded")
 	game.run.skills = {"fireball":1}; game.run.skill_points = 0; game.run.equipment.main = "silver_staff"
 	check(Save.valid(game.run),"The character is save-valid throughout")
+	# LMB is bound from the skill panel as the other slots are.
+	hero({})
+	game.run.skills = {}; game.run.skill_points = 2; game.run.hotbar = ["","","","","",""]
+	game.mode = "playing"; game.hud.tick(0)
+	var panels = game.hud.panels
+	panels.skill_plus.pressed.emit()
+	panels.nodes.ice_bolt.button.pressed.emit()
+	check(game.run.skills.ice_bolt==1 and game.run.hotbar[Data.LEFT_SLOT]=="ice_bolt","The wizard's first spell goes on LMB")
+	panels.nodes.fireball.button.pressed.emit()
+	check(game.run.skills.fireball==1 and game.run.hotbar[0]=="fireball" and game.run.skill_points==0,"his next on RMB")
+	panels.nodes.fireball.button.pressed.emit()
+	check(game.run.hotbar[Data.LEFT_SLOT]=="fireball" and game.run.hotbar[0]=="" and game.run.skills.fireball==1,"With no point to raise it, clicking a learned spell binds it to LMB")
+	panels.assign("ice_bolt",2)
+	check(game.run.hotbar[2]=="ice_bolt","and 1 to 4 bind as before")
+	game.resume_game()
 	FileAccess.open("res://test-results/wizard-skills.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
 	print("WIZARD_SKILLS ",passed.size()," passed; ",failed)
 	game.queue_free()

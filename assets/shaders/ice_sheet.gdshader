@@ -3,13 +3,12 @@ render_mode blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 
 // A sheet of ice frozen over the floor (scripts/wizard_fx.gd, Patch): a disc
 // laid flat, solid through its middle with a ragged frosted rim. Everything
-// in it (its colour, cloudiness, cracks, rime and glitter) is worked out from
+// in it (its colour, cloudiness, cracks and rime) is worked out from
 // where it lies in the world, not from the disc, so where patches overlap they
 // show the same ice and run together into one even sheet. `melt` runs 0 to 1
 // as it thaws: it breaks up from its rim inward, unevenly, rather than fading.
 uniform float melt = 0.0;
 uniform float grow = 1.0;
-uniform float flame_time = 0.0;
 // Its radius in metres, so its rim is as ragged on a wide sheet as a small one.
 uniform float radius = 1.0;
 
@@ -79,14 +78,10 @@ void fragment() {
 	vec3 frosted = vec3(0.86, 0.93, 0.98);
 	vec3 color = mix(clear, frosted, clamp(rime * 0.8 + grain * 0.35, 0.0, 1.0));
 	color = mix(color, vec3(0.97, 0.99, 1.0), crack * 0.75);
-	// Glitter: a few points of the frost catch the light now and then.
-	vec2 sparkle_cell = floor(p * 14.0);
-	float sparkle = step(0.965, hash(sparkle_cell)) * pow(max(0.0, sin(flame_time * 2.4 + hash(sparkle_cell + 3.3) * 40.0)), 12.0);
-	sparkle *= 1.0 - smoothstep(0.1, 0.4, length(fract(p * 14.0) - 0.5));
 	ALBEDO = color;
 	ROUGHNESS = mix(0.08, 0.55, rime * 0.7 + grain * 0.3);
 	SPECULAR = 0.9;
 	METALLIC = 0.0;
-	EMISSION = vec3(0.08, 0.13, 0.18) + vec3(1.0, 1.0, 1.0) * sparkle * 2.5;
+	EMISSION = vec3(0.08, 0.13, 0.18);
 	ALPHA = cover * 0.97;
 }

@@ -234,7 +234,8 @@ func test():
 	pg.toggle_death()
 	check(not game.player.dead,"And revived")
 	# Every hero class lands its basic attack, on a statue and on another hero.
-	for hero in pg.heroes:
+	# (The wizard has none: his left click casts a spell.)
+	for hero in pg.heroes.filter(func(h): return pg.unit_name(h)!="Wizard"):
 		pg.select(hero)
 		for victim in [game.enemies.filter(func(e): return e.kind=="centurion")[0], pg.heroes[(pg.heroes.find(hero)+1)%3]]:
 			var home: Vector3 = victim.position

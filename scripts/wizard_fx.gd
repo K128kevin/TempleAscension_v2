@@ -60,7 +60,6 @@ class Patch extends Node3D:
 		var ice: ShaderMaterial = sheet.material_override
 		ice.set_shader_parameter("grow",minf(1.0,age/.2))
 		ice.set_shader_parameter("melt",clampf(1.0-(life-age)/1.5,0.0,1.0))
-		ice.set_shader_parameter("flame_time",age)
 		return age >= life
 static var ice_sheet_shader: Shader
 # `ground(x, z)` is the floor's height there: a wide sheet is laid over the
@@ -97,6 +96,9 @@ static func patch(at: Vector3, radius: float, seconds: float, ground: Callable =
 	ice.shader = ice_sheet_shader
 	ice.set_shader_parameter("grow",0.0)
 	ice.set_shader_parameter("radius",radius)
+	# (Drawn before every other effect, so fire, spikes, scorch and the
+	# rest show over the ice rather than under it.)
+	ice.render_priority = Material.RENDER_PRIORITY_MIN
 	node.sheet.material_override = ice
 	node.add_child(node.sheet)
 	return node
@@ -194,18 +196,70 @@ class Spikes extends Node3D:
 			left = left or sink<1.0
 		flash.light_energy = 4.0*clampf(1.0-age/.6,0.0,1.0)
 		return not left
+# A spike of ice, a unit high: a crystal of uneven facets standing on its
+# foot, a little waisted above it, drawn up to a needle point. Each of a few
+# shapes is made once and shared (`shape` picks one).
+static var crystal_meshes: Array = []
+static var crystal_shader: Shader
+static func crystal_mesh(shape: int) -> ArrayMesh:
+	if crystal_meshes.is_empty():
+		for k in 4:
+			var rng = RandomNumberGenerator.new()
+			rng.seed = 7919*(k+1)
+			var sides: int = 5+k%3
+			# Each facet's own reach, so no two edges stand alike.
+			var reach: Array = []
+			for i in sides: reach.append(rng.randf_range(.7,1.15))
+			# Up its length: its width there (a share of its foot's) and height.
+			var rings: Array = [[1.0,0.0],[.92,.12],[.78,.42],[.5,.7],[.22,.88]]
+			var tip = Vector3(rng.randf_range(-.06,.06),1.0,rng.randf_range(-.06,.06))
+			var tool = SurfaceTool.new()
+			tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+			var ring_points: Array = []
+			for r in rings:
+				var points: Array = []
+				for i in sides:
+					var angle: float = TAU*i/sides+k
+					points.append(Vector3(cos(angle)*reach[i]*r[0],r[1],sin(angle)*reach[i]*r[0])+tip*Vector3(1,0,1)*r[1])
+				ring_points.append(points)
+			# Flat facets: each triangle its own corners.
+			for j in rings.size()-1:
+				for i in sides:
+					var a: Vector3 = ring_points[j][i]
+					var b: Vector3 = ring_points[j][(i+1)%sides]
+					var c: Vector3 = ring_points[j+1][i]
+					var d: Vector3 = ring_points[j+1][(i+1)%sides]
+					for v in [a,c,b,b,c,d]: tool.add_vertex(v)
+			for i in sides:
+				for v in [ring_points[-1][i],tip,ring_points[-1][(i+1)%sides]]: tool.add_vertex(v)
+			tool.generate_normals()
+			crystal_meshes.append(tool.commit())
+	return crystal_meshes[shape%crystal_meshes.size()]
+
 static func spikes(at: Vector3, radius: float) -> Node3D:
 	var node = Spikes.new()
 	node.position = at
 	var seed = fposmod(at.x*3.7+at.z*1.3,TAU)
 	var count = int(radius*radius*11)
+	if crystal_shader == null: crystal_shader = preload("res://assets/shaders/ice_crystal.gdshader")
 	for i in count:
 		var angle = seed+i*2.399
 		var out = radius*sqrt((i+.5)/count)
-		var spike = Art.model("gem",Vector3(.13,.7+fposmod(i*.41,1.0)*.6,.13),ice())
+		var spike = MeshInstance3D.new()
+		spike.mesh = crystal_mesh(i)
+		var look = ShaderMaterial.new()
+		look.shader = crystal_shader
+		look.set_shader_parameter("seed",fposmod(i*7.31+seed*3.0,50.0))
+		spike.material_override = look
 		node.add_child(spike)
+		# Slender and tall, the tallest toward the middle, each leaning out.
+		var tall: float = (.8+fposmod(i*.41,1.0)*.7)*(1.15-.35*out/radius)
+		var wide: float = .1+fposmod(i*.73,1.0)*.07
+		spike.scale = Vector3(wide,tall,wide)
 		spike.position = Vector3(sin(angle),0,cos(angle))*out
-		spike.rotation = Vector3(.25*sin(i*1.7),angle,.2*cos(i*.9))
+		var outward = Vector3(sin(angle),0,cos(angle))
+		var lean: float = .15+.35*out/radius+.1*sin(i*1.7)
+		spike.basis = Basis(outward.cross(Vector3.UP).normalized() if out>.05 else Vector3.RIGHT,-lean)*Basis(Vector3.UP,i*1.3)*Basis.from_scale(spike.scale)
 		node.spikes.append({"node":spike,"size":spike.scale,"at":Spikes.RISE*out/radius})
 		spike.scale.y = .001
 	node.flash = OmniLight3D.new()
@@ -354,8 +408,12 @@ static func flame_ring(at: Vector3, radius: float) -> Node3D:
 class Tornado extends Node3D:
 	var age = 0.0
 	var life = 6.0
+	# The flame shell, and the hotter column inside it.
 	var funnel: MeshInstance3D
-	var flames: CPUParticles3D
+	var inner: MeshInstance3D
+	# Tongues of fire licking up round its foot (assets/shaders/flame_lick.gdshader),
+	# each [card, how far out, its angle, how fast it goes round, its height].
+	var licks: Array = []
 	var embers: CPUParticles3D
 	var smoke: CPUParticles3D
 	var glow: OmniLight3D
@@ -369,12 +427,23 @@ class Tornado extends Node3D:
 		glow.light_energy = 3.6*strength*(1.0+sin(age*19.0)*.12)
 		scorch.modulate.a = .55*minf(1.0,age/.6)*clampf((life+2.5-age)/2.0,0.0,1.0)
 		trail = trail.lerp(-Vector2(travel.x,travel.z)*.9,minf(1.0,dt*2.0))
-		var shell: ShaderMaterial = funnel.material_override
-		shell.set_shader_parameter("flame_time",age)
-		shell.set_shader_parameter("strength",strength)
-		shell.set_shader_parameter("lean",trail)
-		funnel.visible = strength>0.0
-		for p in [flames,embers,smoke]: p.emitting = age < life
+		for column in [funnel,inner]:
+			var fire: ShaderMaterial = column.material_override
+			fire.set_shader_parameter("flame_time",age)
+			fire.set_shader_parameter("strength",strength)
+			fire.set_shader_parameter("lean",trail)
+			column.visible = strength>0.0
+		# The tongues are whirled round its foot, flickering taller and shorter.
+		for l in licks:
+			l[2] += l[3]*dt
+			var card: MeshInstance3D = l[0]
+			card.position = Vector3(cos(l[2]),0,sin(l[2]))*l[1]
+			card.scale = Vector3(l[4]*.8,l[4]*(.85+.25*sin(age*7.0+l[2]*3.0))*maxf(strength,.01),1)
+			var flame: ShaderMaterial = card.material_override
+			flame.set_shader_parameter("flame_time",age)
+			flame.set_shader_parameter("strength",strength)
+			card.visible = strength>0.0
+		for p in [embers,smoke]: p.emitting = age < life
 		return age >= life+2.5
 const TORNADO_HEIGHT = 6.0
 # The funnel: a tube of rings up TORNADO_HEIGHT, narrow at the ground with a
@@ -383,8 +452,8 @@ const TORNADO_HEIGHT = 6.0
 static func funnel_mesh(radius: float) -> ArrayMesh:
 	var tool = SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var sides = 28
-	var rings = 24
+	var sides = 36
+	var rings = 32
 	for j in rings+1:
 		var h: float = float(j)/rings
 		# (A slender stem, flaring out toward its crown.)
@@ -402,41 +471,44 @@ static func funnel_mesh(radius: float) -> ArrayMesh:
 			tool.add_index(a); tool.add_index(b); tool.add_index(a+1)
 			tool.add_index(a+1); tool.add_index(b); tool.add_index(b+1)
 	return tool.commit()
+static var lick_shader: Shader
 static func tornado(at: Vector3, radius: float, seconds: float) -> Node3D:
 	var node = Tornado.new()
 	node.position = at
 	node.life = seconds
-	node.funnel = MeshInstance3D.new()
-	node.funnel.mesh = funnel_mesh(radius)
-	node.funnel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var shell = ShaderMaterial.new()
-	shell.shader = preload("res://assets/shaders/fire_tornado.gdshader")
-	shell.set_shader_parameter("seed",randf()*40.0)
-	shell.set_shader_parameter("height",TORNADO_HEIGHT)
-	shell.set_shader_parameter("strength",0.0)
-	node.funnel.material_override = shell
-	node.add_child(node.funnel)
-	# Fire whipped round its foot, low along the ground.
-	node.flames = Vfx.particles(node,180,.8,false,true)
-	node.flames.local_coords = true
-	node.flames.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	node.flames.emission_ring_axis = Vector3.UP
-	node.flames.emission_ring_radius = radius*.75
-	node.flames.emission_ring_inner_radius = radius*.25
-	node.flames.emission_ring_height = .2
-	node.flames.position = Vector3.UP*.25
-	node.flames.direction = Vector3.UP
-	node.flames.spread = 20
-	node.flames.gravity = Vector3(0,.8,0)
-	node.flames.initial_velocity_min = .6; node.flames.initial_velocity_max = 1.4
-	node.flames.orbit_velocity_min = 1.0; node.flames.orbit_velocity_max = 1.6
-	node.flames.radial_accel_min = -2.5; node.flames.radial_accel_max = -1.2
-	node.flames.scale_amount_min = .18; node.flames.scale_amount_max = .4
-	node.flames.scale_amount_curve = Vfx.curve(1.0,.1)
-	node.flames.color_ramp = Vfx.ramp([0,.25,.65,1],[Color(1,.8,.45,.75),Color(1,.5,.12,.75),Color(.85,.22,.04,.4),Color(.3,.08,.02,0)])
-	node.flames.emitting = true
+	var seed: float = randf()*40.0
+	var columns: Array = []
+	for core in [0.0,1.0]:
+		var column = MeshInstance3D.new()
+		column.mesh = funnel_mesh(radius*(1.0 if core==0.0 else .55))
+		column.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var fire = ShaderMaterial.new()
+		fire.shader = preload("res://assets/shaders/fire_tornado.gdshader")
+		fire.set_shader_parameter("seed",seed+core*13.0)
+		fire.set_shader_parameter("core",core)
+		fire.set_shader_parameter("strength",0.0)
+		# (The hot core drawn first, the shell over it.)
+		fire.render_priority = -1 if core==1.0 else 0
+		column.material_override = fire
+		node.add_child(column)
+		columns.append(column)
+	node.funnel = columns[0]
+	node.inner = columns[1]
+	# Tongues of fire whipped round its foot.
+	if lick_shader == null: lick_shader = preload("res://assets/shaders/flame_lick.gdshader")
+	for i in 9:
+		var card = MeshInstance3D.new()
+		card.mesh = QuadMesh.new()
+		card.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var flame = ShaderMaterial.new()
+		flame.shader = lick_shader
+		flame.set_shader_parameter("seed",randf()*60.0)
+		flame.set_shader_parameter("strength",0.0)
+		card.material_override = flame
+		node.add_child(card)
+		node.licks.append([card,radius*randf_range(.15,.7),TAU*i/9.0+randf()*.4,randf_range(2.2,3.6),randf_range(.9,1.6)])
 	# Embers flung up and spiralling round the column.
-	node.embers = Vfx.particles(node,90,2.0,false,true)
+	node.embers = Vfx.particles(node,40,2.0,false,true)
 	node.embers.local_coords = true
 	node.embers.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	node.embers.emission_ring_axis = Vector3.UP
@@ -449,7 +521,8 @@ static func tornado(at: Vector3, radius: float, seconds: float) -> Node3D:
 	node.embers.initial_velocity_min = 2.0; node.embers.initial_velocity_max = 3.5
 	node.embers.orbit_velocity_min = .8; node.embers.orbit_velocity_max = 1.3
 	node.embers.radial_accel_min = .3; node.embers.radial_accel_max = .9
-	node.embers.scale_amount_min = .05; node.embers.scale_amount_max = .11
+	node.embers.scale_amount_min = .02; node.embers.scale_amount_max = .045
+	node.embers.scale_amount_curve = Vfx.curve(1.0,.2)
 	node.embers.color_ramp = Vfx.ramp([0,.6,1],[Color(1,.9,.5,1),Color(1,.45,.1,.9),Color(.6,.1,.02,0)])
 	node.embers.emitting = true
 	# Thick black smoke boiling off its crown, left behind as it travels.
