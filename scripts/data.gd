@@ -15,14 +15,14 @@ const DUNGEONS = ["basement","cave"]
 # centurions stand in the gladiators' place (and it has the terraces); its
 # summit, the Crowned Statue.
 const AREAS = {
-	"basement":[{"level":1,"counts":{"bandit":14,"bandit_archer":8}},{"level":3,"counts":{"bandit":20,"bandit_archer":12}}],
-	"cave":[{"level":5,"counts":{"bandit":22,"bandit_archer":14}},{"level":8,"counts":{"bandit":28,"bandit_archer":18}}],
-	"temple":[{"level":11,"counts":{"gladiator":27,"archer":15,"lion":12}},
-		{"level":15,"counts":{"gladiator":28,"archer":18,"lion":20,"wizard":12}},
-		{"level":19,"counts":{"archer":18,"lion":28,"wizard":22,"centurion":58}},
+	"basement":[{"level":1,"counts":{"bandit":18,"bandit_archer":10}},{"level":3,"counts":{"bandit":26,"bandit_archer":16}}],
+	"cave":[{"level":5,"counts":{"bandit":29,"bandit_archer":18}},{"level":8,"counts":{"bandit":36,"bandit_archer":23}}],
+	"temple":[{"level":11,"counts":{"gladiator":35,"archer":20,"lion":16}},
+		{"level":15,"counts":{"gladiator":36,"archer":23,"lion":26,"wizard":16}},
+		{"level":19,"counts":{"archer":23,"lion":36,"wizard":29,"centurion":75}},
 		{"level":23,"counts":{}}]}
 # The temple's own, as lists (tests and the debug tools read them).
-const COUNTS = [{"gladiator":27,"archer":15,"lion":12},{"gladiator":28,"archer":18,"lion":20,"wizard":12},{"archer":18,"lion":28,"wizard":22,"centurion":58}]
+const COUNTS = [{"gladiator":35,"archer":20,"lion":16},{"gladiator":36,"archer":23,"lion":26,"wizard":16},{"archer":23,"lion":36,"wizard":29,"centurion":75}]
 # (Every enemy's health and damage were raised by half again.)
 const ENEMIES = {
 	"gladiator":{"title":"Gladiator","hp":49.5,"damage":11.25,"speed":3.56,"range":1.9,"interval":1.0,"weapon":"sword","shield":"scutum","size":1.0,"color":Color(.70,.73,.69)},

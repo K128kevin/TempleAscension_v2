@@ -64,6 +64,16 @@ func test():
 			var safe = posts.size()==total
 			for post in posts: safe = safe and world.fits(post.at,.45) and post.at.distance_to(world.spawn)>=9
 			check(safe,"Complete reachable roster, safe entrance: "+label)
+			var clumped = true; var apart = true
+			for post in posts:
+				var near = 0
+				for other in posts:
+					if other == post: continue
+					var gap: float = post.at.distance_to(other.at)
+					apart = apart and gap >= Temple.POST_GAP
+					if gap <= Temple.CLUMP_REACH*2: near += 1
+				clumped = clumped and near >= Temple.CLUMP_LEAST-1
+			check(clumped and apart,"Enemies stand in clumps of five or more, none overlapping: "+label)
 			world.free()
 			if floor_index==Layout.COURT_FLOOR:
 				var door_tiles = 0

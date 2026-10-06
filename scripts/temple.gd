@@ -710,42 +710,109 @@ func terrace_surface(at: Vector3) -> bool:
 		if layout.on_terrace(layout.to_cell(at+offset)): return true
 	return false
 
-func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
-	var candidates: Array[Dictionary] = []
-	for cell in layout.cells:
-		if layout.court.has_area() and layout.court.has_point(cell): continue
-		# No statue stands in the doorway.
-		if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): continue
-		var at = layout.to_world(cell)
-		if at.distance_to(spawn)<9 or at.distance_to(exit_point)<2.5 or not fits(at,.45): continue
-		var backs: Array[Vector2i] = []
+# Enemies stand in clumps: CLUMP_LEAST or more near one another (about six), each clump grown over open floor within CLUMP_REACH of
+# where it was begun (CLUMP_STEPS walking steps, so never through a wall),
+# its members POST_GAP or more apart so none overlaps another, and the clumps
+# CLUMP_APART from each other where the floor allows. The posts come back
+# shuffled, so the kinds a floor holds are mixed through its clumps.
+const CLUMP_LEAST = 5
+const CLUMP_REACH = 4.5
+const CLUMP_STEPS = 7
+const CLUMP_APART = 9.0
+const POST_GAP = 2.0
+
+# Where an enemy may stand: not in the fountain court or the doorway, clear
+# of the hero's arrival and the way on.
+func post_allowed(cell: Vector2i) -> bool:
+	if layout.court.has_area() and layout.court.has_point(cell): return false
+	if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): return false
+	var at = layout.to_world(cell)
+	return at.distance_to(spawn)>=9 and at.distance_to(exit_point)>=2.5 and fits(at,.45)
+
+# How many stand in each clump: as many clumps as give about six apiece, none
+# fewer than CLUMP_LEAST (a floor with fewer holds one clump of them all).
+func clump_sizes(count: int) -> Array[int]:
+	var clumps: int = clampi(roundi(count/6.0),1,maxi(1,count/CLUMP_LEAST))
+	var sizes: Array[int] = []
+	for i in clumps: sizes.append(count/clumps)
+	for i in count%clumps: sizes[i] += 1
+	return sizes
+
+# The open cells a clump begun at `seed_cell` may take, nearest first (a
+# little shuffled), reached by walking.
+func clump_ground(seed_cell: Vector2i, allowed: Dictionary, rng: RandomNumberGenerator) -> Array:
+	var origin: Vector3 = layout.to_world(seed_cell)
+	var steps = {seed_cell:0}
+	var queue: Array[Vector2i] = [seed_cell]
+	var ground: Array = []
+	while not queue.is_empty():
+		var cell: Vector2i = queue.pop_front()
+		if allowed.has(cell): ground.append([layout.to_world(cell).distance_to(origin)+rng.randf()*.8,cell])
+		if steps[cell]>=CLUMP_STEPS: continue
 		for direction in Layout.DIRS:
-			if not layout.cells.has(cell+direction): backs.append(direction)
-		if backs.is_empty(): continue
+			var next: Vector2i = cell+direction
+			if steps.has(next) or not layout.cells.has(next) or layout.to_world(next).distance_to(origin)>CLUMP_REACH: continue
+			steps[next] = steps[cell]+1
+			queue.append(next)
+	ground.sort_custom(func(a,b): return a[0]<b[0])
+	return ground.map(func(entry): return entry[1])
+
+func spaced(at: Vector3, posts: Array, gap: float) -> bool:
+	for other in posts:
+		if other.distance_squared_to(at)<gap*gap: return false
+	return true
+
+# Which way a post faces: away from the wall at its back, if it stands at one;
+# out from its clump's middle, if not (a ring keeping watch all round).
+func post_facing(cell: Vector2i, middle: Vector3, rng: RandomNumberGenerator) -> float:
+	var backs: Array[Vector2i] = []
+	for direction in Layout.DIRS:
+		if not layout.cells.has(cell+direction): backs.append(direction)
+	if not backs.is_empty():
 		var back = backs[rng.randi_range(0,backs.size()-1)]
-		candidates.append({"at":at,"facing":atan2(-back.x,-back.y)})
-	for i in range(candidates.size()-1,0,-1):
-		var j = rng.randi_range(0,i)
-		var swap = candidates[i]; candidates[i] = candidates[j]; candidates[j] = swap
-	var posts: Array[Dictionary] = []
-	for candidate in candidates:
-		var crowded = false
-		for other in posts:
-			if other.at.distance_squared_to(candidate.at)<3.24: crowded=true; break
-		if not crowded: posts.append(candidate)
-		if posts.size()==count: return posts
-	# Small/pathological layouts may use unoccupied interior floor positions.
+		return atan2(-back.x,-back.y)
+	var out: Vector3 = layout.to_world(cell)-middle
+	if out.length()<.5: out = Vector3(rng.randf_range(-1,1),0,rng.randf_range(-1,1))
+	return atan2(out.x,out.z)
+
+func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
+	var allowed: Dictionary = {}
+	var seeds: Array[Vector2i] = []
 	for cell in layout.cells:
-		if layout.court.has_area() and layout.court.has_point(cell): continue
-		if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): continue
-		var at = layout.to_world(cell)
-		if at.distance_to(spawn)<9 or at.distance_to(exit_point)<2.5 or not fits(at,.45): continue
-		var crowded = false
-		for other in posts:
-			if other.at.distance_squared_to(at)<3.24: crowded=true; break
-		if not crowded: posts.append({"at":at,"facing":0.0})
-		if posts.size()==count: return posts
-	assert(false,"Generated floor has insufficient statue positions")
+		if post_allowed(cell):
+			allowed[cell] = true
+			seeds.append(cell)
+	for i in range(seeds.size()-1,0,-1):
+		var j = rng.randi_range(0,i)
+		var swap = seeds[i]; seeds[i] = seeds[j]; seeds[j] = swap
+	var sizes: Array[int] = clump_sizes(count)
+	var placed: Array = []
+	var posts: Array[Dictionary] = []
+	# Clumps are begun well apart; where a floor is too small for that, closer.
+	var apart = CLUMP_APART
+	while not sizes.is_empty() and apart>=0.0:
+		for seed_cell in seeds:
+			if sizes.is_empty(): break
+			var origin: Vector3 = layout.to_world(seed_cell)
+			if not spaced(origin,placed,maxf(apart,POST_GAP)): continue
+			var clump: Array = []
+			for cell in clump_ground(seed_cell,allowed,rng):
+				var at: Vector3 = layout.to_world(cell)
+				if spaced(at,placed,maxf(apart*.5,POST_GAP)) and spaced(at,clump.map(func(c): return layout.to_world(c)),POST_GAP): clump.append(cell)
+				if clump.size()==sizes[0]: break
+			if clump.size()<sizes[0]: continue
+			sizes.remove_at(0)
+			var middle = Vector3.ZERO
+			for cell in clump: middle += layout.to_world(cell)/clump.size()
+			for cell in clump:
+				var at: Vector3 = layout.to_world(cell)
+				placed.append(at)
+				posts.append({"at":at,"facing":post_facing(cell,middle,rng)})
+		apart -= 3.0
+	assert(sizes.is_empty(),"Generated floor has no room for its enemies' clumps")
+	for i in range(posts.size()-1,0,-1):
+		var j = rng.randi_range(0,i)
+		var swap = posts[i]; posts[i] = posts[j]; posts[j] = swap
 	return posts
 
 # Floor light a torch at `at` gives a point on the floor, matching the omni
