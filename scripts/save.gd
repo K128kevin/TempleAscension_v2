@@ -4,7 +4,14 @@ const Items = preload("res://scripts/items.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=12: return d
+	if int(d.get("version",0))>=13: return d
+	if int(d.get("version",0))==12:
+		# The hotbar gained an LMB slot (Data.LEFT_SLOT), the wizard's.
+		if not d.get("hotbar") is Array or d.hotbar.size()!=5: return {}
+		var updated = d.duplicate(true)
+		updated.version = 13
+		updated.hotbar = updated.hotbar+[""]
+		return updated
 	if int(d.get("version",0))==11:
 		# The wizard's spells were replaced (ice, fire and lightning): a
 		# wizard's skill points are refunded.
@@ -15,7 +22,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 			updated.skill_points = int(updated.get("level",1))
 			updated.hotbar = ["","","","",""]
 			updated["migration_notice"] = true
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==10:
 		# Items: what was a list of weapons owned and one in hand became
 		# equipment and a bag. A character from before is given its class's
@@ -126,7 +133,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<12:
+	if int(d.get("version",0))<13:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -162,7 +169,8 @@ static func valid(d) -> bool:
 		if not (stat is float or stat is int) or stat<5 or stat>5+(Data.MAX_LEVEL-1)*Data.STAT_POINTS or stat!=int(stat): return false
 		spent += int(stat)-5
 	if d.points<0 or spent+d.points!=(d.level-1)*Data.STAT_POINTS: return false
-	if not d.skills is Dictionary or not d.hotbar is Array or d.hotbar.size()!=5: return false
+	if not d.skills is Dictionary or not d.hotbar is Array or d.hotbar.size()!=6: return false
+	if not Data.casts_left(d) and d.hotbar[Data.LEFT_SLOT]!="": return false
 	var ranks = 0
 	for id in d.skills:
 		if not Data.Skills.all().has(id): return false

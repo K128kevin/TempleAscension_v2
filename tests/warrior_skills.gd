@@ -207,7 +207,7 @@ func test():
 	game.skills.cast("leap",origin+forward*20)
 	play(1.0)
 	check(absf(game.player.position.distance_to(origin)-game.skills.LEAP_RANGE)<.6,"A leap carries at most its range")
-	check(game.attack_range(true,1)==13.0 and game.skills.reach("leap")==game.skills.LEAP_RANGE,"An ordered Leap is made from its range")
+	check(game.attack_range(true,1)==game.RANGED_REACH and game.skills.reach("leap")==game.skills.LEAP_RANGE,"An ordered Leap is made from its range")
 	clear()
 
 	# Powerful Strike: one enemy.
@@ -339,7 +339,7 @@ func test():
 	for key in [KEY_1,KEY_2,KEY_3,KEY_4]:
 		hero({"war_cry":1})
 		var slot: int = key-KEY_1+1
-		game.run.hotbar = ["","","","",""]
+		game.run.hotbar = ["","","","","",""]
 		game.run.hotbar[slot] = "war_cry"
 		var press = InputEventKey.new()
 		press.physical_keycode = key; press.pressed = true
@@ -668,19 +668,19 @@ func test():
 	panels.nodes.leap.button.pressed.emit()
 	check(not game.run.skills.has("leap") and game.run.skill_points==5,"A locked skill cannot be learned")
 	panels.nodes.powerful_strike.button.pressed.emit()
-	check(game.run.skills.powerful_strike==1 and game.run.hotbar==["cleave","powerful_strike","","",""],"Clicking learns a skill; a new active skill takes the first empty slot")
+	check(game.run.skills.powerful_strike==1 and game.run.hotbar==["cleave","powerful_strike","","","",""],"Clicking learns a skill; a new active skill takes the first empty slot")
 	for i in 4: panels.nodes.cleave.button.pressed.emit()
 	game.hud.tick(0)
 	check(game.run.skills.cleave==5 and game.run.skill_points==0 and panels.nodes.cleave.state=="maxed" and panels.nodes.leap.state=="open","Five points in the tree open its next row")
 	check(not panels.skill_plus.visible and panels.stat_plus.visible,"The skills' + is gone while their tab is open with no point left; the attributes' stays, with points to spend")
 	panels.hovered = "powerful_strike"
 	panels.assign("powerful_strike",2)
-	check(game.run.hotbar==["cleave","","powerful_strike","",""],"A learned skill can be moved to another slot")
+	check(game.run.hotbar==["cleave","","powerful_strike","","",""],"A learned skill can be moved to another slot")
 	panels.assign("endurance",1)
-	check(game.run.hotbar==["cleave","","powerful_strike","",""],"Unlearned and passive skills cannot be assigned")
+	check(game.run.hotbar==["cleave","","powerful_strike","","",""],"Unlearned and passive skills cannot be assigned")
 	game.combat_age = 0
 	panels.assign("powerful_strike",0)
-	check(game.run.hotbar==["powerful_strike","","","",""],"Slots can be changed in combat too")
+	check(game.run.hotbar==["powerful_strike","","","","",""],"Slots can be changed in combat too")
 	game.combat_age = 10
 	game.resume_game(); game.hud.tick(0)
 	check(game.mode=="playing" and not panels.any_open() and panels.stat_plus.visible and not panels.skill_plus.visible,"Closed, the attribute + stays until its points are spent; the skill + is gone with its points")

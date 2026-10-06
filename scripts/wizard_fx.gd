@@ -46,36 +46,59 @@ static func ground_sprite(parent: Node3D, diameter: float, gradient: Gradient) -
 
 # --- Ice -----------------------------------------------------------------------
 
-# Frost on the floor: a pale patch `radius` wide, glittering, that melts away
-# over `seconds` (the game keeps its own record of where the ice lies).
+# Frost on the floor: a sheet of ice `radius` wide frozen over it
+# (assets/shaders/ice_sheet.gdshader), that spreads out as it is laid and
+# breaks up as it melts over `seconds` (the game keeps its own record of where
+# the ice lies). The shader draws the ice from where it lies in the world, so
+# patches laid over one another make one even sheet.
 class Patch extends Node3D:
 	var age = 0.0
 	var life = 10.0
-	var sheet: Sprite3D
-	var glints: CPUParticles3D
+	var sheet: MeshInstance3D
 	func tick(dt: float) -> bool:
 		age += dt
-		var a: float = minf(1.0,age/.25)*clampf((life-age)/1.5,0.0,1.0)
-		sheet.modulate.a = .85*a
-		if is_instance_valid(glints): glints.emitting = age < life-1.5
+		var ice: ShaderMaterial = sheet.material_override
+		ice.set_shader_parameter("grow",minf(1.0,age/.2))
+		ice.set_shader_parameter("melt",clampf(1.0-(life-age)/1.5,0.0,1.0))
+		ice.set_shader_parameter("flame_time",age)
 		return age >= life
-static func patch(at: Vector3, radius: float, seconds: float) -> Node3D:
+static var ice_sheet_shader: Shader
+# `ground(x, z)` is the floor's height there: a wide sheet is laid over the
+# lie of the land rather than flat.
+static func patch(at: Vector3, radius: float, seconds: float, ground: Callable = Callable()) -> Node3D:
 	var node = Patch.new()
 	node.position = at
 	node.life = seconds
-	node.sheet = ground_sprite(node,radius*2.0,Vfx.ramp([0,.5,.8,1],[Color(.7,.88,1,.95),Color(.62,.84,1,.85),Color(.66,.86,1,.5),Color(.7,.9,1,0)]))
-	node.sheet.modulate.a = 0
-	node.glints = Vfx.particles(node,int(radius*8),1.4,false,true)
-	node.glints.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	node.glints.emission_sphere_radius = radius*.85
-	node.glints.position = Vector3.UP*.08
-	node.glints.direction = Vector3.UP
-	node.glints.spread = 20
-	node.glints.gravity = Vector3(0,.15,0)
-	node.glints.initial_velocity_min = .05; node.glints.initial_velocity_max = .2
-	node.glints.scale_amount_min = .03; node.glints.scale_amount_max = .07
-	node.glints.color_ramp = Vfx.ramp([0,.5,1],[Color(1,1,1,0),Color(.85,.95,1,.9),Color(.7,.9,1,0)])
-	node.glints.emitting = true
+	if ice_sheet_shader == null: ice_sheet_shader = preload("res://assets/shaders/ice_sheet.gdshader")
+	# (A little over its width: its ragged rim reaches past it.)
+	var side: float = radius*2.3
+	var cells: int = clampi(ceili(side/.6),1,24)
+	var tool = SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for j in cells+1:
+		for i in cells+1:
+			var uv = Vector2(float(i)/cells,float(j)/cells)
+			var x: float = (uv.x-.5)*side
+			var z: float = (uv.y-.5)*side
+			var y: float = float(ground.call(at.x+x,at.z+z))-at.y if ground.is_valid() else 0.0
+			tool.set_normal(Vector3.UP)
+			tool.set_uv(uv)
+			tool.add_vertex(Vector3(x,y,z))
+	for j in cells:
+		for i in cells:
+			var a = j*(cells+1)+i
+			tool.add_index(a); tool.add_index(a+1); tool.add_index(a+cells+1)
+			tool.add_index(a+1); tool.add_index(a+cells+2); tool.add_index(a+cells+1)
+	node.sheet = MeshInstance3D.new()
+	node.sheet.mesh = tool.commit()
+	node.sheet.position = Vector3.UP*.035
+	node.sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var ice = ShaderMaterial.new()
+	ice.shader = ice_sheet_shader
+	ice.set_shader_parameter("grow",0.0)
+	ice.set_shader_parameter("radius",radius)
+	node.sheet.material_override = ice
+	node.add_child(node.sheet)
 	return node
 
 # A bolt of ice in flight: a cold trail and a light.
@@ -331,71 +354,120 @@ static func flame_ring(at: Vector3, radius: float) -> Node3D:
 class Tornado extends Node3D:
 	var age = 0.0
 	var life = 6.0
+	var funnel: MeshInstance3D
 	var flames: CPUParticles3D
 	var embers: CPUParticles3D
 	var smoke: CPUParticles3D
 	var glow: OmniLight3D
 	var scorch: Sprite3D
+	# Where it is heading (Skills moves it), so its crown trails behind.
+	var travel = Vector3.ZERO
+	var trail = Vector2.ZERO
 	func tick(dt: float) -> bool:
 		age += dt
-		var strength: float = minf(1.0,age/.4)*clampf((life-age)/.8,0.0,1.0)
-		glow.light_energy = 3.2*strength*(1.0+sin(age*19.0)*.12)
+		var strength: float = minf(1.0,age/.5)*clampf((life-age)/.9,0.0,1.0)
+		glow.light_energy = 3.6*strength*(1.0+sin(age*19.0)*.12)
 		scorch.modulate.a = .55*minf(1.0,age/.6)*clampf((life+2.5-age)/2.0,0.0,1.0)
+		trail = trail.lerp(-Vector2(travel.x,travel.z)*.9,minf(1.0,dt*2.0))
+		var shell: ShaderMaterial = funnel.material_override
+		shell.set_shader_parameter("flame_time",age)
+		shell.set_shader_parameter("strength",strength)
+		shell.set_shader_parameter("lean",trail)
+		funnel.visible = strength>0.0
 		for p in [flames,embers,smoke]: p.emitting = age < life
 		return age >= life+2.5
+const TORNADO_HEIGHT = 6.0
+# The funnel: a tube of rings up TORNADO_HEIGHT, narrow at the ground with a
+# little skirt where it meets it, flaring toward its crown. The shader
+# (assets/shaders/fire_tornado.gdshader) snakes it and sets it alight.
+static func funnel_mesh(radius: float) -> ArrayMesh:
+	var tool = SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var sides = 28
+	var rings = 24
+	for j in rings+1:
+		var h: float = float(j)/rings
+		var width: float = radius*(.22+.6*pow(h,.9)+.3*exp(-h*12.0))
+		for i in sides+1:
+			var angle: float = TAU*i/sides
+			var out = Vector3(cos(angle),0,sin(angle))
+			tool.set_normal(out)
+			tool.set_uv(Vector2(float(i)/sides,h))
+			tool.add_vertex(out*width+Vector3.UP*h*TORNADO_HEIGHT)
+	for j in rings:
+		for i in sides:
+			var a = j*(sides+1)+i
+			var b = a+sides+1
+			tool.add_index(a); tool.add_index(b); tool.add_index(a+1)
+			tool.add_index(a+1); tool.add_index(b); tool.add_index(b+1)
+	return tool.commit()
 static func tornado(at: Vector3, radius: float, seconds: float) -> Node3D:
 	var node = Tornado.new()
 	node.position = at
 	node.life = seconds
-	node.flames = Vfx.particles(node,160,1.1,false,true)
+	node.funnel = MeshInstance3D.new()
+	node.funnel.mesh = funnel_mesh(radius)
+	node.funnel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var shell = ShaderMaterial.new()
+	shell.shader = preload("res://assets/shaders/fire_tornado.gdshader")
+	shell.set_shader_parameter("seed",randf()*40.0)
+	shell.set_shader_parameter("height",TORNADO_HEIGHT)
+	shell.set_shader_parameter("strength",0.0)
+	node.funnel.material_override = shell
+	node.add_child(node.funnel)
+	# Fire whipped round its foot, low along the ground.
+	node.flames = Vfx.particles(node,180,.8,false,true)
 	node.flames.local_coords = true
 	node.flames.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	node.flames.emission_ring_axis = Vector3.UP
-	node.flames.emission_ring_radius = radius*.8
-	node.flames.emission_ring_inner_radius = radius*.2
+	node.flames.emission_ring_radius = radius*.75
+	node.flames.emission_ring_inner_radius = radius*.25
 	node.flames.emission_ring_height = .2
+	node.flames.position = Vector3.UP*.25
 	node.flames.direction = Vector3.UP
-	node.flames.spread = 6
-	node.flames.gravity = Vector3(0,1.5,0)
-	node.flames.initial_velocity_min = 1.8; node.flames.initial_velocity_max = 3.2
-	node.flames.orbit_velocity_min = .8; node.flames.orbit_velocity_max = 1.2
-	node.flames.radial_accel_min = -1.5; node.flames.radial_accel_max = -.5
-	node.flames.scale_amount_min = .35; node.flames.scale_amount_max = .7
+	node.flames.spread = 20
+	node.flames.gravity = Vector3(0,.8,0)
+	node.flames.initial_velocity_min = .6; node.flames.initial_velocity_max = 1.4
+	node.flames.orbit_velocity_min = 1.0; node.flames.orbit_velocity_max = 1.6
+	node.flames.radial_accel_min = -2.5; node.flames.radial_accel_max = -1.2
+	node.flames.scale_amount_min = .18; node.flames.scale_amount_max = .4
 	node.flames.scale_amount_curve = Vfx.curve(1.0,.1)
-	node.flames.color_ramp = Vfx.ramp([0,.25,.65,1],[Color(1,.95,.7,.9),Color(1,.55,.15,.9),Color(.9,.25,.04,.5),Color(.3,.08,.02,0)])
+	node.flames.color_ramp = Vfx.ramp([0,.25,.65,1],[Color(1,.8,.45,.75),Color(1,.5,.12,.75),Color(.85,.22,.04,.4),Color(.3,.08,.02,0)])
 	node.flames.emitting = true
-	node.embers = Vfx.particles(node,50,1.6,false,true)
+	# Embers flung up and spiralling round the column.
+	node.embers = Vfx.particles(node,90,2.0,false,true)
 	node.embers.local_coords = true
 	node.embers.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	node.embers.emission_ring_axis = Vector3.UP
-	node.embers.emission_ring_radius = radius
-	node.embers.emission_ring_inner_radius = radius*.4
-	node.embers.emission_ring_height = .3
+	node.embers.emission_ring_radius = radius*.6
+	node.embers.emission_ring_inner_radius = radius*.2
+	node.embers.emission_ring_height = 1.0
 	node.embers.direction = Vector3.UP
-	node.embers.spread = 30
-	node.embers.gravity = Vector3(0,2.0,0)
-	node.embers.initial_velocity_min = 1.0; node.embers.initial_velocity_max = 2.5
-	node.embers.orbit_velocity_min = .6; node.embers.orbit_velocity_max = 1.0
+	node.embers.spread = 15
+	node.embers.gravity = Vector3(0,1.2,0)
+	node.embers.initial_velocity_min = 2.0; node.embers.initial_velocity_max = 3.5
+	node.embers.orbit_velocity_min = .8; node.embers.orbit_velocity_max = 1.3
+	node.embers.radial_accel_min = .3; node.embers.radial_accel_max = .9
 	node.embers.scale_amount_min = .05; node.embers.scale_amount_max = .11
 	node.embers.color_ramp = Vfx.ramp([0,.6,1],[Color(1,.9,.5,1),Color(1,.45,.1,.9),Color(.6,.1,.02,0)])
 	node.embers.emitting = true
-	node.smoke = Vfx.particles(node,24,2.2,false,false)
-	node.smoke.local_coords = true
-	node.smoke.position = Vector3.UP*2.4
+	# Thick black smoke boiling off its crown, left behind as it travels.
+	node.smoke = Vfx.particles(node,60,3.0,false,false)
+	node.smoke.position = Vector3.UP*TORNADO_HEIGHT*.72
 	node.smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	node.smoke.emission_sphere_radius = radius*.5
+	node.smoke.emission_sphere_radius = radius*.7
 	node.smoke.direction = Vector3.UP
-	node.smoke.spread = 25
-	node.smoke.gravity = Vector3(0,1.0,0)
-	node.smoke.orbit_velocity_min = .3; node.smoke.orbit_velocity_max = .5
-	node.smoke.scale_amount_min = .8; node.smoke.scale_amount_max = 1.5
+	node.smoke.spread = 35
+	node.smoke.gravity = Vector3(0,.6,0)
+	node.smoke.initial_velocity_min = .6; node.smoke.initial_velocity_max = 1.4
+	node.smoke.scale_amount_min = 1.4; node.smoke.scale_amount_max = 2.4
 	node.smoke.scale_amount_curve = Vfx.curve(.5,1.8)
-	node.smoke.color_ramp = Vfx.ramp([0,.2,1],[Color(.2,.16,.14,0),Color(.14,.12,.11,.45),Color(.08,.07,.07,0)])
+	node.smoke.color_ramp = Vfx.ramp([0,.15,1],[Color(.16,.12,.1,0),Color(.1,.085,.08,.6),Color(.06,.055,.05,0)])
 	node.smoke.emitting = true
 	node.glow = OmniLight3D.new()
 	node.glow.light_color = FLAME
-	node.glow.omni_range = radius*3.5
-	node.glow.position = Vector3.UP*1.5
+	node.glow.omni_range = radius*4.0
+	node.glow.position = Vector3.UP*2.0
 	node.add_child(node.glow)
 	node.scorch = ground_sprite(node,radius*2.2,Vfx.ramp([0,.55,1],[Color(.05,.03,.02,.9),Color(.07,.04,.03,.5),Color(.08,.05,.03,0)]))
 	node.scorch.modulate.a = 0

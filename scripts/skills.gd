@@ -115,8 +115,12 @@ const CHILL_SECONDS = 3.0
 const FREEZE_SECONDS = 3.0
 const PATCH_RADIUS = .9
 const PATCH_SECONDS = 6.0
-const FLOOR_SECONDS = 10.0
-const SPELL_REACH = 13.0
+# Freeze Floor's ice: how long it lasts, how wide each patch the ray lays,
+# and how far the ray moves before it lays the next.
+const FLOOR_SECONDS = 12.0
+const FLOOR_RADIUS = 5.0
+const FLOOR_SPACING = 1.5
+const SPELL_REACH = 15.0
 const SPIKES_RADIUS = 2.0
 const FROST_REACH = 10.0
 const FROST_RADIUS = 3.0
@@ -125,6 +129,10 @@ const STORM_COOLDOWN = 60.0
 const BLAST_RADIUS = 5.0
 const TORNADO_RADIUS = 2.0
 const TORNADO_SECONDS = 6.0
+# Fire Tornado's wandering: metres a second, and how far from where it was
+# cast it may stray.
+const TORNADO_SPEED = 1.1
+const TORNADO_WANDER = 4.0
 const BLAZING_RUN = 75.0
 const BLAZING_COOLDOWN = 60.0
 const SHIELD_SECONDS = 60.0
@@ -239,11 +247,11 @@ func cost(id: String) -> float:
 
 # How close the hero comes to a unit he is ordered to use the skill on.
 func reach(id: String) -> float:
-	if not Book.all().has(id): return 13.0
+	if not Book.all().has(id): return game.RANGED_REACH
 	match Book.all()[id].effect:
 		"cleave","strike","bash","vampiric","shadow","execute","flurry","triple","ambush": return melee_reach()
 		# (With the dagger in hand; with the bow it is a shot.)
-		"weaken": return melee_reach() if Data.weapon(game.run)==5 else 13.0
+		"weaken": return melee_reach() if Data.weapon(game.run)==5 else game.RANGED_REACH
 		"sand": return SAND_REACH-.4
 		"frenzy","hide","vanish","blastwave","icestorm","lshield","blazing": return 1000.0
 		"spikes","tornado","freezefloor","frostblast","icebolt","fireball","bolt","prison","rod","shock": return SPELL_REACH
@@ -252,7 +260,7 @@ func reach(id: String) -> float:
 		"charge": return Book.values(id,maxi(1,rank(id))).x-1.0
 		"shockwave": return Book.values(id,maxi(1,rank(id))).y-.5
 		"cry": return Book.values(id,maxi(1,rank(id))).x-.5
-	return 13.0
+	return game.RANGED_REACH
 
 func cast_slot(slot: int, at: Vector3) -> bool:
 	if slot<0 or slot>=game.run.hotbar.size(): return false
@@ -297,7 +305,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	var direction: Vector3 = at-game.player.position
 	direction.y = 0
 	if direction.length()<.01: direction = game.player.forward()
-	at = game.player.position+direction.normalized()*minf(direction.length(),LEAP_RANGE if s.effect=="leap" else 14.0)
+	at = game.player.position+direction.normalized()*minf(direction.length(),LEAP_RANGE if s.effect=="leap" else game.RANGED_REACH)
 	if not game.world.clear_line(game.player.position,at) and s.effect not in ["blink","retreat","hide"]+SWINGS+RANGER_BLOWS+SELF_SPELLS+Book.CHANNELS:
 		game.toast("The target is behind a wall.")
 		return false
@@ -498,6 +506,7 @@ func channel_held() -> bool:
 	if channel_hold_override>=0: return channel_hold_override==1
 	var slot: int = channel.get("slot",-1)
 	if slot==0: return game.right_held
+	if slot==Data.LEFT_SLOT: return game.left_held
 	if slot>0: return Input.is_physical_key_pressed(KEY_1+slot-1)
 	return true
 
@@ -534,11 +543,11 @@ func tick_channel(dt: float) -> void:
 	if is_instance_valid(channel.stream): channel.stream.aim(hands,direction,reach)
 	var v: Dictionary = Book.values(channel.id,channel.rank)
 	if s.effect=="freezefloor":
-		# Ice laid where the ray falls, a patch every half metre it moves.
+		# Ice laid where the ray falls, a patch every FLOOR_SPACING it moves.
 		var spot: Vector3 = origin+direction*reach
-		if channel.laid==Vector3.INF or spot.distance_to(channel.laid)>.5:
+		if channel.laid==Vector3.INF or spot.distance_to(channel.laid)>FLOOR_SPACING:
 			channel.laid = spot
-			lay_ice(spot,PATCH_RADIUS,FLOOR_SECONDS,v.x)
+			lay_ice(spot,FLOOR_RADIUS,FLOOR_SECONDS,v.x)
 	else:
 		# Frost Blast: its damage a second, dealt in quarter-second breaths, to
 		# everyone within FROST_RADIUS of the stream.
@@ -590,7 +599,7 @@ func burn(total: float) -> void:
 
 # Ice laid on the floor at `at`: enemies on it move `slow` percent slower.
 func lay_ice(at: Vector3, radius: float, seconds: float, slow: float) -> void:
-	var node: Node3D = WizardFx.patch(at+Vector3.UP*game.world.lift(at),radius,seconds)
+	var node: Node3D = WizardFx.patch(at+Vector3.UP*game.world.lift(at),radius,seconds,func(x,z): return game.world.lift(Vector3(x,0,z)))
 	game.world.add_child(node)
 	patches.append({"at":at,"radius":radius,"left":seconds,"slow":slow,"node":node})
 
@@ -684,7 +693,7 @@ func leave_shadows() -> void:
 # normal attack; `extra` is what else it carries (RangerFx.arrow dresses it).
 func loose(direction: Vector3, percent: float, extra: Dictionary = {}) -> void:
 	game.sound.play("archer-arrow")
-	game.projectile(game.player.position,game.player.position+direction*13.0,attack_damage(percent,"ranged"),true,"arrow",Data.passive(game.run,"penetrating_arrows")>0,null,true,extra)
+	game.projectile(game.player.position,game.player.position+direction*game.RANGED_REACH,attack_damage(percent,"ranged"),true,"arrow",Data.passive(game.run,"penetrating_arrows")>0,null,true,extra)
 
 # One of the hero's arrows striking `enemy`: its damage, and whatever it
 # carries.
@@ -1052,7 +1061,7 @@ func execute(job: Dictionary) -> void:
 			game.world.add_child(funnel)
 			waves.append(funnel)
 			game.sound.play("fire-whoosh",-8)
-			zones.append({"effect":"tornado","at":spot,"radius":TORNADO_RADIUS,"percent":v.x,"rod":v.y,"life":TORNADO_SECONDS,"tick":0.0,"rank":job.rank})
+			zones.append({"effect":"tornado","at":spot,"origin":spot,"heading":randf()*TAU,"node":funnel,"radius":TORNADO_RADIUS,"percent":v.x,"rod":v.y,"life":TORNADO_SECONDS,"tick":0.0,"rank":job.rank})
 		"blazing":
 			blazing_time = v.x
 			lasting.blazing_speed = v.x
@@ -1244,6 +1253,7 @@ func tick(dt: float) -> void:
 	for i in range(zones.size()-1,-1,-1):
 		var z: Dictionary = zones[i]
 		z.life -= dt; z.tick -= dt
+		wander(z,dt)
 		if z.tick<=0:
 			z.tick += .25
 			var inside: Array = targets(z.at,z.radius)
@@ -1253,6 +1263,28 @@ func tick(dt: float) -> void:
 				z.second -= 1.0
 				if rank("lightning_rod")>0 and not inside.is_empty() and randf()*100.0<z.rod: inside[randi()%inside.size()].make_rod(Book.values("lightning_rod",rank("lightning_rod")).x,ROD_SECONDS)
 		if z.life<=0: zones.remove_at(i)
+
+# Fire Tornado wanders as a real one does: drifting slowly along a heading
+# that weaves and loops back on itself, never straying far from where it was
+# cast, and turned aside by walls.
+func wander(z: Dictionary, dt: float) -> void:
+	var age: float = TORNADO_SECONDS-z.life
+	z.heading += (sin(age*1.1+z.origin.x)*1.4+sin(age*2.9+z.origin.z)*.6)*dt
+	var way = Vector3(cos(z.heading),0,sin(z.heading))
+	# Pulled back round toward where it was cast once it strays.
+	var home: Vector3 = z.origin-z.at
+	home.y = 0
+	var strayed: float = clampf((home.length()-TORNADO_WANDER*.5)/(TORNADO_WANDER*.5),0.0,1.0)
+	if strayed>0: way = way.lerp(home.normalized(),strayed*.8).normalized()
+	var speed: float = TORNADO_SPEED*(.75+.25*sin(age*1.7+z.origin.x*3.0))
+	var before: Vector3 = z.at
+	z.at = game.world.move(before,way*speed*dt,.5)
+	# Stopped by a wall: it turns away.
+	if before.distance_to(z.at)<speed*dt*.3: z.heading += PI*.6
+	else: z.heading = atan2(way.z,way.x)
+	if is_instance_valid(z.node):
+		z.node.position = z.at+Vector3.UP*game.world.lift(z.at)
+		z.node.travel = (z.at-before)/maxf(dt,.0001)
 
 # The wizard's lasting spells, and his ice.
 func tick_wizard(dt: float) -> void:

@@ -35,10 +35,27 @@ func test():
 		victim.dead = false; victim.visible = true; victim.position = at
 		victim.hp = 100000; victim.max_hp = 100000
 		game.player.position = origin
-		game.attack(false,at)
-		game.tick_scheduled(1.0)
-		for i in 30: game.tick_projectiles(.016)
-		check(victim.hp<100000 and game.run.energy==100,"Free basic attack deals damage: "+class_id)
+		if Data.casts_left(game.run):
+			# The wizard has no normal attack: his left click casts the spell
+			# on LMB, and with none there does nothing.
+			game.attack(false,at)
+			game.tick_scheduled(1.0)
+			check(victim.hp==100000 and game.run.energy==100,"With LMB empty the wizard's left click does nothing")
+			game.player.busy=0; game.player.cooldown=0
+			game.run.skills = {"ice_bolt":1}
+			game.run.hotbar[Data.LEFT_SLOT] = "ice_bolt"
+			game.attack(false,at)
+			game.tick_scheduled(1.0)
+			game.skills.tick(.6)
+			for i in 60: game.tick_projectiles(.016)
+			check(victim.hp<100000 and game.run.energy<100,"The wizard's left click casts the spell on LMB")
+			game.run.hotbar[Data.LEFT_SLOT] = ""
+			game.skills.reset(); game.player.busy=0; game.player.cooldown=0; game.run.energy = 100
+		else:
+			game.attack(false,at)
+			game.tick_scheduled(1.0)
+			for i in 30: game.tick_projectiles(.016)
+			check(victim.hp<100000 and game.run.energy==100,"Free basic attack deals damage: "+class_id)
 		Data.gain_xp(game.run,Data.xp_at_level(Data.MAX_LEVEL))
 		# Every active skill of the class at rank one (the trees themselves are
 		# covered by the progression test).
@@ -74,7 +91,7 @@ func test():
 		game.player.busy=0; game.player.cooldown=0
 		game.player.position=origin
 		var owned_id = "cleave" if class_id=="warrior" else ("power_shot" if class_id=="ranger" else "fireball")
-		game.run.hotbar=[owned_id,"","","",""]
+		game.run.hotbar=[owned_id,"","","","",""]
 		# The warrior with a bow in hand and no blade in his bag; the ranger with
 		# his dagger in hand (he carries his bow as well, and takes it up for
 		# the skill); the wizard with nothing at all (his spells need no weapon).

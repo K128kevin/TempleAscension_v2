@@ -152,7 +152,8 @@ func setup(owner_game) -> void:
 		slot.pressed.connect(func():
 			if game.mode!="playing": return
 			var at: Vector3 = game.target.position if is_instance_valid(game.target) and not game.target.dead else game.player.position+game.player.forward()*4
-			if i==0: game.attack(false,at)
+			if i==0 and Data.casts_left(game.run): game.skills.cast_slot(Data.LEFT_SLOT,at)
+			elif i==0: game.attack(false,at)
 			else: game.skills.cast_slot(i-1,at))
 		slot.mouse_entered.connect(func(): hovered_slot = i)
 		slot.mouse_exited.connect(func():
@@ -166,15 +167,16 @@ func setup(owner_game) -> void:
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(icon)
 		weapon_icons.append(icon)
-		if i>0:
-			var glyph = SkillIcon.new()
-			glyph.position = Vector2(15,13); glyph.size = Vector2(26,26)
-			slot.add_child(glyph)
-			slot_glyphs.append(glyph)
-			var recharge = label("",20,cream,slot)
-			recharge.position = Vector2(0,12); recharge.size = Vector2(56,28)
-			recharge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			slot_cooldowns.append(recharge)
+		# A skill's glyph and its recharge, one for each tile (the LMB tile's
+		# for the wizard's spell there).
+		var glyph = SkillIcon.new()
+		glyph.position = Vector2(15,13); glyph.size = Vector2(26,26)
+		slot.add_child(glyph)
+		slot_glyphs.append(glyph)
+		var recharge = label("",20,cream,slot)
+		recharge.position = Vector2(0,12); recharge.size = Vector2(56,28)
+		recharge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		slot_cooldowns.append(recharge)
 		var hotkey = label(["LMB","RMB","1","2","3","4"][i],12,gold,slot)
 		hotkey.position = Vector2(5,2)
 		var name_label = label("",10,cream,slot)
@@ -295,18 +297,25 @@ func tick(dt: float) -> void:
 	character_info.text = "%s · Level %d" % [r.class_id.capitalize(),r.level]
 	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<Data.MAX_LEVEL else 1
 	experience.value = r.xp-Data.xp_at_level(r.level) if r.level<Data.MAX_LEVEL else 1
-	weapon_slots[0].disabled = game.player.dead
-	# (Its details come from the skill panel's tip, as a skill's do.)
-	weapon_slots[0].tooltip_text = ""
-	weapon_slots[0].add_theme_stylebox_override("normal",idle_style)
-	# (The weapon in hand, as its item is pictured.)
-	var weapon_icon_path = "res://assets/ui/items/%s.png" % r.equipment.main
-	if not ResourceLoader.exists(weapon_icon_path): weapon_icon_path = "res://assets/ui/weapon-%s.png" % Data.WEAPONS[Data.weapon(r)]
-	weapon_icons[0].texture = load(weapon_icon_path) if ResourceLoader.exists(weapon_icon_path) else load("res://assets/textures/seal.png")
-	weapon_icons[0].modulate = Color.WHITE
-	weapon_names[0].text = "Attack"
-	for i in range(1,6):
-		var id: String = r.hotbar[i-1]
+	# The LMB tile: the normal attack, or the wizard's spell there.
+	var casts_left: bool = Data.casts_left(r)
+	if not casts_left:
+		weapon_slots[0].disabled = game.player.dead
+		# (Its details come from the skill panel's tip, as a skill's do.)
+		weapon_slots[0].tooltip_text = ""
+		weapon_slots[0].add_theme_stylebox_override("normal",idle_style)
+		# (The weapon in hand, as its item is pictured.)
+		var weapon_icon_path = "res://assets/ui/items/%s.png" % r.equipment.main
+		if not ResourceLoader.exists(weapon_icon_path): weapon_icon_path = "res://assets/ui/weapon-%s.png" % Data.WEAPONS[Data.weapon(r)]
+		weapon_icons[0].texture = load(weapon_icon_path) if ResourceLoader.exists(weapon_icon_path) else load("res://assets/textures/seal.png")
+		weapon_icons[0].modulate = Color.WHITE
+		weapon_icons[0].visible = true
+		slot_cooldowns[0].text = ""
+		slot_glyphs[0].show_skill("",gold)
+		weapon_names[0].text = "Attack"
+	else: weapon_icons[0].texture = load("res://assets/textures/seal.png")
+	for i in range(0 if casts_left else 1,6):
+		var id: String = r.hotbar[tile_slot(i)]
 		var problem: String = game.skills.reason(id)
 		weapon_slots[i].disabled = not problem.is_empty()
 		# A skill's details come from the skill panel's tip instead.
@@ -317,11 +326,11 @@ func tick(dt: float) -> void:
 		# seconds left while it recharges.
 		weapon_icons[i].visible = id.is_empty()
 		var recharge: float = game.skills.cooldowns.get(id,0.0)
-		slot_cooldowns[i-1].text = str(ceili(recharge)) if recharge>0 else ""
-		slot_glyphs[i-1].show_skill(id,Color(.45,.44,.4) if recharge>0 else (gold if problem.is_empty() else Color(.6,.58,.5)))
+		slot_cooldowns[i].text = str(ceili(recharge)) if recharge>0 else ""
+		slot_glyphs[i].show_skill(id,Color(.45,.44,.4) if recharge>0 else (gold if problem.is_empty() else Color(.6,.58,.5)))
 		weapon_names[i].text = "Empty" if id.is_empty() else game.Book.all()[id].title
 	panels.tick(dt)
-	var hovered_skill: String = r.hotbar[hovered_slot-1] if hovered_slot>0 else (panels.ATTACK if hovered_slot==0 else "")
+	var hovered_skill: String = r.hotbar[tile_slot(hovered_slot)] if hovered_slot>0 or (hovered_slot==0 and casts_left) else (panels.ATTACK if hovered_slot==0 else "")
 	if not hovered_skill.is_empty(): panels.show_tip(hovered_skill,weapon_slots[hovered_slot].get_global_rect())
 	elif panels.hovered.is_empty() and is_instance_valid(panels.tip): panels.tip.visible = false
 	prompt.text = ""
@@ -339,6 +348,11 @@ func tick(dt: float) -> void:
 		boss_bar.value = game.boss.hp
 	notice_time -= dt
 	notice.visible = notice_time > 0
+
+# The hotbar slot (Data) a tile of the bar shows: LMB's is the wizard's
+# LEFT_SLOT, then RMB and 1 to 4.
+func tile_slot(tile: int) -> int:
+	return Data.LEFT_SLOT if tile==0 else tile-1
 
 # Outside the temple the corner of the screen says which way the town and the
 # temple lie. (No place is named.)

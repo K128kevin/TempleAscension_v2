@@ -73,10 +73,16 @@ const XP_STEPS = [100,150,220,300,400,520,650,800,960,1140,1340,1560,1800,2060,2
 # The fastest a melee swing can become, however much attack speed is stacked.
 const MELEE_MINIMUM = .2
 
+# The hotbar: RMB, 1 to 4, and LMB (LEFT_SLOT). Only the wizard puts a
+# skill on LMB: he has no normal attack, and his left click casts it instead.
+const LEFT_SLOT = 5
+static func casts_left(run: Dictionary) -> bool:
+	return run.get("class_id","")=="wizard"
+
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	var run = {"version":12,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	var run = {"version":13,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 	Items.outfit(run,class_id)
 	return run
 
@@ -259,4 +265,4 @@ static func respec(run: Dictionary) -> void:
 static func reset_skills(run: Dictionary) -> void:
 	run.skills = {}
 	run.skill_points = int(run.level)
-	run.hotbar = ["","","","",""]
+	run.hotbar = ["","","","","",""]

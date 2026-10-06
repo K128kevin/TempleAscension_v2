@@ -87,7 +87,7 @@ func test():
 	var ids = ["cleave","powerful_strike","shield_bash"]
 	for id in ids:
 		if not game.run.skills.has(id): Data.Skills.learn(game.run,id)
-	game.run.hotbar = ids+["",""]
+	game.run.hotbar = ids+["","",""]
 	check(hud.weapon_slots.size()==6 and hud.weapon_icons[0].size==Vector2(34,34) and hud.weapon_slots[0].size==Vector2(56,56),"Exactly six significantly smaller ability icons")
 	game.player.busy=0; game.player.cooldown=0
 	await click(hud.weapon_slots[0])

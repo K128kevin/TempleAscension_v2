@@ -12,7 +12,7 @@ const Visual = preload("res://scripts/visual.gd")
 const Art = preload("res://scripts/assets.gd")
 # A skill's square in the tree.
 const NODE = 44
-const SLOT_NAMES = ["RMB","1","2","3","4"]
+const SLOT_NAMES = ["RMB","1","2","3","4","LMB"]
 var hud
 var game
 var dim = Color(.62,.6,.53)
@@ -560,7 +560,10 @@ func square(id: String) -> Button:
 	rank.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var slot = text("",9,hud.cream,b)
 	slot.position = Vector2(4,1)
-	b.pressed.connect(func(): learn(id))
+	# (The wizard's shift-click puts a learned spell on LMB instead.)
+	b.pressed.connect(func():
+		if Data.casts_left(game.run) and Input.is_physical_key_pressed(KEY_SHIFT) and int(game.run.skills.get(id,0))>0: assign(id,Data.LEFT_SLOT)
+		else: learn(id))
 	b.gui_input.connect(func(event):
 		if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_RIGHT: assign(id,0))
 	b.mouse_entered.connect(func(): hovered = id)
@@ -687,6 +690,7 @@ func skill_lines(id: String, on_hotbar: bool) -> Dictionary:
 	lines.hint = ""
 	if Book.can_learn(r,id): lines.hint = "Click to learn" if rank==0 else "Click to raise to rank %d" % (rank+1)
 	if active and rank>0: lines.hint += ("\n" if not lines.hint.is_empty() else "")+"Right-click or 1–4: assign to RMB or that key"
+	if active and rank>0 and Data.casts_left(r): lines.hint += "\nShift-click: assign to LMB"
 	if on_hotbar: lines.hint = ""
 	return lines
 
@@ -725,18 +729,24 @@ func respec() -> void:
 func learn(id: String) -> void:
 	if not Book.learn(game.run,id): return
 	var s: Dictionary = Book.all()[id]
-	# A new active skill takes the first empty slot.
+	# A new active skill takes the first empty slot (the wizard's LMB first:
+	# it is his attack).
 	if s.effect!="passive" and not id in game.run.hotbar:
-		var empty: int = game.run.hotbar.find("")
-		if empty>=0: game.run.hotbar[empty] = id
+		var order: Array = [Data.LEFT_SLOT,0,1,2,3,4] if Data.casts_left(game.run) else [0,1,2,3,4]
+		for slot in order:
+			if game.run.hotbar[slot]=="":
+				game.run.hotbar[slot] = id
+				break
 	game.save_run()
 	refresh()
 
-# Puts a learned active skill on RMB (0) or 1 to 4, in combat or out.
+# Puts a learned active skill on RMB (0), 1 to 4, or (the wizard's) LMB, in
+# combat or out.
 func assign(id: String, slot: int) -> void:
 	var run: Dictionary = game.run
+	if slot==Data.LEFT_SLOT and not Data.casts_left(run): return
 	if not Book.all().has(id) or int(run.skills.get(id,0))<=0 or Book.all()[id].effect=="passive" or run.hotbar[slot]==id: return
-	for j in 3:
+	for j in run.hotbar.size():
 		if run.hotbar[j]==id: run.hotbar[j] = ""
 	run.hotbar[slot] = id
 	game.save_run()

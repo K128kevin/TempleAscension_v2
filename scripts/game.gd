@@ -581,7 +581,7 @@ func update_enemy_hover() -> void:
 # The 1 to 4 keys: a skill used up close is walked to a unit under the cursor,
 # as a right click is; anything else is cast where the cursor points.
 func cast_key(slot: int) -> void:
-	if skills.reach(run.hotbar[slot])<13.0 and is_instance_valid(clicked_enemy()) and not Input.is_physical_key_pressed(KEY_SHIFT): issue_click(true,slot)
+	if skills.reach(run.hotbar[slot])<RANGED_REACH and is_instance_valid(clicked_enemy()) and not Input.is_physical_key_pressed(KEY_SHIFT): issue_click(true,slot)
 	else: skills.cast_slot(slot,aim_point())
 
 func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
@@ -599,6 +599,11 @@ func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
 		return
 	var clicked = null if held and move_hold and not special else clicked_enemy()
 	if not held and not special: move_hold = clicked == null
+	# The wizard has no normal attack: a left click on an enemy casts his LMB
+	# spell at it (on the ground it is a move order still).
+	if clicked and not special and Data.casts_left(run):
+		special = true
+		slot = Data.LEFT_SLOT
 	# A move order, or another skill, lets a held spell go.
 	if not special or not skills.channeling() or skills.channel.get("slot",-1) != slot: skills.end_channel()
 	if clicked: order_attack(clicked,special,slot)
@@ -742,6 +747,10 @@ var sword_steps = 0
 var swings = 0
 func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 	if player.cooldown>0 or player.busy>0 or player.dead or mode!="playing": return
+	# (The wizard's left click is his LMB spell, not a normal attack.)
+	if not special and Data.casts_left(run):
+		special = true
+		slot = Data.LEFT_SLOT
 	if special:
 		# A skill that cannot be cast (no energy, recharging) ends the order
 		# rather than leaving the hero waiting on it.
@@ -1159,9 +1168,10 @@ func take_pickup(pickup: Dictionary) -> void:
 # Metres per second: arrows, and the casters' bolts and ice.
 const ARROW_SPEED = 20.6
 const BOLT_SPEED = 10.3
-# How far the hero's arrows fly (the bow's reach, as Skills.reach): an arrow
-# carried on through its targets by Penetrating Arrows stops there all the same.
-const ARROW_REACH = 13.0
+# How far the hero's arrows, bolts and spells reach at most (the bow's reach,
+# as Skills.reach): an arrow carried on through its targets by Penetrating
+# Arrows stops there all the same.
+const RANGED_REACH = 15.0
 
 # `skill`: a skill's shot rather than the normal attack's.
 # `extra`: what one of the ranger's arrows carries besides its damage
@@ -1191,9 +1201,10 @@ func tick_projectiles(dt: float) -> void:
 		var before: Vector3 = p.node.position
 		var after: Vector3 = before+p.direction*(ARROW_SPEED if p.type=="arrow" else BOLT_SPEED)*dt
 		p.node.visible = world.can_see(after)
-		# Arrows fly twice as fast, over the same range.
-		var lifetime: float = 4.0
-		if p.type=="arrow": lifetime = ARROW_REACH/ARROW_SPEED if p.friendly else BOLT_SPEED*4.0/ARROW_SPEED
+		# Arrows fly twice as fast, over the same range; the hero's shots stop
+		# at RANGED_REACH.
+		var speed: float = ARROW_SPEED if p.type=="arrow" else BOLT_SPEED
+		var lifetime: float = RANGED_REACH/speed if p.friendly else BOLT_SPEED*4.0/speed
 		var remove: bool = p.age>lifetime or not world.clear_line(Vector3(before.x,0,before.z),Vector3(after.x,0,after.z))
 		p.node.position = after
 		if not remove:

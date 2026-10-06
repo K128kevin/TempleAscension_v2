@@ -476,7 +476,7 @@ func test():
 	clear()
 	hero({"penetrating_arrows":1})
 	foe = dummy(5)
-	var past_reach = dummy(game.ARROW_REACH+2.0)
+	var past_reach = dummy(game.RANGED_REACH+2.0)
 	game.attack(false,at)
 	play(2.5)
 	check(within(foe,1,100) and lost(past_reach)==0,"Penetrating Arrows do not carry an arrow past the bow's reach")

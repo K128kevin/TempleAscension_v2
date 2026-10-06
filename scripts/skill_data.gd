@@ -73,7 +73,7 @@ const RANGER = [
 # under it.
 const WIZARD = [
 	["ice_bolt", "Ice Bolt", "ice", 0, "icebolt", "any", 10, "Shoot a bolt of ice at the target for {x}% ice damage, with a {y}% chance to freeze it in place for 3 seconds.", [[100,4],[120,8],[140,12],[160,16],[180,20]]],
-	["freeze_floor", "Freeze Floor", "ice", 0, "freezefloor", "any", 10, "Channel a ray of frost that freezes the floor wherever you spray it, for 10 seconds: enemies on frozen floor move {x}% slower. Costs 10 energy a second while held.", [[40],[50],[60],[70],[80]]],
+	["freeze_floor", "Freeze Floor", "ice", 0, "freezefloor", "any", 10, "Channel a ray of frost that freezes the floor 5 meters around wherever you spray it, for 12 seconds: enemies on frozen floor move {x}% slower. Costs 10 energy a second while held.", [[40],[50],[60],[70],[80]]],
 	["ice_spikes", "Ice Spikes", "ice", 5, "spikes", "any", 35, "Raise spikes of ice out of the floor across 4 meters where you aim, for {x}% ice damage.", [[100],[120],[140],[160],[180]]],
 	["ice_prison", "Ice Prison", "ice", 5, "prison", "any", 45, "Freeze an enemy in a block of ice for {x} seconds: it can do nothing, and takes {y}% more damage.", [[2,20],[3,25],[4,35],[5,45],[6,60]]],
 	["improved_chill", "Improved Chill", "ice", 5, "passive", "any", 0, "Your ice spells' chill slows {x}% more, and lasts {y} seconds longer.", [[10,1],[15,2],[20,3],[30,4],[40,5]]],

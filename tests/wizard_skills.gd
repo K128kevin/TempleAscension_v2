@@ -138,7 +138,7 @@ func test():
 	play(.1)
 	check(not game.skills.channeling() and game.player.busy<=0,"Let go, the channel ends and he is free")
 	var left: float = game.skills.patches[0].left
-	check(left>8.0 and left<=10.0,"The ice lasts 10 seconds")
+	check(left>10.0 and left<=12.0 and game.skills.patches[0].radius==5.0,"The ice lasts 12 seconds and spreads 5 metres around where the ray falls")
 	hero({"freeze_floor":5}); game.skills.channel_hold_override = 1
 	cast("freeze_floor",at); play(.5)
 	check(is_equal_approx(walker.slow_factor,.2),"Rank 5 slows 80%")
@@ -236,15 +236,19 @@ func test():
 	check(within(round_him[0],1,125) and within(round_him[1],1,125) and within(round_him[2],1,125) and lost(round_him[3])==0,"Rank 1: 125%% to everyone within 5 metres, on every side (%.1f, %.1f, %.1f, %.1f)" % [lost(round_him[0]),lost(round_him[1]),lost(round_him[2]),lost(round_him[3])])
 	clear()
 
-	# Fire Tornado: 6 seconds of fire where he aims.
+	# Fire Tornado: 6 seconds of fire where he aims, wandering about it.
 	hero({"fire_tornado":1})
 	foe = dummy(6)
-	var aside = dummy(9)
+	var aside = dummy(13)
 	check(cast("fire_tornado",at) and game.player.visual.state=="CastGround" and is_equal_approx(game.run.energy,55.0),"Fire Tornado costs 45")
 	play(.6)
 	check(game.skills.zones.size()==1,"It stands where he aimed")
-	play(6.5)
-	check(lost(foe)>=10*STAFF*.5*6*.9-.01 and lost(foe)<=15*STAFF*.5*6+.01 and lost(aside)==0 and game.skills.zones.is_empty(),"Rank 1: 50%% a second for 6 seconds to what it touches (%.1f)" % lost(foe))
+	var strayed: float = 0.0
+	for i in 26:
+		play(.25)
+		if not game.skills.zones.is_empty(): strayed = maxf(strayed,game.skills.zones[0].at.distance_to(game.skills.zones[0].origin))
+	check(strayed>.5 and strayed<=game.skills.TORNADO_WANDER+.5,"It wanders, but no further than %.0f metres from where it was cast (%.1f)" % [game.skills.TORNADO_WANDER,strayed])
+	check(lost(foe)>0 and lost(foe)<=15*STAFF*.5*6+.01 and lost(aside)==0 and game.skills.zones.is_empty(),"Rank 1: 50%% a second for 6 seconds to what it touches (%.1f)" % lost(foe))
 	hero({"fire_tornado":5,"lightning_rod":1})
 	foe.hp = foe.max_hp
 	var rods = 0

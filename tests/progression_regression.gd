@@ -13,7 +13,7 @@ func test():
 	for class_id in Data.CLASSES:
 		var run = Data.new_run(class_id)
 		check(run.stats==[5,5,5,5,5] and run.level==1 and Data.max_health(run)==100 and Data.max_energy(run)==100 and Data.energy_regen(run)==10,"Shared base resources and attributes: "+class_id)
-		check(run.skills.is_empty() and run.skill_points==1 and run.hotbar==["","","","",""] and Save.valid(run),"A new character has learned no skill and has one point to spend: "+class_id)
+		check(run.skills.is_empty() and run.skill_points==1 and run.hotbar==["","","","","",""] and Save.valid(run),"A new character has learned no skill and has one point to spend: "+class_id)
 		check(Data.weapon(run)=={"warrior":1,"ranger":2,"wizard":4}[class_id] and run.bag.count("")==(9 if class_id=="ranger" else 10) and ("hunting_dagger" in run.bag)==(class_id=="ranger"),"Each class holds only its starting weapon (the ranger his bow, with his dagger in his bag): "+class_id)
 		var active = 0; var passive = 0
 		for s in Book.all().values():
@@ -34,7 +34,7 @@ func test():
 		Data.gain_xp(run,100000)
 		check(run.points==points,"XP at cap cannot mint points: "+class_id)
 		Data.respec(run)
-		check(run.skill_points==25 and run.points==120 and run.hotbar==["","","","",""] and Save.valid(run),"Respec refunds exact budgets and clears slots: "+class_id)
+		check(run.skill_points==25 and run.points==120 and run.hotbar==["","","","","",""] and Save.valid(run),"Respec refunds exact budgets and clears slots: "+class_id)
 		for tag in ["melee","ranged","spell"]:
 			var i: int = {"melee":0,"ranged":1,"spell":2}[tag]
 			run.stats[i] += 10
@@ -96,14 +96,19 @@ func test():
 	prior.hotbar=["cleave","","","guard","shield_bash"]
 	prior.drops=[{"kind":"weapon","value":2,"id":"weapon:0","position":[0,9]},{"kind":"weapon","value":3,"id":"weapon:1","position":[0,9]}]
 	var converted = Save.migrate(prior)
-	check(Save.valid(prior) and Save.valid(converted) and converted.version==Data.new_run().version and converted.place=="temple" and converted.hotbar==["","","","",""] and converted.drops.is_empty() and converted.skills.is_empty() and converted.skill_points==4 and converted.points==15,"Version 3 saves migrate, retire pending bow/axe drops and refund their points")
+	check(Save.valid(prior) and Save.valid(converted) and converted.version==Data.new_run().version and converted.place=="temple" and converted.hotbar==["","","","","",""] and converted.drops.is_empty() and converted.skills.is_empty() and converted.skill_points==4 and converted.points==15,"Version 3 saves migrate, retire pending bow/axe drops and refund their points")
 	var veteran = Data.new_run("wizard"); veteran.version=5
 	veteran.level=27; veteran.xp=60000; veteran.stats=[5,5,60,10,18]; veteran.points=0
 	veteran.skills={"firebolt":5,"meteor":4}; veteran.skill_points=18; veteran.hotbar=["firebolt","meteor",""]
 	var capped = Save.migrate(veteran)
 	var eight = Data.new_run("warrior"); eight.version=8; eight.skills={"cleave":1}; eight.skill_points=0; eight.hotbar=["cleave","",""]
 	var nine = Save.migrate(eight)
-	check(Save.valid(eight) and nine.version==Data.new_run().version and nine.hotbar==["cleave","","","",""],"Version 8 saves keep their skills, the hotbar grown to RMB and 1 to 4")
+	check(Save.valid(eight) and nine.version==Data.new_run().version and nine.hotbar==["cleave","","","","",""],"Version 8 saves keep their skills, the hotbar grown to RMB and 1 to 4")
+	var twelve = Data.new_run("wizard"); twelve.version=12; twelve.skills={"ice_bolt":1}; twelve.skill_points=0; twelve.hotbar=["ice_bolt","","","",""]
+	var thirteen = Save.migrate(twelve)
+	check(Save.valid(twelve) and thirteen.version==13 and thirteen.hotbar==["ice_bolt","","","","",""],"Version 12 saves gain an empty LMB slot")
+	var warrior_left = Data.new_run("warrior"); warrior_left.skills={"cleave":1}; warrior_left.skill_points=0; warrior_left.hotbar[Data.LEFT_SLOT]="cleave"
+	check(not Save.valid(warrior_left),"Only the wizard may put a skill on LMB")
 	check(Save.valid(capped) and capped.level==25 and capped.xp==Data.xp_at_level(25) and capped.stats==[5,5,5,5,5] and capped.points==120 and capped.skill_points==25 and capped.get("migration_notice",false),"Version 5 saves above the cap come down to level 25 with every point refunded")
 	var old = {"version":2,"floor":3,"stats":[6,3,2,5],"owned":[true,true,true,true],"weapon":0,"difficulty":1,"dead":["3:0"],"gems":["gem:2:0"],"drops":[],"deaths":2,"seed":78,"position":[0,9],"health":140,"energy":120,"phase":"allocation","points":5,"completed":false}
 	var migrated = Save.migrate(old)
