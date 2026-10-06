@@ -8,6 +8,7 @@ const Save = preload("res://scripts/save.gd")
 const Temple = preload("res://scripts/temple.gd")
 const Actor = preload("res://scripts/actor.gd")
 const Art = preload("res://scripts/assets.gd")
+const WizardFx = preload("res://scripts/wizard_fx.gd")
 const STEP = 1.0/60
 # The starting staff adds 5% to every spell.
 const STAFF = 1.05
@@ -262,20 +263,56 @@ func test():
 	check(cast("fire_tornado",at) and game.player.visual.state=="CastGround" and is_equal_approx(game.run.energy,35.0),"Fire Tornado costs 65")
 	play(.6)
 	check(game.skills.zones.size()==1,"It stands where he aimed")
+	# Its fire lands every 0.2 seconds, each time a fifth of its damage a second.
+	var burns: Array = []
+	var was: float = foe.hp
+	for i in 60:
+		play(1.0/60)
+		if foe.hp<was: burns.append(was-foe.hp); was = foe.hp
+	check(burns.size()==5 and burns.all(func(d): return absf(d-burns[0])<burns[0]*.6) and burns[0]>=10*STAFF*.5*.2-.01 and burns[0]<=15*STAFF*.5*.2+.01,"It burns every 0.2 seconds, a fifth of its damage a second each time (%d burns in a second: %s)" % [burns.size(),burns])
 	var strayed: float = 0.0
 	for i in 34:
 		play(.25)
 		if not game.skills.zones.is_empty(): strayed = maxf(strayed,game.skills.zones[0].at.distance_to(game.skills.zones[0].origin))
 	check(strayed>.5 and strayed<=game.skills.TORNADO_WANDER+.5,"It wanders, but no further than %.0f metres from where it was cast (%.1f)" % [game.skills.TORNADO_WANDER,strayed])
 	check(lost(foe)>0 and lost(foe)<=15*STAFF*.5*8+.01 and lost(aside)==0 and game.skills.zones.is_empty(),"Rank 1: 50%% a second for 8 seconds to what it touches (%.1f)" % lost(foe))
+	check(range(1,6).all(func(r): return Book.values("fire_tornado",r).y==r),"Its chance to make an enemy a Lightning Rod is 1, 2, 3, 4 and 5%% by rank")
+	# Each burn rolls for each enemy it burns: with five burns a second for
+	# eight seconds, at rank 5 most of a crowd in it are made rods (once a
+	# second for one enemy, few could be).
+	clear()
 	hero({"fire_tornado":5,"lightning_rod":1})
-	foe.hp = foe.max_hp
-	var rods = 0
+	var crowd: Array = []
 	for i in 6:
-		ready(); foe.rod_time = 0
-		cast("fire_tornado",at); play(8.6)
-		if foe.rod_time>0: rods += 1
-	check(rods>=1,"Rank 5: each second a 30%% chance to make an enemy in it a Lightning Rod (%d of 6 tornadoes)" % rods)
+		var e = dummy(6)
+		e.position = at+Vector3(cos(i*TAU/6),0,sin(i*TAU/6))*.3
+		crowd.append(e)
+	seed(20261006)
+	cast("fire_tornado",at)
+	var strikes = 0
+	for i in 52:
+		play(.16)
+		for e in crowd:
+			if game.skills.zones.size()==1: e.position = game.skills.zones[0].at+(e.position-game.skills.zones[0].at).limit_length(.3)
+		strikes = maxi(strikes,game.skills.waves.filter(func(w): return w is WizardFx.SkyStrike).size())
+	var rodded: int = crowd.filter(func(e): return e.rod_time>0).size()
+	check(rodded>=4,"Rank 5: each burn has its own 5%% chance for each enemy it burns (%d of 6 made rods)" % rodded)
+	check(strikes>=2,"and each one made a rod is struck by lightning from the sky (%d strikes at once)" % strikes)
+	clear()
+
+	# Every other damage over time lands the same way: a fifth of its damage
+	# a second every 0.2 seconds.
+	hero({})
+	var cursed = dummy(4)
+	cursed.add_dot("curse",100.0,5.0,1)
+	var steps: Array = []
+	was = cursed.hp
+	for i in 60:
+		cursed.tick(1.0/60)
+		if cursed.hp<was: steps.append(snappedf(was-cursed.hp,.01)); was = cursed.hp
+	check(steps.size()==5 and steps.all(func(d): return is_equal_approx(d,steps[0])),"Curses, poisons and shadows land every 0.2 seconds, a fifth of their damage a second each time (%s)" % [steps])
+	for i in 300: cursed.tick(1.0/60)
+	check(is_equal_approx(cursed.max_hp-cursed.hp,steps[0]*25) and cursed.dots.is_empty(),"and all of it lands by the time it ends (%.2f)" % (cursed.max_hp-cursed.hp))
 	clear()
 
 	# Blazing Speed.
@@ -331,6 +368,8 @@ func test():
 	check(cast("lightning_rod",rod.position) and game.player.visual.state=="CastPoint" and is_equal_approx(game.run.energy,70.0),"Lightning Rod costs 30, pointed")
 	play(.6)
 	check(rod.rod_time>9.0 and is_instance_valid(rod.rod_mark),"The enemy is a rod for 10 seconds")
+	check(game.skills.waves.any(func(w): return w is WizardFx.SkyStrike and Vector2(w.position.x,w.position.z).distance_to(Vector2(rod.position.x,rod.position.z))<.01),"A great bolt of lightning strikes it out of the sky")
+	check(rod.rod_mark is WizardFx.StaticArcs and not rod.rod_mark.arcs.is_empty() and rod.rod_mark.arcs.any(func(a): return a.a is Array),"and static arcs crawl over its body while it lasts (%d)" % rod.rod_mark.arcs.size())
 	rod.hit(10.0)
 	check(within(chain[0],1,100) and within(chain[1],1,70) and within(chain[2],1,49) and within(chain[3],1,34.3) and lost(chain[4])==0,"Hurt, it jolts the nearest for 100%%, then three more each 30%% weaker (%.1f, %.1f, %.1f, %.1f, %.1f)" % [lost(chain[0]),lost(chain[1]),lost(chain[2]),lost(chain[3]),lost(chain[4])])
 	var jolted: float = lost(chain[0])
@@ -386,6 +425,32 @@ func test():
 	panels.assign("ice_bolt",2)
 	check(game.run.hotbar[2]=="ice_bolt","and 1 to 4 bind as before")
 	game.resume_game()
+
+	# Running, he carries his staff in his fist as the swordsman carries his
+	# sword, swinging with his stride; standing, it is his walking stick again.
+	var look = game.player.visual
+	var staff_line = func() -> Array:
+		look.skeleton.force_update_all_bone_transforms()
+		look.align_weapon()
+		var foot: Vector3 = look.weapon_item.global_transform*Vector3.ZERO
+		var top: Vector3 = look.weapon_item.global_transform*Vector3(0,1,0)
+		var fist: Vector3 = look.bow_hold("r")[0]
+		var along: Vector3 = (top-foot).normalized()
+		return [along,(fist-foot-along*(fist-foot).dot(along)).length()]
+	var swing: Array = []
+	var gripped = true
+	for i in 70:
+		look.locomotion(true,false,false,1.0,4.75); look.advance(1.0/60)
+		if i>=10:
+			var held_line: Array = staff_line.call()
+			swing.append(held_line[0])
+			gripped = gripped and held_line[1]<.03
+	var widest = 0.0
+	for d in swing: widest = maxf(widest,rad_to_deg(swing[0].angle_to(d)))
+	check(look.state=="WizardRun" and gripped and widest>20.0,"Running, the staff stays in his fist and swings with his stride (%.0f degrees)" % widest)
+	for i in 40: look.locomotion(false,false); look.advance(1.0/60)
+	var rest: Array = staff_line.call()
+	check(rest[0].dot(Vector3.UP)>.98 and rest[1]<.03,"Standing, it is upright in his hand again")
 	FileAccess.open("res://test-results/wizard-skills.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
 	print("WIZARD_SKILLS ",passed.size()," passed; ",failed)
 	game.queue_free()

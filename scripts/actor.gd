@@ -214,6 +214,7 @@ func tick(dt: float) -> void:
 	if rod_time<=0 and is_instance_valid(rod_mark):
 		rod_mark.queue_free()
 		rod_mark = null
+	elif is_instance_valid(rod_mark): rod_mark.tick(dt)
 	mark_time = maxf(0,mark_time-dt)
 	weak_time = maxf(0,weak_time-dt)
 	if weak_time<=0: weak_stacks = 0
@@ -774,8 +775,12 @@ func make_rod(percent: float, seconds: float) -> void:
 	if dead or dormant: return
 	rod_percent = percent
 	rod_time = maxf(rod_time,seconds)
+	# Lightning strikes it out of the sky, and static crawls over it while it lasts.
+	game.skills.waves.append(WizardFx.sky_strike(game.world,position+Vector3.UP*game.world.lift(position)))
+	game.sound.play("lightning-zap",-2)
+	game.shake(.18)
 	if not is_instance_valid(rod_mark):
-		rod_mark = WizardFx.rod_mark(config.get("size",1.0))
+		rod_mark = WizardFx.rod_mark(visual,visual.skeleton,config.get("size",1.0))
 		add_child(rod_mark)
 	game.float_text(position+Vector3.UP*1.9,"Lightning Rod",Color(.7,.85,1))
 
@@ -795,28 +800,37 @@ func refresh_dots(dot_kind: String) -> void:
 	for d in dots:
 		if d.kind==dot_kind: d.left = d.seconds
 
+# Damage over time lands every DOT_TICK (Skills) from when each effect began,
+# each time a fifth of its damage a second, until all of it has landed.
+# (A frame's worth of rounding: twelve 60ths of a second fall just short of 0.2.)
+const DOT_SLACK = .0001
 func tick_dots(dt: float) -> void:
 	if dots.is_empty(): return
-	var total = 0.0
-	var by_kind: Dictionary = {}
-	for i in range(dots.size()-1,-1,-1):
-		var d: Dictionary = dots[i]
-		var step = minf(dt,d.left)
-		total += d.rate*step
-		by_kind[d.kind] = by_kind.get(d.kind,0.0)+d.rate*step
-		d.left -= dt
-		if d.left<=0: dots.remove_at(i)
 	if dead or game.playground != null:
 		dots.clear()
 		return
+	var tick: float = game.skills.DOT_TICK
+	var by_kind: Dictionary = {}
+	var total = 0.0
+	for i in range(dots.size()-1,-1,-1):
+		var d: Dictionary = dots[i]
+		d.clock = d.get("clock",0.0)+dt
+		while d.clock>=tick-DOT_SLACK and d.left>0:
+			d.clock -= tick
+			var step: float = minf(tick,d.left)
+			d.left -= step
+			by_kind[d.kind] = by_kind.get(d.kind,0.0)+d.rate*step
+			total += d.rate*step
+		if d.left<=0: dots.remove_at(i)
+	if total<=0: return
 	var dealt: float = Data.mitigate(total,armor(),0.0,int(game.run.level),"physical")
 	hp -= dealt
 	if dealt>0 and not daze in ["ambush","freeze","prison"]: end_stun()
 	if dealt>0 and rod_time>0: game.skills.rod_jolt(self)
-	# Shown as one number a kind every half second rather than one a frame.
+	# Shown as one number a kind every half second or so rather than one a tick.
 	for k in by_kind:
 		if total>0: dot_shown[k] = dot_shown.get(k,0.0)+dealt*by_kind[k]/total
-	dot_clock += dt
+	dot_clock += game.skills.DOT_TICK
 	if dot_clock>=.5 or hp<=0 or dots.is_empty():
 		var rise = 1.2
 		for k in dot_shown:

@@ -82,7 +82,7 @@ const WIZARD = [
 	["fireball", "Fireball", "fire", 0, "fireball", "any", 10, "Hurl a ball of fire at the target for {x}% fire damage.", [[120],[160],[200],[240],[280]]],
 	["blast_wave", "Blast Wave", "fire", 5, "blastwave", "any", 45, "A wave of flame bursts out 5 meters in every direction, for {x}% fire damage to every enemy it touches.", [[125],[145],[170],[200],[235]]],
 	["frostburn", "Frostburn", "fire", 5, "passive", "any", 0, "Your fire spells deal {x}% more damage to chilled enemies.", [[50],[75],[100],[135],[175]]],
-	["fire_tornado", "Fire Tornado", "fire", 10, "tornado", "any", 65, "Conjure a tornado of fire 4 meters across where you aim: for 8 seconds it deals {x}% fire damage a second to everything it touches, and each second has a {y}% chance to make an enemy in it a Lightning Rod, if you know that spell.", [[50,10],[60,15],[70,20],[85,25],[100,30]]],
+	["fire_tornado", "Fire Tornado", "fire", 10, "tornado", "any", 65, "Conjure a tornado of fire 4 meters across where you aim: for 8 seconds it deals {x}% fire damage a second to everything it touches, and each time it burns an enemy there is a {y}% chance to make that enemy a Lightning Rod, if you know that spell.", [[50,1],[60,2],[70,3],[85,4],[100,5]]],
 	["blazing_speed", "Blazing Speed", "fire", 10, "blazing", "any", 50, "For {x} seconds you run 75% faster and your fire spells cost nothing. 60-second cooldown.", [[6]]],
 	["pyromaniac", "Pyromaniac", "fire", 10, "passive", "any", 0, "Your fire spells deal double damage, but each burns you for 10% of the damage it deals, over 3 seconds.", [[100]]],
 	["lightning_bolt", "Lightning Bolt", "lightning", 0, "bolt", "any", 10, "Hurl a bolt of lightning at the target for {x}% lightning damage.", [[100],[130],[160],[190],[220]]],

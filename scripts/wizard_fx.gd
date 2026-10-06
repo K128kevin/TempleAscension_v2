@@ -10,6 +10,7 @@ const Vfx = preload("res://scripts/vfx.gd")
 const Art = preload("res://scripts/assets.gd")
 const RangerFx = preload("res://scripts/ranger_fx.gd")
 const Crackle = preload("res://scripts/crackle.gd")
+const StaticArcs = preload("res://scripts/static_arcs.gd")
 const Shockwave = preload("res://scripts/shockwave.gd")
 const FROST = Color(.72,.9,1.0)
 const FLAME = Color(1.0,.55,.18)
@@ -404,127 +405,215 @@ static func flame_ring(at: Vector3, radius: float) -> Node3D:
 	return wave
 
 # Fire Tornado: a column of flame `radius` wide turning about `at` for
-# `seconds`, embers flung up round it, a scorch beneath, and its light.
+# `seconds`, embers flung off it, smoke off its crown, a scorch beneath, and
+# its light. Its fire is a volume of tongues of flame like the torches', much
+# larger (assets/shaders/tornado_flame.gdshader), each whirled up a spiral
+# ring a funnel that is slender at its foot and flares toward its crown; the
+# funnel's axis twists about like a corkscrew and its crown trails behind as
+# it travels. The tongues and embers are moved here, on the combat clock, so
+# pausing freezes the fire.
 class Tornado extends Node3D:
 	var age = 0.0
 	var life = 6.0
-	# The flame shell, and the hotter column inside it.
-	var funnel: MeshInstance3D
-	var inner: MeshInstance3D
-	# Tongues of fire licking up round its foot (assets/shaders/flame_lick.gdshader),
-	# each [card, how far out, its angle, how fast it goes round, its height].
-	var licks: Array = []
-	var embers: CPUParticles3D
-	var smoke: CPUParticles3D
-	var glow: OmniLight3D
-	var scorch: Sprite3D
+	var radius = 2.0
+	var twist = 0.0
 	# Where it is heading (Skills moves it), so its crown trails behind.
 	var travel = Vector3.ZERO
 	var trail = Vector2.ZERO
+	# The tongues: each one's height, angle round the column, how far out it
+	# rides (a share of the funnel's width), age, lifetime, how fast it rises
+	# and whirls, its size, and its seed.
+	var fire: MultiMeshInstance3D
+	var rise := PackedFloat32Array()
+	var angle := PackedFloat32Array()
+	var out := PackedFloat32Array()
+	var lived := PackedFloat32Array()
+	var lasts := PackedFloat32Array()
+	var climb := PackedFloat32Array()
+	var whirl := PackedFloat32Array()
+	var size := PackedFloat32Array()
+	var marks := PackedFloat32Array()
+	# The embers: drawn in the world, so they are left behind as it travels.
+	var sparks: MultiMeshInstance3D
+	var spark_at := PackedVector3Array()
+	var spark_way := PackedVector3Array()
+	var spark_lived := PackedFloat32Array()
+	var spark_lasts := PackedFloat32Array()
+	var spark_size := PackedFloat32Array()
+	var spark_due = 0.0
+	var smoke: CPUParticles3D
+	var glow: OmniLight3D
+	var scorch: Sprite3D
+	var heat: Gradient
+	var cooling: Gradient
+
+	# The funnel's half-width at `h` (0 its foot, 1 its crown).
+	func width(h: float) -> float:
+		return radius*(.12+.88*pow(h,1.8)+.14*exp(-h*12.0))
+
+	# Its axis at `h`: a bend that winds round it like a corkscrew and slowly
+	# turns, more the higher it goes, a quicker wobble on top, and its crown
+	# trailing behind.
+	func axis(h: float) -> Vector3:
+		var sway: float = pow(h,1.4)
+		var turn: float = age*1.6+twist+h*2.8
+		var bend: float = .6+sin(age*.7+twist)*.2
+		return Vector3((cos(turn)*bend+sin(h*6.1-age*2.6+twist*2.0)*.14)*sway+trail.x*h*h,
+			0,(sin(turn)*bend+cos(h*5.3-age*2.4)*.14)*sway+trail.y*h*h)
+
+	# A new tongue, low in the column: most kindle at its foot, a few higher.
+	func kindle(i: int) -> void:
+		rise[i] = TORNADO_HEIGHT*pow(randf(),2.2)*.55
+		angle[i] = randf()*TAU
+		# (Most on its skin, some through its heart.)
+		out[i] = randf_range(.8,1.08) if randf()<.8 else randf_range(.2,.7)
+		lived[i] = 0.0
+		lasts[i] = randf_range(.9,1.6)
+		climb[i] = randf_range(2.4,3.6)
+		whirl[i] = randf_range(6.0,8.5)
+		size[i] = randf_range(.75,1.2)
+		marks[i] = randf()*50.0
+		# Some cling to its foot, whirling round low and slow and flaring out
+		# over the ground where the funnel meets it.
+		if randf()<.2:
+			rise[i] = randf()*.2
+			out[i] = randf_range(.7,1.7)
+			lasts[i] = randf_range(.6,1.1)
+			climb[i] = randf_range(.4,.9)
+
+	func fling(at: Vector3, way: Vector3) -> void:
+		var i: int = spark_lived.find(-1.0)
+		if i<0: return
+		spark_at[i] = at
+		spark_way[i] = way
+		spark_lived[i] = 0.0
+		spark_lasts[i] = randf_range(1.0,2.2)
+		spark_size[i] = randf_range(.07,.12)
+
 	func tick(dt: float) -> bool:
 		age += dt
 		var strength: float = minf(1.0,age/.5)*clampf((life-age)/.9,0.0,1.0)
+		var burning: bool = age<life
 		glow.light_energy = 3.6*strength*(1.0+sin(age*19.0)*.12)
 		scorch.modulate.a = .55*minf(1.0,age/.6)*clampf((life+2.5-age)/2.0,0.0,1.0)
 		trail = trail.lerp(-Vector2(travel.x,travel.z)*.9,minf(1.0,dt*2.0))
-		for column in [funnel,inner]:
-			var fire: ShaderMaterial = column.material_override
-			fire.set_shader_parameter("flame_time",age)
-			fire.set_shader_parameter("strength",strength)
-			fire.set_shader_parameter("lean",trail)
-			column.visible = strength>0.0
-		# The tongues are whirled round its foot, flickering taller and shorter.
-		for l in licks:
-			l[2] += l[3]*dt
-			var card: MeshInstance3D = l[0]
-			card.position = Vector3(cos(l[2]),0,sin(l[2]))*l[1]
-			card.scale = Vector3(l[4]*.8,l[4]*(.85+.25*sin(age*7.0+l[2]*3.0))*maxf(strength,.01),1)
-			var flame: ShaderMaterial = card.material_override
-			flame.set_shader_parameter("flame_time",age)
-			flame.set_shader_parameter("strength",strength)
-			card.visible = strength>0.0
-		for p in [embers,smoke]: p.emitting = age < life
+		smoke.emitting = burning
+		var where: Vector3 = global_position if is_inside_tree() else position
+		var buffer: PackedFloat32Array = fire.multimesh.buffer
+		var count: int = rise.size()
+		var lit = 0
+		for i in count:
+			lived[i] += dt
+			if lived[i]>=lasts[i] or rise[i]>=TORNADO_HEIGHT:
+				# (As it dies down no more kindle, and its fire burns out.)
+				if burning: kindle(i)
+				else: lasts[i] = -1.0
+			var b = i*20
+			if lasts[i]<0:
+				buffer[b] = 0.0; buffer[b+5] = 0.0; buffer[b+15] = 0.0
+				continue
+			var u: float = lived[i]/lasts[i]
+			# It rises faster as it goes, and whirls round faster where the
+			# funnel is narrow.
+			var h: float = rise[i]/TORNADO_HEIGHT
+			rise[i] += climb[i]*(1.0+u*.8)*dt
+			var spin: float = whirl[i]*(1.3-.65*h)
+			angle[i] += spin*dt
+			var reach: float = width(h)*out[i]*(1.0+.12*sin(marks[i]+age*3.0))
+			var ring = Vector3(cos(angle[i]),0,sin(angle[i]))
+			var at: Vector3 = axis(h)+ring*reach+Vector3.UP*rise[i]
+			var way: Vector3 = Vector3(-ring.z,0,ring.x)*reach*spin+Vector3.UP*climb[i]
+			# It swells as it kindles and gutters as it dies, larger high up.
+			var swell: float = sqrt(sin(PI*u))*size[i]*strength
+			var across: float = radius*(.2+.34*h)*swell
+			var along: float = across*(1.3+minf(way.length()*.05,.6))
+			var color: Color = heat.sample(clampf(1.0-h*.55-u*.35+(1.0-out[i])*.25+(marks[i]-25.0)*.006,0.0,1.0))
+			buffer[b] = across; buffer[b+1] = 0; buffer[b+2] = 0; buffer[b+3] = at.x
+			buffer[b+4] = 0; buffer[b+5] = along; buffer[b+6] = 0; buffer[b+7] = at.y
+			buffer[b+8] = 0; buffer[b+9] = 0; buffer[b+10] = 1; buffer[b+11] = at.z
+			buffer[b+12] = color.r; buffer[b+13] = color.g; buffer[b+14] = color.b; buffer[b+15] = color.a
+			buffer[b+16] = way.x; buffer[b+17] = way.y; buffer[b+18] = way.z; buffer[b+19] = marks[i]
+			lit += 1
+			# Now and then an ember is flung off it, whirling on as it flies.
+			if burning and h<.7 and randf()<dt*1.1:
+				fling(where+at,Vector3(-ring.z,0,ring.x)*reach*spin*.55+ring*randf_range(1.0,2.5)+Vector3.UP*randf_range(1.5,3.5))
+		fire.multimesh.buffer = buffer
+		var lights: PackedFloat32Array = sparks.multimesh.buffer
+		for i in spark_lived.size():
+			var b = i*20
+			if spark_lived[i]<0:
+				lights[b] = 0.0; lights[b+5] = 0.0
+				continue
+			spark_lived[i] += dt
+			var u: float = spark_lived[i]/spark_lasts[i]
+			if u>=1.0:
+				spark_lived[i] = -1.0
+				lights[b] = 0.0; lights[b+5] = 0.0
+				continue
+			# Carried up on the heat, slowed by the air, drifting as it cools.
+			var drift: Vector3 = spark_way[i]
+			drift += Vector3(sin(age*3.0+i)*.8,1.1,cos(age*2.6+i*1.7)*.8)*dt
+			drift *= 1.0-minf(1.0,1.1*dt)
+			spark_way[i] = drift
+			spark_at[i] += drift*dt
+			var p: Vector3 = spark_at[i]
+			var s: float = spark_size[i]*(1.0-u*.5)
+			var color: Color = cooling.sample(u)
+			lights[b] = s; lights[b+1] = 0; lights[b+2] = 0; lights[b+3] = p.x
+			lights[b+4] = 0; lights[b+5] = s*(1.0+minf(drift.length()*.6,3.0)); lights[b+6] = 0; lights[b+7] = p.y
+			lights[b+8] = 0; lights[b+9] = 0; lights[b+10] = 1; lights[b+11] = p.z
+			lights[b+12] = color.r; lights[b+13] = color.g; lights[b+14] = color.b; lights[b+15] = color.a
+			lights[b+16] = drift.x; lights[b+17] = drift.y; lights[b+18] = drift.z; lights[b+19] = 0
+		sparks.multimesh.buffer = lights
+		for m in [fire,sparks]: (m.material_override as ShaderMaterial).set_shader_parameter("flame_time",age)
+		fire.visible = lit>0
 		return age >= life+2.5
 const TORNADO_HEIGHT = 6.0
-# The funnel: a tube of rings up TORNADO_HEIGHT, narrow at the ground with a
-# little skirt where it meets it, flaring toward its crown. The shader
-# (assets/shaders/fire_tornado.gdshader) snakes it and sets it alight.
-static func funnel_mesh(radius: float) -> ArrayMesh:
-	var tool = SurfaceTool.new()
-	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var sides = 36
-	var rings = 32
-	for j in rings+1:
-		var h: float = float(j)/rings
-		# (A slender stem, flaring out toward its crown.)
-		var width: float = radius*(.1+.9*pow(h,1.8)+.12*exp(-h*14.0))
-		for i in sides+1:
-			var angle: float = TAU*i/sides
-			var out = Vector3(cos(angle),0,sin(angle))
-			tool.set_normal(out)
-			tool.set_uv(Vector2(float(i)/sides,h))
-			tool.add_vertex(out*width+Vector3.UP*h*TORNADO_HEIGHT)
-	for j in rings:
-		for i in sides:
-			var a = j*(sides+1)+i
-			var b = a+sides+1
-			tool.add_index(a); tool.add_index(b); tool.add_index(a+1)
-			tool.add_index(a+1); tool.add_index(b); tool.add_index(b+1)
-	return tool.commit()
-static var lick_shader: Shader
+# Tongues of flame in a tornado, and embers it can have in the air at once.
+const TORNADO_TONGUES = 320
+const TORNADO_EMBERS = 90
+static func flame_cloud(parent: Node3D, count: int, ember: bool, bounds: AABB) -> MultiMeshInstance3D:
+	var cloud = MultiMeshInstance3D.new()
+	cloud.multimesh = MultiMesh.new()
+	cloud.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	cloud.multimesh.use_colors = true
+	cloud.multimesh.use_custom_data = true
+	cloud.multimesh.mesh = QuadMesh.new()
+	cloud.multimesh.instance_count = count
+	cloud.multimesh.custom_aabb = bounds
+	cloud.custom_aabb = bounds
+	var buffer = PackedFloat32Array()
+	buffer.resize(count*20)
+	cloud.multimesh.buffer = buffer
+	cloud.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material = ShaderMaterial.new()
+	material.shader = preload("res://assets/shaders/tornado_flame.gdshader")
+	material.set_shader_parameter("ember",1.0 if ember else 0.0)
+	cloud.material_override = material
+	parent.add_child(cloud)
+	return cloud
 static func tornado(at: Vector3, radius: float, seconds: float) -> Node3D:
 	var node = Tornado.new()
 	node.position = at
 	node.life = seconds
-	var seed: float = randf()*40.0
-	var columns: Array = []
-	for core in [0.0,1.0]:
-		var column = MeshInstance3D.new()
-		column.mesh = funnel_mesh(radius*(1.0 if core==0.0 else .55))
-		column.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var fire = ShaderMaterial.new()
-		fire.shader = preload("res://assets/shaders/fire_tornado.gdshader")
-		fire.set_shader_parameter("seed",seed+core*13.0)
-		fire.set_shader_parameter("core",core)
-		fire.set_shader_parameter("strength",0.0)
-		# (The hot core drawn first, the shell over it.)
-		fire.render_priority = -1 if core==1.0 else 0
-		column.material_override = fire
-		node.add_child(column)
-		columns.append(column)
-	node.funnel = columns[0]
-	node.inner = columns[1]
-	# Tongues of fire whipped round its foot.
-	if lick_shader == null: lick_shader = preload("res://assets/shaders/flame_lick.gdshader")
-	for i in 9:
-		var card = MeshInstance3D.new()
-		card.mesh = QuadMesh.new()
-		card.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var flame = ShaderMaterial.new()
-		flame.shader = lick_shader
-		flame.set_shader_parameter("seed",randf()*60.0)
-		flame.set_shader_parameter("strength",0.0)
-		card.material_override = flame
-		node.add_child(card)
-		node.licks.append([card,radius*randf_range(.15,.7),TAU*i/9.0+randf()*.4,randf_range(2.2,3.6),randf_range(.9,1.6)])
-	# Embers flung up and spiralling round the column.
-	node.embers = Vfx.particles(node,40,2.0,false,true)
-	node.embers.local_coords = true
-	node.embers.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	node.embers.emission_ring_axis = Vector3.UP
-	node.embers.emission_ring_radius = radius*.6
-	node.embers.emission_ring_inner_radius = radius*.2
-	node.embers.emission_ring_height = 1.0
-	node.embers.direction = Vector3.UP
-	node.embers.spread = 15
-	node.embers.gravity = Vector3(0,1.2,0)
-	node.embers.initial_velocity_min = 2.0; node.embers.initial_velocity_max = 3.5
-	node.embers.orbit_velocity_min = .8; node.embers.orbit_velocity_max = 1.3
-	node.embers.radial_accel_min = .3; node.embers.radial_accel_max = .9
-	node.embers.scale_amount_min = .02; node.embers.scale_amount_max = .045
-	node.embers.scale_amount_curve = Vfx.curve(1.0,.2)
-	node.embers.color_ramp = Vfx.ramp([0,.6,1],[Color(1,.9,.5,1),Color(1,.45,.1,.9),Color(.6,.1,.02,0)])
-	node.embers.emitting = true
+	node.radius = radius
+	node.twist = randf()*40.0
+	# Hot white-yellow at its root, through orange, to a dull red as it cools.
+	node.heat = Vfx.ramp([0,.25,.55,.8,1],[Color(.5,.08,.01,.15),Color(.9,.24,.03,.45),Color(1,.42,.06,.6),Color(1,.62,.16,.6),Color(1,.8,.4,.55)])
+	node.cooling = Vfx.ramp([0,.5,1],[Color(1,.85,.5,1),Color(1,.45,.1,.9),Color(.6,.1,.02,0)])
+	node.fire = flame_cloud(node,TORNADO_TONGUES,false,AABB(Vector3(-radius*3,-1,-radius*3),Vector3(radius*6,TORNADO_HEIGHT+3,radius*6)))
+	for list in [node.rise,node.angle,node.out,node.lived,node.lasts,node.climb,node.whirl,node.size,node.marks]: list.resize(TORNADO_TONGUES)
+	for i in TORNADO_TONGUES:
+		node.kindle(i)
+		# (Already at every stage of their lives, so it does not kindle all at once.)
+		node.lived[i] = randf()*node.lasts[i]
+		node.rise[i] += node.climb[i]*node.lived[i]
+	# The embers are drawn in the world, wherever they were flung.
+	node.sparks = flame_cloud(node,TORNADO_EMBERS,true,AABB(Vector3(-1000,-100,-1000),Vector3(2000,200,2000)))
+	node.sparks.top_level = true
+	for list in [node.spark_lived,node.spark_lasts,node.spark_size]: list.resize(TORNADO_EMBERS)
+	for list in [node.spark_at,node.spark_way]: list.resize(TORNADO_EMBERS)
+	node.spark_lived.fill(-1.0)
 	# Thick black smoke boiling off its crown, left behind as it travels.
 	node.smoke = Vfx.particles(node,60,3.0,false,false)
 	node.smoke.position = Vector3.UP*TORNADO_HEIGHT*.72
@@ -652,24 +741,115 @@ static func lightning_shield(body: Node3D) -> Node3D:
 	node.add_child(glow)
 	return node
 
-# Lightning Rod: sparks snapping about the marked enemy while it holds.
-static func rod_mark(size: float) -> Node3D:
-	var node = Node3D.new()
-	var sparks = Vfx.particles(node,18,.5,false,true)
-	sparks.position = Vector3.UP*1.2*size
-	sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	sparks.emission_sphere_radius = .45*size
-	sparks.gravity = Vector3.ZERO
-	sparks.direction = Vector3.UP
-	sparks.spread = 180
-	sparks.initial_velocity_min = .3; sparks.initial_velocity_max = 1.2
-	sparks.scale_amount_min = .04; sparks.scale_amount_max = .09
-	sparks.color_ramp = Vfx.ramp([0,.5,1],[Color(1,1,1,1),Color(.7,.86,1,.9),Color(.6,.8,1,0)])
-	sparks.emitting = true
-	var glow = OmniLight3D.new()
-	glow.light_color = SPARK
-	glow.light_energy = .7
-	glow.omni_range = 2.5
-	glow.position = Vector3.UP*1.2*size
-	node.add_child(glow)
+# Lightning Rod's mark: static crawling over the marked enemy while it holds
+# (scripts/static_arcs.gd; its enemy ticks it).
+static func rod_mark(body: Node3D, skeleton: Skeleton3D, size: float) -> Node3D:
+	return StaticArcs.make(body,skeleton,size)
+
+# Lightning Rod's stroke: a great bolt of lightning out of the sky onto `at`
+# (the marked enemy's feet), flickering as it strikes, struck again an
+# instant later and fading, its forks spreading above; a flash that lights
+# all about, arcs crackling where it struck and a scorch beneath. Ticked on
+# the combat clock (Skills' waves) and freed when done.
+class SkyStrike extends Node3D:
+	var age = 0.0
+	# When it flashes (the stroke, and the return strokes down the same
+	# channel), as [start, end] in seconds; it glows faintly between.
+	const STROKES = [[0.0,.09],[.14,.2],[.27,.31]]
+	const LIFE = .55
+	var top = Vector3.ZERO
+	var mesh: ImmediateMesh
+	var material: StandardMaterial3D
+	var flash: OmniLight3D
+	var crackle: Node3D
+	var scorch: Sprite3D
+	var channel: Array = []
+	var forks: Array = []
+	func lay() -> void:
+		# Its channel: a jagged line, its zigzag coarse high up and fine low.
+		channel = [top]
+		var steps = 30
+		var drift = Vector3.ZERO
+		for i in range(1,steps+1):
+			var u: float = float(i)/steps
+			# (Each step kinks it sharply aside, and it wanders off its line.)
+			var kink = Vector3(randf_range(-1,1),0,randf_range(-1,1)).normalized()*randf_range(.25,.75)
+			drift = drift*.7+kink
+			channel.append(top.lerp(Vector3.ZERO,u)+drift*(1.0-u*u*u))
+		channel[-1] = Vector3.UP*.1
+		forks = []
+		for f in 6:
+			var from: int = randi_range(2,steps-8)
+			var way = Vector3(randf_range(-1,1),-randf_range(.6,1.3),randf_range(-1,1)).normalized()
+			var points: Array = [channel[from]]
+			for k in randi_range(4,8):
+				way = (way+Vector3(randf_range(-.5,.5),randf_range(-.25,.15),randf_range(-.5,.5))).normalized()
+				points.append(points[-1]+way*randf_range(.35,.8))
+			forks.append(points)
+	func brightness() -> float:
+		for s in STROKES:
+			if age >= s[0] and age <= s[1]: return 1.0-(age-s[0])/(s[1]-s[0])*.35
+		return .25*clampf(1.0-age/LIFE,0.0,1.0)
+	func tick(dt: float) -> bool:
+		age += dt
+		var lit: float = brightness()
+		# Each return stroke takes a slightly new path down the channel.
+		for s in STROKES:
+			if age-dt < s[0] and age >= s[0] and s[0] > 0.0:
+				for i in range(1,channel.size()-1): channel[i] += Vector3(randf_range(-.12,.12),0,randf_range(-.12,.12))
+		mesh.clear_surfaces()
+		if age < LIFE:
+			mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES,material)
+			ribbon(channel,.32,Color(.3,.5,1,.25*lit))
+			ribbon(channel,.13,Color(.6,.8,1,.7*lit))
+			ribbon(channel,.05,Color(.95,.98,1,lit))
+			for f in forks:
+				ribbon(f,.08,Color(.5,.7,1,.45*lit))
+				ribbon(f,.025,Color(.85,.93,1,.85*lit))
+			mesh.surface_end()
+		flash.light_energy = 9.0*lit if age < LIFE else 0.0
+		crackle.tick(dt)
+		scorch.modulate.a = .6*clampf(1.0-(age-1.2)/1.0,0.0,1.0)
+		return age >= 2.2
+	# A ribbon along `points`, drawn twice at right angles so it shows from
+	# any side.
+	func ribbon(points: Array, width: float, color: Color) -> void:
+		for i in points.size()-1:
+			var p: Vector3 = points[i]
+			var q: Vector3 = points[i+1]
+			var along = (q-p).normalized()
+			var side = along.cross(Vector3.FORWARD).normalized() if absf(along.dot(Vector3.FORWARD)) < .95 else Vector3.RIGHT
+			for across in [side*width*.5,along.cross(side).normalized()*width*.5]:
+				for v in [p-across,p+across,q+across,p-across,q+across,q-across]:
+					mesh.surface_set_color(color)
+					mesh.surface_add_vertex(v)
+static func sky_strike(parent: Node3D, at: Vector3) -> Node3D:
+	var node = SkyStrike.new()
+	node.position = at
+	node.top = Vector3(randf_range(-1.5,1.5),16.0,randf_range(-1.5,1.5))
+	node.lay()
+	node.mesh = ImmediateMesh.new()
+	node.material = StandardMaterial3D.new()
+	node.material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	node.material.vertex_color_use_as_albedo = true
+	node.material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	node.material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	node.material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	node.material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	var bolt = MeshInstance3D.new()
+	bolt.mesh = node.mesh
+	bolt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# (Its own bounds, up into the sky, so it is never culled as off screen.)
+	bolt.custom_aabb = AABB(Vector3(-4,-1,-4),Vector3(8,19,8))
+	node.add_child(bolt)
+	node.flash = OmniLight3D.new()
+	node.flash.light_color = Color(.7,.85,1)
+	node.flash.omni_range = 10.0
+	node.flash.position = Vector3.UP*2.5
+	node.add_child(node.flash)
+	node.crackle = Crackle.make(Vector3.ZERO)
+	node.add_child(node.crackle)
+	node.scorch = ground_sprite(node,2.2,Vfx.ramp([0,.5,1],[Color(.04,.04,.06,.9),Color(.06,.06,.08,.45),Color(.08,.08,.1,0)]))
+	parent.add_child(node)
+	node.tick(0.0)
 	return node

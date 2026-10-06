@@ -493,6 +493,8 @@ func test():
 	var dazed = dummy(1.6,-30)
 	game.skills.strike(dazed,100); dazed.stun(5.0)
 	wait(.1)
+	check(dazed.stunned,"The curse lands in 0.2-second ticks, so not at once")
+	wait(.15)
 	check(not dazed.stunned,"The curse's damage breaks a stun")
 	clear()
 

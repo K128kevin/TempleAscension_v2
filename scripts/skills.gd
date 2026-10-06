@@ -106,6 +106,8 @@ var shield_percent = 0.0
 var shield_node: Node3D
 var burn_left = 0.0
 var burn_rate = 0.0
+# How long since the burn last burned him.
+var burn_tick = 0.0
 var burn_node: Node3D
 var patches: Array = []
 # What every ice spell does besides: the chill, the chance of a freeze, and
@@ -135,6 +137,13 @@ const STORM_COOLDOWN = 60.0
 const BLAST_RADIUS = 5.0
 const TORNADO_RADIUS = 2.0
 const TORNADO_SECONDS = 8.0
+# Every damage over time lands in ticks this far apart, each a fifth of its
+# damage a second: the spells that burn or freeze while they last, and the
+# poisons, curses, shadows and burns that run on after a blow (scripts/actor.gd
+# tick_dots, and Pyromaniac's burn on the wizard here).
+const DOT_TICK = .2
+# (A frame's worth of rounding: twelve 60ths of a second fall just short of it.)
+const DOT_SLACK = .0001
 # Fire Tornado's wandering: metres a second, and how far from where it was
 # cast it may stray.
 const TORNADO_SPEED = 1.1
@@ -217,7 +226,7 @@ func reset() -> void:
 	for node in [storm_node,blaze_node,shield_node,burn_node]:
 		if is_instance_valid(node): node.queue_free()
 	storm_node = null; blaze_node = null; shield_node = null; burn_node = null
-	storm_time = 0; storm_percent = 0; blazing_time = 0; shield_time = 0; shield_percent = 0; burn_left = 0; burn_rate = 0
+	storm_time = 0; storm_percent = 0; blazing_time = 0; shield_time = 0; shield_percent = 0; burn_left = 0; burn_rate = 0; burn_tick = 0
 	for p in patches:
 		if is_instance_valid(p.node): p.node.queue_free()
 	patches.clear()
@@ -555,16 +564,16 @@ func tick_channel(dt: float) -> void:
 			channel.laid = spot
 			lay_ice(spot,FLOOR_RADIUS,FLOOR_SECONDS,v.x)
 	else:
-		# Frost Blast: its damage a second, dealt in quarter-second breaths, to
-		# everyone within FROST_RADIUS of the stream.
+		# Frost Blast: its damage a second, dealt a fifth at a time every
+		# DOT_TICK, to everyone within FROST_RADIUS of the stream.
 		channel.tick += dt
-		if channel.tick>=.25:
-			channel.tick -= .25
+		if channel.tick>=DOT_TICK-DOT_SLACK:
+			channel.tick -= DOT_TICK
 			var line_end: Vector3 = origin+direction*reach
 			for enemy in game.targets(game.player):
 				if enemy.dead or enemy.dormant: continue
 				var nearest: Vector3 = Geometry3D.get_closest_point_to_segment(enemy.position,origin+direction*.5,line_end)
-				if nearest.distance_to(enemy.position)<=FROST_RADIUS and game.world.clear_line(origin,enemy.position): spell_hit(enemy,v.x*.25,"frost")
+				if nearest.distance_to(enemy.position)<=FROST_RADIUS and game.world.clear_line(origin,enemy.position): spell_hit(enemy,v.x*DOT_TICK,"frost")
 
 # --- What the elements do -----------------------------------------------------------
 
@@ -1110,9 +1119,8 @@ func execute(job: Dictionary) -> void:
 		"rod":
 			var marked = aimed_target(at,direction)
 			if marked == null: return
-			WizardFx.jolt(game.world,origin+Vector3.UP*1.4+direction*.4,marked.position+Vector3.UP*1.1)
+			# (The bolt out of the sky that makes it a rod: Actor.make_rod.)
 			marked.make_rod(v.x,ROD_SECONDS)
-			game.sound.play("lightning-zap",-10)
 		"shock":
 			var shocked = aimed_target(at,direction)
 			if shocked == null: return
@@ -1272,20 +1280,18 @@ func tick(dt: float) -> void:
 		if pending[i].time<=0:
 			var job: Dictionary = pending[i]; pending.remove_at(i)
 			if not game.player.dead: execute(job)
-	# Fire Tornado: its damage a second in quarter-second licks, and each
-	# second a chance to make someone in it a Lightning Rod.
+	# Fire Tornado: its damage a second, a fifth at a time every DOT_TICK,
+	# and each time it burns an enemy a chance (its own for each) to make that
+	# enemy a Lightning Rod.
 	for i in range(zones.size()-1,-1,-1):
 		var z: Dictionary = zones[i]
 		z.life -= dt; z.tick -= dt
 		wander(z,dt)
-		if z.tick<=0:
-			z.tick += .25
-			var inside: Array = targets(z.at,z.radius)
-			for enemy in inside: spell_hit(enemy,z.percent*.25,"fire")
-			z["second"] = z.get("second",0.0)+.25
-			if z.second>=1.0:
-				z.second -= 1.0
-				if rank("lightning_rod")>0 and not inside.is_empty() and randf()*100.0<z.rod: inside[randi()%inside.size()].make_rod(Book.values("lightning_rod",rank("lightning_rod")).x,ROD_SECONDS)
+		if z.tick<=DOT_SLACK:
+			z.tick += DOT_TICK
+			for enemy in targets(z.at,z.radius):
+				spell_hit(enemy,z.percent*DOT_TICK,"fire")
+				if rank("lightning_rod")>0 and not enemy.dead and randf()*100.0<z.rod: enemy.make_rod(Book.values("lightning_rod",rank("lightning_rod")).x,ROD_SECONDS)
 		if z.life<=0: zones.remove_at(i)
 
 # Fire Tornado wanders as a real one does: drifting slowly along a heading
@@ -1316,9 +1322,9 @@ func tick_wizard(dt: float) -> void:
 	if storm_time>0:
 		if not is_instance_valid(storm_node): storm_node = WizardFx.storm(game.player.visual,STORM_RADIUS)
 		storm_node.set_meta("tick",storm_node.get_meta("tick",0.0)+dt)
-		if storm_node.get_meta("tick")>=.25:
-			storm_node.set_meta("tick",storm_node.get_meta("tick")-.25)
-			for enemy in targets(game.player.position,STORM_RADIUS): spell_hit(enemy,storm_percent*.25,"frost")
+		if storm_node.get_meta("tick")>=DOT_TICK-DOT_SLACK:
+			storm_node.set_meta("tick",storm_node.get_meta("tick")-DOT_TICK)
+			for enemy in targets(game.player.position,STORM_RADIUS): spell_hit(enemy,storm_percent*DOT_TICK,"frost")
 	elif is_instance_valid(storm_node):
 		storm_node.queue_free()
 		storm_node = null
@@ -1332,9 +1338,14 @@ func tick_wizard(dt: float) -> void:
 		shield_node = null
 		shield_time = 0
 	if burn_left>0 and not game.player.dead:
-		var step: float = minf(dt,burn_left)
-		burn_left -= dt
-		game.player.hp -= burn_rate*step
+		# (Burned a fifth of its rate every DOT_TICK until it is spent.)
+		burn_tick += dt
+		while burn_tick>=DOT_TICK-DOT_SLACK and burn_left>0:
+			burn_tick -= DOT_TICK
+			var step: float = minf(DOT_TICK,burn_left)
+			burn_left -= step
+			game.player.hp -= burn_rate*step
+		if burn_left<=0: burn_tick = 0.0
 		if game.player.hp<=0 and game.playground == null: game.hurt_player(.001)
 	if burn_left<=0 and is_instance_valid(burn_node):
 		burn_node.queue_free()

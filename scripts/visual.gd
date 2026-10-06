@@ -336,6 +336,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	derive_carries()
 	derive_mirrors()
 	derive_duals()
+	derive_staff_run()
 	lower_roll()
 	# The fists that close on a grip, from the stance clips that hold one: the
 	# sword hand's, and the hand the ranger carries his bow in.
@@ -607,6 +608,35 @@ func derive_duals() -> void:
 			made.loop_mode = Animation.LOOP_LINEAR
 			library.add_animation(made_name,made)
 		clips[made_name] = (library_name+"/" if library_name != "" else "")+made_name
+
+# The wizard runs as the swordsman does, his staff carried in his fist as the
+# sword is, the arm swinging it with his stride; his free left arm swings
+# against it: the sword arm seen in a mirror half a stride later (the
+# swordsman's own left arm is held in a shield's guard). His run is played
+# as "WizardRun".
+func derive_staff_run() -> void:
+	if hero_class != "wizard" or not clips.has("SwordRun"): return
+	var library_name: String = clips.SwordRun.get_slice("/",0) if "/" in clips.SwordRun else ""
+	var library: AnimationLibrary = animator.get_animation_library(library_name)
+	if not library.has_animation("StaffRun"):
+		var source: Animation = animator.get_animation(clips.SwordRun)
+		var other: Animation = mirrored(source)
+		var made: Animation = source.duplicate(true)
+		var half: float = source.length*.5
+		for track in made.get_track_count():
+			var bone: String = String(made.track_get_path(track)).get_slice(":",1)
+			if not bone.ends_with("_l") or not (bone.begins_with("clavicle") or bone.begins_with("upperarm") or bone.begins_with("lowerarm") or bone.begins_with("hand")): continue
+			if made.track_get_type(track) != Animation.TYPE_ROTATION_3D: continue
+			var from = other.find_track(made.track_get_path(track),Animation.TYPE_ROTATION_3D)
+			if from < 0: continue
+			for key in range(made.track_get_key_count(track)-1,-1,-1): made.track_remove_key(track,key)
+			for key in other.track_get_key_count(from):
+				made.rotation_track_insert_key(track,fmod(other.track_get_key_time(from,key)+half,source.length),other.track_get_key_value(from,key))
+			# (The loop closes on the key that was shifted to its start.)
+			made.rotation_track_insert_key(track,source.length,made.rotation_track_interpolate(track,0.0))
+		made.loop_mode = Animation.LOOP_LINEAR
+		library.add_animation("StaffRun",made)
+	clips["WizardRun"] = (library_name+"/" if library_name != "" else "")+"StaffRun"
 
 # What the left hand's own frame is against the right's reflected: a thing
 # held in the left hand as its like is in the right is placed through it.
@@ -996,8 +1026,18 @@ func align_oracle_staff() -> void:
 
 # The hero wizard's staff, held like a walking stick: upright, leaning a touch
 # forward, gripped near its top (WIZARD_GRIP of its length up from the foot).
+# Running, it is carried in his fist as the swordsman carries his sword: fixed
+# in the hand, gripped a little below its middle (WIZARD_CARRY_GRIP), so it
+# swings and turns with the arm. Between the two it eases (STAFF_CARRY_EASE
+# seconds), turning about the fist and sliding through it.
 const WIZARD_GRIP = .76
+const WIZARD_CARRY_GRIP = .5
 const WIZARD_STAFF_LENGTH = 1.65
+const STAFF_CARRY_EASE = .12
+# How far toward upright the carried staff is tipped from the line of the fist.
+const STAFF_CARRY_RAISE = .25
+var staff_carry = 0.0
+var staff_carry_clock = 0.0
 func align_walking_staff() -> void:
 	var facing = global_basis.orthonormalized()
 	# Through the middle of his closed fist, not the wrist.
@@ -1006,8 +1046,29 @@ func align_walking_staff() -> void:
 	var side = facing.x.cross(up).normalized()
 	var across = up.cross(side).normalized()
 	var size = Vector3(weapon_size.x,weapon_size.y*WIZARD_STAFF_LENGTH/ORACLE_STAFF_SIZE.y,weapon_size.z)*rig.scale.x
-	weapon_item.global_basis = Basis(across,up,side)*Basis.from_scale(size)
-	weapon_item.global_position = hand-up*size.y*WIZARD_GRIP
+	var upright = Basis(across,up,side)
+	# Carried while he runs, eased in and out on the animation clock.
+	var wanted: float = 1.0 if state == "WizardRun" else 0.0
+	var elapsed: float = anim_clock-staff_carry_clock
+	staff_carry_clock = anim_clock
+	if anim_clock <= 0.0: staff_carry = wanted
+	elif elapsed > 0.0: staff_carry = lerpf(staff_carry,wanted,1.0-exp(-elapsed/STAFF_CARRY_EASE))
+	var w: float = staff_carry*staff_carry*(3.0-2.0*staff_carry)
+	var held: Basis = upright
+	if w > 0.0:
+		# As the sword lies in the hand: along the hand's own grip axis (+Z).
+		var palm: Basis = (skeleton.global_basis*skeleton.get_bone_global_pose(skeleton.find_bone("hand_r")).basis).orthonormalized()
+		var carried: Basis = palm*Basis(Vector3.RIGHT,PI/2)
+		# (Where the sword points ahead, the long staff is tipped up toward
+		# upright, a diagonal across the stride rather than a couched lance;
+		# the hand's swing and turn still carry it.)
+		var line: Vector3 = carried.y.normalized()
+		var raised: Vector3 = line.slerp(Vector3.UP,STAFF_CARRY_RAISE)
+		var tip_up = Quaternion(line,raised) if line.cross(raised).length() > .0001 else Quaternion.IDENTITY
+		carried = (Basis(tip_up)*carried).orthonormalized()
+		held =Basis(upright.get_rotation_quaternion().slerp(carried.get_rotation_quaternion(),w))
+	weapon_item.global_basis = held*Basis.from_scale(size)
+	weapon_item.global_position = hand-held.y*size.y*lerpf(WIZARD_GRIP,WIZARD_CARRY_GRIP,w)
 
 # The shield's place on the forearm, and its board in its own space.
 var shield_rest = Vector3.ZERO
