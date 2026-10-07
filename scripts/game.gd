@@ -1066,13 +1066,28 @@ func discard_item(from: String) -> void:
 	refit()
 	save_run()
 
+# Whatever the hero does to an enemy (strikes it, kills it outright, slows,
+# chills, freezes, stuns, poisons, curses or marks it), however far off he
+# is: it wakes, and so do the enemies near it (AWAKEN_REACH, in plain sight
+# of it), even when the blow has killed it. Once, until it loses him again
+# (Actor.lose_sight).
+const AWAKEN_REACH = 6.56
+func provoke(enemy) -> void:
+	if not is_instance_valid(enemy) or enemy.kind=="player" or enemy.dormant or enemy.provoked: return
+	if playground != null: return
+	enemy.provoked = true
+	if not enemy.dead: awaken(enemy)
+	for other in enemies:
+		if other==enemy or other.awake or other.dead or other.dormant: continue
+		if other.position.distance_to(enemy.position)<AWAKEN_REACH and world.clear_line(enemy.position,other.position): awaken(other)
+
 func awaken(enemy) -> void:
 	if enemy.awake or enemy.dead or enemy.dormant: return
 	enemy.awake = true
 	enemy.visual.play(enemy.visual.idle_action())
 	for other in enemies:
 		if other.awake or other.dead or other.dormant: continue
-		if other.position.distance_to(enemy.position)<6.56 and other.position.distance_to(player.position)<18 and world.clear_line(enemy.position,other.position): awaken(other)
+		if other.position.distance_to(enemy.position)<AWAKEN_REACH and other.position.distance_to(player.position)<18 and world.clear_line(enemy.position,other.position): awaken(other)
 
 # `source` is the enemy whose attack this is; landing it resets its pushback.
 func hurt_player(damage: float, type: String = "physical", source = null) -> void:

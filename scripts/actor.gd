@@ -20,6 +20,9 @@ var hp = 100.0
 var max_hp = 100.0
 var config: Dictionary = {}
 var awake = false
+# The hero has done something to it, and the enemies about it have been
+# woken by it (Game.provoke).
+var provoked = false
 # Ticks an unwoken statue has stood still (it is left be after SETTLE_TICKS).
 const SETTLE_TICKS = 30
 var settled = 0
@@ -680,6 +683,7 @@ func ambush(seconds: float, percent: float) -> void:
 # over its head.
 const DAZE_MARKS = {"stun":Color(1,.88,.35,.95),"ambush":Color(1,.3,.2,.95),"sleep":Color(.6,.8,1),"confuse":Color(.95,.82,.55),"freeze":Color(.65,.88,1),"prison":Color(.65,.88,1)}
 func held(how: String, seconds: float) -> void:
+	if kind != "player": game.provoke(self)
 	stunned = true
 	daze = how
 	daze_bonus = 0.0
@@ -731,6 +735,7 @@ func end_stun() -> void:
 # oldest gives way.
 func add_dot(dot_kind: String, total: float, seconds: float, cap: int) -> void:
 	if dead or dormant or total<=0 or seconds<=0: return
+	game.provoke(self)
 	var same: Array = dots.filter(func(d): return d.kind==dot_kind)
 	if same.size()>=cap: dots.erase(same[0])
 	dots.append({"kind":dot_kind,"rate":total/seconds,"left":seconds,"seconds":seconds})
@@ -739,6 +744,7 @@ func add_dot(dot_kind: String, total: float, seconds: float, cap: int) -> void:
 # on it deal `percent` more.
 func weaken(percent: float, cap: int) -> void:
 	if dead or dormant: return
+	game.provoke(self)
 	weak_stacks = mini(cap,weak_stacks+1)
 	weak_bonus = percent
 	weak_time = WEAK_SECONDS
@@ -747,6 +753,7 @@ func weaken(percent: float, cap: int) -> void:
 # deeper slow holds while both last.)
 func slow(percent: float, seconds: float) -> void:
 	if dead or dormant: return
+	if kind != "player": game.provoke(self)
 	var factor = clampf(1.0-percent*.01,.05,1.0)
 	slow_factor = minf(slow_factor,factor) if slow_time>0 else factor
 	slow_time = maxf(slow_time,seconds)
@@ -775,6 +782,7 @@ func freeze(seconds: float, percent: float = 0.0) -> void:
 # to the enemies about it (Skills.rod_jolt).
 func make_rod(percent: float, seconds: float) -> void:
 	if dead or dormant: return
+	game.provoke(self)
 	rod_percent = percent
 	rod_time = maxf(rod_time,seconds)
 	# Lightning strikes it out of the sky, and static crawls over it while it lasts.
@@ -791,6 +799,7 @@ func make_rod(percent: float, seconds: float) -> void:
 func lose_sight() -> void:
 	if dead or dormant or not awake or kind == "player": return
 	awake = false
+	provoked = false
 	if laser_time>0: return
 	windup = 0
 	cast_total = 0
@@ -884,7 +893,10 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 		if death_impact == Vector3.ZERO:
 			death_impact = StoneFragment.impact(position-game.player.position)
 		die(true,death_impact)
+		# (Killed outright, it still rouses those about it.)
+		game.provoke(self)
 	else:
+		game.provoke(self)
 		if not awake: game.awaken(self)
 		react_to_hit()
 		push_back()

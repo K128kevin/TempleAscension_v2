@@ -498,6 +498,39 @@ func test():
 	for i in 40: look.locomotion(false,false); look.advance(1.0/60)
 	var rest: Array = staff_line.call()
 	check(rest[0].dot(Vector3.UP)>.98 and rest[1]<.03,"Standing, it is upright in his hand again")
+	# --- Whatever he does to an enemy, however remote off, wakes it and those about it.
+	clear()
+	hero({"freeze_floor":1,"system_shock":1})
+	var sleeper = func(at: Vector3):
+		spawned += 1
+		var e = game.spawn_enemy("gladiator","sleeper:%d" % spawned,at)
+		e.max_hp = 100000.0; e.hp = e.max_hp
+		return e
+	var remote: Vector3 = origin+forward*25.0
+	var provoked_one = sleeper.call(remote)
+	var neighbour = sleeper.call(remote+Vector3(3,0,0))
+	var further = sleeper.call(remote+Vector3(-12,0,0))
+	provoked_one.hp = 1.0
+	game.skills.strike(provoked_one,50.0)
+	check(provoked_one.dead and neighbour.awake and not further.awake,"Killed outright from 25 metres, an enemy still wakes those beside it (not those further off)")
+	clear()
+	provoked_one = sleeper.call(remote)
+	neighbour = sleeper.call(remote+Vector3(0,0,3))
+	game.skills.lay_ice(provoked_one.position,game.skills.FLOOR_RADIUS,10.0,40.0)
+	play(.1)
+	check(provoked_one.awake and provoked_one.slow_time>0 and neighbour.awake,"Slowed by ice laid under it from afar, it wakes, and its neighbour with it")
+	clear()
+	provoked_one = sleeper.call(remote)
+	neighbour = sleeper.call(remote+Vector3(2.5,0,2.5))
+	provoked_one.stun(3.0)
+	check(provoked_one.awake and neighbour.awake,"Stunned from afar, too")
+	clear()
+	provoked_one = sleeper.call(remote)
+	neighbour = sleeper.call(remote+Vector3(0,0,-3))
+	provoked_one.chill(40.0,3.0)
+	check(provoked_one.awake and neighbour.awake,"and chilled")
+	clear()
+
 	# --- His evade is a teleport.
 	clear()
 	hero({})
