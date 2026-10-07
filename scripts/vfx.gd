@@ -138,3 +138,18 @@ static func hold_when_paused(game, emitters: Array) -> void:
 	var running = game!=null and game.mode=="playing"
 	for p in emitters:
 		if is_instance_valid(p): p.speed_scale = 1.0 if running else 0.0
+
+const SOFT_GLOW = preload("res://assets/shaders/soft_glow.gdshader")
+# A soft glow facing the eye, added onto what is behind it
+# (assets/shaders/soft_glow.gdshader): `size` metres across and tall, as its
+# scale (change the scale to change it); its "strength" fades it.
+static func soft_glow(color: Color, size: Vector2) -> MeshInstance3D:
+	var material = ShaderMaterial.new()
+	material.shader = SOFT_GLOW
+	material.set_shader_parameter("tint",color)
+	var glow = MeshInstance3D.new()
+	glow.mesh = QuadMesh.new()
+	glow.material_override = material
+	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	glow.scale = Vector3(size.x,size.y,1.0)
+	return glow

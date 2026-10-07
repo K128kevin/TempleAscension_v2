@@ -138,8 +138,15 @@ func test():
 	check(game.run.points==points and game.run.xp==earned,"Floor travel grants no points or XP")
 	game.player.hp=20; game.run.energy=60; game.heal_cd=0; game.heal()
 	check(not game.run.has("flasks") and game.run.energy==0 and game.player.hp==80 and game.heal_cd==20,"Healing spell instantly restores 60 percent for 60 energy without charges")
-	game.run.energy=10; game.dash_cooldown=0; game.dash()
+	# (The wizard teleports; the others dash.)
+	game.run.energy=10; game.dash_cooldown=0
+	var from: Vector3 = game.player.position
+	game.dash(from+Vector3(0,0,-4))
+	check(game.run.energy==10 and game.dash_time==0 and game.player.position!=from and is_equal_approx(game.dash_cooldown,3.0),"The wizard's teleport costs no energy and recharges for 3 seconds")
+	game.run.class_id="warrior"; game.dash_cooldown=0; game.player.busy=0
+	game.dash(game.player.position+Vector3(0,0,4))
 	check(game.run.energy==10 and game.dash_time>0 and game.player.invulnerable>0 and is_equal_approx(game.dash_cooldown,3.0),"Dash costs no energy and recharges for 3 seconds")
+	game.run.class_id="wizard"
 	game.save_run()
 	check(not Save.load_run().is_empty(),"New progression survives gameplay save")
 	FileAccess.open("res://test-results/classes-runtime.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))

@@ -1,11 +1,13 @@
 """Makes the wizard's spell sounds, written to assets/audio as 48 kHz 16-bit
-WAV. All are synthesised (noise, tones and filters only), with
-tools/make_sounds.py's helpers.
+WAV. All but the fireball's are synthesised (noise, tones and filters
+only), with tools/make_sounds.py's helpers.
 
-  fireball-cast.wav   Fireball leaving the staff (and Blazing Speed): a roar
-                      of flame that bursts out at once and rushes away.
-  fireball-burst.wav  Fireball striking (and Ignition): a short, fiery
-                      burst, a thump and a spray of crackles.
+  fireball-cast.wav   Fireball leaving the staff (and Fire Tornado rising,
+                      Blazing Speed): the original game's fire whoosh
+                      (fire-whoosh.mp3), its silence before it cut away so
+                      it swells the moment it is cast.
+  fireball-burst.wav  Fireball striking: that roar struck at its loudest and
+                      cut short, with a low thump.
   fire-blast.wav      Blast Wave: a deep whoomph of flame rushing outward.
   fire-tornado.wav    Fire Tornado, looped while it burns: whooshing flames
                       swirling round, a rumble under them, crackling.
@@ -13,16 +15,19 @@ tools/make_sounds.py's helpers.
                       (struck again twice, as the bolt is drawn:
                       scripts/wizard_fx.gd SkyStrike), a boom, and thunder
                       rolling away.
-  frost-bolt.wav      Ice Bolt cast: an icy rush with a glassy shimmer.
-  ice-impact.wav      Ice Bolt striking: ice shattering.
+  frost-bolt.wav      Ice Bolt cast: an icy rush, frost crackling off it.
+  ice-impact.wav      Ice Bolt striking: ice cracking and shattering (no
+                      chiming: its shards are bursts of noise, not tones).
   ice-spikes.wav      Ice Spikes: ice grinding up out of the floor and
-                      cracking apart.
-  ice-prison.wav      Ice Prison: ice creaking shut round its prisoner, and
-                      a solid clunk as it sets.
+                      splintering apart.
+  ice-prison.wav      Ice Prison: ice creaking shut round its prisoner, a
+                      solid clunk as it sets and the ice cracking through.
   frost-stream.wav    Freeze Floor and Frost Blast, looped while channelled:
                       a hissing spray of frost.
   ice-storm.wav       Ice Storm, looped while it lasts: a howling wind full
                       of tinkling ice.
+  teleport.wav        The wizard's teleport: a quick rush of air drawn in as
+                      he goes, and a soft whump of air as he arrives.
   ignition-burst.wav  Ignition going off: a quick, bursting pop of flame, a
                       sharp crack and a punch, over in a third of a second.
 
@@ -34,7 +39,7 @@ seam; their .import files loop them (edit/loop_mode=2).
 """
 import math
 import numpy as np
-from make_sounds import RATE, times, finish, write
+from make_sounds import RATE, ROOT, times, finish, write, decoded
 
 rng = np.random.default_rng(5150)
 
@@ -100,16 +105,21 @@ def crackles(seconds, rate, low=1800, high=7000, looped=False, density=None):
     return band(clicks, low, high)
 
 
-def pings(t, count, span, low, high, decay=(.02, .09), start=0.0):
-    """Glassy pings of ice: short sines at scattered pitches, struck within
-    `span` seconds after `start`."""
-    out = np.zeros_like(t)
+def splinters(t, count, span, low, high, start=0.0):
+    """Ice cracking and splintering: short bursts of noise, each kept in a
+    band an octave or more wide (so none rings at a pitch, as a chime
+    would), struck within `span` seconds after `start`, each gone in a few
+    milliseconds."""
+    n = len(t)
+    out = np.zeros(n)
     for i in range(count):
-        at = start+rng.uniform(0, span)**1.5/max(span, 1e-4)**.5
-        pitch = math.exp(rng.uniform(math.log(low), math.log(high)))
-        after = t-at
-        ring = np.where(after >= 0, np.exp(-np.clip(after, 0, None)/rng.uniform(*decay)), 0.0)
-        out += np.sin(2*math.pi*pitch*after+rng.uniform(0, 6.28))*ring*rng.uniform(.3, 1.0)
+        at = int((start+rng.uniform(0, span)**1.5/max(span, 1e-4)**.5)*RATE)
+        length = int(rng.uniform(.004, .018)*RATE)
+        if at >= n: continue
+        length = min(length, n-at)
+        bottom = math.exp(rng.uniform(math.log(low), math.log(high/2)))
+        piece = band(rng.standard_normal(length+256), bottom, min(bottom*rng.uniform(2.0, 4.0), 20000))[:length]
+        out[at:at+length] += piece*np.exp(-np.arange(length)/(length*.3))*rng.uniform(.3, 1.0)
     return out
 
 
@@ -125,28 +135,44 @@ def periodic(t, length, cycles, phase=0.0):
     return .5+.5*np.sin(2*math.pi*cycles*t/length+phase)
 
 
+# The original game's fire whoosh (assets/audio/fire-whoosh.mp3): silent for
+# its first 0.62 seconds, then a deep roar swelling to its loudest at about
+# 1.05 and dying away over the next second and a half. The cast begins
+# FIREBALL_CAST seconds in (just as it is heard, so it swells at once); the
+# burst cuts in at FIREBALL_BURST, at the roar's loudest, and is cut short.
+FIREBALL_CAST = .74
+FIREBALL_BURST = .98
+BURST_SECONDS = .7
+
+
+def roar():
+    return decoded(ROOT/'assets/audio/fire-whoosh.mp3')
+
+
 def fireball_cast():
-    seconds = .95
-    t = times(seconds)
-    roar = tilt(noise(seconds), 2.0)
-    # The rush: low flame noise bursting out at once, its body climbing in
-    # pitch as it leaves the staff and falling away.
-    rush = band(roar, 120, 900)*rise_fall(t, .03, .22)*1.3
-    air = band(noise(seconds), 600, 3200)*rise_fall(t, .05, .12)*.5
-    licks = band(roar, 250, 1400)*rise_fall(t, .02, .35)*flutter(seconds, 14, .7, False)*.7
-    thump = sweep_tone(t, 120, 50, .05)*rise_fall(t, .004, .09)*.6
-    snap = crackles(seconds, 90, 1200, 5000, density=rise_fall(t, .02, .3))*1.1
-    return finish(band(rush+air*.6+licks+thump+snap, 20, 7000), drive=1.4)
+    """The old whoosh, without the silence before it: a roar of flame
+    swelling from the staff the moment it is cast (and Fire Tornado
+    rising, and Blazing Speed)."""
+    whoosh = roar()[int(FIREBALL_CAST*RATE):].copy()
+    rise, fall = int(.012*RATE), int(.5*RATE)
+    whoosh[:rise] *= np.linspace(0, 1, rise)[:, None]
+    whoosh[-fall:] *= (np.cos(np.linspace(0, math.pi, fall))*.5+.5)[:, None]
+    return whoosh/np.max(np.abs(whoosh))*.89
 
 
 def fireball_burst():
-    seconds = .6
-    t = times(seconds)
-    thump = sweep_tone(t, 110, 38, .06)*rise_fall(t, .003, .12)*1.2
-    body = band(tilt(noise(seconds), 1.5), 60, 2600)*rise_fall(t, .006, .09)*1.6
-    whoomph = band(noise(seconds), 180, 700)*rise_fall(t, .015, .18)*.9
-    snap = crackles(seconds, 260, 1200, 5000, density=rise_fall(t, .01, .14))*1.4
-    return finish(band(thump+body+whoomph+snap, 20, 6500), drive=1.6)
+    """Fireball striking: the same roar, struck at its loudest and short,
+    with a low thump under it; no crackling."""
+    whoosh = roar()[int(FIREBALL_BURST*RATE):int((FIREBALL_BURST+BURST_SECONDS)*RATE)].copy()
+    t = times(len(whoosh)/RATE)
+    whoosh *= (rise_fall(t, .004, .2)/max(rise_fall(t, .004, .2).max(), 1e-9))[:, None]
+    thump = (sweep_tone(t, 95, 38, .06)*rise_fall(t, .003, .14))[:, None]*.5
+    body = band(tilt(noise(len(t)/RATE), 3.0), 40, 900)*rise_fall(t, .004, .1)
+    out = whoosh/np.max(np.abs(whoosh))+thump+(body/np.max(np.abs(body))*.25)[:, None]
+    out = np.tanh(out*1.4)
+    fall = int(.08*RATE)
+    out[-fall:] *= (np.cos(np.linspace(0, math.pi, fall))*.5+.5)[:, None]
+    return out/np.max(np.abs(out))*.89
 
 
 def fire_blast():
@@ -157,8 +183,8 @@ def fire_blast():
     # The wave rushing outward: a deep roar, and above it the air it drives.
     wave = band(roar, 70, 1100)*rise_fall(t, .06, .4)*flutter(seconds, 9, .5, False)*1.4
     air = band(noise(seconds), 500, 4000)*rise_fall(t, .1, .2)*.45
-    snap = crackles(seconds, 160, 1200, 5000, density=rise_fall(t, .05, .5))*1.2
-    return finish(band(thump+wave+air*.6+snap, 20, 6500), drive=1.5)
+    # (No crackling in it: a clean rush of flame.)
+    return finish(band(thump+wave+air*.6, 20, 6500), drive=1.5)
 
 
 TORNADO_LOOP = 4.0
@@ -207,8 +233,9 @@ def frost_bolt():
     t = times(seconds)
     rush = band(noise(seconds), 1800, 9000)*rise_fall(t, .02, .16)*1.1
     body = band(noise(seconds), 400, 1800)*rise_fall(t, .015, .1)*.5
-    shimmer = pings(t, 14, .25, 2200, 7500, (.05, .2))*.5
-    return finish(rush+body+shimmer, drive=1.3)
+    # (Frost crackling off it as it goes: splintering, not chiming.)
+    frost = splinters(t, 22, .3, 2000, 10000)*1.6
+    return finish(rush+body+frost, drive=1.3)
 
 
 def ice_impact():
@@ -216,7 +243,7 @@ def ice_impact():
     t = times(seconds)
     crack = band(noise(seconds), 1500, 12000)*rise_fall(t, .001, .02)*1.6
     thud = sweep_tone(t, 160, 70, .03)*rise_fall(t, .002, .05)*.7
-    shards = pings(t, 26, .14, 1800, 8000, (.015, .08))*.7
+    shards = splinters(t, 34, .14, 1500, 11000)*2.2
     grit = crackles(seconds, 500, 2000, 9000, density=rise_fall(t, .002, .07))*2.0
     return finish(crack+thud+shards+grit, drive=1.5)
 
@@ -227,7 +254,7 @@ def ice_spikes():
     grind = band(tilt(noise(seconds), 1.5), 200, 2600)*rise_fall(t, .07, .18)*1.3
     crunch = crackles(seconds, 900, 700, 4500, density=rise_fall(t, .05, .2))*2.8
     thud = sweep_tone(t, 130, 45, .07)*rise_fall(t, .01, .15, .03)*1.0
-    shards = pings(t, 30, .3, 1600, 7000, (.02, .12), .06)*.55
+    shards = splinters(t, 40, .3, 1200, 9000, .06)*2.0
     return finish(grind+crunch+thud+shards, drive=1.7)
 
 
@@ -240,8 +267,9 @@ def ice_prison():
     groan = band(noise(seconds), 300, 1200)*np.where(t < sets, t/sets, np.exp(-(t-sets)/.04))*.5
     clunk = sweep_tone(t, 180, 80, .04)*rise_fall(t, .002, .12, sets)*1.1
     knock = band(noise(seconds), 150, 2500)*rise_fall(t, .001, .03, sets)*1.2
-    ring = pings(t, 12, .08, 2000, 6000, (.08, .3), sets)*.5
-    return finish(creak+groan+clunk+knock+ring, drive=1.5)
+    # (As it sets, the ice cracks through: splintering, not ringing.)
+    split = splinters(t, 24, .1, 1500, 10000, sets)*1.8
+    return finish(creak+groan+clunk+knock+split, drive=1.5)
 
 
 FROST_LOOP = 3.0
@@ -286,6 +314,25 @@ def ignition_burst():
     return finish(band(crack+punch+body+whoomph+snap, 20, 7500), drive=2.2)
 
 
+def teleport():
+    seconds = .45
+    t = times(seconds)
+    arrive = .13
+    # Drawn in: noise swept up quickly as he goes, cut off as he vanishes.
+    centre = 600+4200*np.clip(t/arrive, 0, 1)**1.5
+    swish = np.zeros_like(t)
+    rushed = band(noise(seconds), 500, 9000)
+    gate = np.where(t < arrive, (t/arrive)**1.8, np.exp(-(t-arrive)/.012))
+    swish = rushed*gate*.9
+    # (A narrower band riding the sweep gives it its rising pitch, unpitched.)
+    from make_sounds import biquad
+    sweep = biquad(noise(seconds), 'band', centre, 1.2)*gate*1.6
+    # Arriving: a soft whump of displaced air, and a breath after it.
+    whump = sweep_tone(t, 140, 55, .04)*rise_fall(t, .004, .09, arrive)*.9
+    breath = band(noise(seconds), 300, 3000)*rise_fall(t, .01, .1, arrive)*.6
+    return finish(swish+sweep+whump+breath, drive=1.4)
+
+
 if __name__ == '__main__':
     write('fireball-cast.wav', fireball_cast())
     write('fireball-burst.wav', fireball_burst())
@@ -299,3 +346,4 @@ if __name__ == '__main__':
     write('frost-stream.wav', frost_stream())
     write('ice-storm.wav', ice_storm())
     write('ignition-burst.wav', ignition_burst())
+    write('teleport.wav', teleport())

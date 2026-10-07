@@ -710,9 +710,11 @@ func terrace_surface(at: Vector3) -> bool:
 		if layout.on_terrace(layout.to_cell(at+offset)): return true
 	return false
 
-# Enemies stand in clumps: CLUMP_LEAST or more near one another (about six), each clump grown over open floor within CLUMP_REACH of
-# where it was begun (CLUMP_STEPS walking steps, so never through a wall),
-# its members POST_GAP or more apart so none overlaps another, and the clumps
+# Enemies stand in clumps: CLUMP_LEAST or more near one another (about six;
+# in the bandits' cave, smaller knots: CAVE_CLUMPS), each clump grown over
+# open floor within CLUMP_REACH of where it was begun (CLUMP_STEPS walking
+# steps, so never through a wall), its members POST_GAP or more apart so
+# none overlaps another, and the clumps
 # CLUMP_APART from each other where the floor allows. The posts come back
 # shuffled, so the kinds a floor holds are mixed through its clumps.
 const CLUMP_LEAST = 5
@@ -731,11 +733,27 @@ func post_allowed(cell: Vector2i) -> bool:
 
 # How many stand in each clump: as many clumps as give about six apiece, none
 # fewer than CLUMP_LEAST (a floor with fewer holds one clump of them all).
-func clump_sizes(count: int) -> Array[int]:
+# In the bandits' cave they stand in smaller knots: CAVE_CLUMPS (least and
+# most), each its own size between.
+const CAVE_CLUMPS = Vector2i(2,4)
+func clump_sizes(count: int, rng: RandomNumberGenerator = null) -> Array[int]:
+	if layout.kind == "cave" and rng != null: return knot_sizes(count,CAVE_CLUMPS,rng)
 	var clumps: int = clampi(roundi(count/6.0),1,maxi(1,count/CLUMP_LEAST))
 	var sizes: Array[int] = []
 	for i in clumps: sizes.append(count/clumps)
 	for i in count%clumps: sizes[i] += 1
+	return sizes
+
+# Sizes from `span.x` to `span.y` at random, adding up to `count` (none left
+# smaller than the least, where that can be helped).
+func knot_sizes(count: int, span: Vector2i, rng: RandomNumberGenerator) -> Array[int]:
+	var sizes: Array[int] = []
+	var left: int = count
+	while left > 0:
+		var size: int = left if left <= span.y else rng.randi_range(span.x,span.y)
+		if left-size > 0 and left-size < span.x: size = left-span.x if size == span.y else size+1
+		sizes.append(size)
+		left -= size
 	return sizes
 
 # The open cells a clump begun at `seed_cell` may take, nearest first (a
@@ -785,7 +803,7 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	for i in range(seeds.size()-1,0,-1):
 		var j = rng.randi_range(0,i)
 		var swap = seeds[i]; seeds[i] = seeds[j]; seeds[j] = swap
-	var sizes: Array[int] = clump_sizes(count)
+	var sizes: Array[int] = clump_sizes(count,rng)
 	var placed: Array = []
 	var posts: Array[Dictionary] = []
 	# Clumps are begun well apart; where a floor is too small for that, closer.

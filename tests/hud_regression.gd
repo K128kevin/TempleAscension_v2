@@ -59,6 +59,12 @@ func test():
 			await capture("hud-partial")
 		else: await capture("hud-%dx%d" % [size.x,size.y])
 	game.player.hp=100; game.run.energy=100; hud.tick(0)
+	var others_class: String = game.run.class_id
+	check(others_class!="wizard" and hud.energy_title.text=="ENERGY" and hud.energy.material.get_shader_parameter("liquid")==hud.ENERGY_LIQUID,"A %s's energy orb is green and named energy" % others_class)
+	game.run.class_id = "wizard"; hud.tick(0)
+	check(hud.energy_title.text=="MANA" and hud.energy.material.get_shader_parameter("liquid")==hud.MANA_LIQUID,"The wizard's is blue, and named mana")
+	game.run.class_id = others_class; hud.tick(0)
+	check(hud.energy_title.text=="ENERGY","and changes back with the class")
 	check(not hud.weapon_slots[0].disabled and hud.weapon_slots[2].disabled and hud.weapon_slots[3].disabled,"Basic attack remains available and unassigned skill slots are disabled")
 	check(game.hud.root.get_children().filter(func(n): return n is Button and n.visible).is_empty() and not hud.panels.stat_plus.visible and not hud.panels.skill_plus.visible,"No character, skills or equipment buttons at top left, and no + buttons without points")
 	Data.gain_xp(game.run,Data.xp_at_level(8))

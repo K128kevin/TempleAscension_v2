@@ -1116,7 +1116,7 @@ func execute(job: Dictionary) -> void:
 			var funnel = WizardFx.tornado(spot+Vector3.UP*game.world.lift(spot),TORNADO_RADIUS,TORNADO_SECONDS)
 			game.world.add_child(funnel)
 			waves.append(funnel)
-			game.sound.play("fireball-cast",-13)
+			game.sound.play("fireball-cast",-10)
 			# Its flames roaring as long as it burns (louder the nearer he is:
 			# tornado_volume).
 			zones.append({"effect":"tornado","at":spot,"origin":spot,"heading":randf()*TAU,"node":funnel,"radius":TORNADO_RADIUS,"percent":v.x,"rod":v.y,"life":TORNADO_SECONDS,"tick":0.0,"rank":job.rank,
@@ -1127,7 +1127,7 @@ func execute(job: Dictionary) -> void:
 			lasting.blazing_speed = v.x
 			if is_instance_valid(blaze_node): blaze_node.queue_free()
 			blaze_node = WizardFx.blaze(game.player.visual)
-			game.sound.play("fireball-cast",-12)
+			game.sound.play("fireball-cast",-11)
 			game.float_text(origin+Vector3.UP*2.3,"Blazing Speed!",Color(1,.6,.25))
 		"bolt":
 			var hit = aimed_target(at,direction)

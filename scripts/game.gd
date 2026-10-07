@@ -9,6 +9,7 @@ const Actor = preload("res://scripts/actor.gd")
 const Hud = preload("res://scripts/hud.gd")
 const ProgressionUI = preload("res://scripts/progression_ui.gd")
 const Book = preload("res://scripts/skill_data.gd")
+const WizardFx = preload("res://scripts/wizard_fx.gd")
 const Save = preload("res://scripts/save.gd")
 const RangerFx = preload("res://scripts/ranger_fx.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
@@ -70,6 +71,12 @@ const DASH_RISE = .05
 # The dash costs nothing, but recharges for this long after each (Dash Attack
 # shortens it).
 const DASH_COOLDOWN = 3.0
+# The wizard does not dash: he teleports, at once, toward the cursor, up to
+# TELEPORT_REACH metres (and no less than DASH_MIN), on the same recharge.
+# He never passes through a wall: where the spot is not open floor in plain
+# sight of him, he lands as far along the way as is (every TELEPORT_STEP).
+const TELEPORT_REACH = 8.5
+const TELEPORT_STEP = .25
 # How long the healing spell takes to recharge.
 const HEAL_COOLDOWN = 20.0
 var dash_length = DASH_REACH
@@ -378,7 +385,9 @@ func _process(dt: float) -> void:
 			else: regen_recovery_time += dt
 			var health_regen_rate = .01*(4.0 if regen_recovery_time>=3.0 else 1.0)
 			player.hp = minf(Data.max_health(run),player.hp+Data.max_health(run)*health_regen_rate*dt)
-			run.energy = minf(Data.max_energy(run),run.energy+Data.energy_regen(run)*dt)
+			# (Not while he channels a spell: its cost a second is paid in full,
+			# not made up as it is spent.)
+			if not skills.channeling(): run.energy = minf(Data.max_energy(run),run.energy+Data.energy_regen(run)*dt)
 		heal_cd = maxf(0,heal_cd-dt)
 		dash_cooldown = maxf(0,dash_cooldown-dt)
 		slowed = maxf(0,slowed-dt)
@@ -924,7 +933,8 @@ func lean_into_dash(dt: float) -> void:
 		player.visual.skeleton.add_child(dash_lean)
 	dash_lean.lean = move_toward(dash_lean.lean,wanted,DASH_LEAN_RATE*dt)
 
-func dash() -> void:
+# `toward`: where it is aimed (the cursor's point on the ground, if not given).
+func dash(toward = null) -> void:
 	if leap_left>0: return
 	if mode!="playing" or player.dead or dash_cooldown>0: return
 	# Dash Attack makes the dash strike, and recharge sooner.
@@ -939,7 +949,11 @@ func dash() -> void:
 	skills.pending.clear()
 	skills.cancel_aim()
 	skills.end_channel()
-	var offset = world.pointer()-player.position
+	var aim: Vector3 = toward if toward is Vector3 else world.pointer()
+	if run.class_id=="wizard":
+		teleport(aim)
+		return
+	var offset = aim-player.position
 	set_dash_length(offset.length())
 	dash_time = dash_seconds
 	dash_direction = offset.normalized()
@@ -948,6 +962,31 @@ func dash() -> void:
 	player.invulnerable = dash_seconds
 	player.visual.run_at(DASH_SPEED)
 	player.busy = dash_seconds+DASH_RISE
+	route.clear()
+	target = null
+
+func teleport(aim: Vector3) -> void:
+	var from: Vector3 = player.position
+	var offset: Vector3 = aim-from
+	offset.y = 0
+	var way: Vector3 = offset.normalized() if offset.length()>.1 else player.forward()
+	var reach: float = clampf(offset.length(),DASH_MIN,TELEPORT_REACH)
+	var to: Vector3 = from
+	while reach>=TELEPORT_STEP:
+		var spot: Vector3 = from+way*reach
+		if world.fits(spot) and world.clear_line(from,spot):
+			to = spot
+			break
+		reach -= TELEPORT_STEP
+	sound.play("teleport",-8)
+	skills.waves.append(WizardFx.blink(world,from+Vector3.UP*world.lift(from),false))
+	skills.waves.append(WizardFx.blink(world,to+Vector3.UP*world.lift(to),true))
+	player.position = to
+	player.visual.position.y = world.lift(to)
+	player.face(to+way)
+	# (Free at once, any spell he was working given up.)
+	player.busy = 0.0
+	player.visual.play(player.visual.idle_action())
 	route.clear()
 	target = null
 

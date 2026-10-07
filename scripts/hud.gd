@@ -12,6 +12,12 @@ var health: ColorRect
 var energy: ColorRect
 var hp_text: Label
 var en_text: Label
+# Over the energy orb: its name. (The wizard's energy is mana, in a blue orb:
+# show_energy_kind.)
+var energy_title: Label
+var energy_kind = ""
+const ENERGY_LIQUID = Color(.04,.38,.11)
+const MANA_LIQUID = Color(.05,.2,.82)
 var difficulty: Label
 var notice: Label
 var status: Label
@@ -111,7 +117,7 @@ func setup(owner_game) -> void:
 	var left = make_orb(false)
 	health = left.orb; hp_text = left.value
 	var right = make_orb(true)
-	energy = right.orb; en_text = right.value
+	energy = right.orb; en_text = right.value; energy_title = right.title
 	objective = label("",20,gold,root)
 	anchor(objective,Vector2(1,0),Vector2(-464,22),Vector2(440,28))
 	objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -230,13 +236,22 @@ func make_orb(is_energy: bool) -> Dictionary:
 	orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var material = ShaderMaterial.new()
 	material.shader = preload("res://assets/shaders/orb.gdshader")
-	material.set_shader_parameter("liquid",Color(.04,.38,.11) if is_energy else Color(.78,.035,.06))
+	material.set_shader_parameter("liquid",ENERGY_LIQUID if is_energy else Color(.78,.035,.06))
 	orb.material = material
 	holder.add_child(orb)
 	var value = label("",18,cream,holder)
 	value.position = Vector2(0,94); value.size = Vector2(180,28)
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	return {"orb":orb,"value":value}
+	return {"orb":orb,"value":value,"title":title}
+
+# The energy orb as the hero's class has it: the wizard's is mana, blue.
+func show_energy_kind() -> void:
+	var mana: bool = game.run.get("class_id","")=="wizard"
+	var kind: String = "mana" if mana else "energy"
+	if kind == energy_kind: return
+	energy_kind = kind
+	energy_title.text = kind.to_upper()
+	energy.material.set_shader_parameter("liquid",MANA_LIQUID if mana else ENERGY_LIQUID)
 
 func panel_style(bg: Color, border: Color) -> StyleBoxFlat:
 	var s = StyleBoxFlat.new()
@@ -273,6 +288,7 @@ func bar(color: Color, parent: Node) -> ProgressBar:
 
 func tick(dt: float) -> void:
 	game.debug.refresh()
+	show_energy_kind()
 	show_enemy_bars()
 	show_item_labels()
 	show_effects()
@@ -457,7 +473,10 @@ func show_ready() -> void:
 		var waiting = left>0
 		tile.shade.size.y = (READY_ICON-2)*clampf(left/maxf(whole,.01),0.0,1.0)
 		tile.count.text = str(ceili(left)) if waiting else ""
-		tile.glyph.show_skill(tile.kind,Color(.45,.44,.4) if waiting else cream)
+		# (The wizard's evade is a teleport.)
+		var blinks: bool = tile.kind=="dash" and game.run.get("class_id","")=="wizard"
+		tile.glyph.show_skill("teleport" if blinks else tile.kind,Color(.45,.44,.4) if waiting else cream)
+		if tile.kind=="dash": tile.frame.tooltip_text = "Teleport (Space)" if blinks else "Dash (Space)"
 		tile.frame.add_theme_stylebox_override("panel",tile.styles.waiting if waiting else tile.styles.ready)
 
 func effect_slot() -> Dictionary:

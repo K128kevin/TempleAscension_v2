@@ -70,7 +70,7 @@ func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_da
 	position = origin
 	# The flames bursting from the staff, as it is cast (and a burst as it
 	# strikes: explode).
-	game.sound.play("fireball-cast",-12)
+	game.sound.play("fireball-cast",-10)
 
 func fire_material(burst_amount: float) -> ShaderMaterial:
 	var m = ShaderMaterial.new()
@@ -147,7 +147,7 @@ func explode() -> void:
 	core.visible = false
 	carry_light.visible = false
 	trail.emitting = false
-	game.sound.play("fireball-burst",-13)
+	game.sound.play("fireball-burst",-11)
 	if friendly: game.area_damage(target,radius,damage,true,null,true,element,percent)
 	else: game.area_damage(target,radius,damage,false,source)
 	burst_material = fire_material(1.0)

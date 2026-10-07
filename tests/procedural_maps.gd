@@ -90,6 +90,29 @@ func test():
 			check(not signatures.has(signature),"Different run/floor has distinct layout: "+label)
 			signatures[signature] = true
 			if run_seed==0: samples.append({"floor":floor_index+1,"rooms":layout.rooms.size(),"floor_tiles":layout.cells.size(),"map_size":layout.size,"statues":total})
+	# The bandits' cave: knots of two to four, not clumps of five.
+	for run_seed in [0,7,42,991,12345]:
+		for level in 2:
+			var cave = Layout.new(); cave.generate(run_seed,level,"cave")
+			var label = "cave seed %d / level %d" % [run_seed,level+1]
+			var world = Temple.new(); world.layout = cave; world.spawn = cave.to_world(cave.start); world.exit_point = cave.to_world(cave.exit_cell)
+			var total = 0
+			for count in Data.AREAS.cave[level].counts.values(): total += count
+			var rng = RandomNumberGenerator.new(); rng.seed = Layout.floor_seed(run_seed,level+1+Layout.KINDS.cave.salt)
+			var sizes: Array = world.clump_sizes(total,rng)
+			check(sizes.reduce(func(a,b): return a+b,0)==total and sizes.all(func(n): return n>=Temple.CAVE_CLUMPS.x and n<=Temple.CAVE_CLUMPS.y),"Its enemies stand in knots of 2 to 4 (%s): %s" % [sizes,label])
+			var posts = world.statue_posts(total,rng)
+			var together = posts.size()==total
+			for post in posts:
+				var near = 0
+				for other in posts:
+					if other == post: continue
+					var gap: float = post.at.distance_to(other.at)
+					together = together and gap >= Temple.POST_GAP
+					if gap <= Temple.CLUMP_REACH*2: near += 1
+				together = together and near >= 1
+			check(together,"Every bandit stands with at least one other, none overlapping: "+label)
+			world.free()
 	var arena = Layout.new(); arena.generate(123,Layout.SUMMIT)
 	check(arena.rooms.size()==1 and reachable(arena).size()==arena.cells.size(),"Summit remains one connected original-sized arena")
 	FileAccess.open("res://test-results/procedural-maps.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed,"samples":samples},"  "))

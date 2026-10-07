@@ -757,8 +757,10 @@ func chill(percent: float, seconds: float) -> void:
 	slow(percent,seconds)
 	chill_time = maxf(chill_time,seconds)
 
+# Chilled by an ice spell, or standing on the wizard's ice on the floor
+# (which counts the same, for Frostburn).
 func chilled() -> bool:
-	return chill_time>0
+	return chill_time>0 or (kind != "player" and game.skills.on_ice(position))
 
 # Frozen solid (Ice Bolt's chance, Ice Prison): held fast for `seconds`,
 # whatever is done to it; in a prison it takes `percent` more.

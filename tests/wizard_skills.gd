@@ -133,14 +133,19 @@ func test():
 	check(cast("freeze_floor",at) and game.skills.channeling() and game.player.visual.state=="CastChannel" and is_equal_approx(game.run.energy,100.0),"Freeze Floor is a channel: nothing paid until it is held")
 	play(1.0)
 	check(absf(game.run.energy-90.0)<.5 and game.skills.channeling() and game.skills.patches.size()>=1,"Held a second it costs 10 energy and ices the floor where the ray falls")
+	# (With the game's own frames running, his energy coming back as it does,
+	# the channel is still paid in full: none comes back while it is held.)
+	var before_frames: float = game.run.energy
+	for i in 30: game._process(STEP)
+	check(game.skills.channeling() and absf((before_frames-game.run.energy)-10.0*30*STEP)<.3,"In play, held, it drains 10 energy a second; none comes back while it is held (%.2f in half a second)" % (before_frames-game.run.energy))
 	var walker = dummy(6)
 	play(.5)
 	check(walker.slow_time>0 and is_equal_approx(walker.slow_factor,.6),"An enemy on the ice is slowed 40%")
 	game.skills.channel_hold_override = 0
 	play(.1)
 	check(not game.skills.channeling() and game.player.busy<=0,"Let go, the channel ends and he is free")
-	var left: float = game.skills.patches[0].left
-	check(left>10.0 and left<=12.0 and game.skills.patches[0].radius==1.25,"The ice lasts 12 seconds and spreads 2.5 metres across where the ray falls")
+	var left: float = game.skills.patches.map(func(p): return p.left).max()
+	check(left>9.5 and left<=12.0 and game.skills.patches[-1].radius==1.25,"The ice lasts 12 seconds and spreads 2.5 metres across where the ray falls")
 	hero({"freeze_floor":5}); game.skills.channel_hold_override = 1
 	cast("freeze_floor",at); play(.5)
 	check(is_equal_approx(walker.slow_factor,.2),"Rank 5 slows 80%")
@@ -232,6 +237,18 @@ func test():
 	game.player.busy = 0
 	cast("fireball",foe.position); play(2.0)
 	check(lost(foe)-chilled_at>=10*STAFF*1.2*1.5-.01 and lost(foe)-chilled_at<=15*STAFF*1.2*1.5+.01,"Frostburn rank 1: fire deals 50%% more to the chilled (%.1f)" % (lost(foe)-chilled_at))
+	# On ice laid on the floor, unchilled, it counts as chilled.
+	hero({"fireball":1,"frostburn":1}); foe.hp = foe.max_hp; foe.chill_time = 0.0
+	check(not foe.chilled(),"Off the ice and unchilled, an enemy is not chilled")
+	cast("fireball",foe.position); play(2.0)
+	check(within(foe,1,120),"so Frostburn adds nothing (%.1f)" % lost(foe))
+	hero({"fireball":1,"frostburn":1}); foe.hp = foe.max_hp; foe.chill_time = 0.0
+	game.skills.lay_ice(foe.position,game.skills.FLOOR_RADIUS,10.0,0.0)
+	check(foe.chilled() and foe.chill_time==0.0,"Standing on the wizard's ice, it is chilled")
+	cast("fireball",foe.position); play(2.0)
+	check(within(foe,1,120,1.5),"and Frostburn's 50%% more is dealt it (%.1f)" % lost(foe))
+	game.skills.lay_ice(game.player.position,game.skills.FLOOR_RADIUS,10.0,0.0)
+	check(game.skills.on_ice(game.player.position) and not game.player.chilled(),"(The wizard on his own ice is not)")
 	hero({"fireball":1,"pyromaniac":1}); foe.hp = foe.max_hp
 	cast("fireball",foe.position); play(2.0)
 	check(within(foe,1,240) and game.skills.burn_left>0 and game.player.hp<game.player.max_hp,"Pyromaniac doubles fire, and burns him (%.1f dealt, %.1f burnt)" % [lost(foe),game.player.max_hp-game.player.hp])
@@ -481,6 +498,36 @@ func test():
 	for i in 40: look.locomotion(false,false); look.advance(1.0/60)
 	var rest: Array = staff_line.call()
 	check(rest[0].dot(Vector3.UP)>.98 and rest[1]<.03,"Standing, it is upright in his hand again")
+	# --- His evade is a teleport.
+	clear()
+	hero({})
+	var start: Vector3 = game.player.position
+	game.player.busy = 1.0
+	game.dash(start+forward*20.0)
+	check(game.player.position.distance_to(start+forward*game.TELEPORT_REACH)<.01 and game.dash_time==0.0 and game.player.busy==0.0,"Space teleports him at once, as far as 8.5 metres toward the cursor, and he is free at once")
+	check(is_equal_approx(game.dash_cooldown,3.0) and game.skills.waves.filter(func(w): return w is WizardFx.Blink).size()==2 and "teleport" in game.sound.heard,"on the dash's 3-second recharge, with a flash where he goes and where he comes, and its sound")
+	var there: Vector3 = game.player.position
+	game.dash(there-forward*5.0)
+	check(game.player.position==there,"It cannot be used again while it recharges")
+	for i in 190: game._process(STEP)
+	game.player.position = there
+	game.dash(there-forward*4.0)
+	check(game.player.position.distance_to(there-forward*4.0)<.01,"Recharged, he teleports exactly where he points, within reach")
+	game.player.position = there
+	game.dash_cooldown = 0
+	game.dash(there+forward*.2)
+	check(absf(game.player.position.distance_to(there)-game.DASH_MIN)<.01,"Never shorter than the dash's least")
+	game.player.position = origin
+	game.dash_cooldown = 0
+	game.dash(origin+Vector3(0,0,-400))
+	var path_clear: bool = game.world.clear_line(origin,game.player.position) and game.world.fits(game.player.position)
+	check(path_clear and game.player.position.distance_to(origin)<=game.TELEPORT_REACH+.01,"Never through a wall: he lands on open floor in plain sight")
+	hero({})
+	game.run.class_id = "warrior"
+	game.dash(game.player.position+forward*5.0)
+	check(game.dash_time>0,"(The other classes dash, as before)")
+	game.dash_time = 0; game.player.busy = 0; game.player.invulnerable = 0
+
 	# --- Sounds: spells are heard by their own, never as a weapon's blow.
 	var heard: Array = game.sound.heard
 	var blows = func(): return heard.any(func(id): return id in ["weapon-impact","arrow-stone-impact","sword-hit-flesh"] or id.begins_with("arrow-flesh"))

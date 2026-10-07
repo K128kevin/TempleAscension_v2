@@ -688,7 +688,8 @@ class Ignition extends Node3D:
 		ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(ball)
 		# The white-hot heart of it, gone in a blink.
-		core = glow_sprite(Vfx.ramp([0,.35,1],[Color(1,1,.9,1),Color(1,.75,.3,.8),Color(1,.4,.1,0)]),true)
+		core = Vfx.soft_glow(Color(1,.85,.55,1),Vector2.ONE)
+		add_child(core)
 		# The ring racing out along the floor: bright at its edge, clear within.
 		ring = glow_sprite(Vfx.ramp([0,.62,.8,.9,1],[Color(1,.5,.1,0),Color(1,.55,.15,.0),Color(1,.8,.4,.9),Color(1,.5,.12,.5),Color(1,.3,.05,0)]),false)
 		ring.rotation.x = -PI/2
@@ -756,7 +757,7 @@ class Ignition extends Node3D:
 		ball.visible = p<1.0
 		var blink: float = clampf(age/.12,0.0,1.0)
 		core.scale = Vector3.ONE*radius*lerpf(.9,1.6,blink)
-		core.material_override.albedo_color.a = 1.0-blink
+		core.material_override.set_shader_parameter("strength",1.6*(1.0-blink))
 		core.visible = blink<1.0
 		var r: float = clampf(age/RING,0.0,1.0)
 		ring.scale = Vector3.ONE*radius*lerpf(.3,2.4,1.0-pow(1.0-r,2.0))
@@ -772,6 +773,67 @@ static func ignition(parent: Node3D, at: Vector3, radius: float) -> Node3D:
 	parent.add_child(burst)
 	burst.dress()
 	return burst
+
+# The wizard's teleport (Game.teleport): where he goes from, a flash and a
+# column of pale violet light that he is drawn up into and is gone; where he
+# arrives, the same flash, the light gathering down into him with a ring
+# of sparks flung out across the floor. Over in half a second; ticked in
+# Skills.waves.
+class Blink extends Node3D:
+	const LIFE = 1.2
+	var arriving = false
+	var age = 0.0
+	var column: MeshInstance3D
+	var glow: OmniLight3D
+
+	func dress() -> void:
+		# A soft pillar of light: a tall glow turned always to face the eye
+		# (faint: it is added onto what is behind it, and must not hide him).
+		column = Vfx.soft_glow(Color(.7,.62,1,.55),Vector2(1.0,3.0))
+		column.position.y = 1.2
+		add_child(column)
+		glow = OmniLight3D.new()
+		glow.light_color = Color(.72,.66,1)
+		glow.omni_range = 3.0
+		glow.position.y = 1.0
+		add_child(glow)
+		# Motes drawn up into the column as he goes, or flung out as he comes.
+		var motes = Vfx.particles(self,40,.5,true,true)
+		motes.explosiveness = .9
+		motes.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		motes.emission_sphere_radius = .45 if not arriving else .15
+		motes.position.y = .2 if arriving else 1.0
+		motes.direction = Vector3.UP
+		motes.spread = 25.0 if not arriving else 90.0
+		motes.flatness = 0.0 if not arriving else .85
+		motes.initial_velocity_min = 2.0 if not arriving else 3.0
+		motes.initial_velocity_max = 4.5 if not arriving else 5.5
+		motes.damping_min = 4.0; motes.damping_max = 7.0
+		motes.gravity = Vector3(0,2.0 if not arriving else -1.0,0)
+		motes.scale_amount_min = .04; motes.scale_amount_max = .09
+		motes.color_ramp = Vfx.ramp([0,.4,1],[Color(1,1,1,1),Color(.75,.7,1,.9),Color(.55,.5,1,0)])
+		motes.emitting = true
+		tick(0.0)
+
+	func tick(dt: float) -> bool:
+		age += dt
+		var u: float = clampf(age/.35,0.0,1.0)
+		# Going, the column thins and rises away; arriving, it narrows down
+		# into him.
+		var thin: float = 1.0-u
+		column.scale = Vector3(1.0*thin*(1.0 if arriving else 1.0+u*.3),3.0*(1.0+(u*.6 if not arriving else -u*.4)),1.0)
+		column.position.y = 1.2+(u*.8 if not arriving else -u*.4)
+		column.visible = u<1.0
+		glow.light_energy = 1.0*exp(-age*7.0)
+		return age>=LIFE
+
+static func blink(parent: Node3D, at: Vector3, arriving: bool) -> Node3D:
+	var flash = Blink.new()
+	flash.arriving = arriving
+	flash.position = at
+	parent.add_child(flash)
+	flash.dress()
+	return flash
 
 # Burning (Pyromaniac's cost): small flames on the hero while it lasts.
 static func burning(body: Node3D) -> Node3D:
