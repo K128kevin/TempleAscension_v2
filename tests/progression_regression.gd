@@ -106,7 +106,13 @@ func test():
 	check(Save.valid(eight) and nine.version==Data.new_run().version and nine.hotbar==["cleave","","","","",""],"Version 8 saves keep their skills, the hotbar grown to RMB and 1 to 4")
 	var twelve = Data.new_run("wizard"); twelve.version=12; twelve.skills={"ice_bolt":1}; twelve.skill_points=0; twelve.hotbar=["ice_bolt","","","",""]
 	var thirteen = Save.migrate(twelve)
-	check(Save.valid(twelve) and thirteen.version==13 and thirteen.hotbar==["ice_bolt","","","","",""],"Version 12 saves gain an empty LMB slot")
+	check(Save.valid(twelve) and thirteen.version==Data.new_run().version and thirteen.hotbar==["ice_bolt","","","","",""],"Version 12 saves gain an empty LMB slot")
+	var modes = []
+	for old_mode in 3:
+		var before = Data.new_run("warrior"); before.version=13; before.difficulty=old_mode
+		modes.append(Save.migrate(before).difficulty)
+		check(Save.valid(before),"Version 13 saves on any old difficulty stay valid")
+	check(modes==[0,0,1],"Easy and Moderate saves become Normal; Hard stays Hard")
 	var warrior_left = Data.new_run("warrior"); warrior_left.skills={"cleave":1}; warrior_left.skill_points=0; warrior_left.hotbar[Data.LEFT_SLOT]="cleave"
 	check(not Save.valid(warrior_left),"Only the wizard may put a skill on LMB")
 	check(Save.valid(capped) and capped.level==25 and capped.xp==Data.xp_at_level(25) and capped.stats==[5,5,5,5,5] and capped.points==120 and capped.skill_points==25 and capped.get("migration_notice",false),"Version 5 saves above the cap come down to level 25 with every point refunded")

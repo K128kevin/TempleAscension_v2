@@ -231,6 +231,21 @@ static func wizard_staff() -> ShaderMaterial:
 	materials.wizard_staff = m
 	return m
 
+# One part of a wizard's staff (assets/shaders/staff.gdshader), in the colours
+# the item's look gives it (`tint`: its metal; `crystal`).
+const STAFF_PARTS = {"Metal":0,"Crystal":1,"Leather":2,"Wood":3,"Bronze":4}
+static func staff_part(part_name: String, look: Dictionary) -> ShaderMaterial:
+	var part: int = STAFF_PARTS.get(part_name.get_slice(".",0).get_slice("_",0),0)
+	var key = "staffpart%d%s%s" % [part,look.get("tint",Color.WHITE).to_html(),look.get("crystal",Color.WHITE).to_html()]
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/staff.gdshader")
+	m.set_shader_parameter("part",part)
+	if look.has("tint"): m.set_shader_parameter("metal",look.tint)
+	if look.has("crystal"): m.set_shader_parameter("crystal",look.crystal)
+	materials[key] = m
+	return m
+
 # The ranger's quiver (assets/shaders/quiver.gdshader).
 static func quiver() -> ShaderMaterial:
 	if materials.has("quiver"): return materials.quiver
@@ -424,6 +439,10 @@ static func finish(look: Dictionary) -> Material:
 # butt, at its true size.
 static func weapon_model(look: Dictionary) -> Node3D:
 	var node: Node3D = model(look.model,look.size,finish(look))
+	if look.get("finish","") == "parts":
+		# A wizard's staff: metal, crystal, leather, wood and bronze by its
+		# parts (tools/make_staffs.py).
+		for mesh in node.find_children("*","MeshInstance3D",true,false): mesh.material_override = staff_part(String(mesh.name),look)
 	if look.get("finish","") == "hasta":
 		# The legionary's spear: iron, ash and hide by its parts (scripts/town_guard.gd).
 		for mesh in node.find_children("*","MeshInstance3D",true,false):

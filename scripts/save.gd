@@ -4,14 +4,20 @@ const Items = preload("res://scripts/items.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=13: return d
+	if int(d.get("version",0))>=14: return d
+	if int(d.get("version",0))==13:
+		# Easy, Moderate and Hard became Normal and Hard: Moderate is Normal.
+		var updated = d.duplicate(true)
+		updated.version = 14
+		updated.difficulty = 1 if int(updated.get("difficulty",0))>=2 else 0
+		return updated
 	if int(d.get("version",0))==12:
 		# The hotbar gained an LMB slot (Data.LEFT_SLOT), the wizard's.
 		if not d.get("hotbar") is Array or d.hotbar.size()!=5: return {}
 		var updated = d.duplicate(true)
 		updated.version = 13
 		updated.hotbar = updated.hotbar+[""]
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==11:
 		# The wizard's spells were replaced (ice, fire and lightning): a
 		# wizard's skill points are refunded.
@@ -133,7 +139,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<13:
+	if int(d.get("version",0))<14:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -156,7 +162,7 @@ static func valid(d) -> bool:
 	if not d.position is Array or d.position.size()!=2: return false
 	for value in d.position:
 		if not (value is int or value is float) or not is_finite(float(value)): return false
-	if int(d.floor)<0 or int(d.floor)>=Data.AREAS[d.place if Data.AREAS.has(d.place) else "temple"].size() or int(d.difficulty)<0 or int(d.difficulty)>2: return false
+	if int(d.floor)<0 or int(d.floor)>=Data.AREAS[d.place if Data.AREAS.has(d.place) else "temple"].size() or int(d.difficulty)<0 or int(d.difficulty)>=Data.DIFFICULTIES.size(): return false
 	if not d.cleared is Array: return false
 	for place in d.cleared:
 		if not place in Data.DUNGEONS: return false

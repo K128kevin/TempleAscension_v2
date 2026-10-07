@@ -1491,7 +1491,7 @@ func new_run_menu() -> void:
 	mode = "paused"
 	world.process_mode = Node.PROCESS_MODE_DISABLED
 	hud.dialog("A NEW CHARACTER", "Choose difficulty, then Warrior, Ranger or Wizard. This replaces the current character.")
-	for i in 3:
+	for i in Data.DIFFICULTIES.size():
 		hud.button(Data.DIFFICULTIES[i],func(): ProgressionUI.creation(self,i))
 	if not creating_character: hud.button("Back",resume_game)
 

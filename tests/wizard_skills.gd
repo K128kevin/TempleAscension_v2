@@ -265,6 +265,82 @@ func test():
 	cast("fireball",behind.position); play(2.0)
 	check(lost(first)>0 and lost(behind)==0,"A fireball bursts on the first enemy in its way (%.1f, %.1f)" % [lost(first),lost(behind)])
 	clear()
+	# Hurled from his hand, thrown out before him, alight with the spell's
+	# element while he gathers it, the light going out as it leaves him.
+	hero({"ice_bolt":1,"fireball":1,"lightning_bolt":1})
+	var mark = dummy(8)
+	for spell in [["fireball","fire"],["ice_bolt","ice"],["lightning_bolt","lightning"]]:
+		ready()
+		for f in game.fireballs: f.queue_free()
+		game.fireballs.clear()
+		cast(spell[0],mark.position)
+		var aura = game.skills.hand_aura
+		var lit: bool = is_instance_valid(aura) and aura.element==spell[1] and aura.released<0 and aura.emitters.all(func(e): return e.emitting)
+		var hand_at: Vector3 = Vector3.ZERO
+		for i in 30:
+			play(STEP)
+			if hand_at==Vector3.ZERO and spell[0]=="fireball" and not game.fireballs.is_empty(): hand_at = game.fireballs[0].origin
+			if hand_at==Vector3.ZERO and spell[0]=="ice_bolt" and not game.projectiles.is_empty(): hand_at = game.projectiles[0].node.position
+		check(lit and aura.released>=0 and aura.emitters.all(func(e): return not e.emitting),"%s: his hand is alight with %s as he gathers it, going out as it leaves him" % [spell[0],spell[1]])
+		if spell[0]!="lightning_bolt": check((hand_at-origin).dot(forward)>.6 and hand_at.y>1.0,"%s leaves his hand, thrown out before him (%.2f m ahead, %.2f up)" % [spell[0],(hand_at-origin).dot(forward),hand_at.y])
+		play(1.5)
+		check(not is_instance_valid(aura) or aura.is_queued_for_deletion(),"%s: and the light is gone" % spell[0])
+	clear()
+	# Cast along a line, not at a spot: aimed short of an enemy, they fly on
+	# to it; aimed beside one, they pass it by, and end at their reach.
+	hero({"ice_bolt":1,"fireball":1})
+	var beyond = dummy(10)
+	cast("ice_bolt",origin+forward*3.0); play(1.5)
+	check(lost(beyond)>0,"An ice bolt aimed short of an enemy flies on and strikes it (%.1f)" % lost(beyond))
+	beyond.hp = beyond.max_hp; beyond.end_stun(); ready()
+	cast("fireball",origin+forward*3.0); play(2.0)
+	check(lost(beyond)>0,"A fireball aimed short of an enemy flies on and bursts on it, not where it was aimed (%.1f)" % lost(beyond))
+	clear()
+	var passed_by = dummy(6,25)
+	var flown: float = 0.0
+	cast("ice_bolt",origin+forward*6.0)
+	for i in 150:
+		play(STEP)
+		for p in game.projectiles: flown = maxf(flown,Vector2(p.node.position.x-origin.x,p.node.position.z-origin.z).length())
+	check(lost(passed_by)==0 and game.projectiles.is_empty() and flown>game.skills.SPELL_REACH-.6 and flown<=game.skills.SPELL_REACH+1.2,"An ice bolt aimed beside an enemy is not turned to it, and is gone at the end of its %.0f-metre reach from his hand (%.1f m)" % [game.skills.SPELL_REACH,flown])
+	ready(); flown = 0.0; game.sound.heard.clear()
+	# (The last fireball's burst is still dying away.)
+	for f in game.fireballs: f.queue_free()
+	game.fireballs.clear()
+	var spent: bool = true
+	cast("fireball",origin+forward*6.0)
+	for i in 180:
+		play(STEP)
+		for f in game.fireballs:
+			if f.exploded: spent = false
+			if f.fizzled<0: flown = maxf(flown,Vector2(f.position.x-origin.x,f.position.z-origin.z).length())
+	check(lost(passed_by)==0 and spent and game.fireballs.is_empty() and not "fireball-burst" in game.sound.heard and flown>game.skills.SPELL_REACH-.6 and flown<=game.skills.SPELL_REACH+.6,"A fireball aimed beside an enemy passes it, and dies away unburst at the end of its reach (%.1f m)" % flown)
+	clear()
+	# A wall in a fireball's way: it bursts against it, and burns whoever
+	# stands by it.
+	var wall_way = Vector3.ZERO
+	var wall_at: float = 0.0
+	for degrees in range(0,360,10):
+		var way: Vector3 = forward.rotated(Vector3.UP,deg_to_rad(degrees))
+		for step in range(15,60):
+			if not game.world.clear_line(origin,origin+way*step*.2):
+				wall_way = way; wall_at = step*.2
+				break
+		if wall_at>0: break
+	check(wall_at>0,"(A wall stands within 12 metres of the wizard: %.1f m)" % wall_at)
+	if wall_at>0:
+		ready()
+		# (Beside its line, too far off it to be struck, near enough to be burnt.)
+		var by_wall = game.spawn_enemy("gladiator","dummy:wall",origin+wall_way*(wall_at-.4)+wall_way.cross(Vector3.UP)*.9)
+		by_wall.puppet = true; by_wall.awake = true; by_wall.max_hp = 100000.0; by_wall.hp = 100000.0
+		# (Aimed short of the wall: a spot behind it cannot be aimed at.)
+		cast("fireball",origin+wall_way*(wall_at-1.0))
+		var burst_at = null
+		for i in 120:
+			play(STEP)
+			for f in game.fireballs: if f.exploded and burst_at == null: burst_at = f.target
+		check(burst_at != null and Vector2(burst_at.x-origin.x,burst_at.z-origin.z).length()>wall_at-1.0 and Vector2(burst_at.x-origin.x,burst_at.z-origin.z).length()<wall_at and lost(by_wall)>0,"A fireball bursts against a wall in its way, burning the enemy beside it (%s, %.1f)" % [str(burst_at),lost(by_wall)])
+	clear()
 
 	# Blast Wave: 5 metres all round.
 	hero({"blast_wave":1})
@@ -497,8 +573,44 @@ func test():
 	check(look.state=="WizardRun" and gripped and widest>20.0,"Running, the staff stays in his fist and swings with his stride (%.0f degrees)" % widest)
 	for i in 40: look.locomotion(false,false); look.advance(1.0/60)
 	var rest: Array = staff_line.call()
-	check(rest[0].dot(Vector3.UP)>.98 and rest[1]<.03,"Standing, it is upright in his hand again")
-	# --- Whatever he does to an enemy, however remote off, wakes it and those about it.
+	var leaning: Vector3 = (Vector3.UP-look.global_basis.orthonormalized().z*look.STAFF_LEAN).normalized()
+	check(rest[0].dot(leaning)>.995 and rest[1]<.03,"Standing, it is his walking stick again: through his fist, its top leaning back toward him")
+	# The fist closed round it: the hand's grip (its own +Z) along the staff,
+	# at rest, running and casting.
+	var grip_along = func() -> float:
+		look.skeleton.force_update_all_bone_transforms()
+		look.align_weapon()
+		var palm: Basis = (look.skeleton.global_basis*look.skeleton.get_bone_global_pose(look.skeleton.find_bone("hand_r")).basis).orthonormalized()
+		return palm.z.dot(staff_line.call()[0])
+	check(grip_along.call()>.999,"At rest his fist is closed round the staff, not beside it (%.3f)" % grip_along.call())
+	var foot_at: Vector3 = look.weapon_item.global_transform*Vector3.ZERO
+	check(absf(foot_at.y-look.global_position.y)<.04,"and its foot is on the ground (%.3f)" % (foot_at.y-look.global_position.y))
+	var bone_at = func(bone: String) -> Vector3: return look.skeleton.global_transform*look.skeleton.get_bone_global_pose(look.skeleton.find_bone(bone)).origin
+	var shoulder_r: Vector3 = bone_at.call("upperarm_r")
+	var elbow_r: Vector3 = bone_at.call("lowerarm_r")
+	check(shoulder_r.y-elbow_r.y>.18,"His elbow hangs at his side, not raised (%.2f m below the shoulder)" % (shoulder_r.y-elbow_r.y))
+	var cast_grip = 1.0
+	for clip in ["CastBolt","CastSelf","CastGround","CastChannel"]:
+		look.play(clip)
+		for i in 20:
+			look.advance(1.0/60)
+			cast_grip = minf(cast_grip,grip_along.call())
+	check(cast_grip>.999,"Casting, it stays closed round it (%.3f)" % cast_grip)
+	var run_grip = 1.0
+	for i in 40:
+		look.locomotion(true,false,false,1.0,4.75); look.advance(1.0/60)
+		if i>=20: run_grip = minf(run_grip,grip_along.call())
+	check(run_grip>.999,"and running (%.3f)" % run_grip)
+	for i in 40: look.locomotion(false,false); look.advance(1.0/60)
+	# Its staffs are made in parts, each dressed for what it is made of.
+	for id in ["silver_staff","oracle_staff","ashwood_staff"]:
+		var made: Node3D = Art.held_model(Items.get_item(id).look)
+		var parts: Dictionary = {}
+		for mesh in made.find_children("*","MeshInstance3D",true,false):
+			if mesh.material_override is ShaderMaterial: parts[String(mesh.name)] = mesh.material_override.get_shader_parameter("part")
+		check(parts.has("Crystal") and parts.Crystal==1 and (parts.get("Metal",-1)==0 or parts.get("Wood",-1)==3) and parts.size()>=3,"%s is made in parts: %s" % [id,parts])
+		made.free()
+	# --- Whatever he does to an enemy, however far off, wakes it and those about it.
 	clear()
 	hero({"freeze_floor":1,"system_shock":1})
 	var sleeper = func(at: Vector3):
@@ -569,7 +681,7 @@ func test():
 	foe = dummy(6)
 	heard.clear()
 	cast("fireball",foe.position)
-	play(.6)
+	play(.4)
 	var cast_at: int = heard.find("fireball-cast")
 	check(cast_at>=0 and not "fireball-burst" in heard,"Fireball is heard as it leaves his staff, before it lands (%s)" % [heard])
 	play(1.4)

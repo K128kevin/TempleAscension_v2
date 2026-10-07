@@ -59,9 +59,9 @@ const STAT_HELP = ["+2% melee damage (dagger too)","+2% bow damage; +0.3% attack
 # before Intelligence), not from the weapon in hand; a staff may raise them.
 const SPELL_SPAN = [10.0,15.0]
 const GEM_COLORS = [Color(1,.20,.24),Color(.2,1,.63),Color(.2,.58,1),Color(.8,.9,1)]
-const DIFFICULTIES = ["Easy","Moderate","Hard"]
-const HEALTH_SCALE = [.9,1.1,1.4]
-const DAMAGE_SCALE = [.7,1.1,1.4]
+const DIFFICULTIES = ["Normal","Hard"]
+const HEALTH_SCALE = [1.8,2.8]
+const DAMAGE_SCALE = [.7,1.4]
 # (The temple's floors' levels: AREAS has every place's.)
 const ENEMY_LEVELS = [11,15,19,23]
 const MAX_LEVEL = 25
@@ -82,7 +82,7 @@ static func casts_left(run: Dictionary) -> bool:
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	var run = {"version":13,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	var run = {"version":14,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 	Items.outfit(run,class_id)
 	return run
 

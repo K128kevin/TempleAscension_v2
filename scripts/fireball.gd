@@ -1,13 +1,19 @@
 extends Node3D
-## The Oracle's fire spell, and the hero wizard's Firebolt (`friendly`): a
-## fireball shot in a straight line from the staff, bursting at its target. Advanced by Game on the combat clock; damage lands on
+## The Oracle's fire spell, and the hero wizard's Fireball (`friendly`): a
+## fireball shot in a straight line from the staff. The Oracle's bursts at its
+## target; the hero's flies on to the end of its reach as an arrow does,
+## bursting on the first enemy (or wall) in its way, or dying away unburst
+## there. Advanced by Game on the combat clock; damage lands on
 ## impact through Game.area_damage. Every visible piece is a billboard, particle
 ## or light; no mesh geometry is generated.
 const SHADER = preload("res://assets/shaders/fireball.gdshader")
 const Art = preload("res://scripts/assets.gd")
 const Vfx = preload("res://scripts/vfx.gd")
+const WizardFx = preload("res://scripts/wizard_fx.gd")
 const EXPLOSION_TIME = .75
 const LIFETIME_AFTER_IMPACT = 4.0
+# How quickly the hero's dies away at the end of its reach.
+const FIZZLE_TIME = .15
 
 var game
 var origin = Vector3.ZERO
@@ -18,6 +24,8 @@ var flight_time = .6
 var age = 0.0
 var exploded = false
 var since_impact = 0.0
+# How long the hero's has been dying away at the end of its reach (-1: it has not reached it).
+var fizzled = -1.0
 # The Oracle that cast it; landing the blast resets its hit pushback.
 var source = null
 # Cast by the hero: the blast strikes the statues (a skill's hits, each with
@@ -31,6 +39,11 @@ var core: MeshInstance3D
 var core_material: ShaderMaterial
 var carry_light: OmniLight3D
 var trail: CPUParticles3D
+# Tongues of flame streaming off it, and embers shed behind it.
+var flames: CPUParticles3D
+var embers: CPUParticles3D
+# Embers and wisps of flame rising from the burst.
+var rising: Node3D
 var burst: MeshInstance3D
 var burst_material: ShaderMaterial
 var flash: OmniLight3D
@@ -42,7 +55,9 @@ var scorch: Sprite3D
 func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_damage: float, seconds: float) -> void:
 	game = owner_game
 	origin = from
-	target = to+Vector3.UP*.35
+	# (The Oracle's bursts on the floor at the hero's feet; the hero's flight
+	# ends in the air, at the end of its reach.)
+	target = to if friendly else to+Vector3.UP*.35
 	radius = blast_radius
 	damage = blast_damage
 	flight_time = seconds
@@ -67,6 +82,29 @@ func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_da
 	trail.scale_amount_max = .45
 	trail.scale_amount_curve = Vfx.curve(1,0)
 	trail.color_ramp = Vfx.ramp([0,.25,.6,1],[Color(1,.62,.22,.55),Color(1,.4,.08,.45),Color(.55,.12,.03,.25),Color(.1,.08,.07,0)])
+	flames = Vfx.particles(self,90,.5,false,true)
+	flames.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	flames.emission_sphere_radius = .16
+	flames.direction = Vector3.UP
+	flames.spread = 180
+	flames.initial_velocity_min = .3; flames.initial_velocity_max = 1.0
+	flames.damping_min = 1.0; flames.damping_max = 2.0
+	flames.gravity = Vector3(0,2.2,0)
+	flames.scale_amount_min = .22; flames.scale_amount_max = .42
+	flames.scale_amount_curve = Vfx.curve(1,0)
+	flames.color_ramp = Vfx.ramp([0,.2,.55,1],[Color(1,.9,.55,.85),Color(1,.58,.16,.75),Color(.85,.24,.05,.45),Color(.3,.06,.02,0)])
+	flames.emitting = true
+	embers = Vfx.particles(self,40,1.0,false,true)
+	embers.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	embers.emission_sphere_radius = .2
+	embers.direction = Vector3.UP
+	embers.spread = 120
+	embers.initial_velocity_min = .4; embers.initial_velocity_max = 1.4
+	embers.damping_min = .5; embers.damping_max = 1.0
+	embers.gravity = Vector3(0,.9,0)
+	embers.scale_amount_min = .035; embers.scale_amount_max = .07
+	embers.color_ramp = Vfx.ramp([0,.5,1],[Color(1,.88,.45,1),Color(1,.45,.1,.85),Color(.6,.1,.02,0)])
+	embers.emitting = true
 	position = origin
 	# The flames bursting from the staff, as it is cast (and a burst as it
 	# strikes: explode).
@@ -92,22 +130,44 @@ func billboard(material: ShaderMaterial, size: float) -> MeshInstance3D:
 # Returns false once every part of the effect has finished.
 func tick(dt: float) -> bool:
 	age += dt
+	if fizzled >= 0.0:
+		# Spent: the flame shrinks to nothing where it stopped, its trail
+		# drifting away behind it.
+		fizzled += dt
+		var left: float = maxf(0.0,1.0-fizzled/FIZZLE_TIME)
+		core.scale = Vector3.ONE*.75*left
+		core.visible = left > 0.0
+		carry_light.light_energy = 1.8*left
+		flames.emitting = false
+		embers.emitting = false
+		core_material.set_shader_parameter("flame_time",age)
+		visible = game.world.can_see(position)
+		return fizzled < FIZZLE_TIME+embers.lifetime
 	if not exploded:
 		var u = minf(1.0,age/flight_time)
 		# Straight from the staff's crown to the burst point.
 		var before: Vector3 = position
 		position = origin.lerp(target,u)
-		# The hero's bursts on the first enemy in its way, as an arrow strikes.
+		# The hero's bursts on the first enemy in its way, as an arrow strikes,
+		# or against a wall in its way.
 		if friendly:
 			var struck = first_struck(before,position)
 			if struck != null:
 				target = struck.position+Vector3.UP*.35
 				explode()
 				return true
+			if not game.world.clear_line(Vector3(before.x,0,before.z),Vector3(position.x,0,position.z)):
+				target = Vector3(before.x,.35,before.z)
+				explode()
+				return true
 		core_material.set_shader_parameter("flame_time",age)
 		carry_light.light_energy = 1.8*(1.0+sin(age*23.0)*.08)
 		visible = game.world.can_see(position)
-		if u>=1.0: explode()
+		if u>=1.0:
+			if friendly:
+				fizzled = 0.0
+				trail.emitting = false
+			else: explode()
 		return true
 	since_impact += dt
 	var t = since_impact
@@ -139,7 +199,7 @@ func first_struck(before: Vector3, after: Vector3):
 	return best
 
 func _process(_delta: float) -> void:
-	Vfx.hold_when_paused(game,[trail,sparks,smoke])
+	Vfx.hold_when_paused(game,[trail,flames,embers,sparks,smoke,rising])
 
 func explode() -> void:
 	exploded = true
@@ -147,6 +207,8 @@ func explode() -> void:
 	core.visible = false
 	carry_light.visible = false
 	trail.emitting = false
+	flames.emitting = false
+	embers.emitting = false
 	game.sound.play("fireball-burst",-11)
 	if friendly: game.area_damage(target,radius,damage,true,null,true,element,percent)
 	else: game.area_damage(target,radius,damage,false,source)
@@ -185,6 +247,8 @@ func explode() -> void:
 	smoke.scale_amount_curve = Vfx.curve(.45,1.6)
 	smoke.color_ramp = Vfx.ramp([0,.15,1],[Color(.22,.18,.15,0),Color(.16,.14,.12,.6),Color(.09,.08,.08,0)])
 	smoke.emitting = true
+	# Embers and flame floating up from it into the sky.
+	rising = WizardFx.rising(self,Vector3.UP*.4,"fire")
 	# Ground shockwave from the existing seal VFX, and a fading scorch mark.
 	shock = Art.seal(radius*2.2,Color(1,.6,.2,.9))
 	shock.position = Vector3.DOWN*.3

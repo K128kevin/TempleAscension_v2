@@ -553,20 +553,41 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   left arm carried as the right is rather than in a shield's guard).
   `tools/preview_clip.gd` renders any clip as a sheet of poses, seen from the side
   and the front, with a weapon in hand as the game holds it.
-- The wizard's casting (CastBolt, CastPoint, CastGround, CastSelf and the looping
-  CastChannel) is authored by `tools/import_wizard.py` from his stance, the left
-  hand gesturing while the right keeps the staff upright; `scripts/skills.gd`
-  CAST_CLIPS gives each spell its clip and the moment it leaves his hand. His
-  spells' effects are `scripts/wizard_fx.gd`: particles, sprites, ribbons of
-  light and the imported crystal mesh (frost on the floor, bolts of ice, ice
-  closed round a frozen enemy, spikes, streams of frost, the storm; the ring of
-  Blast Wave over the shockwave's front in fire, the tornado's column, Blazing
-  Speed's heat, a burn; bolts, jolts, the shield's sparks, a rod's).
+- The wizard's stance (WizardIdle) is authored by `tools/import_wizard.py` from the
+  library's relaxed Idle: the rear foot brought in under him so his robe's back
+  hangs clear of it, the staff's foot planted ahead of his right foot (clear of
+  the skirt) with its top leaning back toward him, the fist held still where the
+  staff meets the ground, its thumb up the staff, the elbow hanging at his side.
+  His casting (CastBolt, CastPoint, CastGround, CastSelf and the looping
+  CastChannel) is authored by the same tool from that stance, the left
+  hand gesturing while the right keeps the staff; in the game his fist is turned
+  about the wrist so its grip lies along the staff in every clip
+  (`scripts/staff_hand.gd`), and the staff is laid through it. `scripts/skills.gd`
+  CAST_CLIPS gives each spell its clip and the moment it leaves his hand
+  (CastBolt, the hurl of Fireball, Ice Bolt and Lightning Bolt, steps into the
+  throw and back; those three leave from his left hand where the clip has
+  thrown it). His spells' effects are `scripts/wizard_fx.gd`: particles,
+  sprites, ribbons of light and the imported crystal mesh (frost on the floor,
+  bolts of ice, ice closed round a frozen enemy, spikes, streams of frost, the
+  storm; the ring of Blast Wave over the shockwave's front in fire, the
+  tornado's column, Blazing Speed's heat, a burn; bolts, jolts, the shield's
+  sparks, a rod's; the casting hand alight with a hurled spell's element, and
+  what rises from where it strikes).
+- The wizard's staffs are built by `tools/make_staffs.py`, every part turned on a
+  lathe or swept along a path, each its own mesh by material for
+  `assets/shaders/staff.gdshader`: the twisted silver staff (`silver_staff.glb`,
+  1.8 m; also the Oracle's Staff in gold): three strands wound round a core rod
+  opening into a cage of prongs about a long faceted crystal in a cup, with three
+  small shards, a pointed ferrule, a leather grip wound with a raised thong and
+  beaded collars; and the ashwood staff (`ashwood_staff.glb`, 1.75 m): a gnarled,
+  knotted, bowed ash shaft splitting into three branches round a rough stone,
+  bronze bands and ferrule and a cord-wound grip. Each grip is wrapped where the
+  game holds it (1.254 m up).
 - The flanged mace (`assets/models/props/mace.glb`) is built by `tools/make_mace.py`:
   a haft, pommel, grip and collars turned on a lathe, and seven flanges cut as flat
   blades; nothing imported. The other items' models are ones the game already had
   (the adventurers pack's two-handed sword and one-handed axe, the battle axe, the
-  guards' hasta, the bandits' sica, the Oracle's staff and the mage's), each with
+  guards' hasta and the bandits' sica), each with
   one of the game's own finishes (`Art.finish`).
 - Items are pictured for the inventory by `tools/render_item_icons.gd`
   (`assets/ui/items/<id>.png`), each from the same model that lies on the ground
@@ -666,6 +687,7 @@ shield arm pull back. The right foot stays planted by leg IK. Rebuild with:
 # (After tools/paint_kits.py: the gate guards, from the finished hero.)
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_guard.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_spear.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_staffs.py
 ```
 
 Bodies, armor, robes, weapons, shields, arrows and the boss's crown share

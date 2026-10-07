@@ -13,6 +13,7 @@ const BladeCharge = preload("res://scripts/blade_charge.gd")
 const BladeGlow = preload("res://scripts/blade_glow.gd")
 const Items = preload("res://scripts/items.gd")
 const TwoHandGrip = preload("res://scripts/two_hand_grip.gd")
+const StaffHand = preload("res://scripts/staff_hand.gd")
 # A slain statue breaks apart into individual physics-driven stone fragments:
 # a front sweeps down the body, the stone above it cracking loose (the statue
 # shader's shatter) and each fragment let go as the front reaches it. A blast
@@ -165,6 +166,8 @@ var off_attachment: BoneAttachment3D
 var edge: Array = [.42,1.02]
 # A two-handed weapon's second hand is kept on its haft (scripts/two_hand_grip.gd).
 var two_hands = null
+# The hero wizard's fist, turned to close round his staff (scripts/staff_hand.gd).
+var staff_hand = null
 # The bandits' sica: shorter than the hero's sword.
 const SICA_SIZE = Vector3(.19,.86,.09)
 
@@ -361,6 +364,12 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		skeleton.add_child(two_hands)
 		skeleton.move_child(two_hands,3)
 		two_hands.setup(skeleton)
+		staff_hand = StaffHand.new()
+		staff_hand.name = "StaffHand"
+		skeleton.add_child(staff_hand)
+		skeleton.move_child(staff_hand,4)
+		staff_hand.setup(skeleton)
+		staff_hand.active = false
 	skeleton.skeleton_updated.connect(shown_pose_updated)
 	if not stone and hero_class == "ranger": setup_cloak()
 	elif not stone and hero_class == "wizard": setup_cloak("cape_")
@@ -837,6 +846,7 @@ func arm(weapon: String, swung: String = "") -> void:
 		two_hands.weight = 1.0 if clips.has(CARRIES[weapon.capitalize()]) else 0.0
 	# The weapon hand (the bow hand for an archer) and a shield hand stay
 	# closed on their grips.
+	if staff_hand != null: staff_hand.active = weapon == "staff" and not is_stone
 	if grip != null:
 		grip.hands = []
 		if weapon in ["sword","axe","spear","staff","dagger","heavy","pike"]: grip.hands.append("r")
@@ -977,7 +987,9 @@ func cast_glow(phase: float) -> float:
 func staff_tip() -> Vector3:
 	# (The Oracle's staff, or the hero wizard's, the same staff in silver.)
 	if not is_instance_valid(weapon_item) or weapon_kind != "staff": return global_position+Vector3.UP*1.5
-	return weapon_item.global_transform*Vector3(0,.93,0)
+	# (Near the top of the unit model; an item's own in metres up it.)
+	var top: float = .93*(Items.length(held)/held.size.y if not held.is_empty() else 1.0)
+	return weapon_item.global_transform*Vector3(0,top,0)
 
 func oracle_staff_direction(phase: float) -> Vector2:
 	var keys: Array = ORACLE_STAFF_KEYS if state=="OracleCast" else [[0.0,1.0,.08],[1.0,1.0,.08]]
@@ -1024,29 +1036,33 @@ func align_oracle_staff() -> void:
 		oracle_flame.scale = Vector3.ONE*maxf(.05,glow)*rig.scale.x
 		oracle_flame_light.light_energy = 2.2*glow
 
-# The hero wizard's staff, held like a walking stick: upright, leaning a touch
-# forward, gripped near its top (WIZARD_GRIP of its length up from the foot).
-# Running, it is carried in his fist as the swordsman carries his sword: fixed
-# in the hand, gripped a little below its middle (WIZARD_CARRY_GRIP), so it
-# swings and turns with the arm. Between the two it eases (STAFF_CARRY_EASE
-# seconds), turning about the fist and sliding through it.
-const WIZARD_GRIP = .76
+# The hero wizard's staff, held like a walking stick: its foot planted before
+# him and its top leaning back toward him a little (STAFF_LEAN), gripped
+# WIZARD_GRIP_HEIGHT up from its foot, so that, whatever its
+# length, its foot is on the ground beneath his fist as his stance holds it
+# (tools/import_wizard.py; tools/make_staffs.py wraps its grip there).
+# Running, it is carried in his fist as the swordsman carries his sword:
+# along the fist, gripped at its middle (WIZARD_CARRY_GRIP of its length), so
+# it swings and turns with the arm. Between the two it eases
+# (STAFF_CARRY_EASE seconds), turning with the fist and sliding through it.
+# Either way the fist is turned to close round it (scripts/staff_hand.gd,
+# told here which way the staff should go) and the staff lies along the
+# fist's own grip, through its middle.
+const WIZARD_GRIP_HEIGHT = 1.254
+const STAFF_LEAN = .2
 const WIZARD_CARRY_GRIP = .5
+# A staff that is not an item's (the unit model, standing this tall).
 const WIZARD_STAFF_LENGTH = 1.65
 const STAFF_CARRY_EASE = .12
-# How far toward upright the carried staff is tipped from the line of the fist.
-const STAFF_CARRY_RAISE = .25
 var staff_carry = 0.0
 var staff_carry_clock = 0.0
 func align_walking_staff() -> void:
 	var facing = global_basis.orthonormalized()
 	# Through the middle of his closed fist, not the wrist.
 	var hand: Vector3 = bow_hold("r")[0]
-	var up = (Vector3.UP+facing.z*.12).normalized()
-	var side = facing.x.cross(up).normalized()
-	var across = up.cross(side).normalized()
-	var size = Vector3(weapon_size.x,weapon_size.y*WIZARD_STAFF_LENGTH/ORACLE_STAFF_SIZE.y,weapon_size.z)*rig.scale.x
-	var upright = Basis(across,up,side)
+	# An item's staff stands as its look sizes it (Items.length: its length).
+	var length: float = Items.length(held) if not held.is_empty() else WIZARD_STAFF_LENGTH
+	var size: Vector3 = (weapon_size if not held.is_empty() else Vector3(weapon_size.x,WIZARD_STAFF_LENGTH,weapon_size.z))*rig.scale.x
 	# Carried while he runs, eased in and out on the animation clock.
 	var wanted: float = 1.0 if state == "WizardRun" else 0.0
 	var elapsed: float = anim_clock-staff_carry_clock
@@ -1054,21 +1070,14 @@ func align_walking_staff() -> void:
 	if anim_clock <= 0.0: staff_carry = wanted
 	elif elapsed > 0.0: staff_carry = lerpf(staff_carry,wanted,1.0-exp(-elapsed/STAFF_CARRY_EASE))
 	var w: float = staff_carry*staff_carry*(3.0-2.0*staff_carry)
-	var held: Basis = upright
-	if w > 0.0:
-		# As the sword lies in the hand: along the hand's own grip axis (+Z).
-		var palm: Basis = (skeleton.global_basis*skeleton.get_bone_global_pose(skeleton.find_bone("hand_r")).basis).orthonormalized()
-		var carried: Basis = palm*Basis(Vector3.RIGHT,PI/2)
-		# (Where the sword points ahead, the long staff is tipped up toward
-		# upright, a diagonal across the stride rather than a couched lance;
-		# the hand's swing and turn still carry it.)
-		var line: Vector3 = carried.y.normalized()
-		var raised: Vector3 = line.slerp(Vector3.UP,STAFF_CARRY_RAISE)
-		var tip_up = Quaternion(line,raised) if line.cross(raised).length() > .0001 else Quaternion.IDENTITY
-		carried = (Basis(tip_up)*carried).orthonormalized()
-		held =Basis(upright.get_rotation_quaternion().slerp(carried.get_rotation_quaternion(),w))
-	weapon_item.global_basis = held*Basis.from_scale(size)
-	weapon_item.global_position = hand-held.y*size.y*lerpf(WIZARD_GRIP,WIZARD_CARRY_GRIP,w)
+	if staff_hand != null:
+		staff_hand.upright = (Vector3.UP-facing.z*STAFF_LEAN).normalized()
+		staff_hand.carry = w
+	# Along the fist's grip (the hand's own +Z), as a sword lies in the hand.
+	var palm: Basis = (skeleton.global_basis*skeleton.get_bone_global_pose(skeleton.find_bone("hand_r")).basis).orthonormalized()
+	var along: Basis = palm*Basis(Vector3.RIGHT,PI/2)
+	weapon_item.global_basis = along*Basis.from_scale(size)
+	weapon_item.global_position = hand-along.y*lerpf(WIZARD_GRIP_HEIGHT,length*WIZARD_CARRY_GRIP,w)*rig.scale.x
 
 # The shield's place on the forearm, and its board in its own space.
 var shield_rest = Vector3.ZERO

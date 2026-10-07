@@ -14,11 +14,12 @@ rear heel coming up as the weight goes forward), and each eased out of the
 stance and back into it so one crossfades cleanly into the next. The right
 fist is kept where an upright staff through it clears his body and head.
 
-  CastBolt      .6 s, released at .50: a one-handed hurl. The left hand draws
-                back past the shoulder as the body coils away; then it snaps
-                forward at a chest ahead, palm open, the body uncoiling behind
-                it and the weight thrown onto the front foot. (Fireball, Ice
-                Bolt, Lightning Bolt.)
+  CastBolt      .7 s, released at .45: a one-handed hurl. The left hand draws
+                far back behind the shoulder as the body coils away and sits
+                back; then it is driven out at full stretch, palm open, the
+                body uncoiling behind it as he steps into the throw with his
+                front foot, the weight thrown onto it; he steps back after.
+                (Fireball, Ice Bolt, Lightning Bolt.)
   CastPoint     .7 s, released at .50: the left hand drawn in across the chest,
                 then the arm thrust straight out, the finger pointing at the
                 target, the body leaning in behind it and the head lowered
@@ -43,7 +44,8 @@ fist is kept where an upright staff through it clears his body and head.
                 there is no wind-up, only the held effort. (Freeze Floor,
                 Frost Blast.)
 
-None of them travels: he ends where he began.
+None of them travels: he ends where he began (CastBolt's step forward is
+taken back).
 
   .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_wizard.py
 
@@ -63,17 +65,21 @@ if not GLB.is_absolute(): GLB = ROOT/GLB
 OUT = Path(os.environ.get('WIZARD_OUT', str(GLB)))
 # name: seconds, and the share of each at which the spell leaves him
 # (the game's casting code keeps the same).
-CLIPS = {'CastBolt': .6, 'CastPoint': .7, 'CastGround': .9, 'CastSelf': 1.0, 'CastChannel': 1.2}
-RELEASE = {'CastBolt': .5, 'CastPoint': .5, 'CastGround': .55, 'CastSelf': .5}
+CLIPS = {'CastBolt': .7, 'CastPoint': .7, 'CastGround': .9, 'CastSelf': 1.0, 'CastChannel': 1.2}
+RELEASE = {'CastBolt': .45, 'CastPoint': .5, 'CastGround': .55, 'CastSelf': .5}
+# His stance, from which every cast is keyed, is authored first (from the
+# library's relaxed Idle: STANCE, below).
+STANCE = 'WizardIdle'
 ONLY = [n for n in os.environ.get('WIZARD_ONLY', '').split(',') if n]
-for n in ONLY: assert n in CLIPS, n
-AUTHORED = ONLY or list(CLIPS)
+for n in ONLY: assert n in CLIPS or n == STANCE, n
+AUTHORED = ONLY or [STANCE]+list(CLIPS)
 CHECK = bool(os.environ.get('WIZARD_CHECK'))
 # The staff as the game stands it in the right fist (scripts/visual.gd): this
-# long, held this far up it, leaning this much forward.
+# long, held this far up it, its foot planted ahead of him and its top leaning
+# back toward him this much, as a walking staff rests.
 STAFF_LENGTH = 1.65
 STAFF_GRIP = .76
-STAFF_UP = Vector((0, -.12, 1)).normalized()
+STAFF_UP = Vector((0, .2, 1)).normalized()
 PALM = .075
 
 def clip_starts(path):
@@ -122,14 +128,16 @@ def pose_of(action, time=0.0):
     rig.animation_data.action = None
     return pose
 
-BASE = pose_of('WizardIdle')
+# (The library's Idle while his own stance is authored from it; his stance
+# once it is: settle, below.)
+BASE = pose_of('Idle' if STANCE in AUTHORED else STANCE)
 # The left hand's fingers: curled as the stance has them, and opened as the
 # library's cast opens them (the right hand's the game keeps closed on the
 # staff: scripts/hand_grip.gd).
 FINGERS = [n+'_l' for n in ('thumb_01', 'thumb_02', 'thumb_03', 'index_01', 'index_02', 'index_03', 'middle_01', 'middle_02', 'middle_03', 'ring_01', 'ring_02',
     'ring_03', 'pinky_01', 'pinky_02', 'pinky_03')]
 OPEN = {n: m for n, m in pose_of('Cast').items() if n in FINGERS} if 'Cast' in bpy.data.actions else {n: BASE[n] for n in FINGERS}
-POINTING = {n: (OPEN[n] if n.startswith(('index', 'thumb')) else BASE[n]) for n in FINGERS}
+POINTING = {}
 
 def apply(pose):
     for b in B: b.matrix_basis = pose[b.name]
@@ -319,31 +327,38 @@ def pose_blend(m1, m2, w):
     l2, r2, s2 = m2.decompose()
     return Matrix.LocRotScale(l1.lerp(l2, w), r1.slerp(r2, w), s1)
 
-reset()
-PELVIS = B['pelvis'].matrix.translation.copy()
-PLANTED = {s: B['foot_'+s].matrix.translation.copy() for s in 'lr'}
-BALLS = {s: B['ball_'+s].matrix.translation.copy() for s in 'lr'}
-FOOT_TURN = {s: B['foot_'+s].matrix.to_quaternion() for s in 'lr'}
-BALL_TURN = {s: B['ball_'+s].matrix.to_quaternion() for s in 'lr'}
-LEG = {s: (B['calf_'+s].matrix.translation-B['thigh_'+s].matrix.translation).length+(B['foot_'+s].matrix.translation-B['calf_'+s].matrix.translation).length
-    for s in 'lr'}
-TOES = {}
-for s in 'lr':
-    d = BALLS[s]-PLANTED[s]
-    d.z = 0
-    TOES[s] = d.normalized()
-# Where the stance has the wrists, and the way its hands lie.
-HOME = {s: B['hand_'+s].matrix.translation.copy() for s in 'lr'}
-HOME_Q = {s: B['hand_'+s].matrix.to_quaternion() for s in 'lr'}
-HOME_PALM = {s: (HOME_Q[s] @ X)*PALM_SIDE[s] for s in 'lr'}
-HOME_FINGERS = {s: HOME_Q[s] @ Y for s in 'lr'}
+def settle():
+    """Everything the clips take from the stance (BASE): where its feet are
+    planted and how they lie, where its wrists are and how its hands are
+    turned."""
+    global PELVIS, PLANTED, BALLS, FOOT_TURN, BALL_TURN, LEG, TOES, HOME, HOME_Q, HOME_PALM, HOME_FINGERS
+    POINTING.clear()
+    POINTING.update({n: (OPEN[n] if n.startswith(('index', 'thumb')) else BASE[n]) for n in FINGERS})
+    reset()
+    PELVIS = B['pelvis'].matrix.translation.copy()
+    PLANTED = {s: B['foot_'+s].matrix.translation.copy() for s in 'lr'}
+    BALLS = {s: B['ball_'+s].matrix.translation.copy() for s in 'lr'}
+    FOOT_TURN = {s: B['foot_'+s].matrix.to_quaternion() for s in 'lr'}
+    BALL_TURN = {s: B['ball_'+s].matrix.to_quaternion() for s in 'lr'}
+    LEG = {s: (B['calf_'+s].matrix.translation-B['thigh_'+s].matrix.translation).length+(B['foot_'+s].matrix.translation-B['calf_'+s].matrix.translation).length
+        for s in 'lr'}
+    TOES = {}
+    for s in 'lr':
+        d = BALLS[s]-PLANTED[s]
+        d.z = 0
+        TOES[s] = d.normalized()
+    # Where the stance has the wrists, and the way its hands lie.
+    HOME = {s: B['hand_'+s].matrix.translation.copy() for s in 'lr'}
+    HOME_Q = {s: B['hand_'+s].matrix.to_quaternion() for s in 'lr'}
+    HOME_PALM = {s: (HOME_Q[s] @ X)*PALM_SIDE[s] for s in 'lr'}
+    HOME_FINGERS = {s: HOME_Q[s] @ Y for s in 'lr'}
+settle()
 
 def L(palm, fingers):
     return hand_q('l', palm, fingers)
 
 def R(palm, fingers):
     return hand_q('r', palm, fingers)
-print('WIZARD_HOME', {s: [round(v, 3) for v in HOME[s]] for s in 'lr'})
 
 def body(turn=0.0, lean=0.0, tilt=0.0, down=0.0, forward=0.0, aside=0.0, hip=.4, look=0.0, nod=0.0):
     """The trunk: the hips moved (down, forward, to his left), the whole of
@@ -524,6 +539,97 @@ def author(name, pose, loop=False, into=.12, out=.84):
             print('  %.3f palm (%.2f %.2f %.2f) fist (%.2f %.2f %.2f) clear %.3f %s hand %.3f %s wrists l %.0f r %.0f reach l %.2f r %.2f foot %.3f' % (m['t'], m['palm'].x, m['palm'].y, m['palm'].z,
                 m['fist'].x, m['fist'].y, m['fist'].z, m['clear'][0], m['clear'][1], m['hand_clear'][0], m['hand_clear'][1], m['wrists']['l'], m['wrists']['r'], m['reach']['l'], m['reach']['r'], m['stretch']))
 
+# ---- His stance ----
+#
+# WizardIdle: the library's relaxed Idle (its breathing and the small shifts
+# of its weight kept), stood as a man resting on a staff:
+#   - the rear (right) foot brought in under him and its toes turned less far
+#     out (STANCE_FOOT), the front one back a little (STANCE_FRONT), so the
+#     back of his robe hangs clear of his heel;
+#   - the staff before him like a walking stick, its foot planted ahead of
+#     his right foot (clear of his robe's skirt) and its top leaning back
+#     toward him (STAFF_UP): the fist held still close before his right hip
+#     where the staff meets the ground at its grip (STAFF_GRIP of
+#     STAFF_LENGTH up from its foot), the hand's thumb up the staff (its own
+#     +Z along it, so the fist is closed round it, not beside it);
+#   - the elbow hanging easy at his side, down and a little behind the
+#     shoulder (STANCE_ELBOW, its pole), the forearm bent up and forward to
+#     the fist, not winged out to the side nor reaching out before him.
+STANCE_FOOT = {'forward': .25, 'aside': .02, 'yaw': .28}
+# (And the front foot set back a little, so he stands only lightly
+# staggered, his weight between them.)
+STANCE_FRONT = {'forward': -.05}
+# Where the fist stands out from his middle (to his right, ahead): its height
+# is the staff's (above). The elbow's pole, from the shoulder (out to his
+# right, back, down).
+STANCE_FIST = (.31, .05)
+STANCE_ELBOW = (.1, .35, -.6)
+# The fist the game closes his staff hand into (scripts/hand_grip.gd: the
+# swordsman's grip), so the fist is measured here as it is held there.
+FIST = [n+'_r' for n in ('thumb_01', 'thumb_02', 'thumb_03', 'index_01', 'index_02', 'index_03', 'middle_01', 'middle_02', 'middle_03', 'ring_01', 'ring_02',
+    'ring_03', 'pinky_01', 'pinky_02', 'pinky_03')]
+
+def author_stance():
+    source = bpy.data.actions['Idle']
+    length = source.frame_range.y/30
+    samples = 60
+    poses = []
+    rig.animation_data.action = source
+    for f in range(samples+1):
+        frame(length*f/samples)
+        poses.append({b.name: b.matrix_basis.copy() for b in B})
+    closed = {n: m for n, m in pose_of('SwordIdle').items() if n in FIST}
+    for pose in poses: pose.update({n: m.copy() for n, m in closed.items()})
+    rig.animation_data.action = None
+    elbow_pole = V(STANCE_ELBOW[0]*RIGHT_X, STANCE_ELBOW[1], STANCE_ELBOW[2])
+    # The fist's turn: palm in toward his middle, knuckles ahead, thumb up the
+    # staff.
+    q = R(X*-RIGHT_X, AHEAD-STAFF_UP*AHEAD.dot(STAFF_UP))
+    # Where the wrist must be for the fist's middle to be at the staff's
+    # grip, found on the first frame (the fist's middle lies a little way
+    # from the wrist, as the hand is turned).
+    apply(poses[0])
+    wrist = V(STANCE_FIST[0]*RIGHT_X, -STANCE_FIST[1], 1.2)
+    grip_height = STAFF_GRIP*STAFF_LENGTH*STAFF_UP.z
+    for _ in range(6):
+        apply(poses[0])
+        arm('r', wrist, B['upperarm_r'].matrix.translation+elbow_pole)
+        hand('r', q)
+        wrist = wrist+V(0, 0, grip_height-fist().z)
+    a = bpy.data.actions.new(STANCE)
+    rig.animation_data.action = a
+    for f, pose in enumerate(poses):
+        apply(pose)
+        foot('r', **STANCE_FOOT)
+        foot('l', **STANCE_FRONT)
+        arm('r', wrist, B['upperarm_r'].matrix.translation+elbow_pole)
+        hand('r', q)
+        keys(length*30*f/samples)
+    finish(STANCE, a, length)
+    # The checks: where the elbow hangs from the shoulder, how far the wrist
+    # is bent, where the fist is and which way the thumb points, and how far
+    # the staff's foot is from the ground.
+    rig.animation_data.action = a
+    frame(0)
+    shoulder_at = B['upperarm_r'].matrix.translation
+    elbow = B['lowerarm_r'].matrix.translation-shoulder_at
+    bend = math.degrees((B['lowerarm_r'].matrix.to_quaternion() @ Y).angle(B['hand_r'].matrix.to_quaternion() @ Y))
+    thumb = B['hand_r'].matrix.to_quaternion() @ Z
+    grip = fist()
+    staff_foot = grip-STAFF_UP*STAFF_LENGTH*STAFF_GRIP
+    rig.animation_data.action = None
+    feet_at = {s: B['foot_'+s].matrix.translation.copy() for s in 'lr'}
+    print('WIZARD_FEET', {s: [round(c, 3) for c in feet_at[s]] for s in 'lr'})
+    print('WIZARD_STANCE elbow from shoulder out %.3f back %.3f down %.3f | wrist bent %.0f deg | fist (%.3f %.3f %.3f) | thumb (%.2f %.2f %.2f) off staff %.1f deg | staff foot z %.3f | right foot moved %s' % (
+        -elbow.x*RIGHT_X, elbow.y, -elbow.z, bend, grip.x, grip.y, grip.z, thumb.x, thumb.y, thumb.z, math.degrees(thumb.angle(STAFF_UP)), staff_foot.z, STANCE_FOOT))
+
+RIGHT_X = 1.0 if B['upperarm_r'].matrix.translation.x > 0 else -1.0
+if STANCE in AUTHORED:
+    author_stance()
+    BASE = pose_of(STANCE)
+    settle()
+print('WIZARD_HOME', {s: [round(v, 3) for v in HOME[s]] for s in 'lr'})
+
 # ---- The clips ----
 #
 # Each is laid out as states at phases 0, 1, 2 ... (the stance, the wind-up,
@@ -534,32 +640,38 @@ def author(name, pose, loop=False, into=.12, out=.84):
 # so the hips and spine drive the hand rather than follow it.
 
 def bolt(t):
-    # The hurl. The left hand lifted out to his side and drawn back past the
-    # shoulder, cocked by the ear, as the body coils to the left and sits
-    # back onto the rear foot; then
-    # everything unwound toward the target: the hips driven forward, the chest
-    # turned after them, the arm snapped out at chest height with the palm
-    # open behind the bolt, the weight thrown onto the front foot and the rear
-    # heel up; a short follow-through, and back.
+    # The hurl. The left hand lifted out to his side and drawn far back
+    # behind the shoulder, cocked by the ear, as the body coils to the left
+    # and sits back onto the rear foot; then everything unwound toward the
+    # target: the front foot stepping out into the throw and the hips driven
+    # forward over it, the chest turned after them, the arm driven out at
+    # full stretch at chest height with the palm open behind the bolt, the
+    # weight thrown onto the front foot and the rear heel up; a short
+    # follow-through, and he steps back into his stance.
     # (The states: the stance, the hand lifted out to his side, cocked by
     # the ear, over the shoulder, the release, the follow-through, the
     # stance.)
-    T = [(0, 0), (.1, 1), (.2, 2), (.24, 2.04, 'out'), (.38, 3, 'in'), (.5, 4, 'out'), (.62, 5, 'out'), (1, 6)]
+    T = [(0, 0), (.1, 1), (.21, 2), (.25, 2.04, 'out'), (.36, 3, 'in'), (.45, 4, 'out'), (.58, 5, 'out'), (1, 6)]
     a = curve(T, t)
     b = curve(T, lead(t, .04))
-    body(turn=at([0, .25, .5, .1, -.38, -.34, 0], b), lean=at([0, -.04, -.1, .1, .3, .3, 0], b), tilt=at([0, .03, .06, 0, -.08, -.08, 0], b),
-        down=at([0, .02, .04, .07, .1, .1, 0], b), forward=at([0, -.04, -.08, .06, .2, .2, 0], b), nod=at([0, -.02, -.04, 0, .02, .04, 0], a))
-    wrist = at([HOME['l'], V(.55, .06, 1.22), V(.42, .2, 1.6), V(.3, -.14, 1.64), V(.12, -.74, 1.32), V(.1, -.7, 1.22), HOME['l']], a)
+    # The step: the front foot out as the throw comes, planted at the
+    # release, and back again after the follow-through.
+    step = curve([(0, 0), (.22, 0), (.42, 1, 'out'), (.62, 1), (.88, 0)], t)
+    lift = .07*bump(t, .22, .42)+.05*bump(t, .62, .88)
+    body(turn=at([0, .3, .62, .12, -.46, -.42, 0], b), lean=at([0, -.05, -.15, .1, .36, .36, 0], b), tilt=at([0, .03, .07, 0, -.09, -.09, 0], b),
+        down=at([0, .02, .05, .08, .13, .12, 0], b), forward=at([0, -.05, -.12, .04, .2, .2, 0], b)+.14*step, nod=at([0, -.02, -.05, 0, .02, .04, 0], a))
+    ahead = V(0, -.14, 0)*step
+    wrist = at([HOME['l'], V(.58, .1, 1.24), V(.46, .36, 1.6), V(.32, 0, 1.68), V(.12, -.84, 1.33), V(.1, -.8, 1.23), HOME['l']], a)+ahead
     q = quat_at([HOME_Q['l'], L(V(-.2, -.6, -.75), V(.8, -.2, -.5)), L(V(.3, -.9, .3), V(.2, .1, 1)), L(V(.1, -.9, .4), V(.2, -.4, .9)), L(V(0, -.95, -.3), V(.25, -.3, .9)),
         L(V(0, -.85, -.5), V(.2, -.5, .85)), HOME_Q['l']], a)
-    # (The elbow is carried out and a little back as the hand is lifted and
+    # (The elbow is carried out and well back as the hand is lifted and
     # cocked, then leads the hand into the throw.)
-    pole = at([POLE['l'], V(.6, .7, 1.1), V(.9, .2, 1.3), V(.9, -.1, 1.3), V(.7, -.1, .95), V(.7, -.1, .9), POLE['l']], curve(T, lead(t, .05)))
+    pole = at([POLE['l'], V(.6, .8, 1.1), V(.9, .45, 1.3), V(.9, 0, 1.3), V(.7, -.1, .95), V(.7, -.1, .9), POLE['l']], curve(T, lead(t, .05)))
     left(wrist, q, pole, open=curve([(0, 0), (.25, 1), (.8, 1), (1, 0)], t))
-    staff(at([HOME['r'], HOME['r']+V(-.02, .02, -.01), HOME['r']+V(-.03, .03, -.02), HOME['r']+V(-.02, -.06, 0), HOME['r']+V(0, -.14, .04), HOME['r']+V(0, -.14, .03), HOME['r']], a),
-        turn=at([0, .15, .3, .05, -.2, -.2, 0], b))
-    heel = .4*at([0, 0, 0, .3, 1, 1, 0], b)
-    feet(left={}, right={'heel': heel})
+    staff(at([HOME['r'], HOME['r']+V(-.02, .03, -.01), HOME['r']+V(-.03, .05, -.02), HOME['r']+V(-.02, -.06, 0), HOME['r']+V(0, -.16, .04), HOME['r']+V(0, -.16, .03), HOME['r']], a)+ahead,
+        turn=at([0, .18, .36, .05, -.24, -.24, 0], b))
+    heel = .45*at([0, 0, 0, .3, 1, 1, 0], b)
+    feet(left={'forward': .3*step, 'lift': lift}, right={'heel': heel})
 
 def point(t):
     # The point. The hand drawn in across the chest, palm down, the body

@@ -72,14 +72,14 @@ const RANGER = [
 # spell chills what it hits (slowed 40% for 3 seconds) and ices the floor
 # under it.
 const WIZARD = [
-	["ice_bolt", "Ice Bolt", "ice", 0, "icebolt", "any", 10, "Shoot a bolt of ice at the target for {x}% ice damage, with a {y}% chance to freeze it in place for 3 seconds.", [[100,4],[120,8],[140,12],[160,16],[180,20]]],
+	["ice_bolt", "Ice Bolt", "ice", 0, "icebolt", "any", 10, "Shoot a bolt of ice that strikes the first enemy in its path for {x}% ice damage, with a {y}% chance to freeze it in place for 3 seconds.", [[100,4],[120,8],[140,12],[160,16],[180,20]]],
 	["freeze_floor", "Freeze Floor", "ice", 0, "freezefloor", "any", 10, "Channel a ray of frost that freezes the floor 2.5 meters across wherever you spray it, for 12 seconds: enemies on frozen floor move {x}% slower. Costs 10 energy a second while held.", [[40],[50],[60],[70],[80]]],
 	["ice_spikes", "Ice Spikes", "ice", 5, "spikes", "any", 35, "Raise spikes of ice out of the floor across 4 meters where you aim, for {x}% ice damage.", [[100],[120],[140],[160],[180]]],
 	["ice_prison", "Ice Prison", "ice", 5, "prison", "any", 45, "Freeze an enemy in a block of ice for {x} seconds: it can do nothing, and takes {y}% more damage.", [[2,20],[3,25],[4,35],[5,45],[6,60]]],
 	["improved_chill", "Improved Chill", "ice", 5, "passive", "any", 0, "Your ice spells' chill slows {x}% more, and lasts {y} seconds longer.", [[10,1],[15,2],[20,3],[30,4],[40,5]]],
 	["frost_blast", "Frost Blast", "ice", 10, "frostblast", "any", 20, "Channel frost from your hands 10 meters ahead, for {x}% frost damage a second to every enemy within 3 meters of the stream. Costs 20 energy a second while held.", [[70],[90],[110],[130],[150]]],
 	["ice_storm", "Ice Storm", "ice", 10, "icestorm", "any", 40, "Frost swirls about you for {x} seconds, dealing {y}% frost damage a second to every enemy within 4 meters. Your frost spells deal double damage while it lasts, and you can cast nothing else. 60-second cooldown.", [[6,60],[8,70],[10,80],[12,90],[15,100]]],
-	["fireball", "Fireball", "fire", 0, "fireball", "any", 10, "Hurl a ball of fire at the target for {x}% fire damage.", [[120],[160],[200],[240],[280]]],
+	["fireball", "Fireball", "fire", 0, "fireball", "any", 10, "Hurl a ball of fire that bursts on the first enemy in its path for {x}% fire damage.", [[120],[160],[200],[240],[280]]],
 	["blast_wave", "Blast Wave", "fire", 5, "blastwave", "any", 45, "A wave of flame bursts out 5 meters in every direction, for {x}% fire damage to every enemy it touches.", [[125],[145],[170],[200],[235]]],
 	["frostburn", "Frostburn", "fire", 5, "passive", "any", 0, "Your fire spells deal {x}% more damage to chilled enemies, and to those standing on your ice.", [[50],[75],[100],[135],[175]]],
 	["fire_tornado", "Fire Tornado", "fire", 10, "tornado", "any", 65, "Conjure a tornado of fire 4 meters across where you aim: for 8 seconds it deals {x}% fire damage a second to everything it touches, and each time it burns an enemy there is a {y}% chance to make that enemy a Lightning Rod, if you know that spell.", [[50,1],[60,2],[70,3],[85,4],[100,5]]],

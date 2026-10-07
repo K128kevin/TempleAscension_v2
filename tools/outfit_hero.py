@@ -561,6 +561,19 @@ def wizard_kit():
     cy = outfits.KILT_CENTER_Y
     surface = bmesh.new(); surface.from_mesh(robe.data); surface.transform(robe.matrix_world)
     robe_surface = BVHTree.FromBMesh(surface); surface.free()
+    # The sheet takes the widest girth of the body about each point, so it
+    # stood off the cinched robe wherever the waist narrows (up to 5cm at the
+    # back): every point is laid on the robe's surface instead, SASH_ON_ROBE
+    # out from it, so the sash binds the robe all the way round.
+    def onto_robe(piece, off):
+        for v in piece.data.vertices:
+            out = Vector((v.co.x,v.co.y-cy,0))
+            if out.length < 1e-4: continue
+            hit,_,_,_ = robe_surface.ray_cast(Vector((0,cy,v.co.z))+out.normalized()*.4,-out.normalized(),.4)
+            if hit is None: continue
+            need = Vector((hit.x,hit.y-cy,0)).length+off
+            v.co.x = out.normalized().x*need; v.co.y = cy+out.normalized().y*need
+    onto_robe(sash,SASH_ON_ROBE)
     for i,(turn,length) in enumerate([(.0,.34),(.09,.28)]):
         end = bpy.data.objects.new('WizardSashEnd%d' % i,bpy.data.meshes.new('WizardSashEnd%d' % i))
         bpy.context.scene.collection.objects.link(end)
@@ -568,16 +581,10 @@ def wizard_kit():
         # Round from the back (where sheets hang) to the knot at the front.
         spin = _M.Translation((0,cy,0)) @ _M.Rotation(math.pi+(turn+.25)*RIGHT_X,4,'Z') @ _M.Translation((0,-cy,0))
         end.data.transform(spin)
-        # The ends hang over the robe's skirt, which flares out beneath the
-        # sash: each point is laid just outside the robe's surface.
-        for v in end.data.vertices:
-            out = Vector((v.co.x,v.co.y-cy,0))
-            if out.length < 1e-4: continue
-            hit,_,_,_ = robe_surface.ray_cast(Vector((0,cy,v.co.z))+out.normalized()*.4,-out.normalized(),.4)
-            if hit is None: continue
-            need = Vector((hit.x,hit.y-cy,0)).length+.012
-            if out.length < need:
-                v.co.x = out.normalized().x*need; v.co.y = cy+out.normalized().y*need
+        # The ends hang from the knot over the robe's skirt, which flares out
+        # beneath the sash: each point is laid on the robe's surface, a
+        # little further out than the band they hang over.
+        onto_robe(end,SASH_ON_ROBE+.006)
         end.parent = rig
         end.modifiers.new('Armature','ARMATURE').object = rig
         pieces.append(end)
@@ -588,6 +595,8 @@ WIZARD_BOOT_TOP = .34
 SASH_LOW = .985
 SASH_HIGH = 1.06
 ROBE_AT_WAIST = .03
+# How far the sash's leather lies out from the robe it binds.
+SASH_ON_ROBE = .006
 bpy.ops.object.select_all(action='DESELECT')
 ranger_hood.select_set(True); cloak.select_set(True)
 bpy.context.view_layer.objects.active = cloak

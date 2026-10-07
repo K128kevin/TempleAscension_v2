@@ -117,7 +117,7 @@ func test():
 	check(game.run.class_id=="wizard" and Data.weapon(game.run)==4 and game.run.skills.is_empty() and game.run.skill_points==1 and not game.creating_character,"Wizard creation grants the staff and one skill point")
 	check(not Save.load_run().is_empty(),"New class creation writes a valid character save")
 	# A new character wakes in the desert: the corner tells the way, not a floor.
-	game.run.difficulty=2; hud.tick(0)
+	game.run.difficulty=1; hud.tick(0)
 	check(hud.objective.text=="" and "Hard" in hud.difficulty.text and "Temple" in hud.direction.text,"Outdoors the corner shows the difficulty and the way to the temple")
 	await capture("hud-unlocked")
 	game._process(.1)

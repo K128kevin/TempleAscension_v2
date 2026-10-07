@@ -59,6 +59,8 @@ var powering = false
 var lasting: Dictionary = {}
 var falls: Array = []
 var passing: Array = []
+# His casting hand alight while he gathers a hurled spell (it is in `passing` too).
+var hand_aura = null
 # How far the ranger's blade reaches, how far he throws sand, how wide a
 # Volley falls and how near its arrows must land to hit, how far lightning
 # leaps, and how long the cooldowns the document gives are.
@@ -166,13 +168,16 @@ const BURN_SECONDS = 3.0
 const BURN_SHARE = .1
 # Each spell's casting (tools/import_wizard.py): its clip, how long it plays,
 # and how far through it the spell leaves his hand.
-const CAST_CLIPS = {"icebolt":["CastBolt",.6,.5],"fireball":["CastBolt",.6,.5],"bolt":["CastBolt",.6,.5],
+const CAST_CLIPS = {"icebolt":["CastBolt",.7,.45],"fireball":["CastBolt",.7,.45],"bolt":["CastBolt",.7,.45],
 	"prison":["CastPoint",.7,.5],"rod":["CastPoint",.7,.5],"shock":["CastPoint",.7,.5],
 	"spikes":["CastGround",.9,.55],"tornado":["CastGround",.9,.55],
 	"blastwave":["CastSelf",1.0,.5],"icestorm":["CastSelf",1.0,.5],"lshield":["CastSelf",1.0,.5],"blazing":["CastSelf",1.0,.5],
 	"freezefloor":["CastChannel",1.2,0.0],"frostblast":["CastChannel",1.2,0.0]}
 # Spells cast on himself, and the single-target ones that need an enemy before him.
 const SELF_SPELLS = ["blastwave","icestorm","lshield","blazing"]
+# The spells hurled from his left hand, and the element each sets it alight
+# with while he gathers it (WizardFx.hand_aura).
+const HURLED = {"fireball":"fire","icebolt":"ice","bolt":"lightning"}
 const AIMED_SPELLS = ["prison","rod","shock","bolt"]
 # How far (centre to centre) the warrior's blows reach, and how far he leaps.
 const MELEE_REACH = 1.9
@@ -201,6 +206,10 @@ const CHARGE_SPEED = 11.0
 # Firebolt is the Oracle's fireball: how far it flies, and its blast.
 const FIREBALL_REACH = 13.0
 const FIREBALL_RADIUS = 2.2
+# The wizard's Fireball: metres a second, and how high it is at the end of
+# its reach.
+const FIREBALL_SPEED = 18.0
+const FIREBALL_HEIGHT = 1.0
 const CHARGE_THROW = 1.6
 const SHOCKWAVE_THROW = 2.2
 # The screen shakes this hard (metres) as the ground breaks.
@@ -454,6 +463,10 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		game.swing(duration)
 		game.player.visual.tint_blade(SWORD_CHAIN_SKILLS[s.effect],duration)
 	else: game.player.visual.play(clip,duration)
+	if s.class_id=="wizard" and HURLED.has(s.effect):
+		if is_instance_valid(hand_aura): hand_aura.release()
+		hand_aura = WizardFx.hand_aura(game.world,game.player.visual,HURLED[s.effect])
+		passing.append([hand_aura,duration+.8])
 	# Cleave and the strikes struck with the normal attack's swings whistle as
 	# its swings do, a moment before the blow.
 	if s.effect=="cleave" or SWORD_CHAIN_SKILLS.has(s.effect):
@@ -682,6 +695,7 @@ func ice_bolt_hit(enemy, p: Dictionary) -> void:
 	var extra: Dictionary = p.get("extra",{})
 	spell_hit(enemy,extra.get("percent",100.0),"frost",StoneFragment.impact(p.direction))
 	WizardFx.shatter(game.world,enemy.position+Vector3.UP,.8)
+	WizardFx.rising(game.world,enemy.position+Vector3.UP*(1.0+game.world.lift(enemy.position)),"ice")
 	game.sound.play("ice-impact",-14)
 	if not enemy.dead and randf()*100.0<extra.get("freeze",0.0): enemy.freeze(FREEZE_SECONDS)
 
@@ -704,6 +718,21 @@ func rod_jolt(rod) -> void:
 		from = next
 		percent *= ROD_FADE
 	game.sound.play("lightning-zap",-8)
+
+# Where a hurled spell leaves him (Fireball, Ice Bolt, Lightning Bolt): his
+# casting hand, thrown out before him; its light goes out as it does. (Should
+# his hand be nowhere it could be, a little before his chest.)
+func loose_spell(direction: Vector3) -> Vector3:
+	if is_instance_valid(hand_aura): hand_aura.release()
+	var origin: Vector3 = game.player.position
+	var guess: Vector3 = origin+Vector3.UP*1.35+direction*.4
+	var visual = game.player.visual
+	if not is_instance_valid(visual) or visual.skeleton == null: return guess
+	# (The figure stands lifted onto the ground's height; the flights do not.)
+	var hand: Vector3 = visual.bow_hold("l")[0]-Vector3.UP*game.world.lift(origin)
+	var out: Vector3 = hand-origin
+	if out.y<.7 or out.y>2.0 or Vector2(out.x,out.z).length()>1.6: return guess
+	return hand
 
 # The one enemy a pointed spell is cast on: the nearest to where it is aimed,
 # within its reach and in sight.
@@ -1070,12 +1099,14 @@ func execute(job: Dictionary) -> void:
 					strike(victim,blow)
 			game.player.landed_on(victim)
 		# --- The wizard's spells.
+		# Ice Bolt and Fireball are loosed as arrows are: along the way he
+		# faces, striking the first enemy in it, or gone at the end of their
+		# reach (the fireball bursting against a wall in its way).
 		"icebolt":
-			var bolt_at: Vector3 = origin+direction*SPELL_REACH
-			var caught = aimed_target(at,direction)
-			if caught != null: bolt_at = caught.position
+			# (The bolt's flight is a metre up from where it is loosed.)
+			var loosed: Vector3 = loose_spell(direction)-Vector3.UP
 			game.sound.play("frost-bolt",-13)
-			game.projectile(origin,bolt_at,attack_damage(v.x,"spell"),true,"ice",false,null,true,{"kind":"icebolt","percent":v.x,"freeze":v.y})
+			game.projectile(loosed,loosed+direction*SPELL_REACH,attack_damage(v.x,"spell"),true,"ice",false,null,true,{"kind":"icebolt","percent":v.x,"freeze":v.y})
 		"spikes":
 			var spot: Vector3 = origin+direction*minf(SPELL_REACH,origin.distance_to(at))
 			waves.append(WizardFx.spikes(spot+Vector3.UP*game.world.lift(spot),SPIKES_RADIUS))
@@ -1099,12 +1130,10 @@ func execute(job: Dictionary) -> void:
 			if not is_instance_valid(storm_hum): storm_hum = game.sound.held("ice-storm",-14,.6)
 			game.float_text(origin+Vector3.UP*2.3,"Ice Storm!",Color(.7,.9,1))
 		"fireball":
-			var reach: float = minf(SPELL_REACH,origin.distance_to(at)) if origin.distance_to(at) > .5 else SPELL_REACH
-			var caught = aimed_target(at,direction)
-			var landing: Vector3 = caught.position if caught != null else origin+direction*reach
-			while landing.distance_to(origin) > 1.0 and not game.world.clear_line(origin,landing): landing = origin+(landing-origin)*.9
-			var hand: Vector3 = origin+Vector3.UP*1.35+direction*.4
-			game.fireball(hand,landing,1.1,attack_damage(v.x,"spell"),clampf(landing.distance_to(origin)/16.0,.3,.7),null,true,"fire",v.x)
+			var hand: Vector3 = loose_spell(direction)
+			# (Sinking a little over its flight, to the height of an enemy's middle.)
+			var end: Vector3 = origin+Vector3.UP*FIREBALL_HEIGHT+direction*SPELL_REACH
+			game.fireball(hand,end,1.1,attack_damage(v.x,"spell"),hand.distance_to(end)/FIREBALL_SPEED,null,true,"fire",v.x)
 		"blastwave":
 			waves.append(WizardFx.flame_ring(origin+Vector3.UP*game.world.lift(origin),BLAST_RADIUS))
 			game.world.add_child(waves[-1])
@@ -1130,9 +1159,12 @@ func execute(job: Dictionary) -> void:
 			game.sound.play("fireball-cast",-11)
 			game.float_text(origin+Vector3.UP*2.3,"Blazing Speed!",Color(1,.6,.25))
 		"bolt":
+			var hand: Vector3 = loose_spell(direction)
 			var hit = aimed_target(at,direction)
 			if hit == null: return
-			waves.append(WizardFx.bolt(game.world,origin+Vector3.UP*1.4+direction*.4,hit.position+Vector3.UP*1.1))
+			waves.append(WizardFx.bolt(game.world,hand,hit.position+Vector3.UP*1.1))
+			WizardFx.bolt_sparks(game.world,hand,hit.position+Vector3.UP*1.1)
+			WizardFx.rising(game.world,hit.position+Vector3.UP*(1.0+game.world.lift(hit.position)),"lightning")
 			game.sound.play("lightning-zap",-4)
 			spell_hit(hit,v.x,"lightning",StoneFragment.impact(hit.position-origin))
 		"lshield":

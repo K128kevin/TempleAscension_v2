@@ -89,7 +89,7 @@ const ALL = {
 	"worn_boots":{"name":"Worn Leather Boots","slot":"feet","weight":"light","armor":1.0},
 	"wrapped_bracers":{"name":"Wrapped Bracers","slot":"hands","weight":"light","armor":1.0},
 	"silver_staff":{"name":"Twisted Silver Staff","slot":"weapon","kind":"staff","hands":2,"bonus":{"spell_damage":5.0},
-		"look":{"model":"oracle_staff","size":Vector3(.13,1.9,.13),"grip":.45,"finish":"staff"}},
+		"look":{"model":"silver_staff","size":Vector3.ONE,"length":1.8,"grip":1.254,"finish":"parts"}},
 
 	# --- What enemies drop. Weapons and shields first.
 	"bandit_sica":{"name":"Bandit's Sica","rarity":"common","slot":"weapon","kind":"sword","hands":1,"damage":[12.0,17.0],"bonus":{"haste":5.0},
@@ -112,9 +112,9 @@ const ALL = {
 	"viper_fang":{"name":"Viper's Fang","rarity":"uncommon","slot":"weapon","kind":"dagger","hands":1,"damage":[12.0,17.0],"bonus":{"leech":2.0},
 		"look":{"model":"dagger","size":Vector3(.09,.56,.045),"grip":.11,"finish":"dagger","tint":Color(.62,.95,.6)}},
 	"oracle_staff":{"name":"Oracle's Staff","rarity":"rare","slot":"weapon","kind":"staff","hands":2,"bonus":{"spell_damage":20.0,"intelligence":3},
-		"look":{"model":"oracle_staff","size":Vector3(.13,1.9,.13),"grip":.45,"finish":"staff","tint":Color(1.0,.78,.4),"crystal":Color(1.0,.5,.2)}},
+		"look":{"model":"silver_staff","size":Vector3.ONE,"length":1.8,"grip":1.254,"finish":"parts","tint":Color(1.0,.78,.4),"crystal":Color(1.0,.5,.2)}},
 	"ashwood_staff":{"name":"Ashwood Staff","rarity":"common","slot":"weapon","kind":"staff","hands":2,"bonus":{"spell_damage":10.0},
-		"look":{"model":"staff","size":Vector3(.2,1.75,.14),"grip":.45,"finish":"arms","metal_from":.87}},
+		"look":{"model":"ashwood_staff","size":Vector3.ONE,"length":1.75,"grip":1.254,"finish":"parts","crystal":Color(.62,.86,.66)}},
 	"bandit_buckler":{"name":"Bandit's Buckler","rarity":"common","slot":"shield","kind":"shield","block":18.0,"mitigation":30.0,
 		"look":{"model":"shield","size":Vector3(.5,.5,.1),"finish":"lion","tint":Color(.42,.3,.24)}},
 	"bronze_aspis":{"name":"Bronze Aspis","rarity":"rare","slot":"shield","kind":"shield","block":32.0,"mitigation":28.0,"bonus":{"vitality":3},

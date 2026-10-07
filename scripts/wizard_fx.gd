@@ -105,7 +105,8 @@ static func patch(at: Vector3, radius: float, seconds: float, ground: Callable =
 	node.add_child(node.sheet)
 	return node
 
-# A bolt of ice in flight: a cold trail and a light.
+# A bolt of ice in flight: a cold trail, frost smoking off it and glinting
+# motes of ice shed behind it, and a light.
 static func ice_trail(node: Node3D) -> void:
 	var trail = Vfx.particles(node,30,.35,false,true)
 	trail.direction = Vector3.ZERO
@@ -117,6 +118,29 @@ static func ice_trail(node: Node3D) -> void:
 	trail.color = Color(.75,.92,1,.85)
 	trail.scale = Vector3.ONE/node.scale
 	trail.emitting = true
+	var mist = Vfx.particles(node,40,.75,false,false)
+	mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	mist.emission_sphere_radius = .08
+	mist.direction = Vector3.UP
+	mist.spread = 180
+	mist.gravity = Vector3(0,-.35,0)
+	mist.initial_velocity_min = .05; mist.initial_velocity_max = .3
+	mist.damping_min = .5; mist.damping_max = 1.0
+	mist.scale_amount_min = .16; mist.scale_amount_max = .3
+	mist.scale_amount_curve = Vfx.curve(.6,1.5)
+	mist.color_ramp = Vfx.ramp([0,.2,1],[Color(.85,.95,1,0),Color(.85,.95,1,.4),Color(.8,.92,1,0)])
+	mist.scale = Vector3.ONE/node.scale
+	mist.emitting = true
+	var glints = Vfx.particles(node,36,.9,false,true)
+	glints.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	glints.emission_sphere_radius = .1
+	glints.spread = 180
+	glints.gravity = Vector3(0,-.5,0)
+	glints.initial_velocity_min = .2; glints.initial_velocity_max = .7
+	glints.scale_amount_min = .03; glints.scale_amount_max = .06
+	glints.color_ramp = Vfx.ramp([0,.5,1],[Color(.95,1,1,1),Color(.7,.9,1,.8),Color(.6,.85,1,0)])
+	glints.scale = Vector3.ONE/node.scale
+	glints.emitting = true
 	var glow = OmniLight3D.new()
 	glow.light_color = FROST
 	glow.light_energy = 1.3
@@ -863,6 +887,26 @@ static func bolt(parent: Node3D, a: Vector3, b: Vector3) -> Node3D:
 	parent.add_child(crackle)
 	return crackle
 
+# Sparks shed along a hurled bolt's path from `a` to `b`, falling away and
+# going out (Lightning Bolt).
+static func bolt_sparks(parent: Node3D, a: Vector3, b: Vector3) -> Node3D:
+	var sparks = Vfx.particles(parent,70,.5,true,true)
+	sparks.position = a
+	sparks.explosiveness = .9
+	sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINTS
+	var along = PackedVector3Array()
+	for i in 24:
+		along.append((b-a)*(i+randf())/24.0+Vector3(randf()-.5,randf()-.5,randf()-.5)*.15)
+	sparks.emission_points = along
+	sparks.spread = 180
+	sparks.gravity = Vector3(0,-3.0,0)
+	sparks.initial_velocity_min = .4; sparks.initial_velocity_max = 1.6
+	sparks.scale_amount_min = .03; sparks.scale_amount_max = .06
+	sparks.color_ramp = Vfx.ramp([0,.4,1],[Color(1,1,1,1),Color(.65,.85,1,.9),Color(.4,.6,1,0)])
+	sparks.emitting = true
+	sparks.finished.connect(sparks.queue_free)
+	return sparks
+
 # A jolt leaping from one enemy to the next (Lightning Rod, Conductive Ice).
 static func jolt(parent: Node3D, a: Vector3, b: Vector3) -> void:
 	var ribbon: Node3D = RangerFx.bolt(parent,a,b)
@@ -985,3 +1029,169 @@ static func sky_strike(parent: Node3D, at: Vector3) -> Node3D:
 	parent.add_child(node)
 	node.tick(0.0)
 	return node
+
+# --- The hurled spells (Fireball, Ice Bolt, Lightning Bolt) ---------------------
+
+# The casting hand alight as he gathers a hurled spell: flame licking up off
+# it, frost smoking from it, or sparks snapping about it, each with its
+# glow. It follows his left hand (Visual.bow_hold) and, once the spell is
+# loosed (`release`), dies away; Skills frees it.
+class HandAura extends Node3D:
+	var visual
+	var element = ""
+	var glow: OmniLight3D
+	var emitters: Array = []
+	var age = 0.0
+	var released = -1.0
+	func release() -> void:
+		if released >= 0.0: return
+		released = 0.0
+		for e in emitters: e.emitting = false
+	func follow() -> void:
+		if is_instance_valid(visual) and visual.skeleton != null: global_position = visual.bow_hold("l")[0]
+	func _process(delta: float) -> void:
+		age += delta
+		follow()
+		var energy: float = 1.6*(1.0+sin(age*21.0)*.12)
+		if element == "lightning": energy = 1.0+randf()*1.6
+		elif element == "ice": energy = 1.3
+		if released >= 0.0:
+			released += delta
+			energy *= maxf(0.0,1.0-released/.2)
+		glow.light_energy = energy*minf(1.0,age/.12)
+
+static func hand_aura(parent: Node3D, visual: Node3D, element: String) -> HandAura:
+	var aura = HandAura.new()
+	aura.visual = visual
+	aura.element = element
+	parent.add_child(aura)
+	aura.follow()
+	match element:
+		"fire":
+			var flames = Vfx.particles(aura,44,.45,false,true)
+			flames.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+			flames.emission_sphere_radius = .07
+			flames.direction = Vector3.UP
+			flames.spread = 25
+			flames.gravity = Vector3(0,2.2,0)
+			flames.initial_velocity_min = .3; flames.initial_velocity_max = .8
+			flames.scale_amount_min = .1; flames.scale_amount_max = .22
+			flames.scale_amount_curve = Vfx.curve(1.0,0.0)
+			flames.color_ramp = Vfx.ramp([0,.3,.7,1],[Color(1,.9,.55,.95),Color(1,.55,.15,.85),Color(.8,.2,.04,.5),Color(.3,.05,.02,0)])
+			var embers = Vfx.particles(aura,12,.7,false,true)
+			embers.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+			embers.emission_sphere_radius = .08
+			embers.direction = Vector3.UP
+			embers.spread = 60
+			embers.gravity = Vector3(0,1.0,0)
+			embers.initial_velocity_min = .5; embers.initial_velocity_max = 1.2
+			embers.scale_amount_min = .03; embers.scale_amount_max = .05
+			embers.color_ramp = Vfx.ramp([0,.6,1],[Color(1,.85,.4,1),Color(1,.45,.1,.8),Color(.6,.1,.02,0)])
+			aura.emitters = [flames,embers]
+		"ice":
+			var mist = Vfx.particles(aura,26,.8,false,false)
+			mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+			mist.emission_sphere_radius = .07
+			mist.spread = 180
+			mist.gravity = Vector3(0,-.4,0)
+			mist.initial_velocity_min = .05; mist.initial_velocity_max = .25
+			mist.scale_amount_min = .1; mist.scale_amount_max = .2
+			mist.scale_amount_curve = Vfx.curve(.6,1.5)
+			mist.color_ramp = Vfx.ramp([0,.2,1],[Color(.85,.95,1,0),Color(.85,.95,1,.5),Color(.8,.92,1,0)])
+			var glints = Vfx.particles(aura,22,.6,false,true)
+			glints.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+			glints.emission_sphere_radius = .1
+			glints.spread = 180
+			glints.gravity = Vector3(0,-.3,0)
+			glints.initial_velocity_min = .1; glints.initial_velocity_max = .4
+			glints.scale_amount_min = .03; glints.scale_amount_max = .06
+			glints.color_ramp = Vfx.ramp([0,.5,1],[Color(.95,1,1,1),Color(.7,.9,1,.8),Color(.6,.85,1,0)])
+			var core = Vfx.particles(aura,8,.3,false,true)
+			core.spread = 180
+			core.initial_velocity_min = 0.0; core.initial_velocity_max = .05
+			core.scale_amount_min = .16; core.scale_amount_max = .24
+			core.color_ramp = Vfx.ramp([0,.5,1],[Color(.6,.85,1,0),Color(.6,.85,1,.45),Color(.6,.85,1,0)])
+			aura.emitters = [mist,glints,core]
+		_:
+			var sparks = Vfx.particles(aura,40,.16,false,true)
+			sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+			sparks.emission_sphere_radius = .05
+			sparks.spread = 180
+			sparks.initial_velocity_min = 1.0; sparks.initial_velocity_max = 2.4
+			sparks.scale_amount_min = .025; sparks.scale_amount_max = .05
+			sparks.color_ramp = Vfx.ramp([0,.4,1],[Color(1,1,1,1),Color(.65,.85,1,.9),Color(.4,.6,1,0)])
+			var core = Vfx.particles(aura,10,.12,false,true)
+			core.spread = 180
+			core.initial_velocity_min = 0.0; core.initial_velocity_max = .1
+			core.scale_amount_min = .14; core.scale_amount_max = .24
+			core.color_ramp = Vfx.ramp([0,.5,1],[Color(.8,.92,1,0),Color(.7,.85,1,.6),Color(.6,.8,1,0)])
+			aura.emitters = [sparks,core]
+	for e in aura.emitters: e.emitting = true
+	aura.glow = OmniLight3D.new()
+	aura.glow.light_color = {"fire":FLAME,"ice":FROST}.get(element,SPARK)
+	aura.glow.omni_range = 2.2
+	aura.glow.light_energy = 0.0
+	aura.add_child(aura.glow)
+	return aura
+
+# Where a hurled spell strikes, what it leaves rising into the sky: embers
+# and wisps of flame, motes of ice glinting in a breath of cold vapour, or
+# sparks still crackling as they float up.
+static func rising(parent: Node3D, at: Vector3, element: String) -> Node3D:
+	var motes = Vfx.particles(parent,50,2.2,true,true)
+	motes.position = at
+	motes.explosiveness = .7
+	motes.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	motes.emission_sphere_radius = .45
+	motes.direction = Vector3.UP
+	motes.spread = 35
+	motes.damping_min = .5; motes.damping_max = 1.0
+	motes.scale_amount_curve = Vfx.curve(1.0,.3)
+	var wisps = Vfx.particles(motes,18,1.1,true,element != "ice")
+	wisps.explosiveness = .8
+	wisps.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	wisps.emission_sphere_radius = .35
+	wisps.direction = Vector3.UP
+	wisps.spread = 30
+	match element:
+		"fire":
+			motes.gravity = Vector3(0,1.2,0)
+			motes.initial_velocity_min = 1.2; motes.initial_velocity_max = 3.2
+			motes.scale_amount_min = .07; motes.scale_amount_max = .14
+			motes.color_ramp = Vfx.ramp([0,.3,.75,1],[Color(1,.9,.5,1),Color(1,.55,.15,.9),Color(.8,.2,.04,.5),Color(.4,.06,.02,0)])
+			wisps.gravity = Vector3(0,2.0,0)
+			wisps.initial_velocity_min = 1.0; wisps.initial_velocity_max = 2.4
+			wisps.scale_amount_min = .4; wisps.scale_amount_max = .7
+			wisps.scale_amount_curve = Vfx.curve(1.0,0.0)
+			wisps.color_ramp = Vfx.ramp([0,.35,1],[Color(1,.75,.35,.8),Color(1,.4,.08,.55),Color(.5,.1,.03,0)])
+		"ice":
+			motes.lifetime = 2.4
+			motes.gravity = Vector3(0,.5,0)
+			motes.initial_velocity_min = .6; motes.initial_velocity_max = 1.8
+			motes.scale_amount_min = .06; motes.scale_amount_max = .11
+			motes.color_ramp = Vfx.ramp([0,.5,1],[Color(.95,1,1,1),Color(.7,.9,1,.8),Color(.6,.85,1,0)])
+			wisps.lifetime = 1.4
+			wisps.gravity = Vector3(0,.6,0)
+			wisps.initial_velocity_min = .4; wisps.initial_velocity_max = .9
+			wisps.damping_min = .5; wisps.damping_max = 1.0
+			wisps.scale_amount_min = .3; wisps.scale_amount_max = .6
+			wisps.scale_amount_curve = Vfx.curve(.5,1.5)
+			wisps.color_ramp = Vfx.ramp([0,.2,1],[Color(.85,.93,1,0),Color(.85,.93,1,.35),Color(.85,.93,1,0)])
+		_:
+			motes.lifetime = 1.6
+			motes.gravity = Vector3(0,.8,0)
+			motes.initial_velocity_min = .8; motes.initial_velocity_max = 2.2
+			motes.scale_amount_min = .05; motes.scale_amount_max = .1
+			motes.color_ramp = Vfx.ramp([0,.15,.3,.5,1],[Color(1,1,1,1),Color(.5,.7,1,.4),Color(.9,.97,1,1),Color(.6,.8,1,.7),Color(.4,.6,1,0)])
+			# (A quick spray of sparks, where it struck.)
+			wisps.lifetime = .3
+			wisps.explosiveness = 1.0
+			wisps.spread = 180
+			wisps.gravity = Vector3(0,-4.0,0)
+			wisps.initial_velocity_min = 3.0; wisps.initial_velocity_max = 6.0
+			wisps.scale_amount_min = .03; wisps.scale_amount_max = .05
+			wisps.color_ramp = Vfx.ramp([0,.5,1],[Color(1,1,1,1),Color(.65,.85,1,.9),Color(.4,.6,1,0)])
+	motes.emitting = true
+	wisps.emitting = true
+	motes.finished.connect(motes.queue_free)
+	return motes
