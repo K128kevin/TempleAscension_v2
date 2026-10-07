@@ -11,10 +11,10 @@ only), with tools/make_sounds.py's helpers.
   fire-blast.wav      Blast Wave: a deep whoomph of flame rushing outward.
   fire-tornado.wav    Fire Tornado, looped while it burns: whooshing flames
                       swirling round, a rumble under them, crackling.
-  thunder-strike.wav  Lightning Rod's bolt from the sky: a splitting crack
-                      (struck again twice, as the bolt is drawn:
-                      scripts/wizard_fx.gd SkyStrike), a boom, and thunder
-                      rolling away.
+  thunder-strike.wav  Lightning Rod's bolt from the sky: thunder close
+                      overhead, a tearing crack (struck again twice, as the
+                      bolt is drawn: scripts/wizard_fx.gd SkyStrike), then
+                      a rumble rolling away in uneven surges, darkening.
   frost-bolt.wav      Ice Bolt cast: an icy rush, frost crackling off it.
   ice-impact.wav      Ice Bolt striking: ice cracking and shattering (no
                       chiming: its shards are bursts of noise, not tones).
@@ -213,19 +213,35 @@ STROKES = [0.0, .14, .27]
 
 
 def thunder_strike():
-    seconds = 3.4
+    """Thunder close overhead, as heard, not a thud: the bolt tearing the air
+    (a ripping crack of many quick snaps, struck again with each of its
+    strokes), then the thunder rolling away in uneven surges, its brighter
+    part dying first, so it darkens as it goes."""
+    seconds = 4.2
     t = times(seconds)
-    crack = np.zeros_like(t)
+    # The tear: a rapid run of snaps over a few hundredths of a second, each
+    # stroke's, over a bright crack.
+    tear = np.zeros_like(t)
     for i, at in enumerate(STROKES):
-        strength = [1.0, .55, .4][i]
-        crack += band(noise(seconds), 1200, 9000)*rise_fall(t, .001, .02, at)*strength*1.0
-        crack += band(noise(seconds), 150, 2500)*rise_fall(t, .002, .06, at)*strength*1.4
-    sizzle = band(noise(seconds), 3000, 9000)*rise_fall(t, .002, .15)*.15
-    boom = sweep_tone(t, 70, 32, .2)*rise_fall(t, .01, .45, .01)*1.4
-    body = band(tilt(noise(seconds), 3.0), 30, 320)*rise_fall(t, .03, .5, .02)*2.2
-    # The thunder rolling away: deep, lumpy, slowly dying.
-    roll = band(tilt(noise(seconds), 3.0), 25, 180)*rise_fall(t, .25, 1.1, .15)*(1.0+.8*norm(band(noise(seconds), 1.5, 5)))*2.0
-    return finish(band(crack+sizzle+boom*1.3+body*1.4+roll*1.4, 20, 10000), drive=1.8)
+        strength = [1.0, .6, .45][i]
+        snaps = crackles(seconds, 2400, 500, 7000, density=rise_fall(t, .002, .05, at))*strength*1.1
+        crack = band(noise(seconds), 500, 6000)*rise_fall(t, .001, .03, at)*strength*.6
+        tear += snaps+crack
+    # The roll: surges at uneven times, louder early, fading over seconds.
+    surge = np.full_like(t, .25)
+    at = .05
+    while at < seconds-.4:
+        width = rng.uniform(.06, .32)
+        surge += rng.uniform(.4, 1.0)*np.exp(-at/2.6)*np.exp(-((t-at)/width)**2)
+        at += rng.uniform(.08, .38)
+    surge *= rise_fall(t, .05, 2.4, .02)/max(rise_fall(t, .05, 2.4, .02).max(), 1e-9)
+    rumble = tilt(noise(seconds), 2.0)
+    # (Its brighter part dies first.)
+    bright = band(rumble, 350, 2000)*np.exp(-t/.8)*1.0
+    middle = band(rumble, 110, 600)*np.exp(-t/2.0)*2.0
+    deep = band(rumble, 45, 200)*np.exp(-t/3.0)*1.6
+    roll = (bright+middle+deep)*surge
+    return finish(band(tear+roll*2.4, 35, 10000), drive=1.6)
 
 
 def frost_bolt():
