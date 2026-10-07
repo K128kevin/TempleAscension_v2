@@ -12,6 +12,11 @@ const WizardFx = preload("res://scripts/wizard_fx.gd")
 var game
 var pending: Array = []
 var zones: Array = []
+# While a spell's hit is being dealt (spell_hit): it is not heard as a blow
+# of a weapon on its target (Actor.hit), the spell having its own sounds.
+var spell_striking = false
+# Ice Storm's howl, held while it lasts.
+var storm_hum: AudioStreamPlayer
 var barrier = 0.0
 var barrier_time = 0.0
 # Seconds until a skill with a cooldown (Shield Bash) is ready again.
@@ -151,7 +156,6 @@ const TORNADO_WANDER = 4.0
 const BLAZING_RUN = 75.0
 const BLAZING_COOLDOWN = 60.0
 const SHIELD_SECONDS = 60.0
-const SHIELD_COOLDOWN = 60.0
 const SHOCK_COOLDOWN = 45.0
 const ROD_SECONDS = 10.0
 const ROD_LEAP = 5.0
@@ -205,7 +209,10 @@ const SHAKE_SLAM = .4
 
 func reset() -> void:
 	pending.clear()
+	for z in zones: game.sound.release(z.get("hum"),.2)
 	zones.clear()
+	game.sound.release(storm_hum,.2)
+	storm_hum = null
 	cooldowns.clear()
 	charge.clear()
 	for w in waves: w.queue_free()
@@ -338,7 +345,8 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	if s.effect in ["bash","shockwave"]: cooldowns[id] = Book.values(id,level).z
 	if s.effect=="icestorm": cooldowns[id] = STORM_COOLDOWN
 	if s.effect=="blazing": cooldowns[id] = BLAZING_COOLDOWN
-	if s.effect=="lshield": cooldowns[id] = SHIELD_COOLDOWN
+	# (Lightning Shield's, by rank: its `z`.)
+	if s.effect=="lshield": cooldowns[id] = Book.values(id,level).z
 	if s.effect=="shock": cooldowns[id] = SHOCK_COOLDOWN
 	if s.effect=="sand": cooldowns[id] = SAND_COOLDOWN
 	if s.effect=="tranq": cooldowns[id] = TRANQ_COOLDOWN
@@ -510,7 +518,9 @@ func effect(id: String, title: String, stacks: int, left: float, text: String, d
 func begin_channel(id: String, level: int, at: Vector3) -> void:
 	end_channel()
 	var s: Dictionary = Book.all()[id]
-	channel = {"id":id,"rank":level,"slot":casting_slot,"at":at,"laid":Vector3.INF,"tick":0.0,"stream":WizardFx.stream(game.world,s.effect=="frostblast")}
+	channel = {"id":id,"rank":level,"slot":casting_slot,"at":at,"laid":Vector3.INF,"tick":0.0,"stream":WizardFx.stream(game.world,s.effect=="frostblast"),
+		# Its hiss of frost, for as long as it is held.
+		"hum":game.sound.held("frost-stream",-17 if s.effect=="freezefloor" else -14,.12)}
 	game.player.visual.hold_at(0.0,0.0)
 
 func channeling() -> bool:
@@ -528,6 +538,7 @@ func channel_held() -> bool:
 func end_channel() -> void:
 	if channel.is_empty(): return
 	if is_instance_valid(channel.stream): channel.stream.stop()
+	game.sound.release(channel.get("hum"),.25)
 	channel.clear()
 	if is_instance_valid(game.player):
 		game.player.busy = 0.0
@@ -591,7 +602,12 @@ func spell_hit(enemy, percent: float, element: String, impact: Vector3 = Vector3
 			amount *= 2.0
 			burn(amount*BURN_SHARE)
 	var before: float = enemy.hp
+	# (Restored after, not cleared: a Lightning Rod's jolt is a spell's hit
+	# dealt within another's.)
+	var striking: bool = spell_striking
+	spell_striking = true
 	strike(enemy,amount,element,0.0,impact)
+	spell_striking = striking
 	var dealt: float = before-enemy.hp
 	if element=="frost":
 		var chill: Dictionary = Book.values("improved_chill",rank("improved_chill"))
@@ -600,7 +616,8 @@ func spell_hit(enemy, percent: float, element: String, impact: Vector3 = Vector3
 	elif element=="lightning":
 		var spark: Dictionary = Book.values("ignition",rank("ignition"))
 		if spark.x>0 and randf()*100.0<spark.x:
-			WizardFx.ignite(game.world,enemy.position+Vector3.UP*.8,IGNITION_RADIUS)
+			waves.append(WizardFx.ignition(game.world,enemy.position+Vector3.UP*(.8+game.world.lift(enemy.position)),IGNITION_RADIUS))
+			game.sound.play("ignition-burst",-11)
 			for other in targets(enemy.position,IGNITION_RADIUS): spell_hit(other,spark.y,"fire")
 		if not conducted and rank("conductive_ice")>0: conduct(enemy,percent)
 
@@ -665,6 +682,7 @@ func ice_bolt_hit(enemy, p: Dictionary) -> void:
 	var extra: Dictionary = p.get("extra",{})
 	spell_hit(enemy,extra.get("percent",100.0),"frost",StoneFragment.impact(p.direction))
 	WizardFx.shatter(game.world,enemy.position+Vector3.UP,.8)
+	game.sound.play("ice-impact",-14)
 	if not enemy.dead and randf()*100.0<extra.get("freeze",0.0): enemy.freeze(FREEZE_SECONDS)
 
 # Lightning Rod: the marked enemy was hurt: a jolt leaps from it to the
@@ -938,7 +956,11 @@ func defend(damage: float, source) -> float:
 	var absorbed = minf(barrier,damage)
 	barrier -= absorbed
 	damage -= absorbed
-	# Lightning Shield answers whoever strikes it.
+	# Lightning Shield crackles where the blow meets it, and answers whoever
+	# strikes it.
+	if shield_time>0 and absorbed>0:
+		if is_instance_valid(shield_node): shield_node.crackle(source.position+Vector3.UP*1.1 if is_instance_valid(source) else null)
+		game.sound.play("lightning-zap",-15)
 	if shield_time>0 and absorbed>0 and is_instance_valid(source) and not source.dead: spell_hit(source,shield_percent,"lightning")
 	if blocked:
 		game.float_text(game.player.position+Vector3.UP*2.4,"Blocked",Color(.72,.84,1))
@@ -1052,13 +1074,13 @@ func execute(job: Dictionary) -> void:
 			var bolt_at: Vector3 = origin+direction*SPELL_REACH
 			var caught = aimed_target(at,direction)
 			if caught != null: bolt_at = caught.position
-			game.sound.play("fire-whoosh",-14)
+			game.sound.play("frost-bolt",-13)
 			game.projectile(origin,bolt_at,attack_damage(v.x,"spell"),true,"ice",false,null,true,{"kind":"icebolt","percent":v.x,"freeze":v.y})
 		"spikes":
 			var spot: Vector3 = origin+direction*minf(SPELL_REACH,origin.distance_to(at))
 			waves.append(WizardFx.spikes(spot+Vector3.UP*game.world.lift(spot),SPIKES_RADIUS))
 			game.world.add_child(waves[-1])
-			game.sound.play("rock-impact",-14)
+			game.sound.play("ice-spikes",-11)
 			for enemy in targets(spot,SPIKES_RADIUS+.5).filter(func(e): return e.position.distance_to(spot)<=SPIKES_RADIUS+bulk(e)): spell_hit(enemy,v.x,"frost",StoneFragment.impact(enemy.position-spot,true))
 			lay_ice(spot,SPIKES_RADIUS,PATCH_SECONDS,0.0)
 		"prison":
@@ -1067,13 +1089,14 @@ func execute(job: Dictionary) -> void:
 			caged.freeze(v.x,v.y)
 			caged.chill(CHILL_SLOW,v.x)
 			lay_ice(caged.position,PATCH_RADIUS,PATCH_SECONDS,0.0)
-			game.sound.play("whirl-impact",-14)
+			game.sound.play("ice-prison",-11)
 		"icestorm":
 			storm_time = v.x
 			storm_percent = v.y
 			lasting.ice_storm = v.x
 			if is_instance_valid(storm_node): storm_node.queue_free()
 			storm_node = WizardFx.storm(game.player.visual,STORM_RADIUS)
+			if not is_instance_valid(storm_hum): storm_hum = game.sound.held("ice-storm",-14,.6)
 			game.float_text(origin+Vector3.UP*2.3,"Ice Storm!",Color(.7,.9,1))
 		"fireball":
 			var reach: float = minf(SPELL_REACH,origin.distance_to(at)) if origin.distance_to(at) > .5 else SPELL_REACH
@@ -1085,7 +1108,7 @@ func execute(job: Dictionary) -> void:
 		"blastwave":
 			waves.append(WizardFx.flame_ring(origin+Vector3.UP*game.world.lift(origin),BLAST_RADIUS))
 			game.world.add_child(waves[-1])
-			game.sound.play("fire-whoosh",-6)
+			game.sound.play("fire-blast",-9)
 			game.shake(.12)
 			for enemy in targets(origin,BLAST_RADIUS): spell_hit(enemy,v.x,"fire",StoneFragment.impact(enemy.position-origin,true))
 		"tornado":
@@ -1093,13 +1116,18 @@ func execute(job: Dictionary) -> void:
 			var funnel = WizardFx.tornado(spot+Vector3.UP*game.world.lift(spot),TORNADO_RADIUS,TORNADO_SECONDS)
 			game.world.add_child(funnel)
 			waves.append(funnel)
-			game.sound.play("fire-whoosh",-8)
-			zones.append({"effect":"tornado","at":spot,"origin":spot,"heading":randf()*TAU,"node":funnel,"radius":TORNADO_RADIUS,"percent":v.x,"rod":v.y,"life":TORNADO_SECONDS,"tick":0.0,"rank":job.rank})
+			game.sound.play("fireball-cast",-13)
+			# Its flames roaring as long as it burns (louder the nearer he is:
+			# tornado_volume).
+			zones.append({"effect":"tornado","at":spot,"origin":spot,"heading":randf()*TAU,"node":funnel,"radius":TORNADO_RADIUS,"percent":v.x,"rod":v.y,"life":TORNADO_SECONDS,"tick":0.0,"rank":job.rank,
+				"hum":game.sound.held("fire-tornado",-60.0,0.0)})
+			tornado_volume(zones[-1])
 		"blazing":
 			blazing_time = v.x
 			lasting.blazing_speed = v.x
 			if is_instance_valid(blaze_node): blaze_node.queue_free()
 			blaze_node = WizardFx.blaze(game.player.visual)
+			game.sound.play("fireball-cast",-12)
 			game.float_text(origin+Vector3.UP*2.3,"Blazing Speed!",Color(1,.6,.25))
 		"bolt":
 			var hit = aimed_target(at,direction)
@@ -1292,7 +1320,24 @@ func tick(dt: float) -> void:
 			for enemy in targets(z.at,z.radius):
 				spell_hit(enemy,z.percent*DOT_TICK,"fire")
 				if rank("lightning_rod")>0 and not enemy.dead and randf()*100.0<z.rod: enemy.make_rod(Book.values("lightning_rod",rank("lightning_rod")).x,ROD_SECONDS)
-		if z.life<=0: zones.remove_at(i)
+		tornado_volume(z)
+		if z.life<=0:
+			game.sound.release(z.get("hum"),.3)
+			zones.remove_at(i)
+
+# Fire Tornado's roar: TORNADO_LOUDNESS (dB) beside it, falling away with
+# the hero's distance from it (to half at TORNADO_HEARD metres, a quarter
+# about twice as far...), swelling as it rises and dying as it burns out.
+const TORNADO_LOUDNESS = -7.0
+const TORNADO_HEARD = 7.0
+func tornado_gain(z: Dictionary) -> float:
+	var away: float = z.at.distance_to(game.player.position) if is_instance_valid(game.player) else 0.0
+	var age: float = TORNADO_SECONDS-z.life
+	return 1.0/(1.0+pow(away/TORNADO_HEARD,2.0))*clampf(age/.4,0.0,1.0)*clampf(z.life/.8,0.0,1.0)
+
+func tornado_volume(z: Dictionary) -> void:
+	var hum = z.get("hum")
+	if is_instance_valid(hum): hum.volume_db = TORNADO_LOUDNESS+linear_to_db(maxf(tornado_gain(z),.001))
 
 # Fire Tornado wanders as a real one does: drifting slowly along a heading
 # that weaves and loops back on itself, never straying far from where it was
@@ -1328,13 +1373,19 @@ func tick_wizard(dt: float) -> void:
 	elif is_instance_valid(storm_node):
 		storm_node.queue_free()
 		storm_node = null
+	if storm_time<=0 and storm_hum != null:
+		game.sound.release(storm_hum,.6)
+		storm_hum = null
 	blazing_time = maxf(0,blazing_time-dt)
 	if blazing_time<=0 and is_instance_valid(blaze_node):
 		blaze_node.queue_free()
 		blaze_node = null
 	shield_time = maxf(0,shield_time-dt)
+	if is_instance_valid(shield_node): shield_node.tick(dt)
 	if (shield_time<=0 or barrier<=0) and is_instance_valid(shield_node):
-		shield_node.queue_free()
+		# (It fades, any last crackle on it seen out: a wave now.)
+		shield_node.give_out()
+		waves.append(shield_node)
 		shield_node = null
 		shield_time = 0
 	if burn_left>0 and not game.player.dead:

@@ -8,6 +8,7 @@ const Save = preload("res://scripts/save.gd")
 const Temple = preload("res://scripts/temple.gd")
 const Actor = preload("res://scripts/actor.gd")
 const Art = preload("res://scripts/assets.gd")
+const ShieldBubble = preload("res://scripts/shield_bubble.gd")
 const WizardFx = preload("res://scripts/wizard_fx.gd")
 const STEP = 1.0/60
 # The starting staff adds 5% to every spell.
@@ -341,11 +342,18 @@ func test():
 	hero({"lightning_bolt":1,"ignition":5})
 	var beside = dummy(7.2)
 	var lit = 0
+	var bursts = 0
+	var popped = 0
 	for i in 30:
 		ready(); foe.hp = foe.max_hp; beside.hp = beside.max_hp
+		game.sound.heard.clear()
 		cast("lightning_bolt",foe.position); play(.6)
-		if lost(beside)>0: lit += 1
+		if lost(beside)>0:
+			lit += 1
+			if game.skills.waves.any(func(w): return w is WizardFx.Ignition): bursts += 1
+			if "ignition-burst" in game.sound.heard: popped += 1
 	check(lit>=3 and lit<=20 and (lost(beside)==0 or within(beside,1,200)),"Ignition rank 5: a bolt in three sets off 200%% of fire within 2 metres (%d of 30)" % lit)
+	check(bursts==lit and popped==lit,"Each time it goes off with an explosion, and is heard bursting (%d, %d of %d)" % [bursts,popped,lit])
 	clear()
 
 	# Lightning Shield.
@@ -354,11 +362,33 @@ func test():
 	check(cast("lightning_shield",at) and game.player.visual.state=="CastSelf" and is_equal_approx(game.run.energy,50.0),"Lightning Shield costs 50")
 	play(.6)
 	check(game.skills.barrier==50.0 and game.skills.shield_time>59.0 and game.skills.cooldowns.lightning_shield>58.0,"Rank 1 absorbs 50 for 60 seconds, on a 60-second cooldown")
+	var bubble = game.skills.shield_node
+	check(bubble is ShieldBubble and bubble.get_parent()==game.player.visual and bubble.crackles.is_empty(),"It is a bubble about him, quiet until struck")
 	game.hurt_player(30.0,"physical",foe)
 	var through: float = 30.0*(1.0-Data.armor(game.run)*.01)
 	check(game.player.hp==game.player.max_hp and is_equal_approx(game.skills.barrier,50.0-through) and within(foe,1,20),"A blow is absorbed (what armor let through), and its striker shocked for 20%% (%.1f)" % lost(foe))
+	var toward: Vector3 = game.player.visual.global_transform.basis.inverse()*(foe.position-game.player.position)
+	check(bubble.crackles.size()==1 and bubble.crackles[0].from.dot(Vector3(toward.x,0,toward.z).normalized())>.7,"Absorbing it, the bubble crackles with electricity where the blow came from")
+	play(.6)
+	check(bubble.crackles.is_empty(),"and the crackle dies away")
 	game.hurt_player(30.0,"physical",foe)
 	check(game.player.hp<game.player.max_hp and game.skills.barrier==0.0,"Spent, the rest gets through")
+	play(.1)
+	check(game.skills.shield_node == null and is_instance_valid(bubble) and bubble.ending and bubble in game.skills.waves,"Spent, the bubble gives out, its last crackle seen")
+	play(1.0)
+	check(not is_instance_valid(bubble) or bubble.is_queued_for_deletion(),"and is gone")
+	check(range(1,6).map(func(r): return Book.values("lightning_shield",r).z)==[60.0,55.0,50.0,40.0,30.0],"Its cooldown is 60, 55, 50, 40 and 30 seconds by rank")
+	hero({"lightning_shield":5})
+	cast("lightning_shield",at); play(.6)
+	check(is_equal_approx(game.skills.cooldowns.lightning_shield,30.0-.6+STEP) or absf(game.skills.cooldowns.lightning_shield-29.4)<.05,"Rank 5 recharges in 30 seconds (%.1f)" % game.skills.cooldowns.lightning_shield)
+	var first_bubble = game.skills.shield_node
+	game.hurt_player(30.0,"physical",foe)
+	play(30.0)
+	game.player.busy = 0; game.player.cooldown = 0; game.run.energy = Data.max_energy(game.run)
+	check(cast("lightning_shield",at),"Recharged, it is cast again while the shield is still up")
+	play(.6)
+	var shields: int = game.player.visual.get_children().filter(func(c): return c is ShieldBubble and not c.ending and not c.is_queued_for_deletion()).size()
+	check(is_equal_approx(game.skills.barrier,150.0) and game.skills.shield_time>59.0 and shields==1 and not is_instance_valid(first_bubble) or (is_instance_valid(first_bubble) and first_bubble.is_queued_for_deletion()),"It replaces the shield he had (absorbing 150 again, not more; one bubble) (%.0f, %d)" % [game.skills.barrier,shields])
 	clear()
 
 	# Lightning Rod.
@@ -451,6 +481,56 @@ func test():
 	for i in 40: look.locomotion(false,false); look.advance(1.0/60)
 	var rest: Array = staff_line.call()
 	check(rest[0].dot(Vector3.UP)>.98 and rest[1]<.03,"Standing, it is upright in his hand again")
+	# --- Sounds: spells are heard by their own, never as a weapon's blow.
+	var heard: Array = game.sound.heard
+	var blows = func(): return heard.any(func(id): return id in ["weapon-impact","arrow-stone-impact","sword-hit-flesh"] or id.begins_with("arrow-flesh"))
+	clear()
+	hero({"fireball":1})
+	foe = dummy(6)
+	heard.clear()
+	cast("fireball",foe.position)
+	play(.6)
+	var cast_at: int = heard.find("fireball-cast")
+	check(cast_at>=0 and not "fireball-burst" in heard,"Fireball is heard as it leaves his staff, before it lands (%s)" % [heard])
+	play(1.4)
+	check(lost(foe)>0 and heard.find("fireball-burst")>cast_at and not blows.call(),"and bursts as it strikes, with no weapon's blow heard (%s)" % [heard])
+	for spell in [["ice_bolt","frost-bolt"],["ice_spikes","ice-spikes"],["ice_prison","ice-prison"],["blast_wave","fire-blast"],["lightning_bolt","lightning-zap"]]:
+		hero({spell[0]:1}); foe.hp = foe.max_hp; foe.end_stun(); foe.dead = false
+		heard.clear()
+		cast(spell[0],foe.position); play(1.5)
+		check(spell[1] in heard and not blows.call(),"%s is heard as %s, not as a weapon's blow (%s)" % [spell[0],spell[1],heard])
+	hero({"ice_bolt":1}); foe.hp = foe.max_hp; foe.end_stun()
+	heard.clear()
+	cast("ice_bolt",foe.position); play(1.5)
+	check("ice-impact" in heard,"An ice bolt shatters as it strikes")
+	heard.clear()
+	game.skills.strike(foe,1.0)
+	check("weapon-impact" in heard,"A weapon's blow on a statue is still heard")
+	hero({"lightning_rod":1}); foe.hp = foe.max_hp
+	heard.clear()
+	cast("lightning_rod",foe.position); play(1.0)
+	check("thunder-strike" in heard and not "lightning-zap" in heard,"Lightning Rod's bolt from the sky is heard as thunder")
+	heard.clear()
+	game.skills.spell_hit(foe,10.0,"frost")
+	check(not blows.call() and not game.skills.spell_striking,"A spell striking a Lightning Rod (its jolt a spell within a spell) is no weapon's blow either")
+	hero({"fire_tornado":1})
+	heard.clear()
+	cast("fire_tornado",at); play(1.0)
+	var funnel: Dictionary = game.skills.zones[0]
+	game.player.position = funnel.at
+	var close_by: float = game.skills.tornado_gain(funnel)
+	game.player.position = funnel.at+Vector3(7,0,0)
+	var middling: float = game.skills.tornado_gain(funnel)
+	game.player.position = funnel.at+Vector3(25,0,0)
+	var distant: float = game.skills.tornado_gain(funnel)
+	check("fire-tornado" in heard and close_by>.95 and absf(middling-.5)<.02 and distant<.08,"Fire Tornado roars as it burns, louder the nearer he is (%.2f beside it, %.2f at 7 m, %.2f at 25 m)" % [close_by,middling,distant])
+	funnel.life = .4
+	check(game.skills.tornado_gain(funnel)<distant*.6,"and dies away as it burns out")
+	for spell in [["ice_storm","ice-storm"],["freeze_floor","frost-stream"]]:
+		hero({spell[0]:1})
+		heard.clear()
+		cast(spell[0],at); play(1.2)
+		check(spell[1] in heard,"%s is heard for as long as it lasts" % spell[0])
 	FileAccess.open("res://test-results/wizard-skills.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
 	print("WIZARD_SKILLS ",passed.size()," passed; ",failed)
 	game.queue_free()

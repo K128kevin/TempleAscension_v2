@@ -11,6 +11,7 @@ const Art = preload("res://scripts/assets.gd")
 const RangerFx = preload("res://scripts/ranger_fx.gd")
 const Crackle = preload("res://scripts/crackle.gd")
 const StaticArcs = preload("res://scripts/static_arcs.gd")
+const ShieldBubble = preload("res://scripts/shield_bubble.gd")
 const Shockwave = preload("res://scripts/shockwave.gd")
 const FROST = Color(.72,.9,1.0)
 const FLAME = Color(1.0,.55,.18)
@@ -658,29 +659,119 @@ static func blaze(body: Node3D) -> Node3D:
 	heat.add_child(glow)
 	return heat
 
-# A burst of fire at `at` (Ignition, a fireball striking).
-static func ignite(parent: Node3D, at: Vector3, radius: float) -> Node3D:
-	var fire = RangerFx.burst(parent,at,Color(1,.55,.15,.9),radius*1.4,30)
-	fire.finished.connect(fire.queue_free)
-	var sparks = Vfx.particles(parent,24,.6,true,true)
-	sparks.position = at
-	sparks.explosiveness = 1.0
-	sparks.direction = Vector3.UP
-	sparks.spread = 80
-	sparks.gravity = Vector3(0,-7.0,0)
-	sparks.initial_velocity_min = 2.5; sparks.initial_velocity_max = 5.0
-	sparks.scale_amount_min = .06; sparks.scale_amount_max = .12
-	sparks.color_ramp = Vfx.ramp([0,.5,1],[Color(1,.95,.6,1),Color(1,.5,.1,.9),Color(.6,.1,.02,0)])
-	sparks.emitting = true
-	sparks.finished.connect(sparks.queue_free)
-	var flash = OmniLight3D.new()
-	flash.light_color = FLAME
-	flash.light_energy = 4.0
-	flash.omni_range = radius*3.0
-	flash.position = Vector3.UP*.6
-	fire.add_child(flash)
-	flash.create_tween().tween_property(flash,"light_energy",0.0,.35)
-	return fire
+# Ignition's explosion: quick and sharp, over in under half a second. A
+# white-hot flash swells into a ball of fire that cools through orange and
+# red as it spreads (the fireball's burst, scripts/fireball.gd, run faster),
+# a bright ring races out along the floor, embers fly out in every
+# direction, and a little smoke is left. Ticked in Skills.waves.
+const FIREBALL_SHADER = preload("res://assets/shaders/fireball.gdshader")
+class Ignition extends Node3D:
+	# How long the fireball swells and cools, and the ring runs.
+	const BURST = .38
+	const RING = .24
+	var radius = 2.0
+	var age = 0.0
+	var ball: MeshInstance3D
+	var ball_material: ShaderMaterial
+	var core: MeshInstance3D
+	var ring: MeshInstance3D
+	var flash: OmniLight3D
+
+	func dress() -> void:
+		ball_material = ShaderMaterial.new()
+		ball_material.shader = FIREBALL_SHADER
+		ball_material.set_shader_parameter("burst",1.0)
+		ball_material.set_shader_parameter("seed",randf()*50.0)
+		ball = MeshInstance3D.new()
+		ball.mesh = QuadMesh.new()
+		ball.material_override = ball_material
+		ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(ball)
+		# The white-hot heart of it, gone in a blink.
+		core = glow_sprite(Vfx.ramp([0,.35,1],[Color(1,1,.9,1),Color(1,.75,.3,.8),Color(1,.4,.1,0)]),true)
+		# The ring racing out along the floor: bright at its edge, clear within.
+		ring = glow_sprite(Vfx.ramp([0,.62,.8,.9,1],[Color(1,.5,.1,0),Color(1,.55,.15,.0),Color(1,.8,.4,.9),Color(1,.5,.12,.5),Color(1,.3,.05,0)]),false)
+		ring.rotation.x = -PI/2
+		ring.position.y = -.75
+		flash = OmniLight3D.new()
+		flash.light_color = Color(1,.62,.25)
+		# (Soft: a strong light falls in squares on the floor's tiles.)
+		flash.omni_range = radius*2.5
+		add_child(flash)
+		var embers = Vfx.particles(self,36,.55,true,true)
+		embers.explosiveness = 1.0
+		embers.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		embers.emission_sphere_radius = .2
+		embers.direction = Vector3.UP
+		embers.spread = 180
+		embers.initial_velocity_min = 5.0; embers.initial_velocity_max = 10.0
+		embers.damping_min = 6.0; embers.damping_max = 9.0
+		embers.gravity = Vector3(0,-6.0,0)
+		embers.scale_amount_min = .05; embers.scale_amount_max = .11
+		embers.color_ramp = Vfx.ramp([0,.4,1],[Color(1,.97,.7,1),Color(1,.55,.12,.9),Color(.6,.12,.02,0)])
+		embers.emitting = true
+		var smoke = Vfx.particles(self,8,1.1,true,false)
+		smoke.explosiveness = .9
+		smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		smoke.emission_sphere_radius = radius*.3
+		smoke.direction = Vector3.UP
+		smoke.spread = 180
+		smoke.initial_velocity_min = .4; smoke.initial_velocity_max = 1.0
+		smoke.gravity = Vector3(0,1.2,0)
+		smoke.scale_amount_min = .6; smoke.scale_amount_max = 1.0
+		smoke.scale_amount_curve = Vfx.curve(.5,1.5)
+		smoke.color_ramp = Vfx.ramp([0,.2,1],[Color(.2,.16,.13,0),Color(.15,.13,.11,.5),Color(.09,.08,.08,0)])
+		smoke.emitting = true
+		tick(0.0)
+
+	# A glowing disc a metre across (scaled as it goes), added onto what is
+	# behind it: facing the eye, or lying flat.
+	func glow_sprite(gradient: Gradient, facing: bool) -> MeshInstance3D:
+		var texture = GradientTexture2D.new()
+		texture.width = 128; texture.height = 128
+		texture.fill = GradientTexture2D.FILL_RADIAL
+		texture.fill_from = Vector2(.5,.5); texture.fill_to = Vector2(1,.5)
+		texture.gradient = gradient
+		var glow = StandardMaterial3D.new()
+		glow.albedo_texture = texture
+		glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		glow.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		glow.cull_mode = BaseMaterial3D.CULL_DISABLED
+		if facing: glow.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		var disc = MeshInstance3D.new()
+		disc.mesh = QuadMesh.new()
+		disc.material_override = glow
+		disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(disc)
+		return disc
+
+	func tick(dt: float) -> bool:
+		age += dt
+		var p: float = minf(1.0,age/BURST)
+		ball_material.set_shader_parameter("progress",p)
+		ball_material.set_shader_parameter("flame_time",age*3.0)
+		ball.scale = Vector3.ONE*radius*lerpf(.35,1.25,1.0-pow(1.0-p,3.0))
+		ball.visible = p<1.0
+		var blink: float = clampf(age/.12,0.0,1.0)
+		core.scale = Vector3.ONE*radius*lerpf(.9,1.6,blink)
+		core.material_override.albedo_color.a = 1.0-blink
+		core.visible = blink<1.0
+		var r: float = clampf(age/RING,0.0,1.0)
+		ring.scale = Vector3.ONE*radius*lerpf(.3,2.4,1.0-pow(1.0-r,2.0))
+		ring.material_override.albedo_color.a = 1.0-r*r
+		ring.visible = r<1.0
+		flash.light_energy = 2.2*exp(-age*12.0)
+		return age>1.3
+
+static func ignition(parent: Node3D, at: Vector3, radius: float) -> Node3D:
+	var burst = Ignition.new()
+	burst.radius = radius
+	burst.position = at
+	parent.add_child(burst)
+	burst.dress()
+	return burst
 
 # Burning (Pyromaniac's cost): small flames on the hero while it lasts.
 static func burning(body: Node3D) -> Node3D:
@@ -715,31 +806,10 @@ static func jolt(parent: Node3D, a: Vector3, b: Vector3) -> void:
 	var ribbon: Node3D = RangerFx.bolt(parent,a,b)
 	ribbon.create_tween().tween_callback(ribbon.queue_free).set_delay(.18)
 
-# Lightning Shield: sparks circling the wizard and small arcs snapping
-# about him while it holds (its parent is his figure).
+# Lightning Shield: a thin bubble of light about him, crackling with
+# electricity where it absorbs a blow (scripts/shield_bubble.gd).
 static func lightning_shield(body: Node3D) -> Node3D:
-	var node = Node3D.new()
-	body.add_child(node)
-	var sparks = Vfx.particles(node,40,1.2,false,true)
-	sparks.local_coords = true
-	sparks.position = Vector3.UP*1.0
-	sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	sparks.emission_ring_axis = Vector3.UP
-	sparks.emission_ring_radius = .75
-	sparks.emission_ring_inner_radius = .6
-	sparks.emission_ring_height = 1.6
-	sparks.gravity = Vector3.ZERO
-	sparks.orbit_velocity_min = .9; sparks.orbit_velocity_max = 1.4
-	sparks.scale_amount_min = .05; sparks.scale_amount_max = .1
-	sparks.color_ramp = Vfx.ramp([0,.5,1],[Color(1,1,1,0),Color(.75,.88,1,1),Color(.6,.8,1,0)])
-	sparks.emitting = true
-	var glow = OmniLight3D.new()
-	glow.light_color = SPARK
-	glow.light_energy = .9
-	glow.omni_range = 3.0
-	glow.position = Vector3.UP*1.1
-	node.add_child(glow)
-	return node
+	return ShieldBubble.make(body)
 
 # Lightning Rod's mark: static crawling over the marked enemy while it holds
 # (scripts/static_arcs.gd; its enemy ticks it).

@@ -68,8 +68,9 @@ func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_da
 	trail.scale_amount_curve = Vfx.curve(1,0)
 	trail.color_ramp = Vfx.ramp([0,.25,.6,1],[Color(1,.62,.22,.55),Color(1,.4,.08,.45),Color(.55,.12,.03,.25),Color(.1,.08,.07,0)])
 	position = origin
-	# Its only sound: the flames bursting from the staff.
-	game.sound.play("fire-whoosh",-10)
+	# The flames bursting from the staff, as it is cast (and a burst as it
+	# strikes: explode).
+	game.sound.play("fireball-cast",-12)
 
 func fire_material(burst_amount: float) -> ShaderMaterial:
 	var m = ShaderMaterial.new()
@@ -146,6 +147,7 @@ func explode() -> void:
 	core.visible = false
 	carry_light.visible = false
 	trail.emitting = false
+	game.sound.play("fireball-burst",-13)
 	if friendly: game.area_damage(target,radius,damage,true,null,true,element,percent)
 	else: game.area_damage(target,radius,damage,false,source)
 	burst_material = fire_material(1.0)

@@ -777,7 +777,7 @@ func make_rod(percent: float, seconds: float) -> void:
 	rod_time = maxf(rod_time,seconds)
 	# Lightning strikes it out of the sky, and static crawls over it while it lasts.
 	game.skills.waves.append(WizardFx.sky_strike(game.world,position+Vector3.UP*game.world.lift(position)))
-	game.sound.play("lightning-zap",-2)
+	game.sound.play("thunder-strike",-6)
 	game.shake(.18)
 	if not is_instance_valid(rod_mark):
 		rod_mark = WizardFx.rod_mark(visual,visual.skeleton,config.get("size",1.0))
@@ -860,7 +860,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	if dead or dormant: return
 	if game.playground != null:
 		# The playground shows every hit, but nothing takes damage.
-		game.sound.play(impact_sound(),-15)
+		if not game.skills.spell_striking: game.sound.play(impact_sound(),-15)
 		if human: bleed(death_impact)
 		react_to_hit()
 		if kind != "player": push_back()
@@ -874,7 +874,8 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	hp -= damage
 	if damage>0 and not daze in ["ambush","freeze","prison"]: end_stun()
 	if damage>0 and rod_time>0 and not dead: game.skills.rod_jolt(self)
-	game.sound.play(impact_sound(),-15)
+	# (A spell is heard by its own sounds, not as a weapon's blow.)
+	if not game.skills.spell_striking: game.sound.play(impact_sound(),-15)
 	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),HIT_COLORS[look],look=="crit")
 	if human and damage>0: bleed(death_impact,hp<=0)
 	if hp <= 0:
