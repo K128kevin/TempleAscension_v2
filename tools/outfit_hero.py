@@ -631,6 +631,23 @@ def cut_sleeves(robe, flare=.045, droop=.02):
         v.co = robe.matrix_world.inverted() @ co
     print('WIZARD_SLEEVES_CUT',round(end,3))
 cut_sleeves(robe_object)
+# The Oracle's robe belled out from the sash into a skirt half again as wide
+# as his hips, so from behind he looked broadest below the belt. His skirt is
+# drawn in from side to side (front to back it keeps its depth, for his
+# stride): easing in from the sash to sit close over his hips, then falling
+# nearly straight, a little narrower still towards the hem.
+def narrow_skirt(robe, hips=.82, at_hips=.74, at_hem=.7):
+    for v in robe.data.vertices:
+        co = robe.matrix_world @ v.co
+        if co.z >= SASH_LOW: continue
+        if co.z > hips:
+            u = (SASH_LOW-co.z)/(SASH_LOW-hips)
+            k = 1+(at_hips-1)*u*u*(3-2*u)
+        else:
+            k = at_hips+(at_hem-at_hips)*min(max((hips-co.z)/(hips-.14),0.0),1.0)
+        co.x *= k
+        v.co = robe.matrix_world.inverted() @ co
+narrow_skirt(robe_object)
 robed = body.copy(); robed.data = body.data.copy(); robed.name = 'WizardBody'
 bpy.context.scene.collection.objects.link(robed)
 groups = {g.index:g.name for g in robed.vertex_groups}
