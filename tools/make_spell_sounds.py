@@ -1,6 +1,7 @@
 """Makes the wizard's spell sounds, written to assets/audio as 48 kHz 16-bit
-WAV. All but the fireball's and the thunder's are synthesised (noise, tones and filters
-only), with tools/make_sounds.py's helpers.
+WAV. All but the Fireball's and Fire Tornado's (the original game's fire
+whoosh) and the thunder's are synthesised (noise, tones and filters only),
+with tools/make_sounds.py's helpers.
 
   fireball-cast.wav   Fireball leaving the staff (and Fire Tornado rising,
                       Blazing Speed): the original game's fire whoosh
@@ -9,9 +10,9 @@ only), with tools/make_sounds.py's helpers.
   fireball-burst.wav  Fireball striking: that roar struck at its loudest and
                       cut short, with a low thump.
   fire-blast.wav      Blast Wave: a deep whoomph of flame rushing outward.
-  fire-tornado.wav    Fire Tornado, looped while it burns: whooshing flames
-                      swirling round, a rumble under them (no crackling or
-                      hiss, which read as static).
+  fire-tornado.wav    Fire Tornado, looped while it burns: the Fireball
+                      cast's roar of flame (the fire whoosh) held on, in
+                      overlapping grains round the loop, swelling and easing.
   thunder-strike.wav  Lightning Rod's bolt from the sky: a real thunderclap
                       supplied by the user (source_art/audio/
                       thunder-strike.m4a), from just before its crack,
@@ -191,22 +192,43 @@ def fire_blast():
 TORNADO_LOOP = 4.0
 
 
+# Fire Tornado's roar is the Fireball cast's (the fire whoosh), made endless:
+# the loudest stretch of the whoosh (seconds into the recording), evened out,
+# cut into overlapping grains laid at random round the loop.
+TORNADO_ROAR = (.85, 1.45)
+TORNADO_GRAIN = .42
+TORNADO_GRAINS = 64
+
+
 def fire_tornado():
+    """Fire Tornado, looped while it burns: the Fireball cast's roar of flame
+    held on and on, swelling and easing as the flames swirl round."""
     seconds = TORNADO_LOOP
+    length = int(seconds*RATE)
+    body = roar()[int(TORNADO_ROAR[0]*RATE):int(TORNADO_ROAR[1]*RATE)].copy()
+    # Its swell and fade evened out, so every grain is as loud as the next.
+    level = np.sqrt(np.convolve((body**2).mean(axis=1), np.ones(int(.06*RATE))/int(.06*RATE), 'same'))
+    body /= np.maximum(level, level.max()*.2)[:, None]
+    grain = int(TORNADO_GRAIN*RATE)
+    window = np.hanning(grain)[:, None]
+    picks = np.random.default_rng(77)
+    out = np.zeros((length, body.shape[1]))
+    for k in range(TORNADO_GRAINS):
+        # Evenly spaced round the loop (a little jittered), each from
+        # anywhere in the roar; laid round the loop's end and back to its
+        # start, so it repeats without a seam.
+        at = int((k+picks.uniform(-.3, .3))*length/TORNADO_GRAINS) % length
+        start = picks.integers(0, len(body)-grain)
+        piece = body[start:start+grain]*window*picks.uniform(.7, 1.0)
+        index = (at+np.arange(grain)) % length
+        np.add.at(out, index, piece)
+    # The flames swirling round: slow swells, twice and three times over the
+    # loop so they never quite repeat within it.
     t = times(seconds)
-    roar = tilt(noise(seconds), 2.0)
-    # Flames whooshing round: a low body and a brighter band swelling in turn
-    # (twice and three times as often, so the swirl never quite repeats
-    # within the loop) and a deep rumble under them. No crackling, and
-    # nothing much above 2.5 kHz: up there the noise read as static, not fire.
-    low = band(roar, 90, 650)*(.55+.45*periodic(t, seconds, 6))
-    high = band(roar, 400, 1600)*(.3+.7*periodic(t, seconds, 9, 1.3)**2)*1.2
-    rumble = band(noise(seconds), 30, 140)*(.7+.3*periodic(t, seconds, 4, .6))*1.4
-    licks = band(roar, 200, 1400)*(flutter(seconds, 11, .6)-1.0)*.8
-    whole = band((low+high+rumble+licks)*(flutter(seconds, 3, .15)), 20, 2500, soft=.5)
+    swirl = .78+.14*periodic(t, seconds, 2, .4)+.08*periodic(t, seconds, 3, 1.9)
+    out *= swirl[:, None]
     # (No fades: it loops.)
-    whole = np.tanh(whole/np.max(np.abs(whole))*1.5)
-    return whole/np.max(np.abs(whole))*.85
+    return out/np.max(np.abs(out))*.85
 
 
 # The thunderclap supplied by the user (source_art/audio/thunder-strike.m4a):

@@ -125,10 +125,12 @@ const FREEZE_SECONDS = 3.0
 const PATCH_RADIUS = .9
 const PATCH_SECONDS = 6.0
 # Freeze Floor's ice: how long it lasts, how wide each patch the ray lays,
-# and how far the ray moves before it lays the next.
+# how far the ray moves before it lays the next, and how far the ray reaches
+# (further than Frost Blast's).
 const FLOOR_SECONDS = 12.0
-const FLOOR_RADIUS = 1.25
+const FLOOR_RADIUS = 3.0
 const FLOOR_SPACING = .8
+const FLOOR_REACH = 15.0
 # Ice laid within this share of its radius of a patch as wide is that patch
 # frozen afresh rather than another laid over it, and no more than MAX_PATCHES
 # lie at once (the oldest thaws early): every patch is a sheet drawn over the
@@ -575,7 +577,7 @@ func tick_channel(dt: float) -> void:
 	if direction.length()<.3: direction = game.player.forward()
 	direction = direction.normalized()
 	game.player.face(origin+direction)
-	var reach: float = minf(FROST_REACH,maxf(1.0,Vector2(at.x-origin.x,at.z-origin.z).length()))
+	var reach: float = minf(FLOOR_REACH if s.effect=="freezefloor" else FROST_REACH,maxf(1.0,Vector2(at.x-origin.x,at.z-origin.z).length()))
 	# Short of any wall in the way.
 	while reach>1.0 and not game.world.clear_line(origin,origin+direction*reach): reach -= .5
 	var hands: Vector3 = origin+Vector3.UP*1.25+direction*.5
@@ -1360,7 +1362,7 @@ func tick(dt: float) -> void:
 # Fire Tornado's roar: TORNADO_LOUDNESS (dB) beside it, falling away with
 # the hero's distance from it (to half at TORNADO_HEARD metres, a quarter
 # about twice as far...), swelling as it rises and dying as it burns out.
-const TORNADO_LOUDNESS = -7.0
+const TORNADO_LOUDNESS = -13.0
 const TORNADO_HEARD = 7.0
 func tornado_gain(z: Dictionary) -> float:
 	var away: float = z.at.distance_to(game.player.position) if is_instance_valid(game.player) else 0.0

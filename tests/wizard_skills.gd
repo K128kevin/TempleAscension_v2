@@ -146,7 +146,23 @@ func test():
 	play(.1)
 	check(not game.skills.channeling() and game.player.busy<=0,"Let go, the channel ends and he is free")
 	var left: float = game.skills.patches.map(func(p): return p.left).max()
-	check(left>9.5 and left<=12.0 and game.skills.patches[-1].radius==1.25,"The ice lasts 12 seconds and spreads 2.5 metres across where the ray falls")
+	check(left>9.5 and left<=12.0 and game.skills.patches[-1].radius==3.0,"The ice lasts 12 seconds and spreads 6 metres across where the ray falls")
+	# Its ray reaches 15 metres (Frost Blast's 10): aimed further down a clear
+	# line, the ice is laid 15 metres out.
+	var clear_way = Vector3.ZERO
+	for k in 16:
+		var way = forward.rotated(Vector3.UP,TAU*k/16.0)
+		if game.world.clear_line(game.player.position,game.player.position+way*16.0): clear_way = way; break
+	if clear_way != Vector3.ZERO:
+		for p in game.skills.patches: if is_instance_valid(p.node): p.node.queue_free()
+		game.skills.patches.clear()
+		hero({"freeze_floor":1}); game.skills.channel_hold_override = 1
+		cast("freeze_floor",game.player.position+clear_way*20.0); play(.3)
+		var furthest: float = game.skills.patches.map(func(p): return Vector2(p.at.x-game.player.position.x,p.at.z-game.player.position.z).length()).max()
+		check(furthest>14.5 and furthest<=15.01,"Its ray reaches 15 metres (%.1f)" % furthest)
+		game.skills.channel_hold_override = 0
+		play(.1)
+	else: check(false,"(A clear 16-metre line to test Freeze Floor's reach)")
 	hero({"freeze_floor":5}); game.skills.channel_hold_override = 1
 	cast("freeze_floor",at); play(.5)
 	check(is_equal_approx(walker.slow_factor,.2),"Rank 5 slows 80%")

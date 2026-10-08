@@ -465,7 +465,7 @@ lasts; letting go, moving or casting anything else ends them.
 | Tree | Points | Spell | Energy | Ranks 1 → 5 |
 |---|---|---|---|---|
 | Ice | 0 | Ice Bolt | 15 | 100% → 140% ice damage; 4% → 20% chance to freeze the target for 3 seconds |
-| | 0 | Freeze Floor | 10 a second | Channelled: a ray of frost ices the floor where it falls for 10 seconds; enemies on it move 40% → 80% slower |
+| | 0 | Freeze Floor | 10 a second | Channelled: a ray of frost reaching 15 metres ices the floor 6 metres across where it falls for 12 seconds; enemies on it move 40% → 80% slower |
 | | 5 | Ice Spikes | 35 | Spikes across 4 metres where he aims: 100% → 180% |
 | | 5 | Ice Prison | 45 | One enemy frozen in a block of ice for 2 → 6 seconds, unable to act and taking 20% → 60% more damage (damage does not break it) |
 | | 5 | Improved Chill | | The chill slows 10% → 40% more and lasts 1 → 5 seconds longer |

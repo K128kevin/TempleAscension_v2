@@ -144,7 +144,8 @@ static func palm(world, at: Vector3, height: float) -> Node3D:
 	var rng: RandomNumberGenerator = world.rng
 	var tree = world.prop(["palm_a","palm_b","palm_c"][rng.randi_range(0,2)],at,height,rng.randf_range(0,TAU))
 	world.block_disc(at,.5)
-	world.screen([tree])
+	# (Never see-through: a palm's slender trunk and high crown hide little,
+	# and faded it looked to vanish.)
 	return tree
 
 static func tuft(world, at: Vector3, tint: Color = Color(.86,.70,.42)) -> void:
