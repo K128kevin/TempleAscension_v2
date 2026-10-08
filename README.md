@@ -464,20 +464,20 @@ lasts; letting go, moving or casting anything else ends them.
 
 | Tree | Points | Spell | Energy | Ranks 1 → 5 |
 |---|---|---|---|---|
-| Ice | 0 | Ice Bolt | 10 | 100% → 180% ice damage; 4% → 20% chance to freeze the target for 3 seconds |
+| Ice | 0 | Ice Bolt | 15 | 100% → 140% ice damage; 4% → 20% chance to freeze the target for 3 seconds |
 | | 0 | Freeze Floor | 10 a second | Channelled: a ray of frost ices the floor where it falls for 10 seconds; enemies on it move 40% → 80% slower |
 | | 5 | Ice Spikes | 35 | Spikes across 4 metres where he aims: 100% → 180% |
 | | 5 | Ice Prison | 45 | One enemy frozen in a block of ice for 2 → 6 seconds, unable to act and taking 20% → 60% more damage (damage does not break it) |
 | | 5 | Improved Chill | | The chill slows 10% → 40% more and lasts 1 → 5 seconds longer |
 | | 10 | Frost Blast | 20 a second | Channelled: frost 10 metres ahead, 70% → 150% a second to everyone within 3 metres of the stream |
 | | 10 | Ice Storm | 40 | Frost about him for 6 → 15 seconds: 60% → 100% a second within 4 metres; frost spells deal double, and nothing else can be cast; 60-second cooldown |
-| Fire | 0 | Fireball | 10 | 120% → 280% fire damage |
+| Fire | 0 | Fireball | 15 | 110% → 200% fire damage |
 | | 5 | Blast Wave | 45 | Flame 5 metres in every direction: 125% → 235% |
 | | 5 | Frostburn | | Fire deals 50% → 175% more to chilled enemies |
 | | 10 | Fire Tornado | 65 | A tornado 4 metres across for 8 seconds: 75% → 140% a second; each burn a 1% → 5% chance to make an enemy in it a Lightning Rod (if known) |
 | | 10 | Blazing Speed | 50 | 6 seconds: run 75% faster, fire spells free; 60-second cooldown |
 | | 10 | Pyromaniac | | Fire deals double, but each fire spell burns him for 10% of what it dealt, over 3 seconds |
-| Lightning | 0 | Lightning Bolt | 10 | 100% → 220% lightning damage, instantly |
+| Lightning | 0 | Lightning Bolt | 15 | 100% → 160% lightning damage, instantly |
 | | 0 | Lightning Shield | 50 | Absorbs 50 → 150 damage and shocks whoever strikes him for 20% → 50%, for 60 seconds; 60-second cooldown |
 | | 5 | Lightning Rod | 30 | One enemy a rod for 10 seconds: whenever it is hurt, a jolt of 100% → 200% leaps to the nearest enemy within 5 metres and on to 3 more, each 30% weaker, at most twice a second |
 | | 5 | Ignition | | Lightning spells have a 5% → 35% chance to set off 75% → 200% of fire within 2 metres of the target |

@@ -10,7 +10,8 @@ only), with tools/make_sounds.py's helpers.
                       cut short, with a low thump.
   fire-blast.wav      Blast Wave: a deep whoomph of flame rushing outward.
   fire-tornado.wav    Fire Tornado, looped while it burns: whooshing flames
-                      swirling round, a rumble under them, crackling.
+                      swirling round, a rumble under them (no crackling or
+                      hiss, which read as static).
   thunder-strike.wav  Lightning Rod's bolt from the sky: a real thunderclap
                       supplied by the user (source_art/audio/
                       thunder-strike.m4a), from just before its crack,
@@ -196,13 +197,13 @@ def fire_tornado():
     roar = tilt(noise(seconds), 2.0)
     # Flames whooshing round: a low body and a brighter band swelling in turn
     # (twice and three times as often, so the swirl never quite repeats
-    # within the loop), a deep rumble under them, and crackling.
+    # within the loop) and a deep rumble under them. No crackling, and
+    # nothing much above 2.5 kHz: up there the noise read as static, not fire.
     low = band(roar, 90, 650)*(.55+.45*periodic(t, seconds, 6))
-    high = band(roar, 500, 2600)*(.3+.7*periodic(t, seconds, 9, 1.3)**2)*1.6
+    high = band(roar, 400, 1600)*(.3+.7*periodic(t, seconds, 9, 1.3)**2)*1.2
     rumble = band(noise(seconds), 30, 140)*(.7+.3*periodic(t, seconds, 4, .6))*1.4
-    licks = band(roar, 200, 1600)*(flutter(seconds, 11, .6)-1.0)*.8
-    snap = crackles(seconds, 70, 1200, 5000, looped=True)*1.2
-    whole = band((low+high+rumble+licks+snap)*(flutter(seconds, 3, .15)), 20, 6000)
+    licks = band(roar, 200, 1400)*(flutter(seconds, 11, .6)-1.0)*.8
+    whole = band((low+high+rumble+licks)*(flutter(seconds, 3, .15)), 20, 2500, soft=.5)
     # (No fades: it loops.)
     whole = np.tanh(whole/np.max(np.abs(whole))*1.5)
     return whole/np.max(np.abs(whole))*.85

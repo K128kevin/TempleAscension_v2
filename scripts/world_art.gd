@@ -256,7 +256,10 @@ static func faded(source: Material) -> Material:
 				m.set_shader_parameter("alpha",.34)
 	elif source is BaseMaterial3D:
 		m = source.duplicate()
-		if m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED: m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		# Cut-out leaves (a palm's fronds, a shrub's) are blended too: left
+		# cut out, their alpha scaled down fell under the cut and nearly every
+		# leaf vanished instead of fading.
+		if m.transparency in [BaseMaterial3D.TRANSPARENCY_DISABLED,BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR,BaseMaterial3D.TRANSPARENCY_ALPHA_HASH]: m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.albedo_color.a = .34
 	cache[key] = m
 	return m

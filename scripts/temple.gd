@@ -282,10 +282,25 @@ func setup_desert(stone: Material) -> void:
 		var dark = StandardMaterial3D.new()
 		dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		dark.albedo_color = Color(.007,.009,.013)
-		var center = layout.to_world(Vector2i.ZERO)+Vector3((layout.size-1)*.5,0,(layout.size-1)*.5)
-		var foundation = Art.model("floor",Vector3(layout.size,.4,layout.size),dark)
-		foundation.position = center+Vector3.DOWN*.6
-		add_child(foundation)
+		# It stops round a stairwell, which goes down a full storey through
+		# the floor: laid across it, the foundation filled the well with black
+		# just under its rim, hiding the flight.
+		var low: Vector3 = layout.to_world(Vector2i.ZERO)-Vector3(.5,0,.5)
+		var high: Vector3 = layout.to_world(Vector2i(layout.size-1,layout.size-1))+Vector3(.5,0,.5)
+		var slabs = [Rect2(low.x,low.z,high.x-low.x,high.z-low.z)]
+		for well in [layout.arrival if not layout.descending else Rect2i(),layout.stairs if layout.descending else Rect2i()]:
+			if not well.has_area(): continue
+			var near: Vector3 = layout.to_world(well.position)-Vector3(.5,0,.5)
+			var far: Vector3 = layout.to_world(well.end-Vector2i.ONE)+Vector3(.5,0,.5)
+			# (Out to the outside of the well's lining.)
+			var hole = Rect2(near.x-.28,near.z-.28,far.x-near.x+.56,far.z-near.z+.56)
+			var cut = []
+			for slab in slabs: cut += around(slab,hole)
+			slabs = cut
+		for slab in slabs:
+			var foundation = Art.model("floor",Vector3(slab.size.x,.4,slab.size.y),dark)
+			foundation.position = Vector3(slab.get_center().x,-.6,slab.get_center().y)
+			add_child(foundation)
 	# Deep masonry along the exposed edges makes the elevation above the dunes
 	# legible instead of leaving the terrace as a paper-thin floating platform.
 	var masonry = Art.material("stone",Color(.22,.27,.34))
@@ -314,6 +329,18 @@ func setup_desert(stone: Material) -> void:
 	terrace_moonlight.shadow_enabled = false
 	terrace_moonlight.visible = false
 	add_child(terrace_moonlight)
+
+# What is left of `slab` with `hole` cut out of it: up to four rectangles round
+# the hole (x across, y along the floor's z).
+static func around(slab: Rect2, hole: Rect2) -> Array:
+	if not slab.intersects(hole): return [slab]
+	var cut = hole.intersection(slab)
+	var pieces = [
+		Rect2(slab.position.x,slab.position.y,cut.position.x-slab.position.x,slab.size.y),
+		Rect2(cut.end.x,slab.position.y,slab.end.x-cut.end.x,slab.size.y),
+		Rect2(cut.position.x,slab.position.y,cut.size.x,cut.position.y-slab.position.y),
+		Rect2(cut.position.x,cut.end.y,cut.size.x,slab.end.y-cut.end.y)]
+	return pieces.filter(func(r): return r.size.x>.01 and r.size.y>.01)
 
 # Which cells are the temple's floor (walkable, or the fountain and stairs that
 # stand on it). Outdoors, the fog leaves everything at floor height elsewhere

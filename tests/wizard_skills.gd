@@ -110,7 +110,7 @@ func test():
 	# --- Ice.
 	hero({"ice_bolt":1})
 	var foe = dummy(6)
-	check(cast("ice_bolt",foe.position) and game.player.visual.state=="CastBolt" and is_equal_approx(game.run.energy,90.0),"Ice Bolt is hurled for 10 energy")
+	check(cast("ice_bolt",foe.position) and game.player.visual.state=="CastBolt" and is_equal_approx(game.run.energy,85.0),"Ice Bolt is hurled for 15 energy")
 	play(2.0)
 	check(within(foe,1,100) and foe.chilled() and foe.slow_time>0 and is_equal_approx(foe.slow_factor,.6),"Rank 1 hits for 100%% and chills: slowed 40%% for 3 seconds (%.1f)" % lost(foe))
 	check(game.skills.patches.size()==1 and game.skills.on_ice(foe.position),"and ices the floor under it")
@@ -120,7 +120,8 @@ func test():
 		ready(); foe.hp = foe.max_hp; foe.end_stun()
 		cast("ice_bolt",foe.position); play(1.5)
 		if foe.stunned and foe.daze=="freeze": frozen += 1
-	check(within(foe,1,180) and frozen>=2 and frozen<=18,"Rank 5: 180%%, and one bolt in five freezes (%d of 40)" % frozen)
+	check(within(foe,1,140) and frozen>=2 and frozen<=18,"Rank 5: 140%%, and one bolt in five freezes (%d of 40)" % frozen)
+	check(range(1,6).map(func(r): return Book.values("ice_bolt",r).x)==[100.0,110.0,120.0,130.0,140.0],"Ice Bolt deals 100, 110, 120, 130 and 140%% by rank")
 	foe.end_stun()
 	hero({"ice_bolt":1,"improved_chill":5}); foe.hp = foe.max_hp
 	cast("ice_bolt",foe.position); play(1.5)
@@ -225,33 +226,34 @@ func test():
 	# --- Fire.
 	hero({"fireball":1})
 	foe = dummy(6)
-	check(cast("fireball",foe.position) and game.player.visual.state=="CastBolt" and is_equal_approx(game.run.energy,90.0),"Fireball costs 10")
+	check(cast("fireball",foe.position) and game.player.visual.state=="CastBolt" and is_equal_approx(game.run.energy,85.0),"Fireball costs 15")
 	play(2.0)
-	check(within(foe,1,120),"Rank 1 burns for 120%% (%.1f)" % lost(foe))
+	check(within(foe,1,110),"Rank 1 burns for 110%% (%.1f)" % lost(foe))
 	hero({"fireball":5}); foe.hp = foe.max_hp
 	cast("fireball",foe.position); play(2.0)
-	check(within(foe,1,280),"Rank 5: 280%")
+	check(within(foe,1,200),"Rank 5: 200%")
+	check(range(1,6).map(func(r): return Book.values("fireball",r).x)==[110.0,130.0,150.0,175.0,200.0],"Fireball deals 110, 130, 150, 175 and 200%% by rank")
 	hero({"fireball":1,"frostburn":1,"ice_bolt":1}); foe.hp = foe.max_hp
 	cast("ice_bolt",foe.position); play(1.5)
 	var chilled_at: float = lost(foe)
 	game.player.busy = 0
 	cast("fireball",foe.position); play(2.0)
-	check(lost(foe)-chilled_at>=10*STAFF*1.2*1.5-.01 and lost(foe)-chilled_at<=15*STAFF*1.2*1.5+.01,"Frostburn rank 1: fire deals 50%% more to the chilled (%.1f)" % (lost(foe)-chilled_at))
+	check(lost(foe)-chilled_at>=10*STAFF*1.1*1.5-.01 and lost(foe)-chilled_at<=15*STAFF*1.1*1.5+.01,"Frostburn rank 1: fire deals 50%% more to the chilled (%.1f)" % (lost(foe)-chilled_at))
 	# On ice laid on the floor, unchilled, it counts as chilled.
 	hero({"fireball":1,"frostburn":1}); foe.hp = foe.max_hp; foe.chill_time = 0.0
 	check(not foe.chilled(),"Off the ice and unchilled, an enemy is not chilled")
 	cast("fireball",foe.position); play(2.0)
-	check(within(foe,1,120),"so Frostburn adds nothing (%.1f)" % lost(foe))
+	check(within(foe,1,110),"so Frostburn adds nothing (%.1f)" % lost(foe))
 	hero({"fireball":1,"frostburn":1}); foe.hp = foe.max_hp; foe.chill_time = 0.0
 	game.skills.lay_ice(foe.position,game.skills.FLOOR_RADIUS,10.0,0.0)
 	check(foe.chilled() and foe.chill_time==0.0,"Standing on the wizard's ice, it is chilled")
 	cast("fireball",foe.position); play(2.0)
-	check(within(foe,1,120,1.5),"and Frostburn's 50%% more is dealt it (%.1f)" % lost(foe))
+	check(within(foe,1,110,1.5),"and Frostburn's 50%% more is dealt it (%.1f)" % lost(foe))
 	game.skills.lay_ice(game.player.position,game.skills.FLOOR_RADIUS,10.0,0.0)
 	check(game.skills.on_ice(game.player.position) and not game.player.chilled(),"(The wizard on his own ice is not)")
 	hero({"fireball":1,"pyromaniac":1}); foe.hp = foe.max_hp
 	cast("fireball",foe.position); play(2.0)
-	check(within(foe,1,240) and game.skills.burn_left>0 and game.player.hp<game.player.max_hp,"Pyromaniac doubles fire, and burns him (%.1f dealt, %.1f burnt)" % [lost(foe),game.player.max_hp-game.player.hp])
+	check(within(foe,1,220) and game.skills.burn_left>0 and game.player.hp<game.player.max_hp,"Pyromaniac doubles fire, and burns him (%.1f dealt, %.1f burnt)" % [lost(foe),game.player.max_hp-game.player.hp])
 	play(3.0)
 	check(absf((game.player.max_hp-game.player.hp)-lost(foe)*.1)<.5,"for a tenth of what it dealt, over 3 seconds")
 	clear()
@@ -427,12 +429,13 @@ func test():
 	# --- Lightning.
 	hero({"lightning_bolt":1})
 	foe = dummy(6)
-	check(cast("lightning_bolt",foe.position) and game.player.visual.state=="CastBolt" and is_equal_approx(game.run.energy,90.0),"Lightning Bolt costs 10")
+	check(cast("lightning_bolt",foe.position) and game.player.visual.state=="CastBolt" and is_equal_approx(game.run.energy,85.0),"Lightning Bolt costs 15")
 	play(.6)
 	check(within(foe,1,100),"Rank 1 strikes at once for 100%% (%.1f)" % lost(foe))
 	hero({"lightning_bolt":5}); foe.hp = foe.max_hp
 	cast("lightning_bolt",foe.position); play(.6)
-	check(within(foe,1,220),"Rank 5: 220%")
+	check(within(foe,1,160),"Rank 5: 160%")
+	check(range(1,6).map(func(r): return Book.values("lightning_bolt",r).x)==[100.0,115.0,130.0,145.0,160.0],"Lightning Bolt deals 100, 115, 130, 145 and 160%% by rank")
 	hero({"lightning_bolt":1,"ignition":5})
 	var beside = dummy(7.2)
 	var lit = 0
