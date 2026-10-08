@@ -787,7 +787,7 @@ func make_rod(percent: float, seconds: float) -> void:
 	rod_time = maxf(rod_time,seconds)
 	# Lightning strikes it out of the sky, and static crawls over it while it lasts.
 	game.skills.waves.append(WizardFx.sky_strike(game.world,position+Vector3.UP*game.world.lift(position)))
-	game.sound.play("thunder-strike",-6)
+	game.sound.play("thunder-strike",-3)
 	game.shake(.18)
 	if not is_instance_valid(rod_mark):
 		rod_mark = WizardFx.rod_mark(visual,visual.skeleton,config.get("size",1.0))

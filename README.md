@@ -474,7 +474,7 @@ lasts; letting go, moving or casting anything else ends them.
 | Fire | 0 | Fireball | 10 | 120% → 280% fire damage |
 | | 5 | Blast Wave | 45 | Flame 5 metres in every direction: 125% → 235% |
 | | 5 | Frostburn | | Fire deals 50% → 175% more to chilled enemies |
-| | 10 | Fire Tornado | 45 | A tornado 4 metres across for 6 seconds: 50% → 100% a second; each second a 10% → 30% chance to make an enemy in it a Lightning Rod (if known) |
+| | 10 | Fire Tornado | 65 | A tornado 4 metres across for 8 seconds: 75% → 140% a second; each burn a 1% → 5% chance to make an enemy in it a Lightning Rod (if known) |
 | | 10 | Blazing Speed | 50 | 6 seconds: run 75% faster, fire spells free; 60-second cooldown |
 | | 10 | Pyromaniac | | Fire deals double, but each fire spell burns him for 10% of what it dealt, over 3 seconds |
 | Lightning | 0 | Lightning Bolt | 10 | 100% → 220% lightning damage, instantly |

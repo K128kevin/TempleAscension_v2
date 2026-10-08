@@ -363,13 +363,14 @@ func test():
 	for i in 60:
 		play(1.0/60)
 		if foe.hp<was: burns.append(was-foe.hp); was = foe.hp
-	check(burns.size()==5 and burns.all(func(d): return absf(d-burns[0])<burns[0]*.6) and burns[0]>=10*STAFF*.5*.2-.01 and burns[0]<=15*STAFF*.5*.2+.01,"It burns every 0.2 seconds, a fifth of its damage a second each time (%d burns in a second: %s)" % [burns.size(),burns])
+	check(burns.size()==5 and burns.all(func(d): return absf(d-burns[0])<burns[0]*.6) and burns[0]>=10*STAFF*.75*.2-.01 and burns[0]<=15*STAFF*.75*.2+.01,"It burns every 0.2 seconds, a fifth of its damage a second each time (%d burns in a second: %s)" % [burns.size(),burns])
 	var strayed: float = 0.0
 	for i in 34:
 		play(.25)
 		if not game.skills.zones.is_empty(): strayed = maxf(strayed,game.skills.zones[0].at.distance_to(game.skills.zones[0].origin))
 	check(strayed>.5 and strayed<=game.skills.TORNADO_WANDER+.5,"It wanders, but no further than %.0f metres from where it was cast (%.1f)" % [game.skills.TORNADO_WANDER,strayed])
-	check(lost(foe)>0 and lost(foe)<=15*STAFF*.5*8+.01 and lost(aside)==0 and game.skills.zones.is_empty(),"Rank 1: 50%% a second for 8 seconds to what it touches (%.1f)" % lost(foe))
+	check(lost(foe)>0 and lost(foe)<=15*STAFF*.75*8+.01 and lost(aside)==0 and game.skills.zones.is_empty(),"Rank 1: 75%% a second for 8 seconds to what it touches (%.1f)" % lost(foe))
+	check(range(1,6).map(func(r): return Book.values("fire_tornado",r).x)==[75.0,90.0,105.0,120.0,140.0],"It deals 75, 90, 105, 120 and 140%% a second by rank")
 	check(range(1,6).all(func(r): return Book.values("fire_tornado",r).y==r),"Its chance to make an enemy a Lightning Rod is 1, 2, 3, 4 and 5%% by rank")
 	# Each burn rolls for each enemy it burns: with five burns a second for
 	# eight seconds, at rank 5 most of a crowd in it are made rods (once a
