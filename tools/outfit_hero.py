@@ -48,6 +48,7 @@ rig = next(o for o in bpy.data.objects if o.type=='ARMATURE')
 outfits.remove_bones(rig,'cloak_')
 outfits.remove_bones(rig,'cape_')
 outfits.remove_bones(rig,'kilt_')
+outfits.remove_bones(rig,'robe_')
 body = next(o for o in bpy.data.objects if o.type=='MESH' and 'SuperHero' in o.name)
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=str(outfits.SOURCE/'Rogue.glb'))
@@ -548,6 +549,52 @@ def wizard_kit():
         if r > target:
             outfits.place(co,r+(target-r)*lift)
             v.co = robe.matrix_world.inverted() @ co
+    # Below the sash the robe is no longer the tunic drawn down and skinned to
+    # the thighs, which kicked its hem forward with every stride: it is cut
+    # off under the sash, and its skirt hangs instead as a ring of cloth from
+    # chains of bones that the game swings with a spring simulation and folds
+    # over his legs, as the warrior's kilt and the ranger's cloak are
+    # (scripts/visual.gd, assets/shaders/cloth_fold.gdshaderinc).
+    mesh = bmesh.new(); mesh.from_mesh(robe.data)
+    mesh.transform(robe.matrix_world)
+    bmesh.ops.bisect_plane(mesh,geom=mesh.verts[:]+mesh.edges[:]+mesh.faces[:],plane_co=(0,0,ROBE_CUT),plane_no=(0,0,1),clear_inner=True)
+    mesh.transform(robe.matrix_world.inverted())
+    mesh.to_mesh(robe.data); mesh.free()
+    skirt = bpy.data.objects.new('WizardRobeSkirt',bpy.data.meshes.new('WizardRobeSkirt'))
+    bpy.context.scene.collection.objects.link(skirt)
+    hips = [(body,v) for v in body.data.vertices if SASH_LOW-.03<v.co.z<SKIRT_TOP+.01 and v.groups and not (outfits.region_of_bone(body.vertex_groups[max(v.groups,key=lambda g:g.weight).group].name) or '').startswith('arm')]
+    outfits.cloth_sheet(skirt,hips,top=SKIRT_TOP,hem=SKIRT_HEM,flare=SKIRT_FLARE,reach=math.pi,columns=64,rows=24,offset=ROBE_AT_WAIST+.012,window=.2,smoothing=4)
+    # The sheet's two edges meet at the front: joined into one closed ring.
+    mesh = bmesh.new(); mesh.from_mesh(skirt.data)
+    cy = outfits.KILT_CENTER_Y
+    front = {}
+    for v in mesh.verts:
+        if abs(abs(outfits.cloth_bearing(v.co))-math.pi) < 1e-3: front.setdefault(round(v.co.z,4),[]).append(v)
+    weld = {}
+    for pair in front.values():
+        if len(pair) != 2: continue
+        middle = (pair[0].co+pair[1].co)/2
+        pair[0].co = middle; pair[1].co = middle
+        weld[pair[1]] = pair[0]
+    bmesh.ops.weld_verts(mesh,targetmap=weld)
+    mesh.to_mesh(skirt.data); mesh.free()
+    # Its top, under the sash, lies just outside the robe it is cut from, so
+    # the robe's cut edge is hidden inside it.
+    from mathutils.bvhtree import BVHTree
+    surface = bmesh.new(); surface.from_mesh(robe.data); surface.transform(robe.matrix_world)
+    robe_only = BVHTree.FromBMesh(surface); surface.free()
+    for v in skirt.data.vertices:
+        if v.co.z < ROBE_CUT-.08: continue
+        out = Vector((v.co.x,v.co.y-cy,0))
+        hit,_,_,_ = robe_only.ray_cast(Vector((0,cy,v.co.z))+out.normalized()*.4,-out.normalized(),.4)
+        if hit is None: continue
+        need = Vector((hit.x,hit.y-cy,0)).length+.01
+        if out.length < need:
+            v.co.x = out.normalized().x*need; v.co.y = cy+out.normalized().y*need
+    outfits.cloth_chains(rig,skirt,'pelvis',SKIRT_TOP+.01,(SKIRT_TOP-.14,SKIRT_TOP-.04),chains=16,segments=7,prefix='robe_')
+    skirt.parent = rig
+    skirt.modifiers.new('Armature','ARMATURE').object = rig
+    pieces.append(skirt)
     # The sash itself, round his waist just outside the cinched robe.
     ring = [(body,v) for v in body.data.vertices if SASH_LOW<v.co.z<SASH_HIGH and not (outfits.region_of_bone(body.vertex_groups[max(v.groups,key=lambda g:g.weight).group].name) or '').startswith('arm')]
     sash = bpy.data.objects.new('WizardSash',bpy.data.meshes.new('WizardSash'))
@@ -560,6 +607,7 @@ def wizard_kit():
     from mathutils.bvhtree import BVHTree
     cy = outfits.KILT_CENTER_Y
     surface = bmesh.new(); surface.from_mesh(robe.data); surface.transform(robe.matrix_world)
+    surface.from_mesh(skirt.data)
     robe_surface = BVHTree.FromBMesh(surface); surface.free()
     # The sheet takes the widest girth of the body about each point, so it
     # stood off the cinched robe wherever the waist narrows (up to 5cm at the
@@ -574,6 +622,10 @@ def wizard_kit():
             need = Vector((hit.x,hit.y-cy,0)).length+off
             v.co.x = out.normalized().x*need; v.co.y = cy+out.normalized().y*need
     onto_robe(sash,SASH_ON_ROBE)
+    from mathutils import kdtree
+    skirt_tree = kdtree.KDTree(len(skirt.data.vertices))
+    for v in skirt.data.vertices: skirt_tree.insert(v.co,v.index)
+    skirt_tree.balance()
     for i,(turn,length) in enumerate([(.0,.34),(.09,.28)]):
         end = bpy.data.objects.new('WizardSashEnd%d' % i,bpy.data.meshes.new('WizardSashEnd%d' % i))
         bpy.context.scene.collection.objects.link(end)
@@ -585,6 +637,15 @@ def wizard_kit():
         # beneath the sash: each point is laid on the robe's surface, a
         # little further out than the band they hang over.
         onto_robe(end,SASH_ON_ROBE+.006)
+        # They hang on the skirt, so they swing with it: each point moves as
+        # the skirt's nearest point does (the game folds them over his legs
+        # just outside the skirt).
+        for g in list(end.vertex_groups): end.vertex_groups.remove(g)
+        for v in end.data.vertices:
+            _,k,_ = skirt_tree.find(v.co)
+            for g in skirt.data.vertices[k].groups:
+                name = skirt.vertex_groups[g.group].name
+                (end.vertex_groups.get(name) or end.vertex_groups.new(name=name)).add([v.index],g.weight,'REPLACE')
         end.parent = rig
         end.modifiers.new('Armature','ARMATURE').object = rig
         pieces.append(end)
@@ -595,6 +656,12 @@ WIZARD_BOOT_TOP = .34
 SASH_LOW = .985
 SASH_HIGH = 1.06
 ROBE_AT_WAIST = .03
+# Where the robe is cut, under the sash, and its hanging skirt: top (under the
+# sash), hem (at the ankles, as the robe's was) and flare.
+ROBE_CUT = 1.0
+SKIRT_TOP = 1.035
+SKIRT_HEM = .14
+SKIRT_FLARE = .22
 # How far the sash's leather lies out from the robe it binds.
 SASH_ON_ROBE = .006
 bpy.ops.object.select_all(action='DESELECT')
@@ -631,23 +698,6 @@ def cut_sleeves(robe, flare=.045, droop=.02):
         v.co = robe.matrix_world.inverted() @ co
     print('WIZARD_SLEEVES_CUT',round(end,3))
 cut_sleeves(robe_object)
-# The Oracle's robe belled out from the sash into a skirt half again as wide
-# as his hips, so from behind he looked broadest below the belt. His skirt is
-# drawn in from side to side (front to back it keeps its depth, for his
-# stride): easing in from the sash to sit close over his hips, then falling
-# nearly straight, a little narrower still towards the hem.
-def narrow_skirt(robe, hips=.82, at_hips=.74, at_hem=.7):
-    for v in robe.data.vertices:
-        co = robe.matrix_world @ v.co
-        if co.z >= SASH_LOW: continue
-        if co.z > hips:
-            u = (SASH_LOW-co.z)/(SASH_LOW-hips)
-            k = 1+(at_hips-1)*u*u*(3-2*u)
-        else:
-            k = at_hips+(at_hem-at_hips)*min(max((hips-co.z)/(hips-.14),0.0),1.0)
-        co.x *= k
-        v.co = robe.matrix_world.inverted() @ co
-narrow_skirt(robe_object)
 robed = body.copy(); robed.data = body.data.copy(); robed.name = 'WizardBody'
 bpy.context.scene.collection.objects.link(robed)
 groups = {g.index:g.name for g in robed.vertex_groups}

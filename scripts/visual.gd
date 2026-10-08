@@ -232,8 +232,18 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			kilt.set_shader_parameter("fold_from",.03)
 			mesh.material_override = kilt
 			if hero_class == "warrior": cloak_mesh = mesh
-		elif mesh.name.begins_with("WizardSashEnd") or mesh.name == "WizardSash":
-			# Single sheets of dark leather, seen from both sides.
+		elif mesh.name.begins_with("WizardSashEnd"):
+			# Single sheets of dark leather, seen from both sides, hanging on
+			# the robe's skirt: they swing with it and fold over his legs just
+			# outside it (cloak_capsules).
+			mesh.visible = hero_class == "wizard"
+			var sash = ShaderMaterial.new()
+			sash.shader = load("res://assets/shaders/sash_end.gdshader")
+			sash.set_shader_parameter("fold_lift",SASH_END_LIFT)
+			sash.set_shader_parameter("fold_from",ROBE_FOLD_FROM)
+			mesh.material_override = sash
+			if hero_class == "wizard": cloth_followers.append(mesh)
+		elif mesh.name == "WizardSash":
 			mesh.visible = hero_class == "wizard"
 			mesh.material_override = Art.two_sided(Art.leather(),Color(.62,.55,.5))
 		elif mesh.name.begins_with("WizardBoots") or mesh.name.begins_with("WizardBracers") or mesh.name.begins_with("WizardSash"):
@@ -291,9 +301,9 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			cloth.set_shader_parameter("fold_depth",.005)
 			mesh.material_override = cloth
 			if hero_class == "ranger": cloak_mesh = mesh
-		elif "WizardCape" in mesh.name or "WizardHood" in mesh.name or "WizardRobe" in mesh.name:
-			# Deep navy wool, worn and lightly frayed at the hems; the cape
-			# swings and folds over his legs as the ranger's cloak does.
+		elif "WizardHood" in mesh.name or "WizardRobe" in mesh.name:
+			# Deep navy wool, worn and lightly frayed at the hems; the robe's
+			# skirt swings and folds over his legs as the ranger's cloak does.
 			mesh.visible = hero_class == "wizard"
 			var wool = ShaderMaterial.new()
 			wool.shader = load("res://assets/shaders/cloak.gdshader")
@@ -303,14 +313,18 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 				mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 				wool.set_shader_parameter("rest_pose",true)
 			wool.set_shader_parameter("tatter",.35)
-			wool.set_shader_parameter("hem_height",.2 if "WizardCape" in mesh.name else (.14 if "WizardRobe" in mesh.name else -1.0))
+			wool.set_shader_parameter("hem_height",.14 if "WizardRobe" in mesh.name else -1.0)
 			if "WizardRobe" in mesh.name:
 				wool.set_shader_parameter("robe",1.0)
 				var box: AABB = mesh.get_aabb()
 				wool.set_shader_parameter("sleeve_end",maxf(absf(box.position.x),absf(box.end.x)))
 			if "WizardHood" in mesh.name: wool.set_shader_parameter("fold_depth",.0015)
 			mesh.material_override = wool
-			if hero_class == "wizard" and "WizardCape" in mesh.name: cloak_mesh = mesh
+			if "WizardRobeSkirt" in mesh.name:
+				# It hangs from under the sash; only below it does it fold out
+				# over his thighs.
+				wool.set_shader_parameter("fold_from",ROBE_FOLD_FROM)
+				if hero_class == "wizard": cloak_mesh = mesh
 		elif "Hair" in mesh.name:
 			# The helm or hood covers the hair.
 			mesh.visible = false
@@ -372,7 +386,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		staff_hand.active = false
 	skeleton.skeleton_updated.connect(shown_pose_updated)
 	if not stone and hero_class == "ranger": setup_cloak()
-	elif not stone and hero_class == "wizard": setup_cloak("cape_")
+	elif not stone and hero_class == "wizard": setup_cloak("robe_")
 	elif not stone and hero_class == "warrior": setup_cloak("kilt_")
 	elif stone and skeleton.find_bone("cloak_0_0") >= 0:
 		# A statue's stone cloth (the Crowned Statue's cape) swings and folds
@@ -384,10 +398,11 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 				cloak_mesh = mesh
 		setup_cloak()
 	# Cloth over something thicker than the bare legs stands further off them:
-	# the ranger's cloak over his boots, the warrior's kilt over the full
-	# muscle of his thighs, a cape over a robe's skirt and sash.
+	# the ranger's cloak and the wizard's skirt over their boots, the
+	# warrior's kilt over the full muscle of his thighs, the Oracle's cape over
+	# its robe's skirt and sash.
 	if cloak_mesh != null:
-		var robed = (not stone and hero_class == "wizard") or (stone and enemy_kind == "wizard")
+		var robed = stone and enemy_kind == "wizard"
 		cloth_clearance = .08 if robed else (.02 if not stone else 0.0)
 		if robed:
 			cloak_mesh.material_override.set_shader_parameter("min_reach",.24)
@@ -1703,7 +1718,7 @@ func set_shadowed(on: bool) -> void:
 	for mesh in find_children("*","MeshInstance3D",true,false):
 		if mesh == sword_trail: continue
 		# (His cloak's cloth is moved by its own shader, which darkens itself.)
-		if mesh == cloak_mesh and mesh.material_override is ShaderMaterial: mesh.material_override.set_shader_parameter("shadowed",1.0 if on else 0.0)
+		if (mesh == cloak_mesh or mesh in cloth_followers) and mesh.material_override is ShaderMaterial: mesh.material_override.set_shader_parameter("shadowed",1.0 if on else 0.0)
 		else: mesh.material_overlay = shadow_overlay if on else null
 
 # The wake behind the hero's blade as he cuts (scripts/sword_trail.gd).
@@ -1966,10 +1981,20 @@ const CLOTH_HEAVY = {"stiffness":1.6,"drag":.75,"gravity":2.0,"flow":.3,"momentu
 # A short kilt of leather strips: stiff, swaying with the stride, barely
 # trailing.
 const CLOTH_KILT = {"stiffness":2.4,"drag":.6,"gravity":1.6,"flow":.04,"momentum":.01,"flutter":.06}
+# A long wool robe's skirt, hung from the waist: heavier than a cloak, it
+# hangs straight down, barely trails as he runs and sways with his stride.
+const CLOTH_ROBE = {"stiffness":1.6,"drag":.75,"gravity":2.4,"flow":.05,"momentum":.02,"flutter":.1}
+# (Its fold over the legs starts this far above the hips' centre, below the
+# sash; the sash's ends lie this far outside it.)
+const ROBE_FOLD_FROM = .03
+const SASH_END_LIFT = .012
 var cloth_feel: Dictionary = CLOTH_LIGHT
 const CLOAK_RUN_SPEED = 5.0
 var cloak: SpringBoneSimulator3D
 var cloak_mesh: MeshInstance3D
+# Pieces lying on the cloth that fold over the legs with it (the wizard's sash
+# ends).
+var cloth_followers: Array = []
 # The limbs the cloak's cloth may never pass through, as capsules from bone to
 # bone with a radius a little over the limb's own (boots included).
 const CLOAK_BODY_CAPSULES = [["thigh_l","calf_l",.105],["thigh_r","calf_r",.105],["calf_l","foot_l",.085],["calf_r","foot_r",.085],["foot_l","ball_l",.075],["foot_r","ball_r",.075]]
@@ -1983,8 +2008,9 @@ var cloak_last_position = null
 var cloak_clock = 0.0
 var cloak_velocity = Vector3.ZERO
 
-# `prefix` names the chains: cloak_ (the ranger's cloak, a statue's cape) or
-# cape_ (the wizard's cape, on the same hero skeleton as the ranger's).
+# `prefix` names the chains: cloak_ (the ranger's cloak, a statue's cape),
+# robe_ (the wizard's skirt) or kilt_ (the warrior's), all on the one hero
+# skeleton.
 func setup_cloak(prefix: String = "cloak_") -> void:
 	if skeleton.find_bone(prefix+"0_0") < 0: return
 	if cloak_mesh != null: skeleton.skeleton_updated.connect(cloak_capsules)
@@ -1995,6 +2021,7 @@ func setup_cloak(prefix: String = "cloak_") -> void:
 	var hangs_from: int = skeleton.get_bone_parent(skeleton.find_bone(prefix+"0_0"))
 	if hangs_from != skeleton.find_bone("pelvis"): cloth_feel = CLOTH_HEAVY
 	if prefix == "kilt_": cloth_feel = CLOTH_KILT
+	if prefix == "robe_": cloth_feel = CLOTH_ROBE
 	cloak = SpringBoneSimulator3D.new()
 	cloak.name = "CloakPhysics"
 	skeleton.add_child(cloak)
@@ -2047,22 +2074,24 @@ func setup_cloak(prefix: String = "cloak_") -> void:
 # after every pose so the cloth is tested against where the legs are now.
 func cloak_capsules() -> void:
 	if not is_instance_valid(cloak_mesh) or not cloak_mesh.is_inside_tree(): return
-	var to_mesh: Transform3D = cloak_mesh.global_transform.affine_inverse()*skeleton.global_transform
-	var a = PackedVector3Array(); var b = PackedVector3Array(); var r = PackedFloat32Array()
-	for capsule in CLOAK_BODY_CAPSULES+CLOAK_ARM_CAPSULES:
-		a.append(to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(capsule[0])).origin)
-		b.append(to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(capsule[1])).origin)
-		# The mesh's own space is the rig's, before the rig's scale.
-		r.append(capsule[2]+(cloth_clearance if capsule in CLOAK_BODY_CAPSULES else 0.0))
-	var m: ShaderMaterial = cloak_mesh.material_override
-	m.set_shader_parameter("leg_capsules",CLOAK_BODY_CAPSULES.size())
-	# The rig faces +Z.
-	m.set_shader_parameter("body_forward",(to_mesh.basis*Vector3.BACK).normalized())
-	m.set_shader_parameter("capsule_a",a)
-	m.set_shader_parameter("capsule_b",b)
-	m.set_shader_parameter("capsule_radius",r)
-	m.set_shader_parameter("capsule_count",a.size())
-	m.set_shader_parameter("body_center",to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone("pelvis")).origin)
+	for mesh in [cloak_mesh]+cloth_followers:
+		if not is_instance_valid(mesh) or not mesh.material_override is ShaderMaterial: continue
+		var to_mesh: Transform3D = mesh.global_transform.affine_inverse()*skeleton.global_transform
+		var a = PackedVector3Array(); var b = PackedVector3Array(); var r = PackedFloat32Array()
+		for capsule in CLOAK_BODY_CAPSULES+CLOAK_ARM_CAPSULES:
+			a.append(to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(capsule[0])).origin)
+			b.append(to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(capsule[1])).origin)
+			# The mesh's own space is the rig's, before the rig's scale.
+			r.append(capsule[2]+(cloth_clearance if capsule in CLOAK_BODY_CAPSULES else 0.0))
+		var m: ShaderMaterial = mesh.material_override
+		m.set_shader_parameter("leg_capsules",CLOAK_BODY_CAPSULES.size())
+		# The rig faces +Z.
+		m.set_shader_parameter("body_forward",(to_mesh.basis*Vector3.BACK).normalized())
+		m.set_shader_parameter("capsule_a",a)
+		m.set_shader_parameter("capsule_b",b)
+		m.set_shader_parameter("capsule_radius",r)
+		m.set_shader_parameter("capsule_count",a.size())
+		m.set_shader_parameter("body_center",to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone("pelvis")).origin)
 
 # Rest length of a bone: the distance to its first child.
 func bone_length(bone: String) -> float:

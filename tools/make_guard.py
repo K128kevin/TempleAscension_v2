@@ -33,7 +33,7 @@ rig.name = 'GuardRig'
 # The heroes' kits are their own, and the helm covers the hair.
 for o in [o for o in bpy.data.objects if o.type == 'MESH' and (o.name.startswith(('Hero', 'Ranger', 'Wizard', 'Hair')) or o.parent is None)]:
     bpy.data.objects.remove(o, do_unlink=True)
-outfits.remove_bones(rig, ('cloak_', 'cape_', 'kilt_'))
+outfits.remove_bones(rig, ('cloak_', 'cape_', 'kilt_', 'robe_'))
 body = next(o for o in bpy.data.objects if o.type == 'MESH' and 'SuperHero' in o.name)
 body.name = 'Body'
 for track in list(rig.animation_data.nla_tracks):

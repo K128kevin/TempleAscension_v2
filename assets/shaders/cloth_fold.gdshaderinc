@@ -27,6 +27,9 @@ uniform float waist_reach = 0.0;
 // waist instead of being carried out over the tops of the thighs.
 uniform float fold_from = 10.0;
 const float FOLD_EASE = 0.1;
+// For something lying on another folded cloth (the sash's ends on a robe's
+// skirt): how far outside that cloth it is, so it folds just outside it.
+uniform float fold_lift = 0.0;
 // How far past a limb's surface the cloth starts to be carried out.
 const float MARGIN = 0.03;
 // How far beside a limb the cloth is still eased outward.
@@ -48,7 +51,7 @@ vec3 fold_cloth(vec3 vertex) {
 		if (i >= leg_capsules && behind > -0.06) continue;
 		vec3 a = capsule_a[i];
 		vec3 ab = capsule_b[i] - a;
-		float r = capsule_radius[i] + MARGIN;
+		float r = capsule_radius[i] + MARGIN + fold_lift;
 		// The limb, as a row of balls along its length: where each is cut by
 		// the level of this vertex, the outward line from the centre through
 		// the vertex must clear the cut. A limb lifted level with the cloth
@@ -75,8 +78,8 @@ vec3 fold_cloth(vec3 vertex) {
 		}
 	}
 	// Below the hips the cloth hangs around the legs, never in between them.
-	if (vertex.y < body_center.y - 0.1) needed = max(needed, min_reach);
-	else if (vertex.y < body_center.y + 0.3) needed = max(needed, waist_reach);
+	if (vertex.y < body_center.y - 0.1) needed = max(needed, min_reach + fold_lift);
+	else if (vertex.y < body_center.y + 0.3 && waist_reach > 0.0) needed = max(needed, waist_reach + fold_lift);
 	vertex.xz = body_center.xz + out_dir * needed;
 	return mix(unfolded, vertex, strength);
 }

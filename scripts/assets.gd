@@ -368,7 +368,7 @@ const BODY_SLOTS = ["chest","legs","feet","hands"]
 const PIECES = {
 	"warrior":{"head":["HeroHelmet"],"chest":["HeroArmor"],"legs":["HeroKilt","HeroBelt"],"feet":[],"hands":["HeroBracers"]},
 	"ranger":{"head":["RangerCloak","RangerBrooch"],"chest":["RangerBelt","RangerPouch"],"legs":[],"feet":["RangerBoots","RangerBootsFeet"],"hands":["RangerBracers"]},
-	"wizard":{"head":["WizardHood"],"chest":["WizardRobe","WizardSash","WizardSashEnd0","WizardSashEnd1"],"legs":[],"feet":["WizardBoots","WizardBootsFeet"],"hands":["WizardBracers"]}}
+	"wizard":{"head":["WizardHood"],"chest":["WizardRobe","WizardRobeSkirt","WizardSash","WizardSashEnd0","WizardSashEnd1"],"legs":[],"feet":["WizardBoots","WizardBootsFeet"],"hands":["WizardBracers"]}}
 # The class that wears each weight of armor.
 const WEARER = {"heavy":"warrior","medium":"ranger","light":"wizard"}
 

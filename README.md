@@ -328,8 +328,10 @@ they press into it, so they never show through). He stands, runs and crouches
 as the warrior does, carrying the bow at his side in his left hand, the hand
 he shoots from; to shoot he turns side-on, locks the bow arm out at the target
 and draws the string to his jaw. Wizard with a twisted silver staff crowned
-with a pale crystal, in a deep navy wool robe, hood and cape,
-with a knotted leather sash, wrapped leather bracers and worn leather boots. No class starts with a skill learned: each begins with
+with a pale crystal, in a deep navy wool robe and hood, with a knotted
+leather sash, wrapped leather bracers and worn leather boots (the robe's
+ankle-length skirt hangs from his waist on a spring simulation, the sash's
+ends with it, and folds over his legs as the ranger's cloak does). No class starts with a skill learned: each begins with
 one skill point to spend on any skill it can learn.
 
 Every class's skills sit in three trees, shown side by side in the skill panel

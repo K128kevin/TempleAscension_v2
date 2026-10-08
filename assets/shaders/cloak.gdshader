@@ -114,10 +114,12 @@ void fragment() {
 		if (reach > 0.4 && abs(reach - sleeve_end + 0.068) < 0.0016 && fract(p.y * 220.0 + p.z * 220.0) < 0.55) color = thread;
 		if (front && p.y < 0.975) {
 			// Below the sash the robe falls open a little over a dark under-robe,
-			// wider toward the hem, each edge bound in a darker trim.
-			float open = 0.004 + 0.035 * clamp((0.975 - p.y) / 0.8, 0.0, 1.0);
+			// wider toward the hem, each edge bound in a darker trim. (The
+			// under-robe is a deep shade of the robe's own wool, so where a stride
+			// draws the opening wide it reads as cloth in shadow, not a hole.)
+			float open = 0.004 + 0.03 * clamp((0.975 - p.y) / 0.8, 0.0, 1.0);
 			float edge = abs(p.x - 0.012);
-			if (edge < open) { color = vec3(0.045, 0.04, 0.038) * (0.8 + mottle * 0.4); h -= 0.003; }
+			if (edge < open) { color = cloth_color * 0.42 * (0.8 + mottle * 0.4) * (0.9 + grain * 0.14); h -= 0.003; }
 			else if (edge < open + 0.02) { color = trim; h += 0.0015; }
 			if (abs(edge - open - 0.024) < 0.0015 && fract(p.y * 110.0) < 0.55) color = thread;
 		} else if (front && p.y < 1.55) {

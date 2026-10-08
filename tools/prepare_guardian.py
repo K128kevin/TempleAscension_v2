@@ -14,7 +14,7 @@ for o in [o for o in bpy.data.objects if o.name.startswith(('Hero','Ranger','Wiz
 rig=next(o for o in bpy.data.objects if o.type=='ARMATURE')
 bpy.context.view_layer.objects.active=rig
 bpy.ops.object.mode_set(mode='EDIT')
-for bone in [b for b in rig.data.edit_bones if b.name.startswith(('cloak_','cape_','kilt_'))]:rig.data.edit_bones.remove(bone)
+for bone in [b for b in rig.data.edit_bones if b.name.startswith(('cloak_','cape_','kilt_','robe_'))]:rig.data.edit_bones.remove(bone)
 bpy.ops.object.mode_set(mode='OBJECT')
 meshes=[o for o in bpy.data.objects if o.type=='MESH']
 # The statue mask (see statue_stone.gdshader): white, but 0 in blue on the
