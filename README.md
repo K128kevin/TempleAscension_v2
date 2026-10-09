@@ -39,7 +39,8 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 Clicking the ground cancels a combat order. While idle, the hero faces the cursor. Architecture
 between the camera and the hero, or an enemy near a wall, turns semi-transparent. Once
 five or fewer statues remain, an arrow around the hero points to the nearest one; once a
-floor is cleared, a jade arrow points to the stairway on.
+floor is cleared, a jade arrow points to the stairway on (but not in the arena
+basement, whose way down is found).
 
 The HUD keeps to the foot of the screen: a compact row of clickable ability
 icons in the middle (LMB basic attack, RMB and 1 to 4, each skill with its icon
@@ -185,9 +186,13 @@ The temple stands in a larger world, one continuous outdoor map
   bandits' cave. The cave is generated like the temple's floors, in living
   rock over bare earth. The basement is laid out along one great hallway,
   six tiles wide, turning this way and that, with narrower passages off it
-  to rooms; its walls are dressed masonry over a floor of bare dirt, and it
-  is strewn with crumbling statues of gladiators, the bones of the dead,
-  pots (some smashed or knocked over) and cobwebbed corners. On its first
+  to rooms; its walls are dressed masonry, grimed with risen damp and
+  streaks run down from the top, broken away here and there over heaps of
+  rubble, over a floor of old dirt, blotched damp and dusty, stained and
+  gritty. It is strewn with crumbling statues of gladiators, the bones of
+  the dead and pots (some smashed or knocked over); cobwebs hang in its
+  corners, along the hallway's walls and between the statues and the walls
+  behind them; and rats scurry along its walls, scattering from the hero. On its first
   level the hallway ends at a locked iron gate before the stair down: one
   bandit, in a room off the far half of the hallway, wears its key at his
   belt. It falls where he dies, an item (the Rusted Gate Key) picked up

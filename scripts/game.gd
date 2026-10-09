@@ -258,6 +258,12 @@ func load_floor() -> void:
 				enemy.hp = 0
 				enemy.visible = false
 		setup_key(came_up)
+		# Rats scurry about the arena basement (scripts/rats.gd), one to every
+		# RAT_ROOM tiles of its floor.
+		if run.place == "basement":
+			var rats = preload("res://scripts/rats.gd").new()
+			world.add_child(rats)
+			rats.setup(self,roundi(world.layout.cells.size()/RAT_ROOM),Temple.Layout.floor_seed(int(run.seed),int(run.floor)+31+Temple.Layout.KINDS[run.place].salt))
 	else:
 		boss = spawn_enemy("boss","boss",world.boss_point)
 		# Four groups of five centurions stand in reserve in the corners; the
@@ -1423,6 +1429,7 @@ func place_crown() -> void:
 # whoever else still stands. `run.keys` holds the gates opened
 # ("basement:0:open"), which stay open.
 const GATE_KEY = "gate_key"
+const RAT_ROOM = 120.0
 const GATE_REACH = 3.0
 var key_holder = null
 func gated() -> bool:

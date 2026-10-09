@@ -126,6 +126,8 @@ func test():
 	for count in Data.AREAS.basement[0].counts.values(): expected += count
 	check(game.enemies.size()==expected and game.remaining()==expected and game.enemies.all(func(e): return e.human and e.kind.begins_with("bandit") and e.uid.begins_with("basement:0:")),"Its bandits wait there")
 	check(game.enemies.all(func(e): return not e.visual.is_stone and e.role in ["gladiator","archer"]),"They are men, not statues")
+	var rats: Array = world.get_children().filter(func(n): return n.get_script() == preload("res://scripts/rats.gd"))
+	check(rats.size()==1 and rats[0].rats.size()==roundi(world.layout.cells.size()/Game.RAT_ROOM),"Rats scurry about the basement")
 	check(game.player.position.distance_to(world.layout.entry_position())<.01 and not world.leaving_temple(game.player.position),"He arrives just inside the way in")
 	game.hud.tick(0)
 	check("bandits remain" in game.hud.status.text and game.hud.objective.text=="LEVEL 1","The HUD counts bandits, on a numbered level with no place name")
@@ -159,7 +161,7 @@ func test():
 	var lying: Dictionary = game.key_pickup()
 	check(not lying.is_empty() and lying.drop in game.run.drops and not is_instance_valid(holder.visual.belt_key),"The key fell where its bearer died, an item on the floor")
 	game.hud.tick(0)
-	check(game.hud.stair_arrow.visible,"The arrow points the way to the key")
+	check(not game.hud.stair_arrow.visible,"No arrow points the way in the basement")
 	game.player.position = lying.node.position
 	game.pick_up(lying)
 	check(game.has_key() and game.key_pickup().is_empty() and Game.GATE_KEY in game.run.bag,"Picked up, it goes in the bag")
@@ -218,6 +220,7 @@ func test():
 	# The cave.
 	game.player.position = Overworld.CAVE+Vector3(0,0,2)
 	check(game.pass_door() and game.run.place=="cave" and game.run.floor==0 and game.world.layout.kind=="cave","Walking into the cave's mouth enters its first level")
+	check(not game.world.get_children().any(func(n): return n.get_script() == preload("res://scripts/rats.gd")),"The cave has no rats")
 	check(game.enemies.all(func(e): return e.uid.begins_with("cave:0:") and not e.dead) and "basement:0:0" in game.run.dead,"Its bandits are its own; the basement's dead are remembered")
 	var archer = game.enemies.filter(func(e): return e.kind=="bandit_archer")[0]
 	check(archer.visual.weapon_kind=="bow" and archer.config.range>8.0,"Some of the bandits shoot arrows")

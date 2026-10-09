@@ -693,20 +693,15 @@ func aim_arrow(arrow: Polygon2D, at: Vector3) -> void:
 	arrow.visible = true
 
 # Once a floor is cleared (or its way on opened), a jade arrow (the colour of
-# the seal at its foot) points the hero to the stairway on. Behind a locked
-# gate, it points first to the key, where that lies untaken, then the gate.
+# the seal at its foot) points the hero to the stairway on.
 var stair_arrow: Polygon2D
 func point_to_stairs() -> void:
 	if stair_arrow == null: stair_arrow = make_arrow(Color(.3,1,.85,.92))
 	stair_arrow.visible = false
-	if game.playground != null or game.mode!="playing" or game.player.dead or not game.has_way_on(): return
+	# (Not in the arena basement: its way down is found, as its key is.)
+	if game.playground != null or game.mode!="playing" or game.player.dead or not game.has_way_on() or game.run.place=="basement": return
 	if game.remaining()>0 and not game.way_open(): return
-	var goal: Vector3 = game.world.exit_point
-	if game.gated() and not game.world.gate_open:
-		if game.has_key(): goal = game.world.gate_point()
-		elif not game.key_pickup().is_empty(): goal = game.key_pickup().node.position
-		else: return
-	aim_arrow(stair_arrow,goal)
+	aim_arrow(stair_arrow,game.world.exit_point)
 
 # Circles the hero on screen, pointing at the nearest statue still standing.
 func point_to_nearest_enemy() -> void:

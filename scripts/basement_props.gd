@@ -479,6 +479,18 @@ static func wall_web(width: float) -> MeshInstance3D:
 	node.name = "WallWeb"
 	return node
 
+# A web strung between a wall and something standing before it (a statue's
+# shoulders): anchored along the wall's face on the plane z = 0, `width`
+# wide about x = 0, from `top` down `drop`, and out across the gap to points
+# `reach` along +Z (the room's side) a little below `top`, sagging between.
+static func bridge_web(reach: float, width: float, top: float, drop: float) -> MeshInstance3D:
+	var outline = [Vector3(-width*.5,top,0),Vector3(width*.5,top,0),Vector3(width*.35,top-drop,0),
+		Vector3(width*.2,top-drop*.75,reach),Vector3(-width*.15,top-drop*.45,reach),Vector3(-width*.45,top-drop*.35,reach*.4)]
+	var hub = Vector3(0,top-drop*.45,reach*.45)
+	var node = web_mesh(hub,func(t): return around(outline,t),func(r): return Vector3(0,-.12*drop*sin(r*PI),0),maxf(width,reach))
+	node.name = "BridgeWeb"
+	return node
+
 # A point `t` (0 to 1) of the way round the closed outline `points`.
 static func around(points: Array, t: float) -> Vector3:
 	var lengths = []

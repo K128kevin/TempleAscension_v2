@@ -34,6 +34,7 @@ run "$godot_bin" --headless --path . --script tests/overworld.gd --log-file "$PW
 run "$godot_bin" --headless --path . --script tests/daylight.gd --log-file "$PWD/test-results/daylight.log"
 run "$godot_bin" --headless --path . --script tests/dungeons.gd --log-file "$PWD/test-results/dungeons.log"
 run "$godot_bin" --headless --path . --script tests/basement_props.gd --log-file "$PWD/test-results/basement-props.log"
+run "$godot_bin" --headless --path . --script tests/rats.gd --log-file "$PWD/test-results/rats.log"
 run "$godot_bin" --headless --path . --script tests/procedural_maps.gd --log-file "$PWD/test-results/procedural-maps.log"
 run "$godot_bin" --headless --path . --script tests/map_integration.gd --log-file "$PWD/test-results/map-integration.log"
 run "$godot_bin" --headless --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-regression.log"

@@ -225,6 +225,10 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 					var floor_at = Vector3(along,0,edge.line-edge.direction.y*.5) if edge.horizontal else Vector3(edge.line-edge.direction.x*.5,0,along)
 					faces.append(layout.to_cell(floor_at))
 				visibility_cells[wall] = faces
+				# (The basement's walls are dirtied and damaged, once they all stand.)
+				if layout.kind == "basement" and not edge.low:
+					var face = Vector3(mid,0,edge.line) if edge.horizontal else Vector3(edge.line,0,mid)
+					wall_pieces.append({"node":wall,"face":face,"back":edge.direction,"length":finish-start,"horizontal":edge.horizontal,"cells":faces})
 	# The generated rooms determine every landmark and decoration placement.
 	for i in layout.rooms.size():
 		var room: Rect2i = layout.rooms[i]
@@ -252,7 +256,11 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 		if layout.descending: build_well(layout.stairs,layout.stairs_dir,stone)
 		else: build_flight(layout.stairs,layout.stairs_dir,layout.exit_cell,stone)
 	if layout.descending: furnish_dungeon(run_seed)
-	if layout.kind == "basement": furnish_basement(run_seed)
+	if layout.kind == "basement":
+		furnish_basement(run_seed)
+		var dirtied = RandomNumberGenerator.new()
+		dirtied.seed = Layout.floor_seed(run_seed,level+13+Layout.KINDS[layout.kind].salt)
+		grime_walls(dirtied)
 	if layout.gate.has_area(): setup_gate(stone)
 	exit_seal = Art.seal(3,Color(.3,1,.85,.85))
 	exit_seal.position = exit_point+Vector3.UP*.05
@@ -586,20 +594,17 @@ func bare_ground(size: Vector3) -> BoxMesh:
 		ground_slab.size = size
 	return ground_slab
 
-# A cave's floor: packed earth and grit.
-# The arena basement's floor: dark, damp dirt, trodden hard, its grit
-# rough underfoot and blotched darker and lighter across the floor.
-func dirt_material() -> StandardMaterial3D:
-	var dirt = earth_material()
-	dirt.albedo_color = Color(.4,.37,.34)
-	dirt.uv1_scale = Vector3.ONE*.8
-	dirt.normal_scale = 1.8
-	dirt.detail_enabled = true
-	dirt.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
-	dirt.detail_albedo = load("res://assets/textures/rock_detail.jpg")
-	dirt.detail_mask = load("res://assets/textures/sand_fine.jpg")
+# The arena basement's floor: old dirt, trodden hard, blotched damp and
+# dusty, stained and gritty (assets/shaders/basement_dirt.gdshader).
+func dirt_material() -> ShaderMaterial:
+	var dirt = ShaderMaterial.new()
+	dirt.shader = load("res://assets/shaders/basement_dirt.gdshader")
+	dirt.set_shader_parameter("ground",load("res://assets/textures/sand_gravel.jpg"))
+	dirt.set_shader_parameter("ground_normal",load("res://assets/textures/sand_gravel_normal.jpg"))
+	dirt.set_shader_parameter("grit",load("res://assets/textures/rock_detail.jpg"))
 	return dirt
 
+# A cave's floor: packed earth and grit.
 func earth_material() -> StandardMaterial3D:
 	var earth = StandardMaterial3D.new()
 	earth.albedo_color = Color(.66,.64,.62)
@@ -676,13 +681,19 @@ func furnish_dungeon(run_seed: int) -> void:
 # the dead lie where they fell, slumped against a wall or sprawled on the
 # floor, or only their bones are left (SKELETONS a room, as a share); pots
 # stand against the walls in ones, twos and threes, some smashed or knocked
-# over (POTS); and spiders have webbed the rooms' corners (WEBBED). Statues
+# over (POTS); and spiders have webbed the corners of the rooms (WEBBED) and
+# of the hallway (HALL_WEBBED), its far wall every HALL_WEB_EVERY metres or
+# so, a room's far wall now and then (ROOM_WALL_WEBBED), and the gap
+# between a statue and the wall behind it (STATUE_WEBBED). Statues
 # and standing pots are solid; bones, shards and webs are not.
 const STATUE_ROOM = .45
 const STATUE_HALL = 11.0
 const SKELETONS = .5
 const POTS = .6
 const WEBBED = .45
+const HALL_WEBBED = .75
+const HALL_WEB_EVERY = 6.0
+const ROOM_WALL_WEBBED = .4
 const WEB_HEIGHT = 2.7
 var unlit_cells: Dictionary = {}
 func furnish_basement(run_seed: int) -> void:
@@ -736,6 +747,7 @@ func furnish_basement(run_seed: int) -> void:
 				statue.rotation.y = facing.call(spot[1])
 				show.call(statue,spot[0],true)
 				unlit_cells[spot[0]] = true
+				statue_web(rng,spot[0],spot[1],show)
 				taken.append(spot[0])
 				break
 		if rng.randf() < SKELETONS:
@@ -767,10 +779,14 @@ func furnish_basement(run_seed: int) -> void:
 					pot(rng,cell,spot[1],show)
 				taken.append(spot[0])
 				break
-		# Webs in the corners that are true corners.
+	# Webs in the corners that are true corners, in the rooms and along the
+	# hallway (more often there, HALL_WEBBED).
+	for room in layout.rooms+layout.halls:
+		if room == layout.vault: continue
+		var chance: float = HALL_WEBBED if room in layout.halls else WEBBED
 		# (Not the nearest corner, between the two walls nearest the camera.)
 		for corner in [room.position,Vector2i(room.end.x-1,room.position.y),Vector2i(room.position.x,room.end.y-1)]:
-			if rng.randf() > WEBBED: continue
+			if rng.randf() > chance: continue
 			var inward = Vector2i(1 if corner.x==room.position.x else -1,1 if corner.y==room.position.y else -1)
 			if layout.is_open(corner-Vector2i(inward.x,0)) or layout.is_open(corner-Vector2i(0,inward.y)): continue
 			var web = BasementProps.web(rng.randf_range(1.0,1.6))
@@ -778,7 +794,8 @@ func furnish_basement(run_seed: int) -> void:
 			web.rotation.y = {Vector2i(1,1):0.0,Vector2i(-1,1):-PI/2,Vector2i(1,-1):PI/2,Vector2i(-1,-1):PI}[inward]
 			show.call(web,corner,false)
 			unlit_cells[corner] = true
-	# Along the hallway's walls: statues, now and then, and the odd body.
+	# Along the hallway's walls: statues, now and then, and the odd body;
+	# and webs hung on them every few metres (HALL_WEB_EVERY).
 	for hall in layout.halls:
 		var along_x: bool = hall.size.x >= hall.size.y
 		var length: int = hall.size.x if along_x else hall.size.y
@@ -795,8 +812,92 @@ func furnish_basement(run_seed: int) -> void:
 					thing.position = layout.to_world(cell)+(Vector3.ZERO if statue else Vector3(back.x,0,back.y)*.35)
 					thing.rotation.y = facing.call(back)
 					show.call(thing,cell,statue)
-					if statue: unlit_cells[cell] = true
+					if statue:
+						unlit_cells[cell] = true
+						statue_web(rng,cell,back,show)
 				at += rng.randf_range(STATUE_HALL*.7,STATUE_HALL*1.3)
+			at = rng.randf_range(1.0,HALL_WEB_EVERY)
+			while at < length-1:
+				var step = int(at)
+				var cell: Vector2i = Vector2i(hall.position.x+step,hall.position.y) if along_x else Vector2i(hall.position.x,hall.position.y+step)
+				var side = Vector2i(absi(back.y),absi(back.x))
+				if layout.cells.has(cell) and not layout.is_open(cell+back) and not layout.is_open(cell+back+side) and not layout.is_open(cell+back-side):
+					wall_web(rng,cell,back,show)
+				at += rng.randf_range(HALL_WEB_EVERY*.6,HALL_WEB_EVERY*1.4)
+	# And one now and then on a room's far wall.
+	for i in range(1,layout.rooms.size()):
+		if layout.rooms[i] == layout.vault or rng.randf() > ROOM_WALL_WEBBED: continue
+		var room: Rect2i = layout.rooms[i]
+		var back: Vector2i = Vector2i.UP if rng.randf() < .5 else Vector2i.LEFT
+		var cell: Vector2i = Vector2i(rng.randi_range(room.position.x+1,room.end.x-2),room.position.y) if back == Vector2i.UP else Vector2i(room.position.x,rng.randi_range(room.position.y+1,room.end.y-2))
+		var side = Vector2i(absi(back.y),absi(back.x))
+		if not layout.is_open(cell+back) and not layout.is_open(cell+back+side) and not layout.is_open(cell+back-side): wall_web(rng,cell,back,show)
+
+# The basement's walls, dirtied (assets/shaders/wall_grime.gdshader): damp
+# risen from the floor, streaks run down from the top, grime. On the walls the
+# camera sees, a stretch now and then (DAMAGED, of each metre) is broken: the
+# dressed face fallen away in a spot or two, cracks about them, and below,
+# where they fell, rubble and chips of stone on the floor.
+const DAMAGED = .07
+var wall_pieces: Array = []
+func grime_walls(rng: RandomNumberGenerator) -> void:
+	var shared = ShaderMaterial.new()
+	shared.shader = load("res://assets/shaders/wall_grime.gdshader")
+	var groups: Dictionary = {}
+	for group in occluders: groups[group.root] = group
+	for piece in wall_pieces:
+		var grime: ShaderMaterial = shared
+		var back: Vector2i = piece.back
+		if back in [Vector2i.UP,Vector2i.LEFT] and rng.randf() < DAMAGED*piece.length:
+			grime = shared.duplicate()
+			var spots = PackedVector4Array()
+			for k in rng.randi_range(1,2):
+				var along: float = rng.randf_range(-.5,.5)*(piece.length-1.0)
+				var at: Vector3 = piece.face+(Vector3(along,0,0) if piece.horizontal else Vector3(0,0,along))
+				var low: bool = rng.randf() < .55
+				spots.append(Vector4(at.x,rng.randf_range(.25,.9) if low else rng.randf_range(1.0,2.6),at.z,rng.randf_range(.22,.5)))
+				rubble(rng,at,back)
+			grime.set_shader_parameter("spots",spots)
+			grime.set_shader_parameter("spot_count",spots.size())
+		for mesh in piece.node.find_children("*","MeshInstance3D",true,false): mesh.material_overlay = grime
+		if groups.has(piece.node): groups[piece.node].grime = grime
+
+# What fell from a broken wall, at the foot of its face at `at` (the wall's
+# back toward `back`): a low heap of rubble and a few smaller pieces.
+func rubble(rng: RandomNumberGenerator, at: Vector3, back: Vector2i) -> void:
+	var out = Vector3(-back.x,0,-back.y)
+	var cell: Vector2i = layout.to_cell(at+out*.5)
+	if not layout.cells.has(cell): return
+	var heap = Node3D.new()
+	heap.position = at+out*rng.randf_range(.2,.35)
+	var pile = Kit.prop("rubble",rng.randf_range(.18,.3))
+	pile.rotation.y = rng.randf_range(0,TAU)
+	heap.add_child(pile)
+	for k in rng.randi_range(2,4):
+		var chip = Kit.prop("rubble",rng.randf_range(.05,.09))
+		chip.position = out*rng.randf_range(.2,.7)+Vector3(out.z,0,out.x)*rng.randf_range(-.6,.6)
+		chip.rotation = Vector3(rng.randf_range(0,TAU),rng.randf_range(0,TAU),rng.randf_range(0,TAU))*.3
+		heap.add_child(chip)
+	add_child(heap)
+	visibility_nodes.append(heap)
+	visibility_cells[heap] = [cell]
+
+# A web draped on the wall at `cell`'s back (toward `back`), high up.
+func wall_web(rng: RandomNumberGenerator, cell: Vector2i, back: Vector2i, show: Callable) -> void:
+	var web = BasementProps.wall_web(rng.randf_range(.9,1.7))
+	web.position = layout.to_world(cell)+Vector3(back.x,0,back.y)*.5+Vector3.UP*rng.randf_range(2.5,3.0)
+	web.rotation.y = atan2(-back.x,-back.y)
+	show.call(web,cell,false)
+
+# A web strung from the wall behind a statue (at `cell`, its back toward
+# `back`) to its shoulders, now and then (STATUE_WEBBED).
+const STATUE_WEBBED = .55
+func statue_web(rng: RandomNumberGenerator, cell: Vector2i, back: Vector2i, show: Callable) -> void:
+	if rng.randf() > STATUE_WEBBED: return
+	var web = BasementProps.bridge_web(.36,rng.randf_range(.7,1.1),rng.randf_range(2.45,2.75),rng.randf_range(.55,.85))
+	web.position = layout.to_world(cell)+Vector3(back.x,0,back.y)*.5
+	web.rotation.y = atan2(-back.x,-back.y)
+	show.call(web,cell,false)
 
 # A pot against the wall at `cell` (its back toward `back`): an urn, a vase
 # or a plain pot, standing, knocked over, or smashed to a heap of shards.
@@ -1586,7 +1687,10 @@ func follow(pos: Vector3, delta: float) -> void:
 				if blocked: break
 			if blocked != group.hidden:
 				group.hidden = blocked
-				for mesh in group.meshes: mesh.material_override = group.faded if blocked else group.normal
+				for mesh in group.meshes:
+					mesh.material_override = group.faded if blocked else group.normal
+					# (A faded wall shows none of its grime.)
+					if group.has("grime"): mesh.material_overlay = null if blocked else group.grime
 
 func update_visibility(pos: Vector3, delta: float) -> void:
 	visibility_timer -= delta
