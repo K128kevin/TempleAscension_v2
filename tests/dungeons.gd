@@ -49,6 +49,13 @@ func test():
 				check(layout.entry.has_area()==(level==0) and layout.arrival.has_area()==(level==1),"The way in is a door on the first level and a stair on the second: "+label)
 				check(layout.stairs.has_area()==(level==0) and layout.last==(level==1),"Only the first level has a stair further down: "+label)
 				if level==1: check(layout.cells.has(layout.arrival_foot) and not layout.arrival.has_point(layout.arrival_foot),"The stair back up is reached from the floor at its foot: "+label)
+				if place=="basement":
+					check(layout.halls.size()>=5 and layout.halls.all(func(h): return mini(h.size.x,h.size.y)==Layout.MAIN_HALL),"One great hallway, %d wide, in several stretches: %s" % [Layout.MAIN_HALL,label])
+					check(layout.cells.size()>=Layout.BASEMENT_FLOOR[level]*.85,"About 30%% larger than before (%d tiles): %s" % [layout.cells.size(),label])
+					var off: Array = layout.rooms.slice(1,layout.rooms.size()-1)
+					check(off.size()>=6 and off.all(func(r): return r.size.x>=Layout.BRANCH_ROOM.x and r.size.y>=Layout.BRANCH_ROOM.x and not layout.halls.any(func(h): return h.intersects(r))),"Rooms off it, down passages of their own: "+label)
+					if level==0: check(layout.gate.get_area()==Layout.GATE_WIDTH and layout.vault.has_point(layout.gate.get_center()+layout.gate_dir) and layout.vault.encloses(layout.stairs) and layout.halls[-1].has_point(Vector2i(layout.gate.get_center())-layout.gate_dir),"At the hallway's end a gate opens into the vault of the stair: "+label)
+					else: check(not layout.gate.has_area() and not layout.vault.has_area(),"The last level has no gate: "+label)
 				var copy = Layout.new(); copy.generate(run_seed,level,place)
 				check(copy.cells==layout.cells and copy.start==layout.start,"Deterministic: "+label)
 				var signature = hash(layout.cells)
@@ -132,9 +139,33 @@ func test():
 	bandit.hit(10000)
 	check(bandit.dead and bandit.visual.state=="Death" and game.run.xp>xp and bandit.uid in game.run.dead,"He falls, and is worth experience")
 	game.player.hp = game.player.max_hp
+	# The way down is behind a locked gate at the hallway's end; one bandit,
+	# in a room off its far half, carries the key.
+	var layout0 = world.layout
+	check(game.gated() and not world.gate_open and not world.fits(world.gate_point()) and not game.has_key(),"A locked gate bars the way to the stair")
+	check(layout0.vault.encloses(layout0.stairs) and layout0.vault.has_point(layout0.exit_cell),"The stair down is in the vault behind it")
+	var holder = game.key_holder
+	check(holder != null and world.key_rooms().any(func(r): return r.has_point(layout0.to_cell(holder.position))) and is_instance_valid(holder.visual.belt_key),"One bandit in a far room wears the key at his belt")
+	game.player.position = world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*1.5
+	game.hud.tick(0)
+	check("locked" in game.hud.prompt.text,"At the gate the HUD says it is locked")
+	game.interact()
+	check(not world.gate_open,"Without the key it stays shut")
 	for enemy in game.enemies:
 		if not enemy.dead: enemy.hit(100000)
-	check(game.remaining()==0 and world.exit_seal.visible and game.has_way_on() and game.run.cleared.is_empty(),"With the level cleared the way down opens")
+	check(game.remaining()==0 and not world.exit_seal.visible and game.run.cleared.is_empty() and not game.way_open(),"With the level cleared the gate is still locked")
+	check(is_instance_valid(game.key_node) and not is_instance_valid(holder.visual.belt_key),"The key fell where its bearer died")
+	game.hud.tick(0)
+	check(game.hud.stair_arrow.visible,"The arrow points the way to the key")
+	game.player.position = game.key_node.position
+	game.tick_key()
+	check(game.has_key() and not is_instance_valid(game.key_node) and "basement:0" in game.run.keys,"Walking over the key takes it up")
+	game.player.position = world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*1.5
+	game.hud.tick(0)
+	check("Unlock" in game.hud.prompt.text,"With it, the HUD offers to unlock the gate")
+	game.interact()
+	check(world.gate_open and world.fits(world.gate_point()) and world.exit_seal.visible and game.way_open() and "basement:0:open" in game.run.keys,"The key opens the gate, and the way down")
+	check(not world.path(world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*2.0,world.exit_point).is_empty(),"Through the open gate the stair can be walked to")
 	game.player.position = world.exit_point
 	game.hud.tick(0)
 	check("descend" in game.hud.prompt.text,"The HUD says to descend")

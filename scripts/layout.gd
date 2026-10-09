@@ -7,7 +7,7 @@ const DIRS = [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.DOWN,Vector2i.UP]
 # each floor is (its target minutes), how wide its hallways are, and a salt
 # that keeps one place's floors unlike another's.
 const KINDS = {"temple":{"minutes":[3,5,8],"corridor":5,"salt":0},
-	"basement":{"minutes":[3,4],"corridor":4,"salt":40},
+	"basement":{"minutes":[3,4],"corridor":3,"salt":40},
 	"cave":{"minutes":[3,5],"corridor":3,"salt":80}}
 # The temple's floors: the fountain court's, the terraces', and the summit.
 const COURT_FLOOR = 1
@@ -60,6 +60,17 @@ var court_obstacle = Rect2i()
 var terrace: Array[Rect2i] = []
 var terrace_doors: Array[Rect2i] = []
 var rng_state = 0
+# The arena's basement is laid out along one great hallway (see
+# generate_basement): `halls` are its stretches, start to end; `reach` gives,
+# for each of `rooms`, how far along the hallway it opens off it. Where the
+# level has a way further down, the hallway ends at a gate (`gate`, a passage
+# of floor GATE_WIDTH across) into the `vault`, the chamber of the stair.
+var halls: Array[Rect2i] = []
+var reach: Array[float] = []
+var hall_length = 0.0
+var gate = Rect2i()
+var gate_dir = Vector2i.RIGHT
+var vault = Rect2i()
 
 static func floor_seed(run_seed: int, floor_number: int) -> int:
 	var h = ((run_seed*0x27d4eb2d) ^ (floor_number*0x165667b1)) & 0xffffffff
@@ -119,8 +130,9 @@ func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 		horizontal(Vector2i(a.x,b.y),b)
 
 func generate(run_seed: int, floor_index: int, place: String = "temple") -> void:
-	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear()
-	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i()
+	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear(); halls.clear(); reach.clear()
+	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i(); gate = Rect2i(); vault = Rect2i()
+	hall_length = 0.0
 	kind = place
 	var plan: Dictionary = KINDS[kind]
 	corridor = plan.corridor
@@ -143,6 +155,9 @@ func generate(run_seed: int, floor_index: int, place: String = "temple") -> void
 		carve(rooms[0])
 		start = Vector2i(14,17)
 		exit_cell = Vector2i(14,3)
+		return
+	if kind == "basement":
+		generate_basement()
 		return
 	# Larger rooms and hallways need proportionally more floor area.
 	var minutes: int = plan.minutes[floor_index]
@@ -357,6 +372,8 @@ func place_ascent() -> void:
 	var order: Array = []
 	for room in rooms:
 		if room==court or room==rooms[0]: continue
+		# (Behind a gate, the stair is in the vault.)
+		if vault.has_area() and room!=vault: continue
 		order.append(room)
 	order.sort_custom(func(a,b): return center(a).distance_squared_to(start)>center(b).distance_squared_to(start))
 	for room in order:
@@ -420,3 +437,176 @@ func on_terrace(cell: Vector2i) -> bool:
 	for strip in terrace:
 		if strip.has_point(cell): return true
 	return false
+
+# --- The arena's basement ------------------------------------------------------
+
+# One great hallway, MAIN_HALL wide, runs from the entrance room to the far
+# end of the level in stretches that turn this way and that (each HALL_RUN
+# long going on, HALL_TURN across), never doubling back across itself. Off
+# it, narrower passages (`corridor` wide, BRANCH long) lead to rooms of
+# BRANCH_ROOM a side (now and then, BRANCH_SKIP, a stretch of wall is left
+# bare; up to BRANCH_PASSES times along the whole hallway), until the level holds about BASEMENT_FLOOR tiles of
+# floor (a share HALL_SHARE of them the hallway's). Where the level has a way
+# further down, the hallway ends at a gate GATE_WIDTH across, into a vault of
+# VAULT a side holding the stair; on the last level it opens into a great
+# hall of FINAL_ROOM a side. The whole is then turned to one of eight ways
+# round, so no two levels lie alike.
+const BASEMENT_FLOOR = [2900,3550]
+const HALL_SHARE = .4
+const MAIN_HALL = 6
+const HALL_RUN = Vector2i(14,22)
+const HALL_TURN = Vector2i(10,16)
+const HALL_DRIFT = 18
+const BRANCH = Vector2i(3,8)
+const BRANCH_ROOM = Vector2i(9,13)
+const BRANCH_SKIP = .2
+const BRANCH_PASSES = 3
+const ENTRANCE_ROOM = 10
+const GATE_WIDTH = 4
+const VAULT = 9
+const FINAL_ROOM = Vector2i(13,15)
+func generate_basement() -> void:
+	var target: int = BASEMENT_FLOOR[clampi(level_index,0,BASEMENT_FLOOR.size()-1)]
+	var half: int = MAIN_HALL/2
+	# The entrance room, the hallway leaving its far side.
+	var entrance = Rect2i(-ENTRANCE_ROOM,-ENTRANCE_ROOM/2,ENTRANCE_ROOM,ENTRANCE_ROOM)
+	var points: Array[Vector2i] = [Vector2i(-1,0)]
+	var length = 0.0
+	var going_on = true
+	while length < target*HALL_SHARE/MAIN_HALL or going_on:
+		var at: Vector2i = points[-1]
+		var step: Vector2i
+		if going_on: step = Vector2i(integer(HALL_RUN.x,HALL_RUN.y),0)
+		else:
+			var way: int = (1 if random()<.5 else -1) if absi(at.y)<HALL_DRIFT else -signi(at.y)
+			step = Vector2i(0,way*integer(HALL_TURN.x,HALL_TURN.y))
+		points.append(at+step)
+		length += absi(step.x)+absi(step.y)
+		going_on = not going_on
+	var hall_rects: Array[Rect2i] = []
+	for i in range(1,points.size()):
+		var a: Vector2i = points[i-1]
+		var b: Vector2i = points[i]
+		var low = Vector2i(mini(a.x,b.x),mini(a.y,b.y))
+		hall_rects.append(Rect2i(low-Vector2i(half,half),(b-a).abs()+Vector2i(MAIN_HALL,MAIN_HALL)))
+	var end: Vector2i = points[-1]
+	var parts: Array[Rect2i] = [entrance]
+	parts.append_array(hall_rects)
+	# Its far end: the gate and the vault, or the great hall.
+	var gate_rect = Rect2i()
+	var end_room: Rect2i
+	if not last:
+		gate_rect = Rect2i(end.x+half,end.y-GATE_WIDTH/2,1,GATE_WIDTH)
+		end_room = Rect2i(end.x+half+1,end.y-VAULT/2,VAULT,VAULT)
+	else:
+		var w: int = integer(FINAL_ROOM.x,FINAL_ROOM.y)
+		var h: int = integer(FINAL_ROOM.x,FINAL_ROOM.y)
+		end_room = Rect2i(end.x+half,end.y-h/2,w,h)
+	parts.append(end_room)
+	# The side rooms, off both sides of every stretch, each `reach` along it.
+	var side_rooms: Array[Rect2i] = []
+	var side_reach: Array[float] = []
+	var floor_now = func() -> int:
+		var area = {}
+		for r in parts:
+			for y in range(r.position.y,r.end.y):
+				for x in range(r.position.x,r.end.x): area[Vector2i(x,y)] = true
+		return area.size()
+	var walked = 0.0
+	for pass_number in BRANCH_PASSES:
+		walked = 0.0
+		for i in range(1,points.size()):
+			var a: Vector2i = points[i-1]
+			var b: Vector2i = points[i]
+			var run: int = absi(b.x-a.x)+absi(b.y-a.y)
+			var along: Vector2i = (b-a)/maxi(run,1)
+			var across = Vector2i(along.y,along.x)
+			# Each side of the stretch in turn, a room's breadth on past each
+			# one laid out, a step or two on past each that will not fit.
+			for way in [1,-1]:
+				var offset: int = integer(half+2,half+4)
+				while offset <= run-half-2 and floor_now.call() < target:
+					var room: Dictionary = branch(a+along*offset,across*way,parts) if random()>BRANCH_SKIP else {}
+					if room.is_empty():
+						offset += integer(2,4)
+						continue
+					parts.append(room.passage)
+					parts.append(room.room)
+					side_rooms.append(room.room)
+					side_reach.append(walked+offset)
+					offset += (room.room.size.x if along.x!=0 else room.room.size.y)+integer(2,5)
+			walked += run
+		if floor_now.call()>=target: break
+	hall_length = walked
+	# Turned one of eight ways round, and moved clear of the map's edge.
+	var turn: int = integer(0,7)
+	var all: Array[Rect2i] = []
+	for r in parts: all.append(turned(r,turn))
+	var low = Vector2i(1<<30,1<<30)
+	var high = -low
+	for r in all:
+		low = Vector2i(mini(low.x,r.position.x),mini(low.y,r.position.y))
+		high = Vector2i(maxi(high.x,r.end.x),maxi(high.y,r.end.y))
+	var shift: Vector2i = Vector2i(3,3)-low
+	size = maxi(high.x-low.x,high.y-low.y)+6
+	var placed = func(r: Rect2i) -> Rect2i:
+		var t: Rect2i = turned(r,turn)
+		return Rect2i(t.position+shift,t.size)
+	rooms.append(placed.call(entrance))
+	reach.append(0.0)
+	for i in side_rooms.size():
+		rooms.append(placed.call(side_rooms[i]))
+		reach.append(side_reach[i])
+	rooms.append(placed.call(end_room))
+	reach.append(hall_length)
+	for r in hall_rects: halls.append(placed.call(r))
+	for r in parts: carve(placed.call(r))
+	if not last:
+		vault = rooms[-1]
+		gate = placed.call(gate_rect)
+		carve(gate)
+		gate_dir = turned_dir(Vector2i.RIGHT,turn)
+	start = center(rooms[0])
+	exit_cell = center(rooms[-1])
+	place_stairs()
+
+# A passage `corridor` wide leaving the hallway at `at` (on its centre line)
+# toward `out`, and a room at its end, meeting it somewhere along its near
+# wall, if neither runs into anything already laid out (`parts`); {} if they
+# would.
+func branch(at: Vector2i, out: Vector2i, parts: Array[Rect2i]) -> Dictionary:
+	var half: int = MAIN_HALL/2
+	var side = Vector2i(absi(out.y),absi(out.x))
+	var long: int = integer(BRANCH.x,BRANCH.y)
+	# (The hallway's cells run from half below its centre line to half-1 above.)
+	var mouth: Vector2i = at+out*(half if out.x+out.y>0 else half+1)
+	var tail: Vector2i = mouth+out*(long-1)
+	var passage = Rect2i(Vector2i(mini(mouth.x,tail.x),mini(mouth.y,tail.y))-side*(corridor/2),(tail-mouth).abs()+Vector2i.ONE+side*(corridor-1))
+	var w: int = integer(BRANCH_ROOM.x,BRANCH_ROOM.y)
+	var h: int = integer(BRANCH_ROOM.x,BRANCH_ROOM.y)
+	var first: Vector2i = tail+out
+	var shift: int = integer(1,maxi(1,(w if side.x==1 else h)-corridor-1))
+	var corner: Vector2i
+	if side.x==1: corner = Vector2i(at.x-corridor/2-shift,first.y if out.y>0 else first.y-h+1)
+	else: corner = Vector2i(first.x if out.x>0 else first.x-w+1,at.y-corridor/2-shift)
+	var room = Rect2i(corner,Vector2i(w,h))
+	for other in parts:
+		if other.grow(2).intersects(room) or other.intersects(passage): return {}
+		if other.grow(1).intersects(passage) and not other.has_point(at): return {}
+	return {"passage":passage,"room":room}
+
+# `r` turned one of eight ways round (`turn`: bit 0 swaps across and down,
+# bit 1 mirrors across, bit 2 mirrors down).
+static func turned(r: Rect2i, turn: int) -> Rect2i:
+	var p: Vector2i = r.position
+	var s: Vector2i = r.size
+	if turn&1: p = Vector2i(p.y,p.x); s = Vector2i(s.y,s.x)
+	if turn&2: p.x = -p.x-s.x
+	if turn&4: p.y = -p.y-s.y
+	return Rect2i(p,s)
+
+static func turned_dir(d: Vector2i, turn: int) -> Vector2i:
+	if turn&1: d = Vector2i(d.y,d.x)
+	if turn&2: d.x = -d.x
+	if turn&4: d.y = -d.y
+	return d

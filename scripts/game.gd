@@ -179,6 +179,7 @@ func load_floor() -> void:
 	novas.clear()
 	pickups.clear()
 	pickup_goal = null
+	key_holder = null
 	scheduled.clear()
 	carriers.clear()
 	target = null
@@ -221,6 +222,7 @@ func load_floor() -> void:
 	# Come back up a dungeon's stair, he stands at the head of the one he
 	# went down by.
 	if arriving_from_below and not outdoors(): at = world.exit_point
+	var came_up: bool = arriving_from_below
 	arriving_by_door = false
 	arriving_from_below = false
 	if not world.fits(at): at = world.spawn
@@ -250,10 +252,12 @@ func load_floor() -> void:
 			var id = Data.enemy_id(run,i)
 			var enemy = spawn_enemy(types[i],id,spots[i].at)
 			enemy.rotation.y = spots[i].facing
+			if spots[i].get("key",false): key_holder = enemy
 			if id in run.dead:
 				enemy.dead = true
 				enemy.hp = 0
 				enemy.visible = false
+		setup_key(came_up)
 	else:
 		boss = spawn_enemy("boss","boss",world.boss_point)
 		# Four groups of five centurions stand in reserve in the corners; the
@@ -275,7 +279,7 @@ func load_floor() -> void:
 			crown_position = boss.position
 			place_crown()
 	for drop in run.drops: create_pickup(drop)
-	world.exit_seal.visible = remaining()==0 and has_way_on()
+	world.exit_seal.visible = way_open() and has_way_on()
 	mode = "playing"
 	hud.close_modal()
 	if run.get("migration_notice",false):
@@ -375,6 +379,7 @@ func _process(dt: float) -> void:
 		tick_projectiles(dt)
 		tick_fireballs(dt)
 		tick_pickups(dt)
+		tick_key()
 		if not player.dead:
 			var combat_engaged = false
 			for enemy in enemies:
@@ -1120,6 +1125,7 @@ func hurt_player(damage: float, type: String = "physical", source = null) -> voi
 
 func retry_floor() -> void:
 	run.dead = run.dead.filter(func(id): return not Data.of_place(id,run.place))
+	run.keys = run.keys.filter(func(id): return not id.begins_with(run.place+":"))
 	run.drops = []
 	run.health = Data.max_health(run)
 	run.energy = Data.max_energy(run)
@@ -1143,6 +1149,9 @@ func enemy_died(enemy) -> void:
 		loot_forced = ""
 		if not found.is_empty(): drop_item(found,enemy.position)
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
+	if enemy == key_holder and not has_key():
+		drop_key(enemy.position)
+		toast("A heavy iron key falls from the bandit's belt.")
 	if enemy.kind=="boss":
 		crown_available = true
 		crown_position = enemy.position
@@ -1150,6 +1159,8 @@ func enemy_died(enemy) -> void:
 			if other!=enemy: other.die(false)
 		place_crown()
 		toast("The statue falls. The emperor's crown is yours to claim.")
+	elif remaining()==0 and has_way_on() and gated() and not world.gate_open:
+		toast("The level is silent. %s" % ("Unlock the gate to go down." if has_key() else "Take the key and unlock the gate to go down."))
 	elif remaining()==0 and has_way_on():
 		world.exit_seal.visible = true
 		toast("The floor is silent. Ascend at the jade stairway." if run.place=="temple" else "The level is silent. The way down is open.")
@@ -1396,6 +1407,78 @@ func place_crown() -> void:
 	crown.position = crown_position + Vector3.UP*.4
 	effect(crown_position,4,Color(1,.83,.4),10000)
 
+# --- The basement's gate and its key --------------------------------------------
+
+# Where a level's way down is behind a gate (Temple.setup_gate), one of its
+# bandits carries the key (Temple.statue_posts): it falls where he dies, and
+# the hero takes it up by walking over it. With it, E at the gate unlocks it,
+# and the way down is open, whoever else still stands. `run.keys` holds the
+# keys taken ("basement:0") and the gates opened ("basement:0:open"); losing
+# the dungeon's fight loses them, as it brings its bandits back.
+const KEY_REACH = 1.3
+const GATE_REACH = 3.0
+var key_holder = null
+var key_node: Node3D
+func gated() -> bool:
+	return world is Temple and world.gate_node != null
+
+func key_name() -> String:
+	return "%s:%d" % [run.place,int(run.floor)]
+
+func has_key() -> bool:
+	return gated() and key_name() in run.keys
+
+# Whether the way on may be taken: the gate opened, or with no gate, the
+# level cleared.
+func way_open() -> bool:
+	return world.gate_open if gated() else remaining()==0
+
+func at_locked_gate() -> bool:
+	return gated() and not world.gate_open and player.position.distance_to(world.gate_point())<GATE_REACH
+
+# On arriving: the gate stands open if it was opened before (or he has come
+# back up through it); the holder carries his key at his belt, or, slain
+# already, it lies where he fell until it is taken.
+func setup_key(came_up: bool) -> void:
+	key_node = null
+	if not gated(): return
+	if came_up and not key_name()+":open" in run.keys: run.keys.append(key_name()+":open")
+	if key_name()+":open" in run.keys: world.open_gate(true)
+	if key_holder == null or has_key(): return
+	if key_holder.dead: drop_key(key_holder.position)
+	else: key_holder.visual.carry_key(Temple.BasementProps.key_model())
+
+func drop_key(at: Vector3) -> void:
+	if is_instance_valid(key_node): return
+	if key_holder != null and is_instance_valid(key_holder) and key_holder.visual.has_method("drop_key"): key_holder.visual.drop_key()
+	key_node = Node3D.new()
+	world.add_child(key_node)
+	key_node.position = world.move(at,Vector3(.4,0,.3))+Vector3.UP*.03
+	key_node.rotation.y = fposmod(at.x*12.9898+at.z*78.233,TAU)
+	key_node.add_child(Temple.BasementProps.key_model())
+	# (A glint over it, so it is seen lying in the dirt.)
+	var glint = Art.seal(.6,Color(1,.85,.45,.7))
+	glint.position = Vector3.UP*.02
+	key_node.add_child(glint)
+
+func tick_key() -> void:
+	if not is_instance_valid(key_node): return
+	key_node.visible = world.can_see(key_node.position)
+	if player.dead or player.position.distance_to(key_node.position)>KEY_REACH: return
+	key_node.queue_free()
+	key_node = null
+	run.keys.append(key_name())
+	sound.play("gem-pickup")
+	toast("You take up the key. The gate at the end of the hallway is locked.")
+	save_run()
+
+func unlock_gate() -> void:
+	world.open_gate()
+	if not key_name()+":open" in run.keys: run.keys.append(key_name()+":open")
+	if has_way_on(): world.exit_seal.visible = true
+	toast("The key turns in the lock, and the gate swings open. The way down is open.")
+	save_run()
+
 func remaining() -> int:
 	var count = 0
 	for e in enemies:
@@ -1405,7 +1488,10 @@ func remaining() -> int:
 func interact() -> void:
 	if crown_available and player.position.distance_to(crown_position)<3:
 		ending()
-	elif remaining()==0 and has_way_on() and player.position.distance_to(world.exit_point)<4:
+	elif at_locked_gate():
+		if has_key(): unlock_gate()
+		else: toast("The gate is locked. One of the bandits in the far rooms carries its key.")
+	elif way_open() and has_way_on() and player.position.distance_to(world.exit_point)<4:
 		next_floor()
 	elif run.place in Data.DUNGEONS and run.floor>0 and out_of_combat() and player.position.distance_to(world.layout.arrival_position())<3.5:
 		previous_floor()

@@ -4,13 +4,19 @@ const Items = preload("res://scripts/items.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=14: return d
+	if int(d.get("version",0))>=15: return d
+	if int(d.get("version",0))==14:
+		# The basement's gates and their keys: none held yet.
+		var updated = d.duplicate(true)
+		updated.version = 15
+		updated.keys = []
+		return updated
 	if int(d.get("version",0))==13:
 		# Easy, Moderate and Hard became Normal and Hard: Moderate is Normal.
 		var updated = d.duplicate(true)
 		updated.version = 14
 		updated.difficulty = 1 if int(updated.get("difficulty",0))>=2 else 0
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==12:
 		# The hotbar gained an LMB slot (Data.LEFT_SLOT), the wizard's.
 		if not d.get("hotbar") is Array or d.hotbar.size()!=5: return {}
@@ -139,7 +145,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<14:
+	if int(d.get("version",0))<15:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -193,7 +199,9 @@ static func valid(d) -> bool:
 			if id in assigned: return false
 			assigned.append(id)
 		if id!="" and (not d.skills.has(id) or Data.Skills.all()[id].effect=="passive"): return false
-	if not (d.dead is Array and d.gems is Array and d.drops is Array and d.xp_claimed is Array): return false
+	if not (d.dead is Array and d.gems is Array and d.drops is Array and d.xp_claimed is Array and d.keys is Array): return false
+	for key in d.keys:
+		if not key is String: return false
 	for drop in d.drops:
 		if not drop is Dictionary or not drop.get("item") is String or not Items.exists(drop.item): return false
 		if not drop.get("position") is Array or drop.position.size()!=2: return false

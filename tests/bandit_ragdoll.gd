@@ -195,6 +195,26 @@ func test():
 	await frames(210)
 	check(flung.all(func(b): return not is_instance_valid(b)),"Nor does the thrown one")
 
+	# A spell draws no blood; fire or lightning that kills leaves him burnt
+	# black, smoking as he falls. Frost, or a blade, does not.
+	check(not bandit.visual.scorched,"A blade's kill is not burnt")
+	var burnt = victim(origin+Vector3(-1.5,0,-1.2))
+	var frozen = victim(origin+Vector3(1.5,0,-1.2))
+	await frames(10)
+	game.skills.spell_striking = true
+	burnt.hit(1.0,"fire")
+	check(not burnt.dead and blood().is_empty(),"A spell's hit draws no blood")
+	burnt.hit(100000,"lightning",0.0,Fragment.impact(Vector3.FORWARD))
+	frozen.hit(100000,"frost",0.0,Fragment.impact(Vector3.FORWARD))
+	game.skills.spell_striking = false
+	check(burnt.dead and frozen.dead and blood().is_empty(),"Nor does a spell's killing blow")
+	check(burnt.visual.scorched and burnt.visual.skin_meshes.all(func(m): return not is_instance_valid(m) or (m.material_overlay is ShaderMaterial and m.material_overlay.shader.resource_path.ends_with("charred.gdshader"))),"Killed by lightning, every part of him is charred")
+	check(not frozen.visual.scorched and frozen.visual.skin_meshes.all(func(m): return not is_instance_valid(m) or m.material_overlay == null),"Killed by frost, he is not")
+	await frames(40)
+	check(is_equal_approx(float(burnt.visual.skin_meshes[0].material_overlay.get_shader_parameter("amount")),1.0),"The char takes him fully within moments")
+	check(is_instance_valid(burnt.visual.smoke) and burnt.visual.smoke.emitting and burnt.visual.smoke.get_parent() is BoneAttachment3D,"Smoke rises off the body")
+	await snapshot("scorched")
+
 	# Dying of a curse there is no blow: he crumples where he stands.
 	var cursed = victim(origin+Vector3(2,0,-3))
 	watch(cursed.visual)

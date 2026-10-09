@@ -308,8 +308,11 @@ func tick(dt: float) -> void:
 	var dungeon: bool = r.place in Data.DUNGEONS
 	status.text = "%d %s remain" % [remaining,"bandits" if dungeon else "statues"] if remaining>0 else ("The crown awaits" if Data.summit(r) else ("The bandits are routed" if dungeon and Data.last_floor(r) else ("The way down is open" if dungeon else "The way up is open")))
 	direction.text = "Defeat the Crowned Statue" if Data.summit(r) and not outdoors else ""
+	# (Behind a gate: whether he has its key yet.)
+	if game.gated() and not game.world.gate_open: direction.text = "You carry the gate's key" if game.has_key() else "The way down is barred by a locked gate"
 	if outdoors: show_outdoors()
 	point_to_nearest_enemy()
+	point_to_stairs()
 	character_info.text = "%s · Level %d" % [r.class_id.capitalize(),r.level]
 	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<Data.MAX_LEVEL else 1
 	experience.value = r.xp-Data.xp_at_level(r.level) if r.level<Data.MAX_LEVEL else 1
@@ -353,7 +356,8 @@ func tick(dt: float) -> void:
 	if game.mode == "playing":
 		if outdoors: prompt.text = outdoor_prompt()
 		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
-		elif remaining==0 and game.has_way_on(): prompt.text = "The stairway is open. %s" % ("Press E to %s" % ("descend" if r.place in Data.DUNGEONS else "ascend") if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
+		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked. One of the bandits in the far rooms carries its key"
+		elif game.way_open() and game.has_way_on(): prompt.text = "The stairway is open. %s" % ("Press E to %s" % ("descend" if r.place in Data.DUNGEONS else "ascend") if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
 		elif r.place in Data.DUNGEONS and r.floor>0 and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair"
 		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest"
@@ -660,16 +664,49 @@ func dialog(title: String, subtitle: String) -> void:
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 func make_enemy_arrow() -> void:
-	enemy_arrow = Polygon2D.new()
-	enemy_arrow.polygon = PackedVector2Array([Vector2(18,0),Vector2(-10,-11),Vector2(-4,0),Vector2(-10,11)])
-	enemy_arrow.color = Color(.95,.72,.3,.92)
+	enemy_arrow = make_arrow(Color(.95,.72,.3,.92))
+
+# An arrow circling the hero on screen, in `colour`, hidden until needed.
+func make_arrow(colour: Color) -> Polygon2D:
+	var arrow = Polygon2D.new()
+	arrow.polygon = PackedVector2Array([Vector2(18,0),Vector2(-10,-11),Vector2(-4,0),Vector2(-10,11)])
+	arrow.color = colour
 	var outline = Line2D.new()
 	outline.points = PackedVector2Array([Vector2(18,0),Vector2(-10,-11),Vector2(-4,0),Vector2(-10,11),Vector2(18,0)])
 	outline.width = 2.0
 	outline.default_color = Color(.12,.07,.02,.9)
-	enemy_arrow.add_child(outline)
-	enemy_arrow.visible = false
-	root.add_child(enemy_arrow)
+	arrow.add_child(outline)
+	arrow.visible = false
+	root.add_child(arrow)
+	return arrow
+
+# Turns `arrow` round the hero to point at `at`, unless that is close by on
+# screen already.
+func aim_arrow(arrow: Polygon2D, at: Vector3) -> void:
+	var camera: Camera3D = game.world.camera
+	var from: Vector2 = camera.unproject_position(game.player.position+Vector3.UP)
+	var to: Vector2 = camera.unproject_position(at+Vector3.UP)
+	if from.distance_to(to) < ARROW_RADIUS*1.2: return
+	var heading: Vector2 = (to-from).normalized()
+	arrow.position = from+heading*ARROW_RADIUS
+	arrow.rotation = heading.angle()
+	arrow.visible = true
+
+# Once a floor is cleared (or its way on opened), a jade arrow (the colour of
+# the seal at its foot) points the hero to the stairway on. Behind a locked
+# gate, it points first to the key, where that lies untaken, then the gate.
+var stair_arrow: Polygon2D
+func point_to_stairs() -> void:
+	if stair_arrow == null: stair_arrow = make_arrow(Color(.3,1,.85,.92))
+	stair_arrow.visible = false
+	if game.playground != null or game.mode!="playing" or game.player.dead or not game.has_way_on(): return
+	if game.remaining()>0 and not game.way_open(): return
+	var goal: Vector3 = game.world.exit_point
+	if game.gated() and not game.world.gate_open:
+		if game.has_key(): goal = game.world.gate_point()
+		elif is_instance_valid(game.key_node): goal = game.key_node.position
+		else: return
+	aim_arrow(stair_arrow,goal)
 
 # Circles the hero on screen, pointing at the nearest statue still standing.
 func point_to_nearest_enemy() -> void:
@@ -685,14 +722,7 @@ func point_to_nearest_enemy() -> void:
 		var d: float = e.position.distance_squared_to(game.player.position)
 		if d<best: best = d; nearest = e
 	if nearest == null: return
-	var camera: Camera3D = game.world.camera
-	var from: Vector2 = camera.unproject_position(game.player.position+Vector3.UP)
-	var to: Vector2 = camera.unproject_position(nearest.position+Vector3.UP)
-	if from.distance_to(to) < ARROW_RADIUS*1.2: return
-	var heading: Vector2 = (to-from).normalized()
-	enemy_arrow.position = from+heading*ARROW_RADIUS
-	enemy_arrow.rotation = heading.angle()
-	enemy_arrow.visible = true
+	aim_arrow(enemy_arrow,nearest.position)
 
 func button(text: String, callback: Callable) -> Button:
 	var b = Button.new()

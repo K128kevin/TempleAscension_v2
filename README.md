@@ -38,7 +38,8 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 
 Clicking the ground cancels a combat order. While idle, the hero faces the cursor. Architecture
 between the camera and the hero, or an enemy near a wall, turns semi-transparent. Once
-five or fewer statues remain, an arrow around the hero points to the nearest one.
+five or fewer statues remain, an arrow around the hero points to the nearest one; once a
+floor is cleared, a jade arrow points to the stairway on.
 
 The HUD keeps to the foot of the screen: a compact row of clickable ability
 icons in the middle (LMB basic attack, RMB and 1 to 4, each skill with its icon
@@ -179,11 +180,22 @@ The temple stands in a larger world, one continuous outdoor map
   into it; the seats overhead are lifted away while the hero is inside), with
   the kerbed stair down to the basement under the south-eastern stands; and a
   defile in the desert's northern rocks leads to the black mouth of the
-  bandits' cave. Both dungeons are generated like the temple's floors, in
-  their own stone (dressed masonry and slate; living rock over bare earth),
-  are gone down into (E at the far stair descends, E at the arrival stair
-  climbs back, and the first level's door leads out), and hold bandits with
-  swords and with bows: men, who fall rather than crumble.
+  bandits' cave. The cave is generated like the temple's floors, in living
+  rock over bare earth. The basement is laid out along one great hallway,
+  six tiles wide, turning this way and that, with narrower passages off it
+  to rooms; its walls are dressed masonry over a floor of bare dirt, and it
+  is strewn with crumbling statues of gladiators, the bones of the dead,
+  pots (some smashed or knocked over) and cobwebbed corners. On its first
+  level the hallway ends at a locked iron gate before the stair down: one
+  bandit, in a room off the far half of the hallway, wears its key at his
+  belt; it falls where he dies, the hero takes it up by walking over it,
+  and E at the gate unlocks it (the way down is then open, whoever still
+  stands). Both dungeons are gone down into (E at the far stair descends,
+  E at the arrival stair climbs back, and the first level's door leads
+  out), and hold bandits with swords and with bows: men, who fall rather
+  than crumble. A blade draws
+  blood; a spell does not, and one killed by fire or lightning falls burnt
+  black, smoking.
 - **The desert** between them: wind-rippled sand and low
   dunes, crossed by a worn track from the town gate to the temple. Running it
   from gate to door (about 250 m) takes some forty seconds. On the way are an abandoned caravan
@@ -282,7 +294,7 @@ seeded room-and-corridor format: 8–15 tile rooms, five-tile-wide passages,
 extra connections that form loops, and ascent stairs in the most distant room.
 Floors grow from 50×50 to 74×74 tiles. The third floor includes a large central
 court with two entrances; floors four and five add mirrored wraparound galleries.
-Statues line the walls facing inward, with a safe area around the entrance.
+Enemies stand in loose clumps of three to eight (in the arena basement, two or three on its first level and two to five on its second), with a safe area around the entrance.
 The summit remains a single arena with four corner groups of dormant centurions.
 
 ## Classes and progression

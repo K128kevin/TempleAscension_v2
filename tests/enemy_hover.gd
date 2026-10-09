@@ -156,8 +156,16 @@ func verify():
 	for e in alive: e.dead=true
 	game.hud.tick(0)
 	check(not game.hud.enemy_arrow.visible,"The arrow hides when no statues remain")
-	alive[0].dead=false; game.run.floor=3; game.hud.tick(0)
-	check(not game.hud.enemy_arrow.visible,"No arrow on the summit, where the boss is in plain view")
+	var to_stairs: Vector2=(game.world.camera.unproject_position(game.world.exit_point+Vector3.UP)-game.world.camera.unproject_position(game.player.position+Vector3.UP)).normalized()
+	check(game.hud.stair_arrow.visible and absf(angle_difference(game.hud.stair_arrow.rotation,to_stairs.angle()))<.05,"Once the floor is cleared, a jade arrow points to the stairway on")
+	var standing: Vector3=game.player.position
+	game.player.position=game.world.exit_point; game.hud.tick(0)
+	check(not game.hud.stair_arrow.visible,"The stair arrow hides at the stairway's foot")
+	game.player.position=standing
+	alive[0].dead=false; game.hud.tick(0)
+	check(not game.hud.stair_arrow.visible,"No stair arrow while a statue still stands")
+	game.run.floor=3; game.hud.tick(0)
+	check(not game.hud.enemy_arrow.visible and not game.hud.stair_arrow.visible,"No arrow on the summit, where the boss is in plain view")
 	game.run.floor=0; alive[0].dead=true
 	game.load_floor()
 	check(not game.hover_ring.visible and not bar.visible,"Changing floors clears old hover feedback")

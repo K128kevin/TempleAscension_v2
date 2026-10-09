@@ -872,7 +872,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	if game.playground != null:
 		# The playground shows every hit, but nothing takes damage.
 		if not game.skills.spell_striking: game.sound.play(impact_sound(),-15)
-		if human: bleed(death_impact)
+		if human and not game.skills.spell_striking: bleed(death_impact)
 		react_to_hit()
 		if kind != "player": push_back()
 		return
@@ -888,11 +888,14 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	# (A spell is heard by its own sounds, not as a weapon's blow.)
 	if not game.skills.spell_striking: game.sound.play(impact_sound(),-15)
 	game.float_text(position+Vector3.UP*1.6,str(roundi(damage)),HIT_COLORS[look],look=="crit")
-	if human and damage>0: bleed(death_impact,hp<=0)
+	# (A spell burns, freezes or shocks a man; it does not draw blood.)
+	if human and damage>0 and not game.skills.spell_striking: bleed(death_impact,hp<=0)
 	if hp <= 0:
 		if death_impact == Vector3.ZERO:
 			death_impact = StoneFragment.impact(position-game.player.position)
 		die(true,death_impact)
+		# Fire or lightning leaves a bandit burnt black.
+		if visual.bandit and type in ["fire","lightning"]: visual.scorch()
 		# (Killed outright, it still rouses those about it.)
 		game.provoke(self)
 	else:

@@ -1865,6 +1865,60 @@ func fall(impact: Vector3 = Vector3.ZERO) -> void:
 		actor.game.world.ensure_debris_collision()
 	if is_instance_valid(nocked_arrow): nocked_arrow.visible = false
 
+# A bandit killed by fire or lightning is burnt black: every part of him is
+# drawn over in char (assets/shaders/charred.gdshader), taking him in
+# SCORCH_TIME, and smoke curls off his chest for SMOKE_TIME as he falls.
+const SCORCH_TIME = .35
+const SMOKE_TIME = 3.0
+var scorched = false
+var smoke: CPUParticles3D
+func scorch() -> void:
+	if scorched: return
+	scorched = true
+	var soot = ShaderMaterial.new()
+	soot.shader = load("res://assets/shaders/charred.gdshader")
+	soot.set_shader_parameter("seed",bandit_look.get("seed",0.0))
+	soot.set_shader_parameter("amount",0.0)
+	for mesh in skin_meshes:
+		if is_instance_valid(mesh): mesh.material_overlay = soot
+	create_tween().tween_method(func(v): soot.set_shader_parameter("amount",v),0.0,1.0,SCORCH_TIME)
+	if skeleton.find_bone("spine_03") < 0: return
+	var chest = BoneAttachment3D.new()
+	chest.bone_name = "spine_03"
+	skeleton.add_child(chest)
+	smoke = Vfx.particles(chest,18,1.6,false,false)
+	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	smoke.emission_sphere_radius = .25
+	smoke.direction = Vector3.UP
+	smoke.spread = 15
+	smoke.gravity = Vector3(0,.7,0)
+	smoke.initial_velocity_min = .2; smoke.initial_velocity_max = .5
+	smoke.scale_amount_min = .25; smoke.scale_amount_max = .45
+	smoke.scale_amount_curve = Vfx.curve(.6,1.6)
+	smoke.color_ramp = Vfx.ramp([0,.3,1],[Color(.08,.07,.06,0),Color(.1,.09,.08,.55),Color(.2,.19,.18,0)])
+	smoke.emitting = true
+	var tween = create_tween()
+	tween.tween_interval(SMOKE_TIME)
+	tween.tween_callback(func(): smoke.emitting = false)
+	tween.tween_interval(smoke.lifetime)
+	tween.tween_callback(chest.queue_free)
+
+# The bandit who keeps the basement gate's key wears it at his belt, hung on
+# his right hip, until he falls and it drops from him.
+var belt_key: BoneAttachment3D
+func carry_key(key: Node3D) -> void:
+	if skeleton == null or skeleton.find_bone("pelvis") < 0: return
+	belt_key = BoneAttachment3D.new()
+	belt_key.bone_name = "pelvis"
+	skeleton.add_child(belt_key)
+	belt_key.add_child(key)
+	key.position = Vector3(-.2,-.06,.04)
+	key.rotation = Vector3(0,0,PI/2)
+
+func drop_key() -> void:
+	if is_instance_valid(belt_key): belt_key.queue_free()
+	belt_key = null
+
 # The body is gone: its limbs are no longer simulated.
 func clear_ragdoll() -> void:
 	if ragdoll == null: return

@@ -134,8 +134,8 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 	# Pale quartz paving keeps the dark stone statues readable against the floor.
 	# The playground's floor is a mid grey, so every model reads against it.
 	var paving: Material = Art.quartz_material(Color(.46,.47,.5) if floor_index==Layout.PLAYGROUND else Color(.70,.70,.72))
-	# A dungeon's floor: slate under the arena, packed earth in the cave.
-	if layout.kind == "basement": paving = Art.slate_material()
+	# A dungeon's floor: bare dirt under the arena, packed earth in the cave.
+	if layout.kind == "basement": paving = dirt_material()
 	elif layout.kind == "cave": paving = earth_material()
 	var court_paving = Art.quartz_material(Color(.74,.64,.64))
 	var lower = Vector2i(10000,10000)
@@ -159,8 +159,8 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 			# The open-air terraces are paved in grey slate, not the halls' quartz.
 			var tiles = court_paving if layout.court.has_point(cell) else (Art.slate_material() if layout.on_terrace(cell) else paving)
 			var tile = place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),tiles)
-			# (A cave's floor is bare ground, not the paving's cut tiles.)
-			if layout.kind == "cave":
+			# (A dungeon's floor is bare ground, not the paving's cut tiles.)
+			if layout.kind in ["cave","basement"]:
 				for mesh in tile.find_children("*","MeshInstance3D",true,false):
 					var box: AABB = mesh.mesh.get_aabb()
 					mesh.position += mesh.basis*box.get_center()
@@ -249,11 +249,20 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 		if layout.descending: build_well(layout.stairs,layout.stairs_dir,stone)
 		else: build_flight(layout.stairs,layout.stairs_dir,layout.exit_cell,stone)
 	if layout.descending: furnish_dungeon(run_seed)
+	if layout.kind == "basement": furnish_basement(run_seed)
+	if layout.gate.has_area(): setup_gate(stone)
 	exit_seal = Art.seal(3,Color(.3,1,.85,.85))
 	exit_seal.position = exit_point+Vector3.UP*.05
 	add_child(exit_seal)
 	exit_seal.visible = false
 	if layout.court.has_area(): setup_court_torches()
+	# (No torch is hung over a statue standing against its wall, nor in a
+	# webbed corner.)
+	if not unlit_cells.is_empty():
+		var clear: Array[Vector3] = []
+		for spot in torch_candidates:
+			if not unlit_cells.has(layout.to_cell(spot)): clear.append(spot)
+		torch_candidates = clear
 	if level!=Layout.PLAYGROUND: light_floor(torch_candidates)
 	if layout.summit:
 		boss_point = layout.to_world(Vector2i(14,10))
@@ -575,6 +584,19 @@ func bare_ground(size: Vector3) -> BoxMesh:
 	return ground_slab
 
 # A cave's floor: packed earth and grit.
+# The arena basement's floor: dark, damp dirt, trodden hard, its grit
+# rough underfoot and blotched darker and lighter across the floor.
+func dirt_material() -> StandardMaterial3D:
+	var dirt = earth_material()
+	dirt.albedo_color = Color(.4,.37,.34)
+	dirt.uv1_scale = Vector3.ONE*.8
+	dirt.normal_scale = 1.8
+	dirt.detail_enabled = true
+	dirt.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
+	dirt.detail_albedo = load("res://assets/textures/rock_detail.jpg")
+	dirt.detail_mask = load("res://assets/textures/sand_fine.jpg")
+	return dirt
+
 func earth_material() -> StandardMaterial3D:
 	var earth = StandardMaterial3D.new()
 	earth.albedo_color = Color(.66,.64,.62)
@@ -628,7 +650,7 @@ func furnish_dungeon(run_seed: int) -> void:
 			if rng.randf() < .4: pile.append(corner+Vector2i(0,inward.y))
 			var free = true
 			for cell in pile:
-				if not layout.cells.has(cell) or layout.stairs.grow(2).has_point(cell) or layout.arrival.grow(2).has_point(cell) or layout.entry.grow(3).has_point(cell): free = false
+				if not layout.cells.has(cell) or layout.stairs.grow(2).has_point(cell) or layout.arrival.grow(2).has_point(cell) or layout.entry.grow(3).has_point(cell) or layout.gate.grow(3).has_point(cell): free = false
 				for spot in keep_clear:
 					if (cell-spot).length() < 4.0: free = false
 			if not free: continue
@@ -644,6 +666,219 @@ func furnish_dungeon(run_seed: int) -> void:
 				# Solid to movement, open to sight, like a standing brazier.
 				layout.cells.erase(cell)
 				solid_floor[cell] = true
+
+# The arena basement's leavings (scripts/basement_props.gd): broken statues
+# of gladiators stand against the walls of its rooms and hallway (STATUE_ROOM
+# of the rooms, one to every STATUE_HALL metres of hallway, on its far side);
+# the dead lie where they fell, slumped against a wall or sprawled on the
+# floor, or only their bones are left (SKELETONS a room, as a share); pots
+# stand against the walls in ones, twos and threes, some smashed or knocked
+# over (POTS); and spiders have webbed the rooms' corners (WEBBED). Statues
+# and standing pots are solid; bones, shards and webs are not.
+const STATUE_ROOM = .45
+const STATUE_HALL = 11.0
+const SKELETONS = .5
+const POTS = .6
+const WEBBED = .45
+const WEB_HEIGHT = 2.7
+var unlit_cells: Dictionary = {}
+func furnish_basement(run_seed: int) -> void:
+	var rng = RandomNumberGenerator.new()
+	rng.seed = Layout.floor_seed(run_seed,level+11+Layout.KINDS[layout.kind].salt)
+	var keep_clear: Array[Vector2i] = [layout.start,layout.exit_cell]
+	if layout.arrival.has_area(): keep_clear.append(layout.arrival_foot)
+	# A cell with wall at its back toward `back` (and beside it, so it is
+	# not at a doorway's edge), clear of the ways in and out.
+	var by_wall = func(cell: Vector2i, back: Vector2i) -> bool:
+		if not layout.cells.has(cell) or layout.is_open(cell+back): return false
+		var side = Vector2i(absi(back.y),absi(back.x))
+		if layout.is_open(cell+back+side) or layout.is_open(cell+back-side): return false
+		if layout.stairs.grow(2).has_point(cell) or layout.arrival.grow(2).has_point(cell) or layout.entry.grow(3).has_point(cell) or layout.gate.grow(3).has_point(cell): return false
+		for spot in keep_clear:
+			if (cell-spot).length() < 4.0: return false
+		return true
+	var facing = func(back: Vector2i) -> float: return atan2(-back.x,-back.y)
+	var show = func(thing: Node3D, cell: Vector2i, solid: bool) -> void:
+		add_child(thing)
+		visibility_nodes.append(thing)
+		visibility_cells[thing] = [cell]
+		if solid:
+			layout.cells.erase(cell)
+			solid_floor[cell] = true
+	# The places along a room's walls: [cell, back] for each.
+	var wall_spots = func(room: Rect2i) -> Array:
+		var spots: Array = []
+		# (Only along the walls the camera faces: the near ones would hide
+		# whatever stood against them.)
+		for x in range(room.position.x+1,room.end.x-1): spots.append([Vector2i(x,room.position.y),Vector2i.UP])
+		for y in range(room.position.y+1,room.end.y-1): spots.append([Vector2i(room.position.x,y),Vector2i.LEFT])
+		for i in range(spots.size()-1,0,-1):
+			var j = rng.randi_range(0,i)
+			var swap = spots[i]; spots[i] = spots[j]; spots[j] = swap
+		return spots.filter(func(spot): return by_wall.call(spot[0],spot[1]))
+	for i in layout.rooms.size():
+		var room: Rect2i = layout.rooms[i]
+		if room == layout.vault: continue
+		var spots: Array = wall_spots.call(room)
+		var taken: Array[Vector2i] = []
+		var free = func(cell: Vector2i) -> bool:
+			for other in taken:
+				if (other-cell).length() < 2.5: return false
+			return layout.cells.has(cell)
+		if i > 0 and rng.randf() < STATUE_ROOM:
+			for spot in spots:
+				if not free.call(spot[0]): continue
+				var statue = BasementProps.damaged_statue(rng)
+				statue.position = layout.to_world(spot[0])
+				statue.rotation.y = facing.call(spot[1])
+				show.call(statue,spot[0],true)
+				unlit_cells[spot[0]] = true
+				taken.append(spot[0])
+				break
+		if rng.randf() < SKELETONS:
+			var slumped: bool = rng.randf() < .5
+			if slumped:
+				for spot in spots:
+					if not free.call(spot[0]): continue
+					var body = BasementProps.skeleton(rng,true)
+					body.position = layout.to_world(spot[0])+Vector3(spot[1].x,0,spot[1].y)*.35
+					body.rotation.y = facing.call(spot[1])
+					show.call(body,spot[0],false)
+					taken.append(spot[0])
+					break
+			else:
+				var cell = Vector2i(rng.randi_range(room.position.x+2,room.end.x-3),rng.randi_range(room.position.y+2,room.end.y-3))
+				if free.call(cell):
+					var body = BasementProps.skeleton(rng,false) if rng.randf() < .6 else BasementProps.bones(rng)
+					body.position = layout.to_world(cell)
+					body.rotation.y = rng.randf_range(0,TAU)
+					show.call(body,cell,false)
+					taken.append(cell)
+		if rng.randf() < POTS:
+			for spot in spots:
+				if not free.call(spot[0]): continue
+				var side = Vector2i(absi(spot[1].y),absi(spot[1].x))
+				for k in rng.randi_range(1,3):
+					var cell: Vector2i = spot[0]+side*k
+					if not by_wall.call(cell,spot[1]) or not layout.cells.has(cell): break
+					pot(rng,cell,spot[1],show)
+				taken.append(spot[0])
+				break
+		# Webs in the corners that are true corners.
+		# (Not the nearest corner, between the two walls nearest the camera.)
+		for corner in [room.position,Vector2i(room.end.x-1,room.position.y),Vector2i(room.position.x,room.end.y-1)]:
+			if rng.randf() > WEBBED: continue
+			var inward = Vector2i(1 if corner.x==room.position.x else -1,1 if corner.y==room.position.y else -1)
+			if layout.is_open(corner-Vector2i(inward.x,0)) or layout.is_open(corner-Vector2i(0,inward.y)): continue
+			var web = BasementProps.web(rng.randf_range(1.0,1.6))
+			web.position = layout.to_world(corner)-Vector3(inward.x,0,inward.y)*.5+Vector3.UP*WEB_HEIGHT
+			web.rotation.y = {Vector2i(1,1):0.0,Vector2i(-1,1):-PI/2,Vector2i(1,-1):PI/2,Vector2i(-1,-1):PI}[inward]
+			show.call(web,corner,false)
+			unlit_cells[corner] = true
+	# Along the hallway's walls: statues, now and then, and the odd body.
+	for hall in layout.halls:
+		var along_x: bool = hall.size.x >= hall.size.y
+		var length: int = hall.size.x if along_x else hall.size.y
+		for back in [Vector2i.UP if along_x else Vector2i.LEFT]:
+			var at: float = rng.randf_range(3.0,STATUE_HALL)
+			while at < length-3:
+				var step = int(at)
+				var cell: Vector2i
+				if along_x: cell = Vector2i(hall.position.x+step,hall.position.y if back==Vector2i.UP else hall.end.y-1)
+				else: cell = Vector2i(hall.position.x if back==Vector2i.LEFT else hall.end.x-1,hall.position.y+step)
+				if by_wall.call(cell,back):
+					var statue: bool = rng.randf() < .7
+					var thing: Node3D = BasementProps.damaged_statue(rng) if statue else BasementProps.skeleton(rng,true)
+					thing.position = layout.to_world(cell)+(Vector3.ZERO if statue else Vector3(back.x,0,back.y)*.35)
+					thing.rotation.y = facing.call(back)
+					show.call(thing,cell,statue)
+					if statue: unlit_cells[cell] = true
+				at += rng.randf_range(STATUE_HALL*.7,STATUE_HALL*1.3)
+
+# A pot against the wall at `cell` (its back toward `back`): an urn, a vase
+# or a plain pot, standing, knocked over, or smashed to a heap of shards.
+const POT_KINDS = ["pot","urn","vase","pot"]
+func pot(rng: RandomNumberGenerator, cell: Vector2i, back: Vector2i, show: Callable) -> void:
+	var roll: float = rng.randf()
+	var id: String = "urn_broken" if roll < .35 else POT_KINDS[rng.randi_range(0,POT_KINDS.size()-1)]
+	var height: float = {"pot":rng.randf_range(.45,.6),"urn":rng.randf_range(.7,.9),"vase":rng.randf_range(.55,.75),"urn_broken":rng.randf_range(.3,.42)}[id]
+	var thing = Kit.prop(id,height)
+	var holder = Node3D.new()
+	holder.add_child(thing)
+	holder.position = layout.to_world(cell)+Vector3(back.x,0,back.y)*rng.randf_range(.1,.25)+Vector3(rng.randf_range(-.12,.12),0,rng.randf_range(-.12,.12))
+	holder.rotation.y = rng.randf_range(0,TAU)
+	var standing = id != "urn_broken"
+	# (Knocked over: lying on its side.)
+	if standing and roll > .82:
+		thing.rotation.z = PI/2
+		thing.position.y = height*.3
+		standing = false
+	show.call(holder,cell,standing)
+
+# The rooms off the far half of the basement's hallway (not the vault), where
+# the gate's key is kept.
+func key_rooms() -> Array:
+	var far: Array = []
+	for i in range(1,layout.rooms.size()):
+		if layout.rooms[i] != layout.vault and layout.reach[i] > layout.hall_length*.5: far.append(layout.rooms[i])
+	return far
+
+# The basement's gate (scripts/basement_props.gd), GATE_HEIGHT tall under a
+# lintel up to the walls' top: barred to movement while it is locked, though
+# seen through, between its bars. `open_gate` swings it open over GATE_SWING
+# seconds (at once, `instantly`, where it was opened before).
+const BasementProps = preload("res://scripts/basement_props.gd")
+const GATE_HEIGHT = 2.7
+const GATE_SWING = 1.6
+var gate_node: Node3D
+var gate_open = false
+func setup_gate(stone: Material) -> void:
+	var g: Rect2i = layout.gate
+	gate_node = BasementProps.gate(g.size.x*g.size.y,GATE_HEIGHT,WALL_HEIGHT,stone)
+	add_child(gate_node)
+	gate_node.position = gate_point()
+	gate_node.rotation.y = atan2(layout.gate_dir.x,layout.gate_dir.y)
+	visibility_nodes.append(gate_node)
+	var faces: Array[Vector2i] = []
+	for y in range(g.position.y-1,g.end.y+1):
+		for x in range(g.position.x-1,g.end.x+1): faces.append(Vector2i(x,y))
+	visibility_cells[gate_node] = faces
+	bar_gate(true)
+
+# The middle of the gate, on the floor.
+func gate_point() -> Vector3:
+	var g: Rect2i = layout.gate
+	return layout.to_world(g.position)+Vector3(g.size.x-1,0,g.size.y-1)*.5
+
+func bar_gate(barred: bool) -> void:
+	var g: Rect2i = layout.gate
+	for y in range(g.position.y,g.end.y):
+		for x in range(g.position.x,g.end.x):
+			var cell = Vector2i(x,y)
+			if barred:
+				layout.cells.erase(cell)
+				solid_floor[cell] = true
+			else:
+				layout.cells[cell] = true
+				solid_floor.erase(cell)
+	# (Before the floor's navigation is built, it will be built from these.)
+	if nav.region.has_area():
+		for y in range(g.position.y-1,g.end.y+1):
+			for x in range(g.position.x-1,g.end.x+1):
+				var at: Vector3 = layout.to_world(Vector2i(x,y))
+				var point = Vector2i(roundi(at.x),roundi(at.z))
+				if nav.is_in_boundsv(point): nav.set_point_solid(point,not fits(at,.4))
+
+func open_gate(instantly: bool = false) -> void:
+	if gate_node == null or gate_open: return
+	gate_open = true
+	bar_gate(false)
+	if instantly:
+		BasementProps.open_gate(gate_node,1.0)
+		return
+	var swing = create_tween()
+	swing.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	swing.tween_method(func(t): BasementProps.open_gate(gate_node,t),0.0,1.0,GATE_SWING)
 
 # The light beyond a door to the world outside follows the time of day there
 # (scripts/daylight.gd).
@@ -737,39 +972,39 @@ func terrace_surface(at: Vector3) -> bool:
 		if layout.on_terrace(layout.to_cell(at+offset)): return true
 	return false
 
-# Enemies stand in clumps: CLUMP_LEAST or more near one another (about six;
-# in the bandits' cave, smaller knots: CAVE_CLUMPS), each clump grown over
+# Enemies stand in loose clumps of CLUMPS enemies (least and most; smaller
+# on the arena basement's levels: BASEMENT_CLUMPS), each clump grown over
 # open floor within CLUMP_REACH of where it was begun (CLUMP_STEPS walking
-# steps, so never through a wall), its members POST_GAP or more apart so
-# none overlaps another, and the clumps
-# CLUMP_APART from each other where the floor allows. The posts come back
-# shuffled, so the kinds a floor holds are mixed through its clumps.
-const CLUMP_LEAST = 5
-const CLUMP_REACH = 4.5
-const CLUMP_STEPS = 7
-const CLUMP_APART = 9.0
-const POST_GAP = 2.0
+# steps, so never through a wall), its members POST_GAP or more apart, taken
+# from that ground with CLUMP_SCATTER of shuffle so they straggle rather than
+# huddle, and the clumps CLUMP_APART from each other where the floor allows.
+# The posts come back shuffled, so the kinds a floor holds are mixed through
+# its clumps.
+const CLUMPS = Vector2i(3,8)
+const BASEMENT_CLUMPS = [Vector2i(2,3),Vector2i(2,5)]
+const CLUMP_REACH = 7.0
+const CLUMP_STEPS = 11
+const CLUMP_SCATTER = 3.0
+const CLUMP_APART = 12.0
+const POST_GAP = 3.0
 
 # Where an enemy may stand: not in the fountain court or the doorway, clear
 # of the hero's arrival and the way on.
 func post_allowed(cell: Vector2i) -> bool:
 	if layout.court.has_area() and layout.court.has_point(cell): return false
 	if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): return false
+	# (Nor behind the basement's gate, nor in its mouth.)
+	if layout.vault.has_point(cell) or (layout.gate.has_area() and layout.gate.grow(3).has_point(cell)): return false
 	var at = layout.to_world(cell)
 	return at.distance_to(spawn)>=9 and at.distance_to(exit_point)>=2.5 and fits(at,.45)
 
-# How many stand in each clump: as many clumps as give about six apiece, none
-# fewer than CLUMP_LEAST (a floor with fewer holds one clump of them all).
-# In the bandits' cave they stand in smaller knots: CAVE_CLUMPS (least and
-# most), each its own size between.
-const CAVE_CLUMPS = Vector2i(2,4)
-func clump_sizes(count: int, rng: RandomNumberGenerator = null) -> Array[int]:
-	if layout.kind == "cave" and rng != null: return knot_sizes(count,CAVE_CLUMPS,rng)
-	var clumps: int = clampi(roundi(count/6.0),1,maxi(1,count/CLUMP_LEAST))
-	var sizes: Array[int] = []
-	for i in clumps: sizes.append(count/clumps)
-	for i in count%clumps: sizes[i] += 1
-	return sizes
+# How many stand in each clump, each its own size within this floor's span.
+func clump_span() -> Vector2i:
+	if layout.kind == "basement": return BASEMENT_CLUMPS[clampi(layout.level_index,0,BASEMENT_CLUMPS.size()-1)]
+	return CLUMPS
+
+func clump_sizes(count: int, rng: RandomNumberGenerator) -> Array[int]:
+	return knot_sizes(count,clump_span(),rng)
 
 # Sizes from `span.x` to `span.y` at random, adding up to `count` (none left
 # smaller than the least, where that can be helped).
@@ -777,8 +1012,8 @@ func knot_sizes(count: int, span: Vector2i, rng: RandomNumberGenerator) -> Array
 	var sizes: Array[int] = []
 	var left: int = count
 	while left > 0:
-		var size: int = left if left <= span.y else rng.randi_range(span.x,span.y)
-		if left-size > 0 and left-size < span.x: size = left-span.x if size == span.y else size+1
+		# What is left over must still make a clump of the least size.
+		var size: int = left if left <= span.y else rng.randi_range(span.x,mini(span.y,left-span.x))
 		sizes.append(size)
 		left -= size
 	return sizes
@@ -792,7 +1027,7 @@ func clump_ground(seed_cell: Vector2i, allowed: Dictionary, rng: RandomNumberGen
 	var ground: Array = []
 	while not queue.is_empty():
 		var cell: Vector2i = queue.pop_front()
-		if allowed.has(cell): ground.append([layout.to_world(cell).distance_to(origin)+rng.randf()*.8,cell])
+		if allowed.has(cell): ground.append([layout.to_world(cell).distance_to(origin)+rng.randf()*CLUMP_SCATTER,cell])
 		if steps[cell]>=CLUMP_STEPS: continue
 		for direction in Layout.DIRS:
 			var next: Vector2i = cell+direction
@@ -830,6 +1065,17 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	for i in range(seeds.size()-1,0,-1):
 		var j = rng.randi_range(0,i)
 		var swap = seeds[i]; seeds[i] = seeds[j]; seeds[j] = swap
+	# Behind a gate: its key is carried by one of a clump begun first, in a
+	# room off the far half of the hallway.
+	var key_room = Rect2i()
+	if layout.gate.has_area():
+		var far: Array = key_rooms()
+		if not far.is_empty():
+			key_room = far[rng.randi_range(0,far.size()-1)]
+			var inside: Array[Vector2i] = []
+			var outside: Array[Vector2i] = []
+			for cell in seeds: (inside if key_room.has_point(cell) else outside).append(cell)
+			seeds = inside+outside
 	var sizes: Array[int] = clump_sizes(count,rng)
 	var placed: Array = []
 	var posts: Array[Dictionary] = []
@@ -855,6 +1101,14 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 				posts.append({"at":at,"facing":post_facing(cell,middle,rng)})
 		apart -= 3.0
 	assert(sizes.is_empty(),"Generated floor has no room for its enemies' clumps")
+	if layout.gate.has_area() and not posts.is_empty():
+		var holders: Array = posts.filter(func(p): return key_room.has_point(layout.to_cell(p.at)))
+		if holders.is_empty(): holders = posts.filter(func(p): return key_rooms().any(func(r): return r.has_point(layout.to_cell(p.at))))
+		if holders.is_empty():
+			holders = posts.duplicate()
+			holders.sort_custom(func(a,b): return a.at.distance_squared_to(spawn)>b.at.distance_squared_to(spawn))
+			holders.resize(1)
+		holders[rng.randi_range(0,holders.size()-1)]["key"] = true
 	for i in range(posts.size()-1,0,-1):
 		var j = rng.randi_range(0,i)
 		var swap = posts[i]; posts[i] = posts[j]; posts[j] = swap
