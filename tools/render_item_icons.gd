@@ -52,6 +52,8 @@ func render_icons():
 			holder.rotation = Vector3(0,0,-PI/4)
 			span = box.size.y*.74
 		elif item.slot == "shield": holder.rotation = Vector3(0,PI,0)
+		# (A key, stood up off the table and leaning across the picture.)
+		elif item.slot == "key": holder.rotation = Vector3(PI/2,0,PI/4)
 		else: holder.rotation = Vector3(0,.5,0)
 		camera.size = span*1.12
 		camera.look_at_from_position(Vector3(0,span*.15 if item.slot not in ["weapon","shield"] else 0.0,4),Vector3.ZERO)

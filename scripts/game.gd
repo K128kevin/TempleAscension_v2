@@ -379,7 +379,6 @@ func _process(dt: float) -> void:
 		tick_projectiles(dt)
 		tick_fireballs(dt)
 		tick_pickups(dt)
-		tick_key()
 		if not player.dead:
 			var combat_engaged = false
 			for enemy in enemies:
@@ -1125,7 +1124,6 @@ func hurt_player(damage: float, type: String = "physical", source = null) -> voi
 
 func retry_floor() -> void:
 	run.dead = run.dead.filter(func(id): return not Data.of_place(id,run.place))
-	run.keys = run.keys.filter(func(id): return not id.begins_with(run.place+":"))
 	run.drops = []
 	run.health = Data.max_health(run)
 	run.energy = Data.max_energy(run)
@@ -1149,9 +1147,10 @@ func enemy_died(enemy) -> void:
 		loot_forced = ""
 		if not found.is_empty(): drop_item(found,enemy.position)
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
-	if enemy == key_holder and not has_key():
-		drop_key(enemy.position)
-		toast("A heavy iron key falls from the bandit's belt.")
+	if enemy == key_holder and not has_key() and not gate_opened() and key_pickup().is_empty():
+		enemy.visual.drop_key()
+		drop_item(GATE_KEY,enemy.position)
+		toast("A rusted iron key falls from the bandit's belt.")
 	if enemy.kind=="boss":
 		crown_available = true
 		crown_position = enemy.position
@@ -1199,6 +1198,11 @@ func create_pickup(drop: Dictionary) -> void:
 	# (Each lies its own way round, the same each time it is seen.)
 	node.rotation.y = fposmod(at.x*12.9898+at.z*78.233,TAU)
 	node.add_child(Art.laid(drop.item))
+	# (A key is small: a glint round it, so it is seen lying in the dirt.)
+	if Items.get_item(drop.item).slot == "key":
+		var glint = Art.seal(.6,Color(1,.85,.45,.7))
+		glint.position = Vector3.UP*.02
+		node.add_child(glint)
 	pickups.append({"node":node,"drop":drop})
 
 func tick_pickups(_dt: float) -> void:
@@ -1313,7 +1317,9 @@ func area_damage(at: Vector3, radius: float, damage: float, friendly: bool, sour
 	var candidates: Array = targets(source if puppet_attack(source) else player) if friendly else [player]
 	for a in candidates:
 		if a.dead or a.position.distance_to(at)>radius or not world.clear_line(at,a.position): continue
-		if friendly and not puppet_attack(source) and not element.is_empty(): skills.spell_hit(a,percent,element,StoneFragment.impact(a.position-at,true))
+		# (A fireball's burst throws a body no harder than a blow does, away
+		# from where it burst.)
+		if friendly and not puppet_attack(source) and not element.is_empty(): skills.spell_hit(a,percent,element,StoneFragment.impact(a.position-at))
 		elif friendly and not puppet_attack(source): skills.strike(a,damage,"physical",0.0,Vector3.ZERO,skill)
 		elif friendly: a.hit(damage)
 		else: hurt_player(damage,"physical",source)
@@ -1410,23 +1416,32 @@ func place_crown() -> void:
 # --- The basement's gate and its key --------------------------------------------
 
 # Where a level's way down is behind a gate (Temple.setup_gate), one of its
-# bandits carries the key (Temple.statue_posts): it falls where he dies, and
-# the hero takes it up by walking over it. With it, E at the gate unlocks it,
-# and the way down is open, whoever else still stands. `run.keys` holds the
-# keys taken ("basement:0") and the gates opened ("basement:0:open"); losing
-# the dungeon's fight loses them, as it brings its bandits back.
-const KEY_REACH = 1.3
+# bandits wears the key at his belt (Temple.statue_posts): an item (GATE_KEY,
+# scripts/items.gd), it falls where he dies, to be picked up like any other
+# and carried in the bag, kept there though the hero dies. With it, E at the
+# gate unlocks it (the key stays in the lock), and the way down is open,
+# whoever else still stands. `run.keys` holds the gates opened
+# ("basement:0:open"), which stay open.
+const GATE_KEY = "gate_key"
 const GATE_REACH = 3.0
 var key_holder = null
-var key_node: Node3D
 func gated() -> bool:
 	return world is Temple and world.gate_node != null
 
 func key_name() -> String:
 	return "%s:%d" % [run.place,int(run.floor)]
 
+func gate_opened() -> bool:
+	return key_name()+":open" in run.keys
+
 func has_key() -> bool:
-	return gated() and key_name() in run.keys
+	return gated() and GATE_KEY in run.bag
+
+# The key lying on the floor, if it is: its pickup, or {}.
+func key_pickup() -> Dictionary:
+	for p in pickups:
+		if p.drop.item == GATE_KEY: return p
+	return {}
 
 # Whether the way on may be taken: the gate opened, or with no gate, the
 # level cleared.
@@ -1437,44 +1452,26 @@ func at_locked_gate() -> bool:
 	return gated() and not world.gate_open and player.position.distance_to(world.gate_point())<GATE_REACH
 
 # On arriving: the gate stands open if it was opened before (or he has come
-# back up through it); the holder carries his key at his belt, or, slain
-# already, it lies where he fell until it is taken.
+# back up through it). Unless the hero has the key already, its bearer wears
+# it, or, slain already, it lies where he fell until it is picked up (the
+# drops of the level are laid out after this).
 func setup_key(came_up: bool) -> void:
-	key_node = null
 	if not gated(): return
-	if came_up and not key_name()+":open" in run.keys: run.keys.append(key_name()+":open")
-	if key_name()+":open" in run.keys: world.open_gate(true)
-	if key_holder == null or has_key(): return
-	if key_holder.dead: drop_key(key_holder.position)
-	else: key_holder.visual.carry_key(Temple.BasementProps.key_model())
-
-func drop_key(at: Vector3) -> void:
-	if is_instance_valid(key_node): return
-	if key_holder != null and is_instance_valid(key_holder) and key_holder.visual.has_method("drop_key"): key_holder.visual.drop_key()
-	key_node = Node3D.new()
-	world.add_child(key_node)
-	key_node.position = world.move(at,Vector3(.4,0,.3))+Vector3.UP*.03
-	key_node.rotation.y = fposmod(at.x*12.9898+at.z*78.233,TAU)
-	key_node.add_child(Temple.BasementProps.key_model())
-	# (A glint over it, so it is seen lying in the dirt.)
-	var glint = Art.seal(.6,Color(1,.85,.45,.7))
-	glint.position = Vector3.UP*.02
-	key_node.add_child(glint)
-
-func tick_key() -> void:
-	if not is_instance_valid(key_node): return
-	key_node.visible = world.can_see(key_node.position)
-	if player.dead or player.position.distance_to(key_node.position)>KEY_REACH: return
-	key_node.queue_free()
-	key_node = null
-	run.keys.append(key_name())
-	sound.play("gem-pickup")
-	toast("You take up the key. The gate at the end of the hallway is locked.")
-	save_run()
+	# (A key taken before keys were things carried in the bag.)
+	if key_name() in run.keys:
+		run.keys.erase(key_name())
+		if not has_key(): Items.stow(run,GATE_KEY)
+	if came_up and not gate_opened(): run.keys.append(key_name()+":open")
+	if gate_opened(): world.open_gate(true)
+	if key_holder == null or has_key() or gate_opened(): return
+	if not key_holder.dead: key_holder.visual.carry_key(Temple.BasementProps.key_model())
+	elif not run.drops.any(func(d): return d.item == GATE_KEY): run.drops.append({"item":GATE_KEY,"position":[key_holder.position.x,key_holder.position.z]})
 
 func unlock_gate() -> void:
 	world.open_gate()
-	if not key_name()+":open" in run.keys: run.keys.append(key_name()+":open")
+	var held: int = run.bag.find(GATE_KEY)
+	if held >= 0: run.bag[held] = ""
+	if not gate_opened(): run.keys.append(key_name()+":open")
 	if has_way_on(): world.exit_seal.visible = true
 	toast("The key turns in the lock, and the gate swings open. The way down is open.")
 	save_run()
@@ -1490,7 +1487,7 @@ func interact() -> void:
 		ending()
 	elif at_locked_gate():
 		if has_key(): unlock_gate()
-		else: toast("The gate is locked. One of the bandits in the far rooms carries its key.")
+		else: toast("The gate is locked.")
 	elif way_open() and has_way_on() and player.position.distance_to(world.exit_point)<4:
 		next_floor()
 	elif run.place in Data.DUNGEONS and run.floor>0 and out_of_combat() and player.position.distance_to(world.layout.arrival_position())<3.5:

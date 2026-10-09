@@ -40,6 +40,18 @@ static func particles(parent: Node3D, count: int, lifetime: float, one_shot: boo
 	parent.add_child(p)
 	return p
 
+# One soft, unlit dot for smoke, shared by every emitter that wants it
+# (a body smoking as it burns): built once, so a crowd of them costs no more
+# in materials than one.
+static var smoke_dot: QuadMesh
+static func smoke_quad() -> QuadMesh:
+	if smoke_dot == null:
+		var scratch = Node3D.new()
+		var p: CPUParticles3D = particles(scratch,1,1.0,true,false)
+		smoke_dot = p.mesh
+		scratch.free()
+	return smoke_dot
+
 static func ramp(offsets: Array, colors: Array) -> Gradient:
 	var g = Gradient.new()
 	g.offsets = PackedFloat32Array(offsets)

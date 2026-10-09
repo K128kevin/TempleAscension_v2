@@ -1867,9 +1867,16 @@ func fall(impact: Vector3 = Vector3.ZERO) -> void:
 
 # A bandit killed by fire or lightning is burnt black: every part of him is
 # drawn over in char (assets/shaders/charred.gdshader), taking him in
-# SCORCH_TIME, and smoke curls off his chest for SMOKE_TIME as he falls.
+# SCORCH_TIME, and grey smoke curls up off him for SMOKE_TIME as he falls and
+# lies, rising and spreading as it goes. However many fall together, no more
+# than SMOKE_LIMIT smoke at once (the rest are charred, without it), each
+# with SMOKE_PUFFS soft dots alive at a time, all of one shared mesh.
 const SCORCH_TIME = .35
-const SMOKE_TIME = 3.0
+const SMOKE_TIME = 4.0
+const SMOKE_LIFE = 2.4
+const SMOKE_PUFFS = 16
+const SMOKE_LIMIT = 10
+static var smoking = 0
 var scorched = false
 var smoke: CPUParticles3D
 func scorch() -> void:
@@ -1882,26 +1889,38 @@ func scorch() -> void:
 	for mesh in skin_meshes:
 		if is_instance_valid(mesh): mesh.material_overlay = soot
 	create_tween().tween_method(func(v): soot.set_shader_parameter("amount",v),0.0,1.0,SCORCH_TIME)
-	if skeleton.find_bone("spine_03") < 0: return
+	if smoking >= SMOKE_LIMIT or skeleton.find_bone("spine_03") < 0: return
+	smoking += 1
+	# (From his chest, wherever his fall takes it; the smoke itself stays in
+	# the air where it was given off.)
 	var chest = BoneAttachment3D.new()
 	chest.bone_name = "spine_03"
 	skeleton.add_child(chest)
-	smoke = Vfx.particles(chest,18,1.6,false,false)
+	smoke = CPUParticles3D.new()
+	smoke.mesh = Vfx.smoke_quad()
+	smoke.amount = SMOKE_PUFFS
+	smoke.lifetime = SMOKE_LIFE
+	smoke.local_coords = false
+	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	smoke.emission_sphere_radius = .25
+	smoke.emission_sphere_radius = .3
 	smoke.direction = Vector3.UP
-	smoke.spread = 15
-	smoke.gravity = Vector3(0,.7,0)
-	smoke.initial_velocity_min = .2; smoke.initial_velocity_max = .5
-	smoke.scale_amount_min = .25; smoke.scale_amount_max = .45
-	smoke.scale_amount_curve = Vfx.curve(.6,1.6)
-	smoke.color_ramp = Vfx.ramp([0,.3,1],[Color(.08,.07,.06,0),Color(.1,.09,.08,.55),Color(.2,.19,.18,0)])
+	smoke.spread = 12
+	smoke.gravity = Vector3(0,.35,0)
+	smoke.damping_min = .15; smoke.damping_max = .3
+	smoke.initial_velocity_min = .3; smoke.initial_velocity_max = .6
+	smoke.angular_velocity_min = -20; smoke.angular_velocity_max = 20
+	smoke.scale_amount_min = .35; smoke.scale_amount_max = .55
+	smoke.scale_amount_curve = Vfx.curve(.5,2.2)
+	smoke.color_ramp = Vfx.ramp([0,.18,.6,1],[Color(.22,.21,.2,0),Color(.3,.29,.27,.5),Color(.38,.37,.35,.28),Color(.44,.43,.41,0)])
+	chest.add_child(smoke)
 	smoke.emitting = true
 	var tween = create_tween()
 	tween.tween_interval(SMOKE_TIME)
 	tween.tween_callback(func(): smoke.emitting = false)
-	tween.tween_interval(smoke.lifetime)
+	tween.tween_interval(SMOKE_LIFE)
 	tween.tween_callback(chest.queue_free)
+	chest.tree_exiting.connect(func(): smoking -= 1)
 
 # The bandit who keeps the basement gate's key wears it at his belt, hung on
 # his right hip, until he falls and it drops from him.

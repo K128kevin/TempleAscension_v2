@@ -310,9 +310,13 @@ func tick(dt: float) -> void:
 		cast_nova()
 		return
 	var reach: float = config.range
-	if distance <= reach and game.world.clear_line(position,player.position) and cooldown <= 0:
+	var sees: bool = game.world.clear_line(position,player.position)
+	if distance <= reach and sees and cooldown <= 0:
 		start_attack(player.position)
-	elif distance > reach * (.85 if closing else 1.0):
+	# Out of reach, or out of sight (round a corner, behind a wall: an archer
+	# or an Oracle as much as a swordsman), it goes after him until it can
+	# strike or shoot at him again.
+	elif distance > reach * (.85 if closing else 1.0) or not sees:
 		closing = true
 		walk_to(player.position,dt)
 	elif role == "wizard" and distance < 5:

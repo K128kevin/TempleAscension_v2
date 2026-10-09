@@ -130,7 +130,10 @@ const ALL = {
 	# Light armor.
 	"crimson_hood":{"name":"Crimson Hood","rarity":"uncommon","slot":"head","weight":"light","armor":4.0,"bonus":{"intelligence":2},"look":{"tint":Color(.42,.07,.08)}},
 	"ember_robe":{"name":"Ember Robe","rarity":"rare","slot":"chest","weight":"light","armor":7.0,"bonus":{"spell_damage":10.0},"look":{"tint":Color(.42,.07,.08)}},
-	"seer_bracers":{"name":"Seer's Bracers","rarity":"common","slot":"hands","weight":"light","armor":2.0,"bonus":{"willpower":3},"look":{"tint":Color(.75,.68,.5)}}}
+	"seer_bracers":{"name":"Seer's Bracers","rarity":"common","slot":"hands","weight":"light","armor":2.0,"bonus":{"willpower":3},"look":{"tint":Color(.75,.68,.5)}},
+	# --- Carried, not worn or held: the key to the arena basement's gate,
+	# which one of its bandits keeps (scripts/game.gd). Never random loot.
+	"gate_key":{"name":"Rusted Gate Key","slot":"key"}}
 
 # What each class begins wearing and holding, and carrying in its bag.
 const STARTING = {
@@ -174,6 +177,7 @@ static func color(id: String) -> Color:
 static func barred(class_id: String, id: String) -> String:
 	if not ALL.has(id): return "Not an item."
 	var item: Dictionary = ALL[id]
+	if item.slot == "key": return ""
 	if item.slot in ARMOR_SLOTS:
 		if item.weight != ARMOR_OF[class_id]: return "%s: a %s cannot wear it." % [ARMOR_TITLES[item.weight],class_id]
 	elif not item.kind in WIELDS[class_id]: return "A %s cannot use a %s." % [class_id,KIND_TITLES[item.kind].to_lower()]
@@ -312,6 +316,7 @@ static func misfit(run: Dictionary, id: String, slot: String) -> String:
 	var no: String = barred(run.class_id,id)
 	if not no.is_empty(): return no
 	var item: Dictionary = ALL[id]
+	if item.slot == "key": return "A key is carried, not worn or held."
 	if slot in ARMOR_SLOTS: return "" if item.slot == slot else "That goes on the %s." % (SLOT_TITLES[item.slot].to_lower() if item.slot in ARMOR_SLOTS else "hands, as a weapon")
 	if item.slot in ARMOR_SLOTS: return "That is worn, not held."
 	if slot == "main": return "" if item.slot == "weapon" else "A shield goes in the off hand."
@@ -359,6 +364,7 @@ static func move(run: Dictionary, from: String, to: String) -> String:
 static func slot_for(run: Dictionary, id: String) -> String:
 	if not ALL.has(id): return ""
 	var item: Dictionary = ALL[id]
+	if item.slot == "key": return ""
 	if item.slot in ARMOR_SLOTS: return item.slot
 	if item.slot == "shield": return "off"
 	if item.hands == 1 and not run.equipment.main.is_empty() and not two_handed(run.equipment.main) and run.equipment.off.is_empty() and item.kind != "bow": return "off"
@@ -407,7 +413,10 @@ static func describe(id: String, class_id: String = "") -> Dictionary:
 	var item: Dictionary = ALL[id]
 	var lines: Array = []
 	var what = ""
-	if item.slot in ARMOR_SLOTS:
+	if item.slot == "key":
+		what = "Key"
+		lines.append("Opens the locked gate at the end of the basement's hallway")
+	elif item.slot in ARMOR_SLOTS:
 		what = "%s · %s" % [ARMOR_TITLES[item.weight],SLOT_TITLES[item.slot]]
 		lines.append("%s%% less damage taken" % figure(item.armor))
 	elif item.slot == "shield":

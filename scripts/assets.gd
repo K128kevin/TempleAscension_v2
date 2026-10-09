@@ -520,6 +520,11 @@ static func piece_material(mesh_name: String, hero_class: String, tint = null) -
 static func item_model(id: String) -> Node3D:
 	var item: Dictionary = Items.get_item(id)
 	var look: Dictionary = item.get("look",{})
+	# (A key lies flat; it is the one the basement's bandit wore.)
+	if item.slot == "key":
+		var key: Node3D = load("res://scripts/basement_props.gd").key_model()
+		key.set_meta("bounds",AABB(Vector3(-.1,-.012,-.035),Vector3(.2,.024,.07)))
+		return key
 	if item.slot in ["weapon","shield"]:
 		var held: Node3D = weapon_model(look)
 		var tall: float = Items.length(look)

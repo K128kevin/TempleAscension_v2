@@ -3,6 +3,8 @@ extends SceneTree
 ## arena and the bandits' cave. Their layouts, their bandits, the stairs down
 ## and back up, and the temple's door staying shut until both are cleared.
 const Save = preload("res://scripts/save.gd")
+const Items = preload("res://scripts/items.gd")
+const Game = preload("res://scripts/game.gd")
 const Data = preload("res://scripts/data.gd")
 const Layout = preload("res://scripts/layout.gd")
 const Temple = preload("res://scripts/temple.gd")
@@ -154,17 +156,28 @@ func test():
 	for enemy in game.enemies:
 		if not enemy.dead: enemy.hit(100000)
 	check(game.remaining()==0 and not world.exit_seal.visible and game.run.cleared.is_empty() and not game.way_open(),"With the level cleared the gate is still locked")
-	check(is_instance_valid(game.key_node) and not is_instance_valid(holder.visual.belt_key),"The key fell where its bearer died")
+	var lying: Dictionary = game.key_pickup()
+	check(not lying.is_empty() and lying.drop in game.run.drops and not is_instance_valid(holder.visual.belt_key),"The key fell where its bearer died, an item on the floor")
 	game.hud.tick(0)
 	check(game.hud.stair_arrow.visible,"The arrow points the way to the key")
-	game.player.position = game.key_node.position
-	game.tick_key()
-	check(game.has_key() and not is_instance_valid(game.key_node) and "basement:0" in game.run.keys,"Walking over the key takes it up")
+	game.player.position = lying.node.position
+	game.pick_up(lying)
+	check(game.has_key() and game.key_pickup().is_empty() and Game.GATE_KEY in game.run.bag,"Picked up, it goes in the bag")
+	check(Items.describe(Game.GATE_KEY).kind=="Key" and Items.slot_for(game.run,Game.GATE_KEY)=="" and not Items.move(game.run,"bag:%d" % game.run.bag.find(Game.GATE_KEY),"main").is_empty(),"It is carried, not worn or held")
+	# Killed, he rises again with the key still in his bag.
+	game.hurt_player(100000)
+	game.retry_floor()
+	world = game.world
+	check(game.has_key() and game.enemies.all(func(e): return not e.dead) and not is_instance_valid(game.key_holder.visual.belt_key) and game.key_pickup().is_empty(),"Dying, he keeps the key; its bearer stands again without it")
+	for enemy in game.enemies:
+		if not enemy.dead: enemy.hit(100000)
+	game.player.hp = game.player.max_hp
+	check(game.key_pickup().is_empty() and game.run.bag.count(Game.GATE_KEY)==1,"No second key falls")
 	game.player.position = world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*1.5
 	game.hud.tick(0)
 	check("Unlock" in game.hud.prompt.text,"With it, the HUD offers to unlock the gate")
 	game.interact()
-	check(world.gate_open and world.fits(world.gate_point()) and world.exit_seal.visible and game.way_open() and "basement:0:open" in game.run.keys,"The key opens the gate, and the way down")
+	check(world.gate_open and world.fits(world.gate_point()) and world.exit_seal.visible and game.way_open() and "basement:0:open" in game.run.keys and not Game.GATE_KEY in game.run.bag,"The key opens the gate (and stays in its lock), and the way down")
 	check(not world.path(world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*2.0,world.exit_point).is_empty(),"Through the open gate the stair can be walked to")
 	game.player.position = world.exit_point
 	game.hud.tick(0)

@@ -15,7 +15,7 @@ const DUNGEONS = ["basement","cave"]
 # centurions stand in the gladiators' place (and it has the terraces); its
 # summit, the Crowned Statue.
 const AREAS = {
-	"basement":[{"level":1,"counts":{"bandit":18,"bandit_archer":10}},{"level":3,"counts":{"bandit":26,"bandit_archer":16}}],
+	"basement":[{"level":1,"counts":{"bandit":36,"bandit_archer":20}},{"level":3,"counts":{"bandit":52,"bandit_archer":32}}],
 	"cave":[{"level":5,"counts":{"bandit":29,"bandit_archer":18}},{"level":8,"counts":{"bandit":36,"bandit_archer":23}}],
 	"temple":[{"level":11,"counts":{"gladiator":35,"archer":20,"lion":16}},
 		{"level":15,"counts":{"gladiator":36,"archer":23,"lion":26,"wizard":16}},

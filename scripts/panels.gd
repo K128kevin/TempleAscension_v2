@@ -57,6 +57,7 @@ var stat_xp: Label
 var stat_xp_bar: ProgressBar
 var stat_points: Label
 var stat_values: Array = []
+var stat_splits: Array = []
 var stat_buttons: Array = []
 var stat_summary: Label
 var stat_reset: Button
@@ -243,6 +244,7 @@ func build_stats(body: VBoxContainer) -> void:
 	stat_xp_bar.custom_minimum_size = Vector2(0,4)
 	stat_points = text("",12,hud.gold,body)
 	stat_values.clear()
+	stat_splits.clear()
 	stat_buttons.clear()
 	for i in 5:
 		var row = HBoxContainer.new()
@@ -254,10 +256,19 @@ func build_stats(body: VBoxContainer) -> void:
 		row.add_child(names)
 		text(Data.STATS[i],14,hud.cream,names)
 		text(Data.STAT_HELP[i].replace("; ","\n"),11,dim,names)
-		var value = text("",16,hud.gold,row)
+		# The attribute in all, and beneath it, where items add to it, how
+		# much is his own (what he has spent points on) and how much theirs.
+		var column = VBoxContainer.new()
+		column.add_theme_constant_override("separation",-3)
+		column.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(column)
+		var value = text("",16,hud.gold,column)
 		value.custom_minimum_size.x = 26
 		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		stat_values.append(value)
+		var split = text("",10,Items.RARITY_COLORS.uncommon,column)
+		split.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		stat_splits.append(split)
 		var plus = small_button("+",15,func(): add_stat(i))
 		plus.custom_minimum_size = Vector2(26,26)
 		plus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -477,7 +488,10 @@ func quick_move(place: String) -> void:
 	var id: String = Items.at(game.run,place)
 	if id.is_empty(): return
 	var to = ""
-	if Items.in_bag(place): to = Items.slot_for(game.run,id)
+	if Items.in_bag(place):
+		to = Items.slot_for(game.run,id)
+		# (Nothing to put it on: a key is only carried.)
+		if to.is_empty(): return
 	else:
 		var room: int = Items.free_bag_slot(game.run)
 		if room < 0:
@@ -621,7 +635,10 @@ func refresh() -> void:
 		stat_points.text = "%d attribute point%s to spend" % [r.points,"" if r.points==1 else "s"]
 		stat_points.add_theme_color_override("font_color",hud.gold if r.points>0 else dim)
 		for i in 5:
-			stat_values[i].text = str(r.stats[i])
+			var gear: int = Data.stat(r,i)-int(r.stats[i])
+			stat_values[i].text = str(Data.stat(r,i))
+			stat_splits[i].text = "%d base · %+d items" % [r.stats[i],gear] if gear != 0 else ""
+			stat_splits[i].visible = gear != 0
 			stat_buttons[i].disabled = r.points<=0
 		stat_summary.text = "Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%" % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(game.skills.basic_speed(Data.weapon(r))),game.skills.figure(Data.crit_chance(r))]
 		stat_reset.disabled = not game.safe_checkpoint()

@@ -301,6 +301,32 @@ func test():
 		var gap: float=ranged.position.distance_to(game.player.position)-start.distance_to(game.player.position)
 		check(gap>.5 if kind=="wizard" else ranged.position.distance_to(start)<.01,"Close range: %s %s" % [kind,"retreats" if kind=="wizard" else "holds position"])
 		ranged.dead=true; ranged.visible=false
+	# A ranged statue that loses sight of the hero (in its reach, round a
+	# corner) goes after him until it sees him again, and does not stand.
+	for kind in ["archer","wizard"]:
+		var hunter=game.spawn_enemy(kind,"hunt:"+kind,game.world.spawn)
+		hunter.awake=true; hunter.cooldown=0; hunter.nova_cooldown=1000000
+		# (Wherever the floor has one: the hero stands at a room's middle.)
+		var hero: Vector3=game.world.spawn
+		var hidden=Vector3.INF
+		for room in game.world.layout.rooms:
+			hero=game.world.layout.to_world(game.world.layout.center(room))
+			if not game.world.fits(hero,.45): continue
+			for cell in game.world.layout.cells:
+				var at: Vector3=game.world.layout.to_world(cell)
+				var gap: float=at.distance_to(hero)
+				if gap>4.0 and gap<hunter.config.range-1.0 and game.world.fits(at,.45) and not game.world.clear_line(at,hero) and game.world.path(at,hero).size()>0:
+					hidden=at; break
+			if hidden!=Vector3.INF: break
+		game.player.position=hero
+		check(hidden!=Vector3.INF,"There is a spot in reach of the hero but out of his sight: "+kind)
+		hunter.position=hidden
+		var saw=false
+		for step in 1500:
+			hunter.tick(1.0/60)
+			if game.world.clear_line(hunter.position,hero): saw=true; break
+		check(saw and hunter.position.distance_to(hidden)>.05,"Out of sight in its reach, %s goes after the hero until it sees him" % kind)
+		hunter.dead=true; hunter.visible=false
 	for kind in ["gladiator","centurion","archer","wizard","lion","boss"]:
 		var enemy=game.spawn_enemy(kind,"timing:"+kind,game.world.spawn)
 		enemy.awake=true; enemy.laser_cooldown=1000000

@@ -1,4 +1,5 @@
 extends SceneTree
+const Visual = preload("res://scripts/visual.gd")
 ## A slain bandit falls limp on actual physics frames (scripts/ragdoll.gd),
 ## and bandits bleed when struck. With --render-ragdoll the fall is drawn to
 ## test-results/bandit-ragdoll-*.png.
@@ -214,6 +215,17 @@ func test():
 	check(is_equal_approx(float(burnt.visual.skin_meshes[0].material_overlay.get_shader_parameter("amount")),1.0),"The char takes him fully within moments")
 	check(is_instance_valid(burnt.visual.smoke) and burnt.visual.smoke.emitting and burnt.visual.smoke.get_parent() is BoneAttachment3D,"Smoke rises off the body")
 	await snapshot("scorched")
+	# A crowd burnt down together: all charred, but only so many smoking.
+	var crowd: Array = []
+	for i in 14: crowd.append(victim(origin+Vector3(-6+i,0,4)))
+	await frames(4)
+	game.skills.spell_striking = true
+	for one in crowd: one.hit(100000,"fire")
+	game.skills.spell_striking = false
+	var smokers: int = crowd.filter(func(b): return is_instance_valid(b.visual.smoke)).size()
+	check(crowd.all(func(b): return b.visual.scorched) and smokers > 0 and Visual.smoking <= Visual.SMOKE_LIMIT,"Fourteen burnt at once are all charred; no more than %d smoke (%d)" % [Visual.SMOKE_LIMIT,smokers])
+	await frames(int((Visual.SMOKE_TIME+Visual.SMOKE_LIFE)*60)+30)
+	check(Visual.smoking == 0 and crowd.all(func(b): return not is_instance_valid(b.visual.smoke)),"Their smoke clears, and its emitters with it")
 
 	# Dying of a curse there is no blow: he crumples where he stands.
 	var cursed = victim(origin+Vector3(2,0,-3))

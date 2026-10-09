@@ -356,7 +356,7 @@ func tick(dt: float) -> void:
 	if game.mode == "playing":
 		if outdoors: prompt.text = outdoor_prompt()
 		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
-		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked. One of the bandits in the far rooms carries its key"
+		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked"
 		elif game.way_open() and game.has_way_on(): prompt.text = "The stairway is open. %s" % ("Press E to %s" % ("descend" if r.place in Data.DUNGEONS else "ascend") if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
 		elif r.place in Data.DUNGEONS and r.floor>0 and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair"
 		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
@@ -704,7 +704,7 @@ func point_to_stairs() -> void:
 	var goal: Vector3 = game.world.exit_point
 	if game.gated() and not game.world.gate_open:
 		if game.has_key(): goal = game.world.gate_point()
-		elif is_instance_valid(game.key_node): goal = game.key_node.position
+		elif not game.key_pickup().is_empty(): goal = game.key_pickup().node.position
 		else: return
 	aim_arrow(stair_arrow,goal)
 

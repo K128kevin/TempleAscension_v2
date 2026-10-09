@@ -58,7 +58,9 @@ right side of the screen. C, K and I open it at each (or turn it to that tab,
 or close it from there); its tabs can be clicked; Escape closes it; and the
 game is paused while it is open. Gaining a level puts a small + button at each
 lower corner: the left one opens the window at the attributes, the right one
-at the skills. Each stays until its points are spent.
+at the skills. Each stays until its points are spent. The attributes tab
+shows each attribute in all; where items add to one, a line beneath it shows
+how much is its base (the points spent) and how much the items give.
 
 The inventory tab shows a figure of the hero as he is dressed and armed (drag
 across it to turn it), with his head, chest and legs slots to its left, his
@@ -188,14 +190,17 @@ The temple stands in a larger world, one continuous outdoor map
   pots (some smashed or knocked over) and cobwebbed corners. On its first
   level the hallway ends at a locked iron gate before the stair down: one
   bandit, in a room off the far half of the hallway, wears its key at his
-  belt; it falls where he dies, the hero takes it up by walking over it,
-  and E at the gate unlocks it (the way down is then open, whoever still
-  stands). Both dungeons are gone down into (E at the far stair descends,
+  belt. It falls where he dies, an item (the Rusted Gate Key) picked up
+  like any other and carried in the bag, kept there though the hero dies;
+  E at the gate unlocks it, the key staying in the lock (the way down is
+  then open, whoever still stands, and the gate stays open). Its levels
+  hold twice the bandits they did. Both dungeons are gone down into (E at the far stair descends,
   E at the arrival stair climbs back, and the first level's door leads
   out), and hold bandits with swords and with bows: men, who fall rather
   than crumble. A blade draws
   blood; a spell does not, and one killed by fire or lightning falls burnt
-  black, smoking.
+  black, grey smoke curling up off him for a few seconds (no more than ten
+  bodies smoke at once, however many fall together).
 - **The desert** between them: wind-rippled sand and low
   dunes, crossed by a worn track from the town gate to the temple. Running it
   from gate to door (about 250 m) takes some forty seconds. On the way are an abandoned caravan
@@ -284,7 +289,9 @@ Each floor holds three quarters more statues than the original's 24 / 32 / 54 / 
 (lions now stand on every floor; centurions only from the third up, their places
 on the first two taken by gladiators and lions). Gladiators,
 archers, fast Lion Guardians, spellcasting oracles and centurions activate as
-statues and alert nearby allies. Hitting an enemy pushes back its next attack by 50% of its normal
+statues and alert nearby allies. An enemy that loses sight of the hero
+(round a corner, behind a wall) goes after him until it sees him again, the
+archers and Oracles as much as the rest. Hitting an enemy pushes back its next attack by 50% of its normal
 time between attacks and roots it for that time; further hits add 30%, then 15%,
 then nothing, until it lands an attack. A hit during a wind-up breaks it off: the
 enemy flinches and starts the attack over once the delay ends. A hit during an Oracle's
@@ -483,7 +490,7 @@ lasts; letting go, moving or casting anything else ends them.
 | | 5 | Improved Chill | | The chill slows 10% → 40% more and lasts 1 → 5 seconds longer |
 | | 10 | Frost Blast | 20 a second | Channelled: frost 10 metres ahead, 70% → 150% a second to everyone within 3 metres of the stream |
 | | 10 | Ice Storm | 40 | Frost about him for 6 → 15 seconds: 60% → 100% a second within 4 metres; frost spells deal double, and nothing else can be cast; 60-second cooldown |
-| Fire | 0 | Fireball | 15 | 110% → 200% fire damage |
+| Fire | 0 | Fireball | 15 | 110% → 200% fire damage (its burst throws the slain no harder than a blow) |
 | | 5 | Blast Wave | 45 | Flame 5 metres in every direction: 125% → 235% |
 | | 5 | Frostburn | | Fire deals 50% → 175% more to chilled enemies |
 | | 10 | Fire Tornado | 65 | A tornado 4 metres across for 8 seconds: 75% → 140% a second; each burn a 1% → 5% chance to make an enemy in it a Lightning Rod (if known) |

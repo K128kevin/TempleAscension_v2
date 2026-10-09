@@ -142,20 +142,23 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 	var upper = Vector2i(-10000,-10000)
 	var edges: Dictionary = {}
 	var torch_candidates: Array[Vector3] = []
-	# The ascent stair's footprint is paved and walled like the room around it,
+	# A flight's footprint is paved and walled like the room around it,
 	# although it is solid for movement.
 	var surface: Array = layout.cells.keys()
 	for y in range(layout.stairs.position.y,layout.stairs.end.y):
 		for x in range(layout.stairs.position.x,layout.stairs.end.x): surface.append(Vector2i(x,y))
-	# The arrival stairwell is unpaved, but the room's walls still run round it,
+	# A stairwell down is unpaved, but the room's walls still run round it,
 	# rising above the flight's deep end.
 	for y in range(layout.arrival.position.y,layout.arrival.end.y):
 		for x in range(layout.arrival.position.x,layout.arrival.end.x): surface.append(Vector2i(x,y))
+	# (A stairwell going down is left open: in the temple the one he arrives
+	# by, in a dungeon the one on down.)
+	var well: Rect2i = layout.stairs if layout.descending else layout.arrival
 	for cell in surface:
 		var at = layout.to_world(cell)
 		lower = lower.min(Vector2i(at.x,at.z))
 		upper = upper.max(Vector2i(at.x,at.z))
-		if not layout.arrival.has_point(cell):
+		if not well.has_point(cell):
 			# The open-air terraces are paved in grey slate, not the halls' quartz.
 			var tiles = court_paving if layout.court.has_point(cell) else (Art.slate_material() if layout.on_terrace(cell) else paving)
 			var tile = place("floor",at+Vector3.DOWN*.16,Vector3(1,.16,1),tiles)
@@ -1487,6 +1490,9 @@ func path(from: Vector3, to: Vector3) -> PackedVector3Array:
 	var destination = Vector3(clampf(to.x,bounds.position.x+.41,bounds.end.x-.41),0,clampf(to.z,bounds.position.y+.41,bounds.end.y-.41))
 	if walk_line(from,destination): return PackedVector3Array([destination])
 	var start = navigation_cell(from,true)
+	# (Pressed into a wall's corner, none may be walked to in a straight
+	# line: the nearest open one will do, rather than no way at all.)
+	if start.x == -1000: start = navigation_cell(from,false)
 	var end = navigation_cell(destination,false)
 	var result = PackedVector3Array()
 	if start.x == -1000 or end.x == -1000: return result

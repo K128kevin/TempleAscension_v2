@@ -110,8 +110,10 @@ func test():
 	var droppable = 0
 	for id in Items.ALL:
 		var item: Dictionary = Items.ALL[id]
-		var sound = item.has("name") and item.slot in Items.ARMOR_SLOTS+["weapon","shield"]
-		if item.slot in Items.ARMOR_SLOTS: sound = sound and item.weight in Items.ARMOR_OF.values() and item.armor > 0
+		var sound = item.has("name") and item.slot in Items.ARMOR_SLOTS+["weapon","shield","key"]
+		# (A key is only carried: it has a name, never drops at random, and is pictured.)
+		if item.slot == "key": sound = sound and not item.has("rarity") and ResourceLoader.exists("res://assets/ui/items/%s.png" % id)
+		elif item.slot in Items.ARMOR_SLOTS: sound = sound and item.weight in Items.ARMOR_OF.values() and item.armor > 0
 		elif item.slot == "weapon": sound = sound and item.kind in Items.KIND_TITLES and item.hands in [1,2] and (item.has("damage") and item.damage[0] > 0 and item.damage[1] >= item.damage[0] or item.kind == "staff")
 		else: sound = sound and item.block > 0 and item.mitigation > 0
 		if item.slot in ["weapon","shield"]: sound = sound and ResourceLoader.exists("res://assets/models/props/%s.glb" % item.look.model) and item.look.has("size") and (item.slot == "shield" or item.look.has("grip"))
@@ -235,6 +237,12 @@ func test():
 	game.run.bag[0] = "bronze_helm"; game.run.bag[1] = "bronze_cuirass"
 	check(game.move_item("bag:0","head") == "" and game.move_item("bag:1","chest") == "" and Data.armor(game.run) == 33.0 and Data.max_health(game.run) == 100.0+20.0+25.0 and game.player.max_hp == 145.0,"Better armor: more protection, and its Vitality and health")
 	check(game.run.bag[0] == "gladiator_helm" and game.run.bag[1] == "scale_cuirass","What it replaces goes where it came from")
+	# The attributes tab shows each in all, and how much of it the items give.
+	game.hud.panels.open_stats(); game.hud.panels.refresh()
+	var gear: int = Data.stat(game.run,3)-int(game.run.stats[3])
+	check(gear > 0 and game.hud.panels.stat_values[3].text == str(Data.stat(game.run,3)) and game.hud.panels.stat_splits[3].visible and game.hud.panels.stat_splits[3].text == "%d base · +%d items" % [game.run.stats[3],gear],"The attributes tab shows Vitality in all, its base and what items add (%s, %s)" % [game.hud.panels.stat_values[3].text,game.hud.panels.stat_splits[3].text])
+	check(game.hud.panels.stat_values[0].text == str(game.run.stats[0]) and not game.hud.panels.stat_splits[0].visible,"An attribute no item raises shows only its value")
+	game.hud.panels.close()
 	check(game.move_item("chest","bag:5") == "" and game.player.max_hp == 120.0 and game.player.hp <= 120.0,"Taken off, its health goes with it")
 	game.run.bag[6] = "bandit_sica"
 	var plain: float = game.attack_profile().duration
