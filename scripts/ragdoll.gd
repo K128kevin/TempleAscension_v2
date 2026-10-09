@@ -67,7 +67,7 @@ static func body(skeleton: Skeleton3D, part: Dictionary) -> PhysicalBone3D:
 	var from: Vector3 = skeleton.get_bone_global_rest(skeleton.find_bone(part.bone)).origin
 	var to: Vector3 = skeleton.get_bone_global_rest(skeleton.find_bone(part.to)).origin
 	var length: float = from.distance_to(to)+part.get("more",0.0)
-	var bone = PhysicalBone3D.new()
+	var bone: PhysicalBone3D = load("res://scripts/ragdoll_bone.gd").new()
 	bone.name = "Ragdoll_"+part.bone
 	bone.bone_name = part.bone
 	bone.body_offset = Transform3D(Basis.IDENTITY,Vector3(0,length*.5,0))
@@ -114,9 +114,11 @@ static func drop(simulator: PhysicalBoneSimulator3D, impact: Vector3) -> void:
 		if bone is PhysicalBone3D:
 			bone.linear_velocity = impact+topple*TOPPLE.get(String(bone.bone_name),0.0)
 
-# No limb moves faster than FASTEST: one wedged between his weight and a wall
-# is not flung out by its joint.
-const FASTEST = 16.0
+# No limb moves faster than FASTEST, nor turns faster than SPIN (radians a
+# second), every physics step (scripts/ragdoll_bone.gd): one wedged between
+# his weight and a wall is not flung out by its joint.
+const FASTEST = 12.0
+const SPIN = 25.0
 static func calm(simulator: PhysicalBoneSimulator3D) -> void:
 	for bone in simulator.get_children():
 		if bone is PhysicalBone3D and bone.linear_velocity.length_squared() > FASTEST*FASTEST:

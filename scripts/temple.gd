@@ -218,6 +218,13 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 				var height = LOW_WALL_HEIGHT if edge.low else WALL_HEIGHT
 				var dimensions = Vector3(finish-start,height,.28) if edge.horizontal else Vector3(.28,height,finish-start)
 				var wall: Node3D = rock_wall(pos+Vector3(edge.direction.x,0,edge.direction.y)*.5,dimensions) if layout.kind == "cave" else place("wall",pos,dimensions,Art.world_stone(stone) if edge.low else stone)
+				# (A full wall stops what falls as a box running deep into the
+				# solid ground behind it: see ensure_debris_collision.)
+				if layout.kind != "cave" and not edge.low:
+					debris_props.erase(wall)
+					var back = Vector3(edge.direction.x,0,edge.direction.y)
+					var box = AABB(pos-Vector3(dimensions.x,0,dimensions.z)*.5,dimensions)
+					debris_walls.append(box.merge(AABB(box.position+back*WALL_DEPTH,box.size)))
 				# Walls stand in solid cells that are never seen themselves. Reveal
 				# each piece from the floor it faces, never from the far side.
 				var faces: Array[Vector2i] = []
@@ -1421,6 +1428,13 @@ func ensure_debris_collision() -> void:
 				debris_slab(slab)
 				slab = box
 		debris_slab(slab)
+	for wall in debris_walls:
+		var shape = BoxShape3D.new()
+		shape.size = wall.size
+		var collision = CollisionShape3D.new()
+		collision.shape = shape
+		collision.position = wall.get_center()
+		debris_collision.add_child(collision)
 	# Each prop's hull is its model's outermost points (worked out once a
 	# model), not its every vertex.
 	var outlines: Dictionary = {}
@@ -1437,7 +1451,18 @@ func ensure_debris_collision() -> void:
 			collision.shape = hull
 			debris_collision.add_child(collision)
 
+# A full wall, solid WALL_DEPTH back from its face into the ground behind it,
+# for the same reason: a fast limb sunk into a thin one is pushed out behind
+# it, and held there by the wall while the body is carried on.
+const WALL_DEPTH = .6
+var debris_walls: Array[AABB] = []
+
+# A slab of floor, solid FLOOR_DEPTH below its paving: a fast limb sunk into
+# a thin one is pushed out through its underside, and the body's joints tear
+# it apart; sunk into this, it is always pushed back up.
+const FLOOR_DEPTH = 1.5
 func debris_slab(bounds: AABB) -> void:
+	bounds = AABB(bounds.position-Vector3(0,FLOOR_DEPTH,0),bounds.size+Vector3(0,FLOOR_DEPTH,0))
 	var shape = BoxShape3D.new()
 	shape.size = bounds.size
 	var collision = CollisionShape3D.new()

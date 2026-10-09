@@ -51,6 +51,7 @@ run "$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log"
 run "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"
 run "$godot_bin" --headless --fixed-fps 60 --path . --script tests/statue_physics.gd --log-file "$PWD/test-results/statue-physics.log"
 run "$godot_bin" --headless --fixed-fps 60 --path . --script tests/bandit_ragdoll.gd --log-file "$PWD/test-results/bandit-ragdoll.log"
+run "$godot_bin" --headless --fixed-fps 60 --path . --script tests/ragdoll_stability.gd --log-file "$PWD/test-results/ragdoll-stability.log"
 run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-normal.log"
 run "$godot_bin" --headless --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-regression.log" -- --debug-mode --floor=3 --bow --axe
 run "$godot_bin" --headless --path . --script tests/playground.gd --log-file "$PWD/test-results/playground.log" -- --debug-mode

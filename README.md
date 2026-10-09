@@ -202,7 +202,9 @@ The temple stands in a larger world, one continuous outdoor map
   hold twice the bandits they did. Both dungeons are gone down into (E at the far stair descends,
   E at the arrival stair climbs back, and the first level's door leads
   out), and hold bandits with swords and with bows: men, who fall rather
-  than crumble. A blade draws
+  than crumble, limp, thrown by the blow (the game's physics run on Jolt,
+  which keeps a body whole however hard it is thrown against the walls and
+  floor). A blade draws
   blood; a spell does not, and one killed by fire or lightning falls burnt
   black, grey smoke curling up off him for a few seconds (no more than ten
   bodies smoke at once, however many fall together).
