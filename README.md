@@ -124,6 +124,17 @@ The temple stands in a larger world, one continuous outdoor map
   follow-my-leader, resting in a huddle between games; they never go into the
   inn. No one goes into the arena, through the palace gate or out of the town,
   and all give way to the hero.
+- **The watch.** Armored guards with spear and shield stand two at each of
+  the town's gates (east and south) and two at each of the palace's (its
+  precinct gate and its door), and six pairs more walk the town, the second
+  man a pace behind the first, stopping a while at each place they come to.
+  Every eight hours of the day (every ten minutes of play) the watch
+  changes: for each post a walking pair is chosen at random, walks there and
+  takes the places of the two on watch, who then walk the town in their
+  turn. Over a guard the cursor becomes a speech bubble; right-clicked, he
+  turns to the hero and stops a while (and the man walking with him), and
+  says, over his head, "Keep your eye out for filthy bandits, they're
+  everywhere...".
 - **The inn and the smithy** stand open: the hero walks in through the
   doorway, and while he is inside the roof and the two walls on the camera's
   side are lifted away, so the room is seen from above. The inn is a

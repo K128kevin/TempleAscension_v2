@@ -233,6 +233,8 @@ static func guard(world, at: Vector3, facing: Vector3, variant: float) -> Node3D
 	man.rotation.y = atan2(facing.x,facing.z)
 	man.setup(variant)
 	world.block_disc(at+man.basis*Vector3(.1,0,.15),.65,world.LOW)
+	# (Two to a post, one after the other: scripts/town_watch.gd.)
+	world.guard_posts.append(man)
 	return man
 
 # A point on the arena's oval at `angle`, `inset` metres inside its outer wall.

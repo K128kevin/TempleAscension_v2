@@ -1,0 +1,225 @@
+extends Node3D
+## The town's watch: the guards at its gates and the palace's (scripts/
+## world_town.gd guard, two to a post), and PAIRS more who walk the town two
+## by two (scripts/town_guard.gd). A pair walks to one of the places the
+## townsfolk go (scripts/townsfolk.gd haunts) by the world's ways, the second
+## man a pace or two behind the first; stands there a while, looking about;
+## and goes on to another.
+##
+## Every third of a day (SHIFT: eight hours) the watch changes: for each post
+## a pair still walking is chosen at random, walks there, and takes the
+## places of the two on watch, who then walk the town in their turn.
+##
+## The hero may speak to any of them (scripts/game.gd talk_to): the man turns
+## to him, stops a while (and the man walking with him), and says so
+## (SAYING, over his head).
+const Guard = preload("res://scripts/town_guard.gd")
+const Daylight = preload("res://scripts/daylight.gd")
+const PAIRS = 6
+const SHIFT = Daylight.CYCLE/3.0
+const WALK = 1.2
+# How far the second man keeps behind the first, and how long a pair stands
+# at a place (seconds) before going on.
+const BEHIND = 1.5
+const STAND = Vector2(4.0,10.0)
+# Arrived: within this of the spot; come to relieve a post, within this of
+# the man there.
+const NEAR = .3
+const RELIEF_NEAR = 1.6
+# Spoken to: how long he stops, and what he says.
+const TALK = 4.0
+const SAYING = "Keep your eye out for filthy bandits, they're everywhere..."
+# How near (screen pixels, about his middle) the cursor must be to pick him.
+const PICK = 48.0
+
+var world
+var rng = RandomNumberGenerator.new()
+# Each post: its two men and where each stands (`spots`: position, facing).
+var posts: Array = []
+# Each pair walking: its two men; what they are about ("stand", "walk", or
+# "relieve" a post); their way (the first man's); how long they stand on.
+var patrols: Array = []
+var shift = -1
+# Each man spoken to, and how long he stays stopped.
+var talking: Dictionary = {}
+
+func setup(overworld) -> void:
+	world = overworld
+	rng.seed = 7311
+	for i in range(0,world.guard_posts.size()-1,2):
+		var pair: Array = [world.guard_posts[i],world.guard_posts[i+1]]
+		posts.append({"guards":pair,"spots":pair.map(func(g): return {"at":g.position,"yaw":g.rotation.y})})
+	var haunts: Array = world.townsfolk.haunts
+	for p in PAIRS:
+		var men: Array = []
+		var at: Vector3 = haunts[rng.randi_range(0,haunts.size()-1)].at
+		for k in 2:
+			var man = Guard.new()
+			man.name = "PatrolGuard"
+			add_child(man)
+			var spot: Vector3 = at+Vector3(k*.9,0,k*.4)
+			man.position = spot+Vector3.UP*world.lift(spot)
+			man.rotation.y = rng.randf_range(0,TAU)
+			man.setup(rng.randf())
+			men.append(man)
+		patrols.append({"guards":men,"state":"stand","route":PackedVector3Array(),"timer":rng.randf_range(0,STAND.y),"post":-1,"trail":[]})
+
+# Every man of the watch, at his post or walking.
+func guards() -> Array:
+	var all: Array = []
+	for post in posts: all.append_array(post.guards)
+	for patrol in patrols: all.append_array(patrol.guards)
+	return all
+
+func tick(delta: float, _hero: Vector3) -> void:
+	delta = minf(delta,.1)
+	var now = int(Daylight.of_day(world.time)/SHIFT)
+	if shift >= 0 and now != shift: change_watch()
+	shift = now
+	for man in talking.keys():
+		talking[man] -= delta
+		if talking[man] <= 0.0: talking.erase(man)
+	for patrol in patrols: walk_patrol(patrol,delta)
+	for post in posts:
+		for k in 2: keep_post(post.guards[k],post.spots[k],delta)
+
+# A man at a post: come to relieve it, he walks the last of the way to his
+# own spot; on it, he faces out as the post does (and back so, once he has
+# said his piece to the hero).
+func keep_post(man: Node3D, spot: Dictionary, delta: float) -> void:
+	if talking.has(man): return
+	var way: Vector3 = spot.at-man.position
+	way.y = 0
+	if way.length() > .05:
+		var at: Vector3 = man.position+way.normalized()*minf(way.length(),WALK*delta)
+		at.y = world.lift(at)
+		man.position = at
+		man.turn_to(way,delta)
+		man.walk(WALK)
+		return
+	man.stand()
+	man.rotation.y = lerp_angle(man.rotation.y,spot.yaw,minf(1.0,delta*4.0))
+
+# The watch changes: each post's pair is to be relieved by a pair still
+# walking, chosen at random.
+func change_watch() -> void:
+	var free: Array = patrols.filter(func(p): return p.state != "relieve")
+	for i in posts.size():
+		if free.is_empty(): return
+		var patrol: Dictionary = free.pop_at(rng.randi_range(0,free.size()-1))
+		patrol.state = "relieve"
+		patrol.post = i
+		head_for(patrol,posts[i].spots[0].at)
+
+func head_for(patrol: Dictionary, goal: Vector3) -> void:
+	var lead = patrol.guards[0]
+	var route: PackedVector3Array = world.path(Vector3(lead.position.x,0,lead.position.z),goal)
+	# (Its last step is onto the spot itself, kept clear of everyone else.)
+	if route.is_empty() or Vector2(route[-1].x-goal.x,route[-1].z-goal.z).length() > .05: route.append(Vector3(goal.x,0,goal.z))
+	patrol.route = route
+	patrol.trail = [lead.position]
+	if patrol.state != "relieve": patrol.state = "walk"
+
+func walk_patrol(patrol: Dictionary, delta: float) -> void:
+	var lead = patrol.guards[0]
+	var second = patrol.guards[1]
+	# Spoken to, the pair stands.
+	if talking.has(lead) or talking.has(second):
+		for man in patrol.guards: man.stand()
+		return
+	if patrol.state == "stand":
+		for man in patrol.guards: man.stand()
+		patrol.timer -= delta
+		if patrol.timer <= 0.0:
+			var haunts: Array = world.townsfolk.haunts
+			head_for(patrol,haunts[rng.randi_range(0,haunts.size()-1)].at)
+		return
+	# (Come to a post, he is there once he is near it: the man he relieves
+	# stands on the spot itself.)
+	if patrol.route.is_empty() or (patrol.state == "relieve" and lead.position.distance_to(posts[patrol.post].spots[0].at) < RELIEF_NEAR):
+		arrive(patrol)
+		return
+	step(lead,patrol.route,delta)
+	var trail: Array = patrol.trail
+	if trail.is_empty() or trail[-1].distance_to(lead.position) > .25: trail.append(lead.position)
+	follow(second,trail,delta)
+
+# One man's step along `route` (taking each point as it is reached).
+func step(man: Node3D, route: PackedVector3Array, delta: float) -> void:
+	var at = Vector3(man.position.x,0,man.position.z)
+	var to: Vector3 = route[0]
+	var way = to-at
+	var reach: float = WALK*delta
+	if way.length() <= maxf(reach,NEAR*.5):
+		route.remove_at(0)
+		at = to
+	else: at += way.normalized()*reach
+	man.position = at+Vector3.UP*world.lift(at)
+	man.turn_to(way,delta)
+	man.walk(WALK)
+
+# The second man keeps BEHIND the first along the way the first has walked.
+func follow(man: Node3D, trail: Array, delta: float) -> void:
+	while trail.size() > 1 and trail[0].distance_to(trail[-1]) > BEHIND and man.position.distance_to(trail[0]) < .3: trail.pop_front()
+	var to: Vector3 = trail[0]
+	var gap: float = man.position.distance_to(patrol_lead_of(man).position)
+	if gap <= BEHIND*.9 or man.position.distance_to(to) < .05:
+		man.stand()
+		return
+	var way: Vector3 = to-man.position
+	way.y = 0
+	var at: Vector3 = man.position+way.normalized()*minf(way.length(),WALK*1.15*delta)
+	at.y = world.lift(at)
+	man.position = at
+	man.turn_to(way,delta)
+	man.walk(WALK*1.15)
+
+func patrol_lead_of(man: Node3D) -> Node3D:
+	for patrol in patrols:
+		if patrol.guards[1] == man: return patrol.guards[0]
+	return man
+
+# The way's end: a pair walking stands a while; a pair come to relieve a
+# post takes it (each man then walking on to his own place there), and the
+# two relieved walk the town in their turn.
+func arrive(patrol: Dictionary) -> void:
+	if patrol.state != "relieve":
+		patrol.state = "stand"
+		patrol.timer = rng.randf_range(STAND.x,STAND.y)
+		return
+	var post: Dictionary = posts[patrol.post]
+	var relieved: Array = post.guards
+	post.guards = patrol.guards
+	patrol.guards = relieved
+	patrol.state = "walk"
+	patrol.post = -1
+	var haunts: Array = world.townsfolk.haunts
+	head_for(patrol,haunts[rng.randi_range(0,haunts.size()-1)].at)
+
+# --- Speaking to them ------------------------------------------------------------
+
+# The man of the watch nearest the cursor at `screen` (within PICK pixels
+# of him, head to foot), or null.
+func guard_at(camera: Camera3D, screen: Vector2):
+	var best = null
+	var nearest = PICK
+	for man in guards():
+		if not man.visible or camera.is_position_behind(man.position): continue
+		var head: Vector2 = camera.unproject_position(man.position+Vector3.UP*1.8)
+		var foot: Vector2 = camera.unproject_position(man.position)
+		var d: float = Geometry2D.get_closest_point_to_segment(screen,foot,head).distance_to(screen)
+		if d < nearest:
+			nearest = d
+			best = man
+	return best
+
+# Spoken to by the hero (at `hero`): he turns to him and stops a while, as
+# does the man walking with him.
+func talk_to(man: Node3D, hero: Vector3) -> void:
+	talking[man] = TALK
+	var way = hero-man.position
+	man.rotation.y = atan2(way.x,way.z)
+	man.stand()
+	for patrol in patrols:
+		if man in patrol.guards:
+			for other in patrol.guards: talking[other] = TALK

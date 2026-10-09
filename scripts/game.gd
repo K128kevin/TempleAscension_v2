@@ -511,6 +511,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			left_held = true
 			issue_click(false)
 		elif event.button_index==MOUSE_BUTTON_RIGHT:
+			# (A right click on one of the town's guards speaks to him.)
+			var guard = guard_under_cursor()
+			if guard != null:
+				talk_to(guard)
+				return
 			right_held = true
 			issue_click(true)
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -596,6 +601,58 @@ func update_enemy_hover() -> void:
 		hover_ring.position = hovered.position+Vector3.UP*.08
 		hover_ring.scale = Vector3.ONE*hovered.config.size
 	hud.show_npc_name(world.townsfolk.named_at(world.pointer()) if outdoors() and mode=="playing" and get_viewport().gui_get_hovered_control()==null else {})
+	# Over one of the town's guards, the cursor is a speech bubble: he may be
+	# spoken to (a right click).
+	var guard = guard_under_cursor() if mode=="playing" and not player.dead else null
+	if (guard != null) != talk_cursor:
+		talk_cursor = guard != null
+		Input.set_custom_mouse_cursor(speech_cursor() if talk_cursor else null,Input.CURSOR_ARROW,TALK_HOTSPOT)
+
+# --- Speaking to the town's guards ----------------------------------------------
+
+var talk_cursor = false
+static var bubble_cursor: ImageTexture
+const TALK_HOTSPOT = Vector2(3,26)
+
+# The town guard under the cursor (scripts/town_watch.gd), or null.
+func guard_under_cursor():
+	if not outdoors() or not is_instance_valid(world) or world.get("watch") == null: return null
+	if get_viewport().gui_get_hovered_control() != null: return null
+	return world.watch.guard_at(world.camera,get_viewport().get_mouse_position())
+
+# He turns to the hero and stops a while (the man he walks with too), and
+# says his piece, in a bubble over his head.
+func talk_to(guard: Node3D) -> void:
+	if player.dead: return
+	world.watch.talk_to(guard,player.position)
+	hud.speak(guard,world.watch.SAYING,world.watch.TALK)
+
+# The cursor over a guard: a white speech bubble, outlined dark, its tail at
+# the lower left, where it points.
+static func speech_cursor() -> ImageTexture:
+	if bubble_cursor != null: return bubble_cursor
+	var size = 32
+	var image = Image.create(size,size,false,Image.FORMAT_RGBA8)
+	image.fill(Color(0,0,0,0))
+	var inside = func(x: float, y: float) -> bool:
+		var bubble = pow((x-17.0)/13.5,2)+pow((y-12.0)/10.0,2) <= 1.0
+		# The tail, from the bubble's foot down to its point at the lower left.
+		var tail = y >= 17.0 and y <= 27.0 and x >= 3.0+(27.0-y)*.2 and x <= 3.0+(27.0-y)*1.1
+		return bubble or tail
+	for y in size:
+		for x in size:
+			if inside.call(x+.5,y+.5): image.set_pixel(x,y,Color(.97,.95,.88))
+			else:
+				for d in [Vector2(1,0),Vector2(-1,0),Vector2(0,1),Vector2(0,-1),Vector2(1,1),Vector2(-1,-1),Vector2(1,-1),Vector2(-1,1)]:
+					if inside.call(x+.5+d.x*1.5,y+.5+d.y*1.5):
+						image.set_pixel(x,y,Color(.12,.09,.06))
+						break
+	# Three dots, as of speech.
+	for dot in [Vector2(11,12),Vector2(17,12),Vector2(23,12)]:
+		for dy in range(-1,2):
+			for dx in range(-1,2): image.set_pixel(int(dot.x)+dx,int(dot.y)+dy,Color(.25,.2,.14))
+	bubble_cursor = ImageTexture.create_from_image(image)
+	return bubble_cursor
 
 # The 1 to 4 keys: a skill used up close is walked to a unit under the cursor,
 # as a right click is; anything else is cast where the cursor points.

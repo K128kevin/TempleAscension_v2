@@ -5,7 +5,8 @@ extends Node3D
 ## grounded upright in his right fist and his shield stood on its foot at his
 ## left, his hand resting on its rim (scripts/arm_reach.gd holds each hand to
 ## its grip). He is no part of the town's round (scripts/townsfolk.gd): he
-## never leaves his post.
+## keeps his post, or walks the town with another, until he is relieved or
+## relieves another pair at theirs (scripts/town_watch.gd).
 const Art = preload("res://scripts/assets.gd")
 const ArmReach = preload("res://scripts/arm_reach.gd")
 # Measured from him (he faces +Z, his right toward -X): where his right fist
@@ -85,15 +86,42 @@ func setup(variant: float) -> void:
 	animator.play(clip)
 	animator.seek(variant*animator.get_animation(clip).length,true)
 
+# Walking, he carries his spear and shield CARRY metres off the ground, at
+# a stride that covers STRIDE metres a second at the clip's own pace.
+const CARRY = .12
+const STRIDE = 1.25
+var walking = false
+
+func walk(speed: float) -> void:
+	if not walking:
+		walking = true
+		animator.play("Walk",.25)
+		animator.get_animation("Walk").loop_mode = Animation.LOOP_LINEAR
+	animator.speed_scale = speed/STRIDE
+
+func stand() -> void:
+	if not walking: return
+	walking = false
+	animator.play("Idle",.35)
+	animator.speed_scale = 1.0
+
+# Turns him toward `direction`, at `quickness`.
+func turn_to(direction: Vector3, delta: float, quickness: float = 7.0) -> void:
+	if Vector2(direction.x,direction.z).length() < .01: return
+	rotation.y = lerp_angle(rotation.y,atan2(direction.x,direction.z),minf(1.0,delta*quickness))
+
 # The hands go to their grips wherever he stands (they are found in the
 # world, so he must be placed first).
 func _process(_delta: float) -> void:
+	var lift = Vector3.UP*(CARRY if walking else 0.0)
+	spear.position = Vector3(SPEAR_FIST.x,0,SPEAR_FIST.z)+lift
+	shield.position = SHIELD_AT+lift
 	var frame: Transform3D = global_transform
-	hands.r.target = frame*SPEAR_FIST
+	hands.r.target = frame*(SPEAR_FIST+lift)
 	hands.r.axis = frame.basis*Vector3.UP
 	# On the middle of the shield's top rim, the fist round it.
 	var rim: Basis = Basis(Vector3.UP,SHIELD_TURN)
-	hands.l.target = frame*(SHIELD_AT+Vector3(0,SHIELD_SIZE.y+.02,0))
+	hands.l.target = frame*(SHIELD_AT+lift+Vector3(0,SHIELD_SIZE.y+.02,0))
 	hands.l.axis = frame.basis*(rim*Vector3.LEFT)
 
 static func shared(kind: String) -> StandardMaterial3D:

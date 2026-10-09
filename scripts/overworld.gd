@@ -16,6 +16,7 @@ const Palace = preload("res://scripts/world_palace.gd")
 const Front = preload("res://scripts/world_temple_front.gd")
 const Wilds = preload("res://scripts/world_wilds.gd")
 const Townsfolk = preload("res://scripts/townsfolk.gd")
+const Watch = preload("res://scripts/town_watch.gd")
 const Daylight = preload("res://scripts/daylight.gd")
 const GLOW_COLOUR = Front.GLOW
 # `level` of the outdoor world, where a temple floor has its index.
@@ -148,6 +149,11 @@ var stand_front: Array = []
 var under_stands = false
 # The town's people (scripts/townsfolk.gd).
 var townsfolk: Node3D
+# The town's guards: those at its gates and the palace's (two to a post, in
+# the order they were posted), and the pairs walking the town who relieve
+# them (scripts/town_watch.gd).
+var guard_posts: Array = []
+var watch: Node3D
 # Floors above the ground indoors: over its "area" a deck stands "low" high
 # at "start" and climbs to "high" the way "along" points (a level one has no
 # "along").
@@ -203,6 +209,10 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 	townsfolk.name = "Townsfolk"
 	add_child(townsfolk)
 	townsfolk.setup(self)
+	watch = Watch.new()
+	watch.name = "Watch"
+	add_child(watch)
+	watch.setup(self)
 	fixtures = get_child_count()
 	follow(spawn,1)
 
@@ -739,6 +749,7 @@ func ground_at(viewport_position: Vector2) -> Vector3:
 # frame it is running: the townspeople go about their day.)
 func update_visibility(pos: Vector3, delta: float) -> void:
 	townsfolk.tick(delta,pos)
+	watch.tick(delta,pos)
 
 func can_see(_at: Vector3) -> bool:
 	return true

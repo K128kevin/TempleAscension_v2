@@ -6,8 +6,8 @@ close-fitted over the hero's body at the centurion's heavy build. But he is a
 man, at life size, not stone: the pieces are kept apart, each with its own
 material, for the game to dress in earnest (scripts/town_guard.gd): the body in
 the warrior's painted skin and kit, the armor in worn steel, bronze, leather and
-red wool over the knight's own palette. He keeps only the clip a man standing
-watch needs.
+red wool over the knight's own palette. He keeps only the clips a man standing
+watch, or walking his round of the town (scripts/town_watch.gd), needs.
 
 Run after outfit_hero.py and paint_kits.py have written warrior.glb:
 
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT/'assets/models/character'
 spec = importlib.util.spec_from_file_location('outfits', ROOT/'tools/prepare_enemy_outfits.py')
 outfits = importlib.util.module_from_spec(spec); spec.loader.exec_module(outfits)
-CLIPS = ['Idle']
+CLIPS = ['Idle', 'Walk']
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 # The clips are baked at 30 fps (tools/import_combat.py); exporting at
