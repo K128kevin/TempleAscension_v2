@@ -6,10 +6,14 @@ static var directory = "user://"
 static func migrate(d: Dictionary) -> Dictionary:
 	if int(d.get("version",0))>=15: return d
 	if int(d.get("version",0))==14:
-		# The basement's gates and their keys: none held yet.
+		# The basement's gates and their keys: none held yet. Its levels were
+		# laid out anew, so the bandits slain there (known by their number on
+		# a level) stand again, in their new places.
 		var updated = d.duplicate(true)
 		updated.version = 15
 		updated.keys = []
+		updated.dead = updated.get("dead",[]).filter(func(id): return not str(id).begins_with("basement:"))
+		if updated.get("place","")=="basement": updated.drops = []
 		return updated
 	if int(d.get("version",0))==13:
 		# Easy, Moderate and Hard became Normal and Hard: Moderate is Normal.

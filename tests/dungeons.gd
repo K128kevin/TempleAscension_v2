@@ -186,6 +186,11 @@ func test():
 		if not enemy.dead: enemy.hit(100000)
 	check(game.remaining()==0 and game.run.cleared==["basement"] and not Data.temple_open(game.run) and not world.exit_seal.visible,"Clearing the last level clears the dungeon; the temple stays shut for the cave")
 	check(Save.valid(game.run),"The run is valid to save")
+	# A save from before the basement was laid out anew: its bandits stand again.
+	var older: Dictionary = game.run.duplicate(true)
+	older.version = 14; older.erase("keys")
+	var renewed: Dictionary = Save.migrate(older)
+	check(Save.valid(older) and renewed.keys.is_empty() and not renewed.dead.any(func(id): return id.begins_with("basement:")) and renewed.cleared==["basement"],"An earlier save's basement is peopled again, still counted cleared")
 	# Out again.
 	game.player.position = world.layout.arrival_position()
 	game.interact()
