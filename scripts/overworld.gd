@@ -428,6 +428,7 @@ func lay_ground() -> void:
 	var material = ShaderMaterial.new()
 	material.shader = load("res://assets/shaders/desert_ground.gdshader")
 	ground_material = material
+	if not ground_hole.is_empty(): open_ground(ground_hole.at,ground_hole.half,ground_hole.yaw)
 	material.set_shader_parameter("control",ImageTexture.create_from_image(image))
 	material.set_shader_parameter("map_origin",Vector2(WEST,NORTH))
 	material.set_shader_parameter("map_size",Vector2(WIDTH,DEPTH))
@@ -461,6 +462,17 @@ func lay_ground() -> void:
 		mesh.layers = GROUND_LAYER
 	add_child(hill)
 	add_child(dune_ground(sloping))
+
+# An opening in the ground at `at`, `half` its half size (across, along),
+# turned `yaw`: the ground is not drawn there (the basement's stair).
+# (Opened before the ground is laid, it is kept until it is.)
+var ground_hole = {}
+func open_ground(at: Vector3, half: Vector2, yaw: float) -> void:
+	ground_hole = {"at":at,"half":half,"yaw":yaw}
+	if ground_material == null: return
+	ground_material.set_shader_parameter("hole_center",Vector2(at.x,at.z))
+	ground_material.set_shader_parameter("hole_half",half)
+	ground_material.set_shader_parameter("hole_yaw",yaw)
 
 # The dune's ground, lying over the slab as the hill's does: a sheet of
 # two-metre squares raised to `dune_height`.
@@ -680,9 +692,12 @@ func clear_line(a: Vector3, b: Vector3) -> bool:
 		if not fits_for_visibility(a.lerp(b,float(i)/steps),.04): return false
 	return true
 
+# A way walked keeps a hair (.41) further from walls than he must (.4). Where
+# he sets out from need only fit him: hard against a wall, he is as near as
+# he may be, and a way out from there is a way.
 func walk_line(a: Vector3, b: Vector3) -> bool:
 	var steps = maxi(1,ceili(a.distance_to(b)/.2))
-	for i in range(steps+1):
+	for i in range(1 if fits(a,.4) else 0,steps+1):
 		if not fits(a.lerp(b,float(i)/steps),.41): return false
 	return true
 

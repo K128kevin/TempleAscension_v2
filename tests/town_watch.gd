@@ -46,9 +46,9 @@ func test():
 		run_for(game,.5)
 		for p in watch.patrols:
 			together = together and p.guards[0].position.distance_to(p.guards[1].position) < 4.0
-			for g in p.guards: footing = footing and world.fits(g.position,.15)
+			for g in p.guards: footing = footing and world.fits(g.position,.15) and not Watch.in_arena(g.position)
 	check(together,"Each pair keeps together, the second a pace or two behind")
-	check(footing,"They keep to open ground")
+	check(footing,"They keep to open ground, and never cross the arena")
 	# The watch changes: each post relieved by a pair, chosen at random.
 	var on_watch: Array = watch.posts.map(func(p): return p.guards.duplicate())
 	world.time = (watch.shift+1)*Watch.SHIFT+1.0
@@ -58,13 +58,16 @@ func test():
 	var coming: Array = []
 	for i in 4: coming.append(relieving.filter(func(p): return p.post == i)[0].guards.duplicate())
 	var taken = false
+	var outside = true
 	for t in 1500:
 		run_for(game,.2)
+		for g in watch.guards(): outside = outside and not Watch.in_arena(g.position)
 		taken = true
 		for i in 4:
 			for k in 2: taken = taken and watch.posts[i].guards[k] in coming[i] and watch.posts[i].guards[k].position.distance_to(watch.posts[i].spots[k].at) < .06
 		if taken: break
 	check(taken,"Each pair walks to its post and takes the places of the two there")
+	check(outside,"On their way to the posts, round the arena, not through it")
 	var off_watch: Array = []
 	for pair in on_watch: off_watch.append_array(pair)
 	check(off_watch.all(func(g): return watch.patrols.any(func(p): return g in p.guards)),"The men relieved walk the town in their turn")
@@ -87,8 +90,16 @@ func test():
 	check(pair.guards[0].position.distance_to(held[0]) < .01 and pair.guards[1].position.distance_to(held[1]) < .01 and not pair.guards.any(func(g): return g.walking),"Spoken to, he stops, and the man walking with him")
 	var way: Vector3 = game.player.position-man.position
 	check(absf(angle_difference(man.rotation.y,atan2(way.x,way.z))) < .05,"He turns to the hero")
-	check(game.hud.speeches.size() == 1 and game.hud.speeches[0].speaker == man and game.hud.speeches[0].panel.get_child(0).text == Watch.SAYING,"And says: "+Watch.SAYING)
-	game.hud.show_speech(Watch.TALK)
+	check(game.hud.speeches.size() == 1 and game.hud.speeches[0].speaker == man and game.hud.speeches[0].panel.words == Watch.SAYING,"And says: "+Watch.SAYING)
+	# (Typed in a letter at a time, as in the first Temple Ascension.)
+	var bubble = game.hud.speeches[0].panel
+	bubble.clock = 0.0; game.hud.show_speech(.2)
+	var part: int = bubble.line.visible_characters
+	game.hud.show_speech(.5)
+	check(part > 0 and part < Watch.SAYING.length() and bubble.line.visible_characters > part,"The words type in over time (%d, then %d letters)" % [part,bubble.line.visible_characters])
+	game.hud.show_speech(2.0)
+	check(bubble.line.visible_characters == Watch.SAYING.length() and game.hud.speeches.size() == 1,"then stay, whole, to be read")
+	game.hud.show_speech(bubble.lasts())
 	check(game.hud.speeches.is_empty(),"The words go after a while")
 	pair.state = "stand"; pair.timer = 0.0
 	run_for(game,6.0)

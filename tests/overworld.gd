@@ -451,7 +451,8 @@ func test():
 	var highest = 0.0
 	var stairs_mesh = Overworld.Kit.mesh_of("stairs")
 	for node in world.get_children():
-		if not node is Node3D or node is MultiMeshInstance3D: continue
+		# (The flight down to the basement, sunk under the stands, is no seat.)
+		if not node is Node3D or node is MultiMeshInstance3D or node.name == "BasementFlight": continue
 		for mesh in node.find_children("*","MeshInstance3D",true,false):
 			if mesh.mesh != stairs_mesh or (Vector2(node.position.x-Town.ARENA.x,node.position.z-Town.ARENA.z)/Town.ARENA_RADII).length()>1.0: continue
 			seats += 1
@@ -593,6 +594,17 @@ func test():
 	var beds_by_kind = {}
 	for w in everyone: beds_by_kind[w.bed.kind] = beds_by_kind.get(w.bed.kind,0)+1
 	check(beds_by_kind.get("inn",0)==4 and beds_by_kind.get("ground",0)>=10 and beds_by_kind.get("house",0)>=10 and folk.anya.bed.kind=="kitchen" and folk.orion.bed.kind=="house","Four lodge in the inn's loft, those in rags sleep on the ground, the rest at home; Anya in her kitchen (%s)" % str(beds_by_kind))
+	# Those sleeping in the street are all in rags, and none in rags is
+	# without a place there; the most ragged are thin with hunger.
+	var sleepers: Array = everyone.filter(func(w): return w.bed.kind=="ground")
+	check(sleepers.all(func(w): return w.body.look.get("wear",0.0) >= .8) and folk.people.filter(func(w): return w.bed.kind=="ground").all(func(w): return w.body.look.wear >= folk.HOMELESS_WEAR),"Everyone sleeping in the street is in rags")
+	check(folk.people.filter(func(w): return w.body.look.wear >= folk.HOMELESS_WEAR).all(func(w): return w.bed.kind=="ground"),"Everyone in rags sleeps in the street")
+	var starving: Array = folk.people.filter(func(w): return w.body.look.get("gaunt",0.0) > 0.0)
+	var in_rags: Array = folk.people.filter(func(w): return w.body.look.wear >= folk.HOMELESS_WEAR)
+	var thinned = func(w):
+		var gaunt = w.body.skeleton.find_children("*","MeshInstance3D",true,false).filter(func(m): return m.name=="Body")[0].material_override.get_shader_parameter("gaunt")
+		return gaunt != null and gaunt > 0.0
+	check(starving.size() >= in_rags.size()*.7 and starving.all(func(w): return w in in_rags and thinned.call(w)) and not folk.people.any(func(w): return not w in starving and thinned.call(w)),"Most of those in rags are thin with hunger, and only they (%d of %d)" % [starving.size(),in_rags.size()])
 	var house_doors = {}
 	for w in everyone:
 		if w.bed.kind=="house": house_doors[snapped(w.bed.at,Vector3.ONE*.1)] = true

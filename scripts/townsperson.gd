@@ -99,6 +99,7 @@ func setup(appearance: Dictionary) -> void:
 		# (A figure's bounds follow its skeleton; a seated or reaching one
 		# must not be culled by where it stood at rest.)
 		mesh.extra_cull_margin = 1.0
+	starve(look.get("gaunt",0.0))
 	# A child's head is large for its body.
 	if look.get("child",false): skeleton.set_bone_pose_scale(skeleton.find_bone("Head"),Vector3.ONE*1.22)
 	# A heavy build: the whole figure broadened across and through (its own
@@ -260,6 +261,36 @@ func lowest() -> float:
 func lie_down(rate: float, blend: float = .3) -> void:
 	state = "LieDown"
 	animator.play("GetUp",blend,-rate,true)
+
+# Gone thin with hunger (0 fed, 1 starving): the body and what it wears
+# drawn in by THIN metres along each bone (assets/shaders/gaunt.gdshaderinc),
+# the frame a little narrower across (GAUNT_FRAME), the skin sallow and
+# pale (GAUNT_TONE).
+const THIN = {"pelvis":.02,"spine_01":.028,"spine_02":.03,"spine_03":.025,"neck_01":.012,"Head":.004,
+	"clavicle_l":.01,"clavicle_r":.01,"upperarm_l":.02,"upperarm_r":.02,"lowerarm_l":.014,"lowerarm_r":.014,
+	"thigh_l":.027,"thigh_r":.027,"calf_l":.017,"calf_r":.017}
+const GAUNT_FRAME = .08
+const GAUNT_TONE = Color(.93,.9,.83)
+const THIN_BINDS = 72
+func starve(gaunt: float) -> void:
+	if gaunt <= 0.0: return
+	figure.scale = Vector3(1.0-GAUNT_FRAME*gaunt,1.0,1.0-GAUNT_FRAME*gaunt)*size
+	for mesh in skeleton.find_children("*","MeshInstance3D",true,false):
+		if mesh.skin == null or not mesh.material_override is ShaderMaterial: continue
+		var thin = PackedFloat32Array()
+		thin.resize(THIN_BINDS)
+		for i in mini(mesh.skin.get_bind_count(),THIN_BINDS):
+			var bone: String = String(mesh.skin.get_bind_name(i))
+			if bone.is_empty() and mesh.skin.get_bind_bone(i) >= 0: bone = skeleton.get_bone_name(mesh.skin.get_bind_bone(i))
+			thin[i] = THIN.get(bone,0.0)
+		var material: ShaderMaterial = mesh.material_override
+		while material != null:
+			material.set_shader_parameter("gaunt",gaunt)
+			material.set_shader_parameter("thin",thin)
+			if mesh.name == "Body" and material.shader.resource_path.ends_with("townsfolk_skin.gdshader"):
+				var tone: Vector3 = material.get_shader_parameter("tone")
+				material.set_shader_parameter("tone",tone.lerp(tone*Vector3(GAUNT_TONE.r,GAUNT_TONE.g,GAUNT_TONE.b),gaunt))
+			material = material.next_pass as ShaderMaterial
 
 func flesh(cover: Dictionary, worn: Array, wear: float) -> ShaderMaterial:
 	var m = ShaderMaterial.new()

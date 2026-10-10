@@ -6,8 +6,9 @@ close-fitted over the hero's body at the centurion's heavy build. But he is a
 man, at life size, not stone: the pieces are kept apart, each with its own
 material, for the game to dress in earnest (scripts/town_guard.gd): the body in
 the warrior's painted skin and kit, the armor in worn steel, bronze, leather and
-red wool over the knight's own palette. He keeps only the clips a man standing
-watch, or walking his round of the town (scripts/town_watch.gd), needs.
+red wool over the knight's own palette, and steel gauntlets cut from his own
+hands. He keeps only the clips a man standing watch with spear and shield, or
+walking his round of the town (scripts/town_watch.gd), needs.
 
 Run after outfit_hero.py and paint_kits.py have written warrior.glb:
 
@@ -15,13 +16,14 @@ Run after outfit_hero.py and paint_kits.py have written warrior.glb:
 """
 from pathlib import Path
 import importlib.util
+import bmesh
 import bpy
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT/'assets/models/character'
 spec = importlib.util.spec_from_file_location('outfits', ROOT/'tools/prepare_enemy_outfits.py')
 outfits = importlib.util.module_from_spec(spec); spec.loader.exec_module(outfits)
-CLIPS = ['Idle', 'Walk']
+CLIPS = ['Idle', 'SpearShieldIdle', 'Walk']
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 # The clips are baked at 30 fps (tools/import_combat.py); exporting at
@@ -60,6 +62,34 @@ for piece in fitted:
     piece.name = 'Armor'+piece.name.removeprefix('Knight_').split('.')[0]
     piece.data.materials.clear()
     piece.data.materials.append(bpy.data.materials.get('Armor') or bpy.data.materials.new('Armor'))
+
+# His gauntlets: his own hands and wrists, cut from his body and stood a
+# little off it (a cuff GAUNTLET_CUFF up the forearm from the wrist), for the
+# game to finish as steel and leather (assets/shaders/guard_armor.gdshader).
+GAUNTLET_CUFF = .07
+GAUNTLET_LIFT = .006
+HAND_BONES = ('hand_', 'thumb_', 'index_', 'middle_', 'ring_', 'pinky_')
+gloves = body.copy()
+gloves.data = body.data.copy()
+gloves.name = 'ArmorGauntlets'
+bpy.context.collection.objects.link(gloves)
+hand_groups = {g.index for g in gloves.vertex_groups if g.name.startswith(HAND_BONES)}
+wrists = {side: (rig.matrix_world @ rig.data.bones['hand_'+side].head_local) for side in ('l', 'r')}
+mesh = gloves.data
+keep = set()
+for v in mesh.vertices:
+    weight = sum(g.weight for g in v.groups if g.group in hand_groups)
+    near = min((gloves.matrix_world @ v.co - w).length for w in wrists.values())
+    if weight > .5 or near < GAUNTLET_CUFF: keep.add(v.index)
+bm = bmesh.new()
+bm.from_mesh(mesh)
+bm.verts.ensure_lookup_table()
+bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.index not in keep], context='VERTS')
+for v in bm.verts: v.co += v.normal*GAUNTLET_LIFT
+bm.to_mesh(mesh)
+bm.free()
+mesh.materials.clear()
+mesh.materials.append(bpy.data.materials.get('Armor') or bpy.data.materials.new('Armor'))
 
 bpy.ops.object.select_all(action='DESELECT')
 for o in bpy.data.objects:

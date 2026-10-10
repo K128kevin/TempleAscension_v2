@@ -1591,8 +1591,15 @@ func floor_line(a: Vector3, b: Vector3, radius: float) -> bool:
 		if not fits(a.lerp(b,float(i)/steps),radius): return false
 	return true
 
+# A way walked keeps a hair (.41) further from walls than he must (.4). Where
+# he sets out from need only fit him: hard against a wall, he is as near as
+# he may be, and a way out from there is a way.
 func walk_line(a: Vector3, b: Vector3) -> bool:
-	return floor_line(a,b,.41)
+	if not fits(a,.4): return floor_line(a,b,.41)
+	var steps = maxi(1,ceili(a.distance_to(b)/.2))
+	for i in range(1,steps+1):
+		if not fits(a.lerp(b,float(i)/steps),.41): return false
+	return true
 
 func navigation_cell(at: Vector3, require_connection: bool) -> Vector2i:
 	var center = Vector2i(clampi(roundi(at.x),nav.region.position.x,nav.region.end.x-1),clampi(roundi(at.z),nav.region.position.y,nav.region.end.y-1))

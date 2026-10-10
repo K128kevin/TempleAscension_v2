@@ -103,6 +103,8 @@ func test():
 	check(world.CAVE.z<-60.0 and world.CAVE.x>Overworld.CARAVAN.x and world.CAVE.x<Overworld.TEMPLE_DOOR.x-30.0,"The cave is in the desert's northern rocks, before the temple")
 	# Under the stands.
 	check(Town.under_stands(Overworld.BASEMENT_STAIR) and not Town.under_stands(Town.ARENA) and not Town.under_stands(Town.ARENA+Vector3(Town.ARENA_RADII.x+3.0,0,0)),"The stair stands under the arena's stands, between its outer wall and the sand")
+	var flight = world.find_child("BasementFlight",false,false)
+	check(flight != null and flight.position.y < -2.0 and flight.position.distance_to(Overworld.BASEMENT_STAIR+Vector3.DOWN*Town.STAIR_DEPTH) < .01 and world.ground_material.get_shader_parameter("hole_center") == Vector2(Overworld.BASEMENT_STAIR.x,Overworld.BASEMENT_STAIR.z),"The stair down is a flight of steps sunk in an opening in the ground")
 	check(not world.stand_seats.is_empty() and world.stand_seats.all(func(n): return n.visible) and world.stand_fittings.all(func(n): return not n.visible),"From outside the seats are seen, and what is under them is not")
 	world.follow(Overworld.OUTSIDE.basement.at,1)
 	check(world.stand_seats.all(func(n): return not n.visible) and not world.stand_fittings.is_empty() and world.stand_fittings.all(func(n): return n.visible),"Under the stands the seats overhead are lifted away")

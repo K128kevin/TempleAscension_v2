@@ -120,21 +120,26 @@ The temple stands in a larger world, one continuous outdoor map
   the table, then leaves or waits for another. Their clothes are
   neutral and plain, and most are poor: ten in rags (frayed, patched, holed
   and filthy), nine in worn and patched tunics and gowns, six decently
-  dressed. Six ragged children run about the streets at tag and
+  dressed. Most of those in rags are thin with hunger, their arms and legs
+  stick-thin, their frames narrow and their skin sallow; all ten of them,
+  and no one else among the grown, sleep in the street. Six ragged children run about the streets at tag and
   follow-my-leader, resting in a huddle between games; they never go into the
   inn. No one goes into the arena, through the palace gate or out of the town,
   and all give way to the hero.
-- **The watch.** Armored guards with spear and shield stand two at each of
+- **The watch.** Armored guards in steel gauntlets, spear in the right fist
+  and scutum on the left forearm, stand two at each of
   the town's gates (east and south) and two at each of the palace's (its
-  precinct gate and its door), and six pairs more walk the town, the second
-  man a pace behind the first, stopping a while at each place they come to.
+  precinct gate and its door), and six pairs more walk the town's streets
+  (round the arena, never through it), the second man a pace behind the
+  first, stopping a while at each place they come to.
   Every eight hours of the day (every ten minutes of play) the watch
   changes: for each post a walking pair is chosen at random, walks there and
   takes the places of the two on watch, who then walk the town in their
   turn. Over a guard the cursor becomes a speech bubble; right-clicked, he
   turns to the hero and stops a while (and the man walking with him), and
-  says, over his head, "Keep your eye out for filthy bandits, they're
-  everywhere...".
+  says "Keep your eye out for filthy bandits, they're everywhere..." in a
+  speech bubble over his head, as the first Temple Ascension's were: a dark
+  panel edged in old gold, the words typed in a letter at a time.
 - **The inn and the smithy** stand open: the hero walks in through the
   doorway, and while he is inside the roof and the two walls on the camera's
   side are lifted away, so the room is seen from above. The inn is a
@@ -192,7 +197,9 @@ The temple stands in a larger world, one continuous outdoor map
 - **The dungeons' entrances**: under the arena's stands runs a paved, shadowed
   undercroft (a doorway in each side of the east, south and west gateways lets
   into it; the seats overhead are lifted away while the hero is inside), with
-  the kerbed stair down to the basement under the south-eastern stands; and a
+  the kerbed stair down to the basement under the south-eastern stands (a
+  flight of stone steps sunk in an opening in the ground, lined with dark
+  stone); and a
   defile in the desert's northern rocks leads to the black mouth of the
   bandits' cave. The cave is generated like the temple's floors, in living
   rock over bare earth. The basement is laid out along one great hallway,

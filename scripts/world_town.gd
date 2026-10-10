@@ -355,6 +355,10 @@ static func under_stands(at: Vector3) -> bool:
 # What stands under the stands: a pier under every other rib of the seating,
 # fires along the inner wall, the fighters' stores, and in the south-east the
 # stair down to the basement. (Seen only from inside: world.stand_fittings.)
+# The opening of the stair down to the basement (across, along) and how far
+# down its flight goes.
+const STAIR_OPENING = Vector2(2.6,3.6)
+const STAIR_DEPTH = 2.6
 static func undercroft(world, material: Material) -> void:
 	var step = TAU/ARENA_BAYS
 	var before = world.get_child_count()
@@ -377,18 +381,21 @@ static func undercroft(world, material: Material) -> void:
 				var spot = oval(angle+item[1]*.022,3.4)
 				world.prop(item[0],spot,item[2],angle+item[1])
 				world.block_disc(spot,.5,world.LOW,false)
-	# The stair to the basement: a kerbed well in the floor, its steps going
-	# down into the dark.
+	# The stair to the basement: a kerbed well opened in the ground
+	# (world.open_ground), its flight of steps going down from its open side
+	# (the stair's +Z) into the dark, lined with stone, a dark floor at its
+	# foot (STAIR_DEPTH down).
 	var stair: Vector3 = world.BASEMENT_STAIR
-	var dark = StandardMaterial3D.new()
-	dark.albedo_color = Color(.02,.02,.025)
-	dark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	world.place("floor",stair+Vector3.UP*.05,Vector3(2.6,.04,3.6),dark,PI/4)
-	# (The ground is one slab: the steps are drawn on the dark, each dimmer
-	# than the one above it.)
-	for i in 5:
-		var tread = Kit.gritty(ARENA_STONE*Color(.8,.8,.8)*(.9-i*.19),1.6,true)
-		world.place("floor",stair+Vector3(0,.07,1.45-i*.62).rotated(Vector3.UP,PI/4),Vector3(2.5,.03,.56),tread,PI/4)
+	var turn = Basis(Vector3.UP,PI/4)
+	world.open_ground(stair,STAIR_OPENING*.5,PI/4)
+	var flight = world.place("stairs",stair+Vector3.DOWN*STAIR_DEPTH,Vector3(STAIR_OPENING.x,STAIR_DEPTH,STAIR_OPENING.y),material,PI/4+PI)
+	var lining = Kit.gritty(ARENA_STONE*Color(.32,.3,.28),1.6,true)
+	for wall in [[Vector3(STAIR_OPENING.x*.5+.14,0,0),Vector3(.28,STAIR_DEPTH,STAIR_OPENING.y+.56)],[Vector3(-STAIR_OPENING.x*.5-.14,0,0),Vector3(.28,STAIR_DEPTH,STAIR_OPENING.y+.56)],[Vector3(0,0,-STAIR_OPENING.y*.5-.14),Vector3(STAIR_OPENING.x,STAIR_DEPTH,.28)]]:
+		world.place("floor",stair+turn*wall[0]+Vector3.DOWN*STAIR_DEPTH,wall[1]-Vector3(0,.02,0),lining,PI/4)
+	var depths = StandardMaterial3D.new()
+	depths.albedo_color = Color(.03,.028,.025)
+	world.place("floor",stair+Vector3.DOWN*(STAIR_DEPTH+.1),Vector3(STAIR_OPENING.x+.6,.1,STAIR_OPENING.y+.6),depths,PI/4)
+	flight.name = "BasementFlight"
 	for side in [[Vector3(1.5,0,0),.4,3.9],[Vector3(-1.5,0,0),.4,3.9],[Vector3(0,0,-1.95),3.4,.4]]:
 		var offset: Vector3 = side[0].rotated(Vector3.UP,PI/4)
 		world.place("floor",stair+offset,Vector3(side[1],.5,side[2]),material,PI/4)

@@ -38,6 +38,12 @@ uniform vec3 absorption = vec3(.95,.42,.40);
 uniform vec3 sky_colour = vec3(.62,.70,.82);
 varying vec3 world;
 varying vec3 mesh_normal;
+// An opening in the ground (the stair down to the arena's basement:
+// scripts/world_town.gd undercroft): its middle, its half size along and
+// across, and the way it is turned; nothing of the ground is drawn in it.
+uniform vec2 hole_center = vec2(0.0);
+uniform vec2 hole_half = vec2(0.0);
+uniform float hole_yaw = 0.0;
 
 float hash(vec2 p) {
 	p = fract(p*vec2(.1031,.1030));
@@ -83,6 +89,9 @@ void vertex() {
 
 void fragment() {
 	vec2 p = world.xz;
+	vec2 into = p - hole_center;
+	into = vec2(cos(hole_yaw) * into.x - sin(hole_yaw) * into.y, sin(hole_yaw) * into.x + cos(hole_yaw) * into.y);
+	if (abs(into.x) < hole_half.x && abs(into.y) < hole_half.y) discard;
 	// The map's hard cell edges are broken up with noise.
 	vec2 wobble = vec2(value_noise(p*.9),value_noise(p.yx*.9+31.7))-.5;
 	vec4 map = texture(control,(p+wobble*1.1-map_origin+.5)/map_size);

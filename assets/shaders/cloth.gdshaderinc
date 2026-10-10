@@ -2,6 +2,7 @@
 // dyed one colour, and worn out as far as `wear` says. A garment's UVs are in
 // metres over the cloth; its second UV set carries how near the hem or cuff a
 // point is (x) and how far down the garment's length (y).
+#include "gaunt.gdshaderinc"
 uniform sampler2D weave : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D grit : source_color, filter_linear_mipmap, repeat_enable;
 uniform vec3 dye = vec3(0.7, 0.65, 0.55);
@@ -84,4 +85,9 @@ void fragment() {
 	ROUGHNESS = 0.95;
 	SPECULAR = 0.1;
 #endif
+}
+
+// (Over a starving body, a garment is drawn in with it: gaunt.gdshaderinc.)
+void vertex() {
+	VERTEX = gaunt_inset(VERTEX, NORMAL, BONE_INDICES, BONE_WEIGHTS);
 }

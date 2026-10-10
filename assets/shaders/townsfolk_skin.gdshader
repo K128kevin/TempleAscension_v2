@@ -10,6 +10,11 @@ uniform float dirt = 0.0;
 // Covered from this height (x) up to this one (y), and this far down the arm.
 uniform vec2 cover = vec2(0.0);
 uniform float sleeve = 0.0;
+#include "gaunt.gdshaderinc"
+
+void vertex() {
+	VERTEX = gaunt_inset(VERTEX, NORMAL, BONE_INDICES, BONE_WEIGHTS);
+}
 
 void fragment() {
 	// (The exporter turns a UV's second coordinate over.)

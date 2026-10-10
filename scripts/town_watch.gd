@@ -2,7 +2,8 @@ extends Node3D
 ## The town's watch: the guards at its gates and the palace's (scripts/
 ## world_town.gd guard, two to a post), and PAIRS more who walk the town two
 ## by two (scripts/town_guard.gd). A pair walks to one of the places the
-## townsfolk go (scripts/townsfolk.gd haunts) by the world's ways, the second
+## townsfolk go (scripts/townsfolk.gd haunts) by the streets (never through
+## the arena: path), the second
 ## man a pace or two behind the first; stands there a while, looking about;
 ## and goes on to another.
 ##
@@ -15,6 +16,7 @@ extends Node3D
 ## (SAYING, over his head).
 const Guard = preload("res://scripts/town_guard.gd")
 const Daylight = preload("res://scripts/daylight.gd")
+const Town = preload("res://scripts/world_town.gd")
 const PAIRS = 6
 const SHIFT = Daylight.CYCLE/3.0
 const WALK = 1.2
@@ -46,6 +48,7 @@ var talking: Dictionary = {}
 func setup(overworld) -> void:
 	world = overworld
 	rng.seed = 7311
+	lay_grid()
 	for i in range(0,world.guard_posts.size()-1,2):
 		var pair: Array = [world.guard_posts[i],world.guard_posts[i+1]]
 		posts.append({"guards":pair,"spots":pair.map(func(g): return {"at":g.position,"yaw":g.rotation.y})})
@@ -113,7 +116,7 @@ func change_watch() -> void:
 
 func head_for(patrol: Dictionary, goal: Vector3) -> void:
 	var lead = patrol.guards[0]
-	var route: PackedVector3Array = world.path(Vector3(lead.position.x,0,lead.position.z),goal)
+	var route: PackedVector3Array = path(Vector3(lead.position.x,0,lead.position.z),goal)
 	# (Its last step is onto the spot itself, kept clear of everyone else.)
 	if route.is_empty() or Vector2(route[-1].x-goal.x,route[-1].z-goal.z).length() > .05: route.append(Vector3(goal.x,0,goal.z))
 	patrol.route = route
@@ -195,6 +198,80 @@ func arrive(patrol: Dictionary) -> void:
 	patrol.post = -1
 	var haunts: Array = world.townsfolk.haunts
 	head_for(patrol,haunts[rng.randi_range(0,haunts.size()-1)].at)
+
+# --- Their ways ----------------------------------------------------------------
+
+# The watch keeps to the streets: their ways are the world's (Overworld.nav)
+# over the town and the palace's grounds (GROUND), but never through the
+# arena (its oval, ARENA_MARGIN out past its outer wall), which they walk
+# round.
+const GROUND = Rect2i(-350,-125,190,220)
+const ARENA_MARGIN = 1.04
+var grid = AStarGrid2D.new()
+func lay_grid() -> void:
+	grid.region = GROUND.intersection(world.nav.region)
+	grid.cell_size = Vector2.ONE
+	grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	grid.update()
+	for z in range(grid.region.position.y,grid.region.end.y):
+		for x in range(grid.region.position.x,grid.region.end.x):
+			var cell = Vector2i(x,z)
+			if world.nav.is_point_solid(cell) or in_arena(Vector3(x,0,z)): grid.set_point_solid(cell)
+
+static func in_arena(at: Vector3) -> bool:
+	return Vector2((at.x-Town.ARENA.x)/Town.ARENA_RADII.x,(at.z-Town.ARENA.z)/Town.ARENA_RADII.y).length() < ARENA_MARGIN
+
+# Whether a man may walk straight from `a` to `b`: nothing in the way, and
+# not across the arena.
+func clear(a: Vector3, b: Vector3) -> bool:
+	if not world.walk_line(a,b): return false
+	var steps: int = ceili(a.distance_to(b)/.5)
+	for i in steps+1:
+		if in_arena(a.lerp(b,float(i)/maxi(steps,1))): return false
+	return true
+
+func cell_near(at: Vector3, connected: bool) -> Vector2i:
+	var center = Vector2i(roundi(at.x),roundi(at.z))
+	var best = Vector2i(-10000,-10000)
+	var distance = INF
+	for radius in range(7):
+		for x in range(-radius,radius+1):
+			for z in range(-radius,radius+1):
+				var cell = center+Vector2i(x,z)
+				if not grid.is_in_boundsv(cell) or grid.is_point_solid(cell): continue
+				var point = Vector3(cell.x,0,cell.y)
+				if connected and not clear(at,point): continue
+				var d = at.distance_squared_to(point)
+				if d < distance:
+					best = cell
+					distance = d
+		if best.x != -10000: break
+	return best
+
+# As Overworld.path: straight there when nothing is in the way, otherwise
+# along the grid, cutting every corner that can be walked.
+func path(from: Vector3, to: Vector3) -> PackedVector3Array:
+	if clear(from,to): return PackedVector3Array([to])
+	var start = cell_near(from,true)
+	if start.x == -10000: start = cell_near(from,false)
+	var end = cell_near(to,false)
+	var result = PackedVector3Array()
+	if start.x == -10000 or end.x == -10000: return result
+	var points = PackedVector3Array()
+	for p in grid.get_point_path(start,end): points.append(Vector3(p.x,0,p.y))
+	if points.is_empty(): return result
+	if clear(points[-1],to): points.append(to)
+	var anchor = from
+	while not points.is_empty():
+		var next = 0
+		for i in range(points.size()-1,-1,-1):
+			if clear(anchor,points[i]):
+				next = i
+				break
+		anchor = points[next]
+		result.append(anchor)
+		for i in range(next+1): points.remove_at(0)
+	return result
 
 # --- Speaking to them ------------------------------------------------------------
 

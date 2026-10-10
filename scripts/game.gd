@@ -625,7 +625,7 @@ func guard_under_cursor():
 func talk_to(guard: Node3D) -> void:
 	if player.dead: return
 	world.watch.talk_to(guard,player.position)
-	hud.speak(guard,world.watch.SAYING,world.watch.TALK)
+	hud.speak(guard,world.watch.SAYING)
 
 # The cursor over a guard: a white speech bubble, outlined dark, its tail at
 # the lower left, where it points.

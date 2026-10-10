@@ -253,48 +253,33 @@ func show_energy_kind() -> void:
 	energy_title.text = kind.to_upper()
 	energy.material.set_shader_parameter("liquid",MANA_LIQUID if mana else ENERGY_LIQUID)
 
-# What someone says, in a bubble over his head for `seconds` (a town guard
-# spoken to: scripts/game.gd talk_to). A new word from him replaces the last.
-const SPEECH_WIDTH = 260.0
+# What someone says, over his head (scripts/speech_bubble.gd: typed in, then
+# left to be read; a town guard spoken to, scripts/game.gd talk_to). A new
+# word from him replaces the last.
+const SpeechBubble = preload("res://scripts/speech_bubble.gd")
 const SPEECH_ABOVE = 2.35
 var speeches: Array = []
-func speak(speaker: Node3D, words: String, seconds: float) -> void:
+func speak(speaker: Node3D, words: String) -> void:
 	for old in speeches.filter(func(b): return b.speaker == speaker):
 		old.panel.queue_free()
 		speeches.erase(old)
-	var panel = PanelContainer.new()
-	var style = panel_style(Color(.96,.93,.84,.95),Color(.2,.15,.09))
-	style.set_content_margin_all(8)
-	style.set_corner_radius_all(8)
-	panel.add_theme_stylebox_override("panel",style)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var line = Label.new()
-	line.text = words
-	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	line.custom_minimum_size.x = SPEECH_WIDTH
-	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	line.add_theme_font_size_override("font_size",14)
-	line.add_theme_color_override("font_color",Color(.16,.12,.08))
-	panel.add_child(line)
-	root.add_child(panel)
-	root.move_child(panel,0)
-	speeches.append({"panel":panel,"speaker":speaker,"left":seconds})
+	var bubble = SpeechBubble.new()
+	bubble.setup(words)
+	root.add_child(bubble)
+	root.move_child(bubble,0)
+	speeches.append({"panel":bubble,"speaker":speaker})
 	show_speech(0.0)
 
 func show_speech(dt: float) -> void:
 	var camera: Camera3D = game.world.camera if is_instance_valid(game.world) else null
-	for bubble in speeches.duplicate():
-		bubble.left -= dt
-		if bubble.left <= 0.0 or not is_instance_valid(bubble.speaker) or camera == null:
-			bubble.panel.queue_free()
-			speeches.erase(bubble)
+	for said in speeches.duplicate():
+		if not said.panel.advance(dt) or not is_instance_valid(said.speaker) or camera == null:
+			said.panel.queue_free()
+			speeches.erase(said)
 			continue
-		var head: Vector3 = bubble.speaker.global_position+Vector3.UP*SPEECH_ABOVE
-		bubble.panel.visible = not camera.is_position_behind(head)
-		var size: Vector2 = bubble.panel.get_combined_minimum_size()
-		bubble.panel.position = camera.unproject_position(head)-Vector2(size.x*.5,size.y)
-		# (It fades as it goes.)
-		bubble.panel.modulate.a = clampf(bubble.left/.4,0.0,1.0)
+		var head: Vector3 = said.speaker.global_position+Vector3.UP*SPEECH_ABOVE
+		said.panel.visible = not camera.is_position_behind(head)
+		said.panel.point_at(camera.unproject_position(head))
 
 func panel_style(bg: Color, border: Color) -> StyleBoxFlat:
 	var s = StyleBoxFlat.new()

@@ -73,6 +73,9 @@ const ANYA_RISING = 10.0
 # gone sleep in the street. Of the children, these three do too.
 const LODGERS = [11,12,13,23]
 const HOMELESS_WEAR = .85
+# Those in rags this far gone are starving, too: thin to the bone
+# (scripts/townsperson.gd starve).
+const GAUNT_WEAR = .88
 const STREET_CHILDREN = [0,2,4]
 # Going to bed, asleep (lying down, or "indoors", unseen) and getting up.
 const ABED = ["to_bed","lie_down","asleep","indoors","get_up","from_bed"]
@@ -237,7 +240,8 @@ func setup(overworld) -> void:
 		var walker = Walker.new()
 		walker.body = figure({"who":look[0],"garment":look[1],"cloth":CLOTHS[look[2]],"wear":wear,"weave":"hessian" if wear>.8 else "linen",
 			"hair":look[4],"beard":look[5],"hair_colour":HAIRS[rng.randi_range(0,HAIRS.size()-1)],"belt":(Color(.42,.36,.26) if wear>.5 else Color(.3,.2,.12)) if look[6] else null,
-			"skin":look[7],"tone":Color(1.0,.93,.86) if look[7]=="light" else Color.WHITE,"dirt":clampf(wear*1.1-.1,0.0,1.0),"size":rng.randf_range(.93,1.02),"seed":rng.randf()})
+			"skin":look[7],"tone":Color(1.0,.93,.86) if look[7]=="light" else Color.WHITE,"dirt":clampf(wear*1.1-.1,0.0,1.0),"size":rng.randf_range(.93,1.02),"seed":rng.randf(),
+			"gaunt":1.0 if wear >= GAUNT_WEAR else 0.0})
 		walker.body.name = "Townsperson%d" % i
 		walker.speed = WALK*rng.randf_range(.88,1.12)
 		people.append(walker)

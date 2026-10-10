@@ -13,6 +13,10 @@ uniform sampler2D grit : source_color, filter_linear_mipmap, repeat_enable;
 uniform bool rest_pose = false;
 // A little different on each man.
 uniform float seed = 0.0;
+// His gauntlets (cut from his own hands, so not read through the palette):
+// steel lames over the backs of the hands and fingers, oiled leather on the
+// palms (which face down in the rest pose, the arms held out).
+uniform bool gauntlet = false;
 
 varying vec3 rest;
 varying vec3 rest_normal;
@@ -56,6 +60,14 @@ void fragment() {
 	vec3 colour;
 	float rough;
 	float metal = 0.0;
+	if (gauntlet) {
+		bool palm = rest_normal.y < -0.35;
+		// The lames: overlapping bands across the hand, a dark seam at each.
+		float band = fract(length(rest.xz) * 38.0);
+		lit = palm ? 0.3 : mix(0.35, 0.75, smoothstep(0.0, 0.12, band));
+		spread = palm ? 1.0 : 0.0;
+		base = palm ? vec3(0.3, 0.18, 0.1) : vec3(lit);
+	}
 	if (spread < 0.1) {
 		// Steel: hammered, grained, oxidised dark in patches, rusting in
 		// specks and scratched bright every which way. The palette's darker
