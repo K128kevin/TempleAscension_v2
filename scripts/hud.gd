@@ -386,8 +386,8 @@ func tick(dt: float) -> void:
 		if outdoors: prompt.text = outdoor_prompt()
 		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
 		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked"
-		elif game.way_open() and game.has_way_on(): prompt.text = "The stairway is open. %s" % ("Press E to %s" % ("descend" if r.place in Data.DUNGEONS else "ascend") if game.player.position.distance_to(game.world.exit_point)<4 else "Follow the jade seal to the stairs")
-		elif r.place in Data.DUNGEONS and r.floor>0 and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair"
+		elif game.way_open() and game.has_way_on() and game.player.position.distance_to(game.world.exit_point)<4: prompt.text = "E · %s" % ("Descend" if r.place in Data.DUNGEONS else "Ascend")
+		elif r.place in Data.DUNGEONS and game.world.layout.arrival.has_area() and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair" if r.floor>0 else "E · Up the stair to the arena"
 		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
@@ -721,8 +721,8 @@ func aim_arrow(arrow: Polygon2D, at: Vector3) -> void:
 	arrow.rotation = heading.angle()
 	arrow.visible = true
 
-# Once a floor is cleared (or its way on opened), a jade arrow (the colour of
-# the seal at its foot) points the hero to the stairway on.
+# Once a floor is cleared (or its way on opened), a jade arrow points the
+# hero to the stairway on.
 var stair_arrow: Polygon2D
 func point_to_stairs() -> void:
 	if stair_arrow == null: stair_arrow = make_arrow(Color(.3,1,.85,.92))

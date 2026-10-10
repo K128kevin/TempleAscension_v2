@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT/'assets/models/character'
 spec = importlib.util.spec_from_file_location('outfits', ROOT/'tools/prepare_enemy_outfits.py')
 outfits = importlib.util.module_from_spec(spec); spec.loader.exec_module(outfits)
-CLIPS = ['Idle', 'SpearShieldIdle', 'Walk']
+CLIPS = ['Idle', 'SpearShieldIdle', 'ScutumSwordIdle', 'Walk']
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 # The clips are baked at 30 fps (tools/import_combat.py); exporting at

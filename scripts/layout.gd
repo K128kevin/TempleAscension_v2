@@ -271,8 +271,9 @@ func place_stairs() -> void:
 	# (A dungeon's lowest level has no way further down.)
 	if not last: place_ascent()
 	# The first floor is at ground level: no stair leads into it, and its
-	# door opens on the world outside.
-	if level_index > 0: place_arrival()
+	# door opens on the world outside. (The arena basement is under the
+	# ground even at its first level: a stair climbs from it to the stands.)
+	if level_index > 0 or kind == "basement": place_arrival()
 	else: place_entry()
 
 # The door passage leaves the entrance room through solid wall, as near the

@@ -81,7 +81,7 @@ func setup(appearance: Dictionary) -> void:
 			if keep: material = hair_material(0)
 		elif part == "Belt":
 			keep = look.get("belt") != null
-			if keep: material = Kit.gritty(look.belt,3.0)
+			if keep: material = belt_material(look.belt)
 		else:
 			keep = part in worn
 			if keep: material = cloth(look.cloth if part == look.garment else look.get("under_cloth",Color(.86,.84,.78)),wear if part == look.garment else wear*.5,look.get("weave","linen") if part == look.garment else "linen")
@@ -292,6 +292,15 @@ func starve(gaunt: float) -> void:
 				material.set_shader_parameter("tone",tone.lerp(tone*Vector3(GAUNT_TONE.r,GAUNT_TONE.g,GAUNT_TONE.b),gaunt))
 			material = material.next_pass as ShaderMaterial
 
+# A belt of worn leather, its own (so it is drawn in with its wearer when he
+# starves: starve, as his body and clothes are).
+func belt_material(tint: Color) -> ShaderMaterial:
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/townsfolk_belt.gdshader")
+	m.set_shader_parameter("leather",Vector3(tint.r,tint.g,tint.b))
+	m.set_shader_parameter("grit",load("res://assets/textures/rock_detail.jpg"))
+	return m
+
 func flesh(cover: Dictionary, worn: Array, wear: float) -> ShaderMaterial:
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/townsfolk_skin.gdshader")
@@ -386,11 +395,12 @@ func hold(thing: Node3D) -> void:
 # Carries the hand to a point in the world (`weight` 1), or lets it go back to
 # the animation (0); the fist closes on a handle as `curl` says, and the
 # elbow swings out from the body as `splay` says (scripts/arm_reach.gd).
-func reach(point: Vector3, weight: float, curl: float = -1.0, splay: float = 0.0) -> void:
+# `tip` tilts what is held (radians) toward him, as a mug at the lips is.
+func reach(point: Vector3, weight: float, curl: float = -1.0, splay: float = 0.0, tip: float = 0.0) -> void:
 	arm.target = point
 	arm.splay = splay
 	arm.weight = weight
-	arm.grip = global_transform.basis*GRIP_HAND
+	arm.grip = global_transform.basis*Basis(Vector3.RIGHT,-tip)*GRIP_HAND
 	if curl >= 0.0: arm.curl = curl
 
 # Where a mug stands when the hand is at `point`, and the reverse.

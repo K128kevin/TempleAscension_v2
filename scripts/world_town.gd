@@ -356,9 +356,48 @@ static func under_stands(at: Vector3) -> bool:
 # fires along the inner wall, the fighters' stores, and in the south-east the
 # stair down to the basement. (Seen only from inside: world.stand_fittings.)
 # The opening of the stair down to the basement (across, along) and how far
-# down its flight goes.
+# down its flight goes; its kerbs' height, and the tone of their stone and
+# the steps' (the paving's own limestone, as the floor under the stands is).
 const STAIR_OPENING = Vector2(2.6,3.6)
 const STAIR_DEPTH = 2.6
+const KERB_HEIGHT = .38
+const KERB_TONE = Color(.7,.65,.58)
+
+# A block of old stone `size` big, standing on its base at the origin: its
+# top edges and corners worn round (WEAR deep) and its faces a little uneven
+# (ROUGH), so it sits in the ground as stone long trodden past does, not as
+# a cut box.
+const WEAR = .07
+const ROUGH = .012
+static func worn_block(size: Vector3, rng: RandomNumberGenerator) -> ArrayMesh:
+	var box = BoxMesh.new()
+	box.size = size
+	box.subdivide_width = maxi(2,int(size.x/.12))
+	box.subdivide_height = 4
+	box.subdivide_depth = maxi(2,int(size.z/.12))
+	var tool = SurfaceTool.new()
+	tool.create_from(box,0)
+	var data = MeshDataTool.new()
+	var mesh = tool.commit()
+	data.create_from_surface(mesh,0)
+	var half: Vector3 = size*.5
+	var seed: float = rng.randf()*100.0
+	for i in data.get_vertex_count():
+		var p: Vector3 = data.get_vertex(i)
+		# Rounded toward a box WEAR inside its top and sides (never its base).
+		var inner = Vector3(clampf(p.x,-half.x+WEAR,half.x-WEAR),clampf(p.y,-half.y,half.y-WEAR),clampf(p.z,-half.z+WEAR,half.z-WEAR))
+		var out: Vector3 = p-inner
+		if out.length() > WEAR: p = inner+out.normalized()*WEAR
+		# (Uneven by where it is, so the faces' shared edges stay closed.)
+		var bump = sin(p.x*23.0+seed)*cos(p.z*19.0-seed)*sin(p.y*29.0+seed*.5)
+		if p.y > -half.y+.01: p += (p-Vector3(0,p.y,0)).normalized()*ROUGH*bump+Vector3.UP*ROUGH*.5*bump
+		data.set_vertex(i,p+Vector3.UP*half.y)
+	var worn = ArrayMesh.new()
+	data.commit_to_surface(worn)
+	tool = SurfaceTool.new()
+	tool.create_from(worn,0)
+	tool.generate_normals()
+	return tool.commit()
 static func undercroft(world, material: Material) -> void:
 	var step = TAU/ARENA_BAYS
 	var before = world.get_child_count()
@@ -388,7 +427,10 @@ static func undercroft(world, material: Material) -> void:
 	var stair: Vector3 = world.BASEMENT_STAIR
 	var turn = Basis(Vector3.UP,PI/4)
 	world.open_ground(stair,STAIR_OPENING*.5,PI/4)
-	var flight = world.place("stairs",stair+Vector3.DOWN*STAIR_DEPTH,Vector3(STAIR_OPENING.x,STAIR_DEPTH,STAIR_OPENING.y),material,PI/4+PI)
+	# (Its stone the paving's own, dulled by the years, not the stands' pale
+	# dressed blocks.)
+	var worn = Art.material("stone",KERB_TONE)
+	var flight = world.place("stairs",stair+Vector3.DOWN*STAIR_DEPTH,Vector3(STAIR_OPENING.x,STAIR_DEPTH,STAIR_OPENING.y),worn,PI/4+PI)
 	var lining = Kit.gritty(ARENA_STONE*Color(.32,.3,.28),1.6,true)
 	for wall in [[Vector3(STAIR_OPENING.x*.5+.14,0,0),Vector3(.28,STAIR_DEPTH,STAIR_OPENING.y+.56)],[Vector3(-STAIR_OPENING.x*.5-.14,0,0),Vector3(.28,STAIR_DEPTH,STAIR_OPENING.y+.56)],[Vector3(0,0,-STAIR_OPENING.y*.5-.14),Vector3(STAIR_OPENING.x,STAIR_DEPTH,.28)]]:
 		world.place("floor",stair+turn*wall[0]+Vector3.DOWN*STAIR_DEPTH,wall[1]-Vector3(0,.02,0),lining,PI/4)
@@ -396,9 +438,18 @@ static func undercroft(world, material: Material) -> void:
 	depths.albedo_color = Color(.03,.028,.025)
 	world.place("floor",stair+Vector3.DOWN*(STAIR_DEPTH+.1),Vector3(STAIR_OPENING.x+.6,.1,STAIR_OPENING.y+.6),depths,PI/4)
 	flight.name = "BasementFlight"
-	for side in [[Vector3(1.5,0,0),.4,3.9],[Vector3(-1.5,0,0),.4,3.9],[Vector3(0,0,-1.95),3.4,.4]]:
-		var offset: Vector3 = side[0].rotated(Vector3.UP,PI/4)
-		world.place("floor",stair+offset,Vector3(side[1],.5,side[2]),material,PI/4)
+	# Its kerbs: worn blocks, low and rounded at the top (worn_block), sunk a
+	# little into the ground, with the dust of the floor drifted against them.
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 2207
+	for side in [[Vector3(1.5,0,0),.42,3.9],[Vector3(-1.5,0,0),.42,3.9],[Vector3(0,0,-1.95),3.4,.42]]:
+		var kerb = MeshInstance3D.new()
+		kerb.mesh = worn_block(Vector3(side[1],KERB_HEIGHT,side[2]),rng)
+		kerb.material_override = worn
+		world.add_child(kerb)
+		kerb.position = stair+side[0].rotated(Vector3.UP,PI/4)+Vector3.DOWN*.03
+		kerb.rotation.y = PI/4
+	world.dab_disc(world.SHADE,stair,2.6,1.6,.4)
 	for side in [-1.0,1.0]:
 		world.brazier(stair+Vector3(side*2.4,0,-2.2).rotated(Vector3.UP,PI/4),.75,.6)
 	world.add_place("basement stair","basement",stair,5.0)

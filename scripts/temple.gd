@@ -11,7 +11,6 @@ var spawn = Vector3(0,0,9)
 var exit_point = Vector3.ZERO
 var camera: Camera3D
 var zoom = 19.0
-var exit_seal: Sprite3D
 var bounds = Rect2()
 var level = 0
 var occluders: Array = []
@@ -269,10 +268,6 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 		dirtied.seed = Layout.floor_seed(run_seed,level+13+Layout.KINDS[layout.kind].salt)
 		grime_walls(dirtied)
 	if layout.gate.has_area(): setup_gate(stone)
-	exit_seal = Art.seal(3,Color(.3,1,.85,.85))
-	exit_seal.position = exit_point+Vector3.UP*.05
-	add_child(exit_seal)
-	exit_seal.visible = false
 	if layout.court.has_area(): setup_court_torches()
 	# (No torch is hung over a statue standing against its wall, nor in a
 	# webbed corner.)
@@ -995,11 +990,12 @@ func open_gate(instantly: bool = false) -> void:
 # (scripts/daylight.gd).
 func set_time(clock: float) -> void:
 	var beyond = get_node_or_null("TempleDoorDaylight")
-	if beyond == null: return
+	var spill = get_node_or_null("TempleDoorSunlight")
+	if beyond == null and spill == null: return
 	var sky: Dictionary = preload("res://scripts/daylight.gd").sky(clock)
 	var lit: Color = sky.sky.lerp(Color(.86,.70,.48),.5)*(1.0-sky.night*.55)
-	for mesh in beyond.find_children("*","MeshInstance3D",true,false): mesh.material_override.albedo_color = Color(lit.r,lit.g,lit.b)
-	var spill = get_node_or_null("TempleDoorSunlight")
+	if beyond != null:
+		for mesh in beyond.find_children("*","MeshInstance3D",true,false): mesh.material_override.albedo_color = Color(lit.r,lit.g,lit.b)
 	if spill != null:
 		spill.light_color = sky.light.lerp(sky.ambient,.4)
 		spill.light_energy = lerpf(1.0,.3,sky.night)

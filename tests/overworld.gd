@@ -605,6 +605,12 @@ func test():
 		var gaunt = w.body.skeleton.find_children("*","MeshInstance3D",true,false).filter(func(m): return m.name=="Body")[0].material_override.get_shader_parameter("gaunt")
 		return gaunt != null and gaunt > 0.0
 	check(starving.size() >= in_rags.size()*.7 and starving.all(func(w): return w in in_rags and thinned.call(w)) and not folk.people.any(func(w): return not w in starving and thinned.call(w)),"Most of those in rags are thin with hunger, and only they (%d of %d)" % [starving.size(),in_rags.size()])
+	# What they wear is drawn in with them: a belt as much as the body under it.
+	var belted: Array = starving.filter(func(w): return not w.body.skeleton.find_children("Belt","MeshInstance3D",true,false).is_empty())
+	var cinched = func(w):
+		var belt: MeshInstance3D = w.body.skeleton.find_children("Belt","MeshInstance3D",true,false)[0]
+		return belt.material_override is ShaderMaterial and belt.material_override.get_shader_parameter("gaunt") == w.body.look.gaunt and (belt.material_override.get_shader_parameter("thin") as PackedFloat32Array).size() > 0
+	check(not belted.is_empty() and belted.all(cinched),"A starving man's belt is drawn in with him, never left floating off his waist (%d belted)" % belted.size())
 	var house_doors = {}
 	for w in everyone:
 		if w.bed.kind=="house": house_doors[snapped(w.bed.at,Vector3.ONE*.1)] = true
@@ -724,7 +730,8 @@ func test():
 	check(reached,"And goes in at his door with it")
 	var packing = false
 	hour = Daylight.SUNSET-5.0
-	while hour < Daylight.SUNSET+120.0:
+	# (Through the whole of it: the last of them may be late to bed.)
+	while hour < Daylight.NIGHT:
 		hour += .1
 		world.set_time(hour)
 		folk.tick(.1,Overworld.START)

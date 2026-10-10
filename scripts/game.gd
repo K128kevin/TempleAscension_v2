@@ -179,6 +179,7 @@ func load_floor() -> void:
 	novas.clear()
 	pickups.clear()
 	pickup_goal = null
+	talk_goal = null
 	key_holder = null
 	scheduled.clear()
 	carriers.clear()
@@ -218,7 +219,10 @@ func load_floor() -> void:
 	world.add_child(player)
 	var at = Vector3(run.position[0],0,run.position[1])
 	# Come in from the desert, the hero stands just inside the temple's door.
-	if arriving_by_door and not outdoors() and world.layout.entry.has_area(): at = world.layout.entry_position()
+	if arriving_by_door and not outdoors():
+		# (Into the arena basement, down its stair: he stands at its foot.)
+		if world.layout.entry.has_area(): at = world.layout.entry_position()
+		elif world.layout.arrival.has_area(): at = world.layout.arrival_position()
 	# Come back up a dungeon's stair, he stands at the head of the one he
 	# went down by.
 	if arriving_from_below and not outdoors(): at = world.exit_point
@@ -285,7 +289,6 @@ func load_floor() -> void:
 			crown_position = boss.position
 			place_crown()
 	for drop in run.drops: create_pickup(drop)
-	world.exit_seal.visible = way_open() and has_way_on()
 	mode = "playing"
 	hud.close_modal()
 	if run.get("migration_notice",false):
@@ -316,6 +319,11 @@ func pass_door() -> bool:
 		save_run()
 		return true
 	if not world.leaving_temple(player.position): return false
+	leave_to_world()
+	return true
+
+# Out of a dungeon or the temple, into the world beside its way in.
+func leave_to_world() -> void:
 	save_run()
 	var from: String = run.place
 	run.place = "world"
@@ -326,7 +334,6 @@ func pass_door() -> bool:
 	player.rotation.y = outside.facing
 	save_run()
 	if from=="temple": toast("The town lies west, across the desert.")
-	return true
 
 # Whether the floor the hero is on has a way on from it: the temple's stair up
 # (not on the summit), a dungeon's stair down (not on its lowest level).
@@ -514,7 +521,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			# (A right click on one of the town's guards speaks to him.)
 			var guard = guard_under_cursor()
 			if guard != null:
-				talk_to(guard)
+				speak_with(guard)
 				return
 			right_held = true
 			issue_click(true)
@@ -622,6 +629,28 @@ func guard_under_cursor():
 
 # He turns to the hero and stops a while (the man he walks with too), and
 # says his piece, in a bubble over his head.
+# A guard is spoken to from no further than TALK_REACH off: from further, the
+# hero walks to him first (after him, if he is walking: the way is found
+# again every TALK_REPATH seconds), and speaks once he is near.
+const TALK_REACH = 2.0
+const TALK_REPATH = .3
+var talk_goal = null
+var talk_repath = 0.0
+func speak_with(guard: Node3D) -> void:
+	if mode != "playing" or player.dead: return
+	if near_enough(guard):
+		talk_to(guard)
+		return
+	target = null
+	order_pending = false
+	pickup_goal = null
+	talk_goal = guard
+	talk_repath = TALK_REPATH
+	route = world.path(player.position,guard.position)
+
+func near_enough(guard: Node3D) -> bool:
+	return Vector2(player.position.x-guard.position.x,player.position.z-guard.position.z).length() <= TALK_REACH
+
 func talk_to(guard: Node3D) -> void:
 	if player.dead: return
 	world.watch.talk_to(guard,player.position)
@@ -666,6 +695,7 @@ func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
 	if special and skills.powering: return
 	order_pending = false
 	pickup_goal = null
+	talk_goal = null
 	hold_timer = .08
 	pursuit_timer = .15
 	if Input.is_physical_key_pressed(KEY_SHIFT):
@@ -771,6 +801,18 @@ func player_control(dt: float) -> void:
 		if pickup_goal != null and player.position.distance_to(pickup_goal.node.position) <= PICKUP_REACH:
 			route.clear()
 			take_pickup(pickup_goal)
+		# Walking to a guard to speak with him.
+		if talk_goal != null:
+			if not is_instance_valid(talk_goal): talk_goal = null
+			elif near_enough(talk_goal):
+				route.clear()
+				talk_to(talk_goal)
+				talk_goal = null
+			else:
+				talk_repath -= dt
+				if talk_repath <= 0.0 or route.is_empty():
+					talk_repath = TALK_REPATH
+					route = world.path(player.position,talk_goal.position)
 		if not route.is_empty():
 			var offset: Vector3 = route[0]-player.position
 			var step: float = minf(offset.length(),pace*dt)
@@ -1224,8 +1266,7 @@ func enemy_died(enemy) -> void:
 	elif remaining()==0 and has_way_on() and gated() and not world.gate_open:
 		toast("The level is silent. %s" % ("Unlock the gate to go down." if has_key() else "Take the key and unlock the gate to go down."))
 	elif remaining()==0 and has_way_on():
-		world.exit_seal.visible = true
-		toast("The floor is silent. Ascend at the jade stairway." if run.place=="temple" else "The level is silent. The way down is open.")
+		toast("The floor is silent. The stairway up is open." if run.place=="temple" else "The level is silent. The way down is open.")
 	elif remaining()==0 and run.place in Data.DUNGEONS and not run.place in run.cleared:
 		# The dungeon's last level is cleared: one step nearer the temple.
 		run.cleared.append(run.place)
@@ -1280,6 +1321,7 @@ func pick_up(pickup: Dictionary) -> void:
 		return
 	target = null
 	order_pending = false
+	talk_goal = null
 	pickup_goal = pickup
 	route = world.path(player.position,pickup.node.position)
 
@@ -1536,7 +1578,6 @@ func unlock_gate() -> void:
 	var held: int = run.bag.find(GATE_KEY)
 	if held >= 0: run.bag[held] = ""
 	if not gate_opened(): run.keys.append(key_name()+":open")
-	if has_way_on(): world.exit_seal.visible = true
 	toast("The key turns in the lock, and the gate swings open. The way down is open.")
 	save_run()
 
@@ -1554,8 +1595,11 @@ func interact() -> void:
 		else: toast("The gate is locked.")
 	elif way_open() and has_way_on() and player.position.distance_to(world.exit_point)<4:
 		next_floor()
-	elif run.place in Data.DUNGEONS and run.floor>0 and out_of_combat() and player.position.distance_to(world.layout.arrival_position())<3.5:
-		previous_floor()
+	elif run.place in Data.DUNGEONS and world.layout.arrival.has_area() and out_of_combat() and player.position.distance_to(world.layout.arrival_position())<3.5:
+		# Up the stair: to the level above, or from the basement's first
+		# level, out under the arena's stands.
+		if run.floor>0: previous_floor()
+		else: leave_to_world()
 	elif safe_checkpoint():
 		save_run()
 		ProgressionUI.character(self)

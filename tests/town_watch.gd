@@ -48,6 +48,31 @@ func test():
 			together = together and p.guards[0].position.distance_to(p.guards[1].position) < 4.0
 			for g in p.guards: footing = footing and world.fits(g.position,.15) and not Watch.in_arena(g.position)
 	check(together,"Each pair keeps together, the second a pace or two behind")
+	# The second man follows smoothly: his pace changes little from one
+	# moment to the next, never starting and stopping by turns.
+	var walker: Dictionary = watch.patrols.filter(func(p): return p.state == "walk")[0] if watch.patrols.any(func(p): return p.state == "walk") else watch.patrols[0]
+	if walker.state != "walk": watch.head_for(walker,world.townsfolk.haunts[0].at)
+	var second = walker.guards[1]
+	var last: Vector3 = second.position
+	var speeds: Array = []
+	for t in 120:
+		watch.tick(1.0/60,game.player.position)
+		second._process(1.0/60)
+		speeds.append(Vector2(second.position.x-last.x,second.position.z-last.z).length()*60.0)
+		last = second.position
+	var jolts = 0
+	for i in range(1,speeds.size()):
+		if absf(speeds[i]-speeds[i-1]) > .6: jolts += 1
+	check(jolts <= 2,"The second man walks smoothly behind the first (%d jolts in pace)" % jolts)
+	# Shields on forearms, standing and walking.
+	var strapped = true
+	for g in watch.guards():
+		g._process(1.0/60)
+		var at = func(bone: String) -> Vector3: return g.skeleton.global_transform*g.skeleton.get_bone_global_pose(g.skeleton.find_bone(bone)).origin
+		var forearm: Vector3 = (at.call("lowerarm_l")+at.call("hand_l"))*.5
+		var middle: Vector3 = g.shield.global_transform*Vector3(0,.5,0)
+		strapped = strapped and middle.distance_to(forearm) < .35
+	check(strapped,"Every guard's shield is held on his left forearm")
 	check(footing,"They keep to open ground, and never cross the arena")
 	# The watch changes: each post relieved by a pair, chosen at random.
 	var on_watch: Array = watch.posts.map(func(p): return p.guards.duplicate())
@@ -79,12 +104,26 @@ func test():
 	# Spoken to.
 	var pair: Dictionary = watch.patrols.filter(func(p): return p.state == "walk")[0] if watch.patrols.any(func(p): return p.state == "walk") else watch.patrols[0]
 	var man = pair.guards[0]
-	game.player.position = man.position+Vector3(2,0,0)
+	game.player.position = man.position+Vector3(1.5,0,0)
 	var camera: Camera3D = world.camera
 	world.follow(game.player.position,1.0)
 	check(watch.guard_at(camera,camera.unproject_position(man.position+Vector3.UP)) == man,"The cursor over a guard finds him")
 	check(game.speech_cursor().get_width() == 32,"Over him the cursor is a speech bubble")
-	game.talk_to(man)
+	# Spoken to from further off, the hero walks to him first, and speaks
+	# once within TALK_REACH.
+	game.player.position = world.move(man.position,Vector3(5,0,0)) if world.fits(man.position+Vector3(5,0,0)) else man.position+Vector3(0,0,5)
+	game.speak_with(man)
+	check(not watch.talking.has(man) and game.talk_goal == man,"Too far off to be heard, the hero walks to him")
+	var spoke_at = -1.0
+	for t in 600:
+		game.player.tick(1.0/60); game.player_control(1.0/60)
+		watch.tick(1.0/60,game.player.position)
+		if watch.talking.has(man):
+			spoke_at = Vector2(game.player.position.x-man.position.x,game.player.position.z-man.position.z).length()
+			break
+	check(spoke_at >= 0.0 and spoke_at <= game.TALK_REACH+.01,"and speaks to him once within %.0f m (at %.2f m)" % [game.TALK_REACH,spoke_at])
+	game.player.position = man.position+Vector3(1.5,0,0)
+	game.speak_with(man)
 	var held: Array = pair.guards.map(func(g): return g.position)
 	run_for(game,Watch.TALK*.8)
 	check(pair.guards[0].position.distance_to(held[0]) < .01 and pair.guards[1].position.distance_to(held[1]) < .01 and not pair.guards.any(func(g): return g.walking),"Spoken to, he stops, and the man walking with him")

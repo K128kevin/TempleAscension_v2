@@ -27,8 +27,8 @@ var hands: Dictionary = {}
 var spear: Node3D
 var shield: Node3D
 
-# `variant` (0…1) sets him apart from the next man: his armor's wear and where
-# his breathing is when he is first seen.
+# `variant` (0…1) sets him apart from the next man: his armor's wear and the
+# set of his spear.
 func setup(variant: float) -> void:
 	figure = load("res://assets/models/character/town_guard.glb").instantiate()
 	add_child(figure)
@@ -76,37 +76,77 @@ func setup(variant: float) -> void:
 	for mesh in shield.find_children("*","MeshInstance3D",true,false): mesh.material_override = board
 	add_child(shield)
 	shield.top_level = true
-	for side in ["l","r"]:
-		var arm = ArmReach.new()
-		arm.side = side
-		arm.tool = true
-		arm.curl = 1.0
-		arm.weight = 1.0 if side == "r" else 0.0
-		skeleton.add_child(arm)
-		hands[side] = arm
-	var clip = WATCH
-	animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
-	animator.play(clip)
-	animator.seek(variant*animator.get_animation(clip).length,true)
+	var grip = ArmReach.new()
+	grip.side = "r"
+	grip.tool = true
+	grip.curl = 1.0
+	grip.weight = 1.0
+	skeleton.add_child(grip)
+	hands.r = grip
+	pose_tree()
 
 # Walking, he carries his spear and shield CARRY metres off the ground, at
 # a stride that covers STRIDE metres a second at the clip's own pace.
 const CARRY = .12
 const STRIDE = 1.25
 var walking = false
+# How fast he means to go, and how far into his walk he is (0 standing his
+# watch, 1 walking), eased toward it (PACE_EASE a second) so a man who stops
+# and starts again never jerks between the two.
+var pace = 0.0
+var stride_blend = 0.0
+const PACE_EASE = 3.0
 
 func walk(speed: float) -> void:
-	if not walking:
-		walking = true
-		animator.play("Walk",.25)
-		animator.get_animation("Walk").loop_mode = Animation.LOOP_LINEAR
-	animator.speed_scale = speed/STRIDE
+	walking = true
+	pace = speed
 
 func stand() -> void:
-	if not walking: return
 	walking = false
-	animator.play(WATCH,.35)
-	animator.speed_scale = 1.0
+	pace = 0.0
+
+# His body stands his watch (WATCH) or walks (Walk), the one blended into
+# the other by how fast he goes; his left arm keeps the scutum bearer's
+# carry (SHIELD_ARM, as the centurions hold theirs), the shield held up
+# before him on his forearm whether he stands or walks.
+const SHIELD_ARM = "ScutumSwordIdle"
+const ARM_BONES = ["clavicle_l","upperarm_l","lowerarm_l","hand_l","thumb_","index_","middle_","ring_","pinky_"]
+var tree: AnimationTree
+func pose_tree() -> void:
+	for clip in [WATCH,"Walk",SHIELD_ARM]: animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
+	var blend = AnimationNodeBlendTree.new()
+	var still = AnimationNodeAnimation.new(); still.animation = WATCH
+	var moving = AnimationNodeAnimation.new(); moving.animation = "Walk"
+	var arm = AnimationNodeAnimation.new(); arm.animation = SHIELD_ARM
+	var speed = AnimationNodeTimeScale.new()
+	var body = AnimationNodeBlend2.new()
+	var shield_arm = AnimationNodeBlend2.new()
+	shield_arm.filter_enabled = true
+	var held: Animation = animator.get_animation(SHIELD_ARM)
+	for i in held.get_track_count():
+		var path: NodePath = held.track_get_path(i)
+		var bone: String = path.get_concatenated_subnames()
+		if bone.ends_with("_l") and ARM_BONES.any(func(b): return bone.begins_with(b)): shield_arm.set_filter_path(path,true)
+	blend.add_node("still",still,Vector2(0,0))
+	blend.add_node("moving",moving,Vector2(0,150))
+	blend.add_node("speed",speed,Vector2(200,150))
+	blend.add_node("body",body,Vector2(400,50))
+	blend.add_node("arm",arm,Vector2(400,250))
+	blend.add_node("shield_arm",shield_arm,Vector2(600,100))
+	blend.connect_node("speed",0,"moving")
+	blend.connect_node("body",0,"still")
+	blend.connect_node("body",1,"speed")
+	blend.connect_node("shield_arm",0,"body")
+	blend.connect_node("shield_arm",1,"arm")
+	blend.connect_node("output",0,"shield_arm")
+	tree = AnimationTree.new()
+	tree.tree_root = blend
+	figure.add_child(tree)
+	tree.anim_player = tree.get_path_to(animator)
+	tree.set("parameters/shield_arm/blend_amount",1.0)
+	tree.set("parameters/body/blend_amount",0.0)
+	tree.set("parameters/speed/scale",1.0)
+	tree.active = true
 
 # Turns him toward `direction`, at `quickness`.
 func turn_to(direction: Vector3, delta: float, quickness: float = 7.0) -> void:
@@ -114,19 +154,16 @@ func turn_to(direction: Vector3, delta: float, quickness: float = 7.0) -> void:
 	rotation.y = lerp_angle(rotation.y,atan2(direction.x,direction.z),minf(1.0,delta*quickness))
 
 # The spear's hand goes to its grip wherever he stands (found in the world,
-# so he must be placed first); walking, his shield hand is held at CARRY_FIST,
-# its fist round the shield's grip, so the shield is carried before him
-# rather than swung; and the shield is laid along that forearm.
-const CARRY_FIST = Vector3(.3,.95,.3)
+# so he must be placed first), and the shield is laid along his left forearm.
 func _process(delta: float) -> void:
-	var lift = Vector3.UP*(CARRY if walking else 0.0)
+	stride_blend = move_toward(stride_blend,clampf(pace/STRIDE,0.0,1.0),delta*PACE_EASE)
+	tree.set("parameters/body/blend_amount",stride_blend)
+	tree.set("parameters/speed/scale",maxf(pace,STRIDE*.5)/STRIDE)
+	var lift = Vector3.UP*CARRY*stride_blend
 	spear.position = Vector3(SPEAR_FIST.x,0,SPEAR_FIST.z)+lift
 	var frame: Transform3D = global_transform
 	hands.r.target = frame*(SPEAR_FIST+lift)
 	hands.r.axis = frame.basis*Vector3.UP
-	hands.l.weight = move_toward(hands.l.weight,1.0 if walking else 0.0,delta*4.0)
-	hands.l.target = frame*CARRY_FIST
-	hands.l.axis = frame.basis*Vector3.RIGHT
 	strap()
 
 # The shield laid along his left forearm, its back against the outside of

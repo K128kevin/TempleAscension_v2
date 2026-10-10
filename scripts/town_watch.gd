@@ -144,38 +144,63 @@ func walk_patrol(patrol: Dictionary, delta: float) -> void:
 		return
 	step(lead,patrol.route,delta)
 	var trail: Array = patrol.trail
-	if trail.is_empty() or trail[-1].distance_to(lead.position) > .25: trail.append(lead.position)
+	if trail.is_empty() or trail[-1].distance_to(lead.position) > .1: trail.append(lead.position)
 	follow(second,trail,delta)
 
-# One man's step along `route` (taking each point as it is reached).
+# One man's step along `route`, a walk's length every moment (what is left
+# of it at a point he reaches carried on toward the next, so he keeps one
+# pace round every corner).
 func step(man: Node3D, route: PackedVector3Array, delta: float) -> void:
 	var at = Vector3(man.position.x,0,man.position.z)
-	var to: Vector3 = route[0]
-	var way = to-at
 	var reach: float = WALK*delta
-	if way.length() <= maxf(reach,NEAR*.5):
+	var way = Vector3.ZERO
+	while reach > 0.0 and not route.is_empty():
+		way = route[0]-at
+		if way.length() > reach:
+			at += way.normalized()*reach
+			break
+		reach -= way.length()
+		at = route[0]
 		route.remove_at(0)
-		at = to
-	else: at += way.normalized()*reach
 	man.position = at+Vector3.UP*world.lift(at)
 	man.turn_to(way,delta)
 	man.walk(WALK)
 
-# The second man keeps BEHIND the first along the way the first has walked.
+# The second man keeps BEHIND the first, along the very way the first has
+# walked (`trail`, the first man's footsteps, newest last): he makes for the
+# point that far back along it, no faster than CATCH_UP times a walk, and
+# his stride follows how fast he actually goes, so he never starts and stops
+# from one moment to the next.
+const CATCH_UP = 1.3
 func follow(man: Node3D, trail: Array, delta: float) -> void:
-	while trail.size() > 1 and trail[0].distance_to(trail[-1]) > BEHIND and man.position.distance_to(trail[0]) < .3: trail.pop_front()
-	var to: Vector3 = trail[0]
-	var gap: float = man.position.distance_to(patrol_lead_of(man).position)
-	if gap <= BEHIND*.9 or man.position.distance_to(to) < .05:
+	var lead = patrol_lead_of(man)
+	var goal: Vector3 = lead.position
+	var left = BEHIND
+	var back: Vector3 = lead.position
+	var oldest = 0
+	for i in range(trail.size()-1,-1,-1):
+		var span: float = back.distance_to(trail[i])
+		if span >= left:
+			goal = back.lerp(trail[i],left/span)
+			left = 0.0
+			oldest = i
+			break
+		left -= span
+		back = trail[i]
+	if left > 0.0: goal = back
+	# (Footsteps further back than the one before his goal are forgotten.)
+	for i in oldest: trail.pop_front()
+	var way: Vector3 = goal-man.position
+	way.y = 0
+	var reach: float = minf(way.length(),WALK*CATCH_UP*delta)
+	if reach < .002:
 		man.stand()
 		return
-	var way: Vector3 = to-man.position
-	way.y = 0
-	var at: Vector3 = man.position+way.normalized()*minf(way.length(),WALK*1.15*delta)
+	var at: Vector3 = man.position+way.normalized()*reach
 	at.y = world.lift(at)
 	man.position = at
 	man.turn_to(way,delta)
-	man.walk(WALK*1.15)
+	man.walk(reach/delta)
 
 func patrol_lead_of(man: Node3D) -> Node3D:
 	for patrol in patrols:

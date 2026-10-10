@@ -155,10 +155,18 @@ func dart(r: Dictionary) -> void:
 func flee(r: Dictionary, hero: Vector3) -> void:
 	var goal = pick(r.at,FLEE,hero,r.at.distance_to(hero)+1.5)
 	if goal == null:
+		# (Cornered, it takes whichever way away from him runs clearest.)
 		var away: Vector3 = r.at-hero
 		away.y = 0
 		if away.length_squared() < .0001: away = Vector3(rng.randf_range(-1,1),0,rng.randf_range(-1,1))
-		goal = r.at+away.normalized()*FLEE.x
+		var best = -1.0
+		for turn in [0.0,.5,-.5,1.0,-1.0,1.5,-1.5]:
+			var way: Vector3 = away.normalized().rotated(Vector3.UP,turn)
+			var clear = 0.0
+			while clear < FLEE.x and world.fits(r.at+way*(clear+.2),RADIUS): clear += .2
+			if clear > best:
+				best = clear
+				goal = r.at+way*clear
 	r.goal = goal
 	r.doing = "flee"
 	r.speed = FLEE_SPEED

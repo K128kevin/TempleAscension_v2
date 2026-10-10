@@ -64,10 +64,12 @@ func bent(shoulder: Vector3, elbow: Vector3, wrist: Vector3, goal: Vector3, a: f
 	var down = Vector3(0,-1,0)-direction*(-direction.y)
 	bend = (bend.normalized()*.4+down.normalized()*.6) if bend.length() > 1e-4 else down
 	if splay > 0.0:
-		# Out from the body's middle on the arm's own side, and forward,
-		# while still hanging below the shoulder.
-		var out = Vector3(signf(shoulder.x),0,0)*.75+Vector3(0,0,.5)
-		bend = bend.normalized()+out.normalized()*splay*1.1
+		# Out to the arm's own side, a little forward and below the shoulder,
+		# as a drinker's elbow is held out from his ribs: with the hand
+		# brought in close (to the mouth), the elbow is not folded in across
+		# the chest but stands off it.
+		var out = Vector3(signf(shoulder.x)*1.3,-1.6,.2)
+		bend = bend.normalized()*(1.0-splay*.8)+out.normalized()*splay*1.6
 	bend = (bend-direction*bend.dot(direction)).normalized()
 	var reach = (a*a-b*b+length*length)/(2.0*length)
 	return [shoulder+direction*reach+bend*sqrt(maxf(0.0,a*a-reach*reach)),goal]

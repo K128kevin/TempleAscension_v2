@@ -117,7 +117,6 @@ var hill: Node3D
 var fixtures = 0
 # Members a temple floor has, which Game reads on any world.
 var exit_point = Vector3.ZERO
-var exit_seal: Sprite3D
 var boss_point = Vector3.ZERO
 var summon_points: Array[Vector3] = []
 var occlusion_targets: Array = []
@@ -184,9 +183,6 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 	camera.size = zoom
 	camera.far = 400
 	add_child(camera)
-	exit_seal = Art.seal(3,Color(.3,1,.85,.85))
-	exit_seal.visible = false
-	add_child(exit_seal)
 	shape_ground()
 	spawn = START
 	# The town and the temple's court are laid out first, so the desert's

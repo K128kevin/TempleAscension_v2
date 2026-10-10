@@ -62,7 +62,7 @@ func start(owner_game):
 				game.tick_scheduled(1.2)
 			check(enemy.dead,"Defeat through weapon combat: "+enemy.uid)
 			total+=1
-		check(game.remaining()==0 and game.world.exit_seal.visible,"Combat opens stairs on floor %d" % (floor_index+1))
+		check(game.remaining()==0 and (game.way_open() and game.has_way_on()),"Combat opens stairs on floor %d" % (floor_index+1))
 		# What fell is picked up (as far as the bag has room for it).
 		var fallen: int = game.pickups.size()
 		var room: int = game.run.bag.count("")

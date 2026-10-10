@@ -615,8 +615,12 @@ func tend(walker: Walker, delta: float) -> void:
 		"to_buy","buying","laden","home","from_home": shop(walker,delta)
 
 # A sip: the hand goes to the mug on the table, closes on its handle, lifts
-# it to the mouth, sets it down again and lets go.
-const SIP = {"reach":.55,"lift":.6,"sip":.9,"lower":.6,"return":.5}
+# it to the lips (MOUTH, from the head's root, in his own frame), the elbow
+# coming up and out from his side as it rises, tips it to drink (TIP, eased
+# in and out over the sip), sets it down again and lets go.
+const SIP = {"reach":.55,"lift":.7,"sip":1.2,"lower":.65,"return":.5}
+const MOUTH = Vector3(0,-.05,.13)
+const TIP = .55
 
 func sip(walker: Walker, delta: float) -> void:
 	var seat: Dictionary = walker.seat
@@ -626,13 +630,13 @@ func sip(walker: Walker, delta: float) -> void:
 	var eased = smoothstep(0.0,1.0,t)
 	var on_table: Vector3 = body.hand_for(seat.mug+Vector3.UP*world.lift(seat.at))
 	var head: Vector3 = body.skeleton.global_transform*body.skeleton.get_bone_global_pose(body.skeleton.find_bone("Head")).origin
-	var at_mouth: Vector3 = body.hand_for(head+body.global_transform.basis*Vector3(0,-.17,.09))
+	var at_mouth: Vector3 = body.hand_for(head+body.global_transform.basis*MOUTH)
 	match walker.phase:
 		"reach": body.reach(on_table,eased,eased)
 		# (The elbow rises out from the side as the mug comes up.)
-		"lift": body.reach(on_table.lerp(at_mouth,eased),1.0,1.0,eased)
-		"sip": body.reach(at_mouth,1.0,1.0,1.0)
-		"lower": body.reach(at_mouth.lerp(on_table,eased),1.0,1.0,1.0-eased)
+		"lift": body.reach(on_table.lerp(at_mouth,eased),1.0,1.0,eased,TIP*.25*eased)
+		"sip": body.reach(at_mouth,1.0,1.0,1.0,TIP*(.25+.75*smoothstep(0.0,.3,t)*(1.0-smoothstep(.7,1.0,t))))
+		"lower": body.reach(at_mouth.lerp(on_table,eased),1.0,1.0,1.0-eased,TIP*.25*(1.0-eased))
 		"return": body.reach(on_table,1.0-eased,1.0-eased)
 	if t < 1.0: return
 	walker.phase_time = 0.0

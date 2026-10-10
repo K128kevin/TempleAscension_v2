@@ -48,7 +48,9 @@ func test():
 				var label = "%s level %d / seed %d" % [place,level+1,run_seed]
 				check(reachable(layout).size()==layout.cells.size() and layout.rooms.size()>=5,"Every tile of several rooms is connected: "+label)
 				check(layout.descending and layout.corridor==Layout.KINDS[place].corridor and layout.court.size==Vector2i.ZERO and layout.terrace.is_empty(),"A dungeon's own hallways, with no court or terrace: "+label)
-				check(layout.entry.has_area()==(level==0) and layout.arrival.has_area()==(level==1),"The way in is a door on the first level and a stair on the second: "+label)
+				# (The cave's way in is its mouth; the basement is entered down a stair.)
+				if place == "basement": check(not layout.entry.has_area() and layout.arrival.has_area(),"The way in is a stair, on both levels: "+label)
+				else: check(layout.entry.has_area()==(level==0) and layout.arrival.has_area()==(level==1),"The way in is a door on the first level and a stair on the second: "+label)
 				check(layout.stairs.has_area()==(level==0) and layout.last==(level==1),"Only the first level has a stair further down: "+label)
 				if level==1: check(layout.cells.has(layout.arrival_foot) and not layout.arrival.has_point(layout.arrival_foot),"The stair back up is reached from the floor at its foot: "+label)
 				if place=="basement":
@@ -130,10 +132,10 @@ func test():
 	check(game.enemies.all(func(e): return not e.visual.is_stone and e.role in ["gladiator","archer"]),"They are men, not statues")
 	var rats: Array = world.get_children().filter(func(n): return n.get_script() == preload("res://scripts/rats.gd"))
 	check(rats.size()==1 and rats[0].rats.size()==roundi(world.layout.cells.size()/Game.RAT_ROOM),"Rats scurry about the basement")
-	check(game.player.position.distance_to(world.layout.entry_position())<.01 and not world.leaving_temple(game.player.position),"He arrives just inside the way in")
+	check(game.player.position.distance_to(world.layout.arrival_position())<.01 and not world.leaving_temple(game.player.position),"He arrives at the foot of the stair down from the arena")
 	game.hud.tick(0)
 	check("bandits remain" in game.hud.status.text and game.hud.objective.text=="LEVEL 1","The HUD counts bandits, on a numbered level with no place name")
-	check(not game.has_way_on() or not world.exit_seal.visible,"The way down is shut while bandits remain")
+	check(not game.has_way_on() or not (game.way_open() and game.has_way_on()),"The way down is shut while bandits remain")
 	# A bandit fights, and falls.
 	var bandit = game.enemies.filter(func(e): return e.kind=="bandit")[0]
 	game.player.position = bandit.position+Vector3(0,0,1.4)
@@ -159,7 +161,7 @@ func test():
 	check(not world.gate_open,"Without the key it stays shut")
 	for enemy in game.enemies:
 		if not enemy.dead: enemy.hit(100000)
-	check(game.remaining()==0 and not world.exit_seal.visible and game.run.cleared.is_empty() and not game.way_open(),"With the level cleared the gate is still locked")
+	check(game.remaining()==0 and not (game.way_open() and game.has_way_on()) and game.run.cleared.is_empty() and not game.way_open(),"With the level cleared the gate is still locked")
 	var lying: Dictionary = game.key_pickup()
 	check(not lying.is_empty() and lying.drop in game.run.drops and not is_instance_valid(holder.visual.belt_key),"The key fell where its bearer died, an item on the floor")
 	game.hud.tick(0)
@@ -181,11 +183,11 @@ func test():
 	game.hud.tick(0)
 	check("Unlock" in game.hud.prompt.text,"With it, the HUD offers to unlock the gate")
 	game.interact()
-	check(world.gate_open and world.fits(world.gate_point()) and world.exit_seal.visible and game.way_open() and "basement:0:open" in game.run.keys and not Game.GATE_KEY in game.run.bag,"The key opens the gate (and stays in its lock), and the way down")
+	check(world.gate_open and world.fits(world.gate_point()) and (game.way_open() and game.has_way_on()) and game.way_open() and "basement:0:open" in game.run.keys and not Game.GATE_KEY in game.run.bag,"The key opens the gate (and stays in its lock), and the way down")
 	check(not world.path(world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*2.0,world.exit_point).is_empty(),"Through the open gate the stair can be walked to")
 	game.player.position = world.exit_point
 	game.hud.tick(0)
-	check("descend" in game.hud.prompt.text,"The HUD says to descend")
+	check("descend" in game.hud.prompt.text.to_lower(),"The HUD says to descend")
 	game.interact()
 	world = game.world
 	check(game.run.place=="basement" and game.run.floor==1 and world.layout.last and not game.has_way_on(),"The stair goes down to the second, last level")
@@ -201,7 +203,7 @@ func test():
 	check(game.run.floor==1 and game.remaining()>0,"And down again")
 	for enemy in game.enemies:
 		if not enemy.dead: enemy.hit(100000)
-	check(game.remaining()==0 and game.run.cleared==["basement"] and not Data.temple_open(game.run) and not world.exit_seal.visible,"Clearing the last level clears the dungeon; the temple stays shut for the cave")
+	check(game.remaining()==0 and game.run.cleared==["basement"] and not Data.temple_open(game.run) and not (game.way_open() and game.has_way_on()),"Clearing the last level clears the dungeon; the temple stays shut for the cave")
 	check(Save.valid(game.run),"The run is valid to save")
 	# A save from before the basement was laid out anew: its bandits stand again.
 	var older: Dictionary = game.run.duplicate(true)
@@ -213,12 +215,12 @@ func test():
 	game.interact()
 	world = game.world
 	game.target = null
-	var layout = world.layout
-	var passage = layout.to_world(layout.entry.position)+Vector3(layout.entry.size.x-1,0,layout.entry.size.y-1)*.5
-	game.player.position = layout.entry_position()
-	game.route = PackedVector3Array([passage+Vector3(layout.entry_dir.x,0,layout.entry_dir.y)*.7])
-	var left = play(func(): return game.outdoors(),8.0)
-	check(left and game.run.place=="world" and game.player.position.distance_to(Overworld.OUTSIDE.basement.at)<.01,"Walking out comes up under the stands, by the stair")
+	check(game.run.floor==0 and game.player.position.distance_to(world.exit_point)<.01,"Up from the second level, back on the first, at the head of its stair down")
+	game.player.position = world.layout.arrival_position()
+	game.hud.tick(0)
+	check("arena" in game.hud.prompt.text,"At the first level's stair the HUD says it climbs to the arena")
+	game.interact()
+	check(game.outdoors() and game.run.place=="world" and game.player.position.distance_to(Overworld.OUTSIDE.basement.at)<.01,"Up the stair, he comes out under the stands, by its head")
 	# The cave.
 	game.player.position = Overworld.CAVE+Vector3(0,0,2)
 	check(game.pass_door() and game.run.place=="cave" and game.run.floor==0 and game.world.layout.kind=="cave","Walking into the cave's mouth enters its first level")

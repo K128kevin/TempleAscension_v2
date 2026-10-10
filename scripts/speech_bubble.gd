@@ -5,7 +5,7 @@ extends Control
 ## pale typewriter face, typed in a letter every REVEAL seconds; then left to
 ## be read (HOLD a word, HOLD_LEAST at least) before it goes.
 const WIDTH = 304.0
-const PAD = Vector2(14,12)
+const PAD = Vector2(10,10)
 const TAIL = Vector2(9,14)
 const RADIUS = 7.0
 const FILL = Color(0x14/255.0,0x11/255.0,0x0d/255.0,.94)
@@ -39,9 +39,28 @@ func setup(said: String, size_px: int = 14) -> void:
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(line)
 	# Laid out whole first, so the panel stays still as the words type in.
+	line.visible_characters_behavior = TextServer.VC_CHARS_AFTER_SHAPING
 	line.text = words
 	line.visible_characters = 0
-	size = Vector2(WIDTH,line.get_combined_minimum_size().y+PAD.y*2)
+	fit()
+
+# The panel round the words, PAD clear of them on every side: as wide as
+# their longest line (WIDTH at most), as tall as their lines (measured again
+# once it is shown, in the font it is drawn in).
+func fit() -> void:
+	var font: Font = line.get_theme_font("font")
+	var font_size: int = line.get_theme_font_size("font_size")
+	var widest: float = font.get_multiline_string_size(words,HORIZONTAL_ALIGNMENT_LEFT,WIDTH-PAD.x*2,font_size,-1,TextServer.BREAK_MANDATORY|TextServer.BREAK_WORD_BOUND).x
+	line.custom_minimum_size.x = ceilf(minf(widest,WIDTH-PAD.x*2))
+	var words_size: Vector2 = line.get_combined_minimum_size()
+	line.size = words_size
+	var wanted = words_size+PAD*2
+	if size != wanted:
+		size = wanted
+		queue_redraw()
+
+func _ready() -> void:
+	fit()
 
 # How long it is shown in all: typed in, then read.
 func lasts() -> float:
@@ -51,6 +70,7 @@ func advance(dt: float) -> bool:
 	clock += dt
 	typed = mini(words.length(),int(clock/REVEAL))
 	line.visible_characters = typed
+	fit()
 	modulate.a = clampf((lasts()-clock)/FADE,0.0,1.0)
 	return clock < lasts()
 

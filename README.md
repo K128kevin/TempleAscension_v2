@@ -39,7 +39,8 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 Clicking the ground cancels a combat order. While idle, the hero faces the cursor. Architecture
 between the camera and the hero, or an enemy near a wall, turns semi-transparent. Once
 five or fewer statues remain, an arrow around the hero points to the nearest one; once a
-floor is cleared, a jade arrow points to the stairway on (but not in the arena
+floor is cleared, a jade arrow points to the stairway on, and E at its foot takes
+it (but no arrow in the arena
 basement, whose way down is found).
 
 The HUD keeps to the foot of the screen: a compact row of clickable ability
@@ -116,12 +117,14 @@ The temple stands in a larger world, one continuous outdoor map
   name shows when the cursor is on her), fills a mug at the barrels behind her
   bar, carries it upright in her fist round to the table and sets it down in
   front of the drinker, clearing the empties; a patron drinks for a minute,
-  lifting the mug to his mouth for a sip now and then and setting it back on
-  the table, then leaves or waits for another. Their clothes are
+  lifting the mug to his lips and tipping it for a sip now and then, his
+  elbow held out from his side, and setting it back on the table, then
+  leaves or waits for another. Their clothes are
   neutral and plain, and most are poor: ten in rags (frayed, patched, holed
   and filthy), nine in worn and patched tunics and gowns, six decently
   dressed. Most of those in rags are thin with hunger, their arms and legs
-  stick-thin, their frames narrow and their skin sallow; all ten of them,
+  stick-thin, their frames narrow and their skin sallow (their belts drawn
+  in with them, never left standing off their waists); all ten of them,
   and no one else among the grown, sleep in the street. Six ragged children run about the streets at tag and
   follow-my-leader, resting in a huddle between games; they never go into the
   inn. No one goes into the arena, through the palace gate or out of the town,
@@ -135,7 +138,8 @@ The temple stands in a larger world, one continuous outdoor map
   Every eight hours of the day (every ten minutes of play) the watch
   changes: for each post a walking pair is chosen at random, walks there and
   takes the places of the two on watch, who then walk the town in their
-  turn. Over a guard the cursor becomes a speech bubble; right-clicked, he
+  turn. Over a guard the cursor becomes a speech bubble; right-clicked (the
+  hero first walking up to him, if he is more than two metres off), he
   turns to the hero and stops a while (and the man walking with him), and
   says "Keep your eye out for filthy bandits, they're everywhere..." in a
   speech bubble over his head, as the first Temple Ascension's were: a dark
@@ -218,8 +222,9 @@ The temple stands in a larger world, one continuous outdoor map
   E at the gate unlocks it, the key staying in the lock (the way down is
   then open, whoever still stands, and the gate stays open). Its levels
   hold twice the bandits they did. Both dungeons are gone down into (E at the far stair descends,
-  E at the arrival stair climbs back, and the first level's door leads
-  out), and hold bandits with swords and with bows: men, who fall rather
+  E at the arrival stair climbs back; the cave's first level's mouth leads
+  out, and the basement's first level is entered and left by a stair up to
+  the arena's stands, E at its foot), and hold bandits with swords and with bows: men, who fall rather
   than crumble, limp, thrown by the blow (the game's physics run on Jolt,
   which keeps a body whole however hard it is thrown against the walls and
   floor). A blade draws
