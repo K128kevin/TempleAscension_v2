@@ -60,6 +60,14 @@ const EMPEROR_CHANCE = 10.0
 const EMPEROR_ENERGY = 20.0
 const ODYSSEUS_CHANCE = 25.0
 const ODYSSEUS_STUN = 2.0
+# The Lightning Hammer: a hit's chance to call lightning down on its target,
+# the bolt's damage (flat, before the leaps' fading), and how many more it
+# leaps to (each leap LIGHTNING_FADE as strong as the one before).
+const HAMMER_CHANCE = 10.0
+const HAMMER_DAMAGE = [200.0,300.0]
+const HAMMER_LEAPS = 4
+# While its lightning is being dealt (no second bolt from the bolt's hits).
+var hammer_striking = false
 var charge_glow: Node3D
 # Power Shot being aimed: how long the aim is, and how much of it is left (the
 # HUD shows it as a bar over his head).
@@ -285,6 +293,7 @@ func reason(id: String) -> String:
 	if s.effect=="vanish" and hidden: return "Already hidden."
 	if s.effect=="ambush" and not hidden: return "Surprise Attack needs you hidden in shadows."
 	if storm_time>0 and s.class_id=="wizard" and s.tree!="ice": return "Only frost spells while the Ice Storm rages."
+	if s.class_id=="wizard" and s.tree=="ice" and Data.Items.effect(game.run,"ice_queen"): return "The Ice Queen's Gloves allow no frost."
 	return ""
 
 # What a skill costs (a channelled spell: a second of it). Blazing Speed makes
@@ -584,7 +593,7 @@ func end_channel() -> void:
 func tick_channel(dt: float) -> void:
 	var s: Dictionary = Book.all()[channel.id]
 	var rate: float = cost(channel.id)
-	if not channel_held() or game.player.dead or game.run.energy<rate*dt or (storm_time>0 and s.tree!="ice"):
+	if not channel_held() or game.player.dead or game.run.energy<rate*dt or (storm_time>0 and s.tree!="ice") or (s.tree=="ice" and Data.Items.effect(game.run,"ice_queen")):
 		end_channel()
 		return
 	game.run.energy -= rate*dt
@@ -1006,6 +1015,7 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 	if surprise_time>0: amount *= 1.0+surprise_bonus*.01
 	if rally_time>0: amount *= 1.0+RALLY_BONUS*.01
 	if not spell_striking: rally_chance()
+	var hammer: bool = not spell_striking and not hammer_striking and Data.Items.effect(game.run,"lightning_hammer") and randf()*100.0<HAMMER_CHANCE
 	var mastery: Dictionary = Data.specialization(game.run,weapon)
 	var crit: bool = randf()*100.0<Data.crit_chance(game.run)+mastery.x+crit_bonus if crit_override<0 else crit_override==1
 	if crit: amount *= Data.CRIT_MULTIPLIER*(1.0+mastery.y*.01)*(1.0+enemy.weak_stacks*enemy.weak_bonus*.01)
@@ -1021,6 +1031,33 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 	# What his equipment restores with each hit landed.
 	var leech: float = Data.Items.bonus(game.run,"leech")
 	if leech>0 and not game.player.dead: game.player.hp = minf(Data.max_health(game.run),game.player.hp+leech)
+	if hammer: hammer_lightning(enemy)
+
+# The Lightning Hammer's lightning: called down on the one struck, then
+# leaping from each to the nearest not yet struck, up to HAMMER_LEAPS more,
+# each leap a quarter weaker.
+func hammer_lightning(enemy) -> void:
+	if not is_instance_valid(enemy) or enemy.dormant: return
+	game.sound.play("lightning-zap",-4)
+	var top: Vector3 = enemy.position+Vector3.UP*(1.0+game.world.lift(enemy.position))
+	WizardFx.rising(game.world,top,"lightning")
+	var crackle = Crackle.make(enemy.position+Vector3.UP*game.world.lift(enemy.position))
+	game.world.add_child(crackle)
+	waves.append(crackle)
+	var struck: Array = [enemy]
+	var from = enemy
+	hammer_striking = true
+	for leap in HAMMER_LEAPS+1:
+		var amount: float = randf_range(HAMMER_DAMAGE[0],HAMMER_DAMAGE[1])*pow(LIGHTNING_FADE,leap)
+		strike(from,amount,"lightning",0.0,Vector3.ZERO,true)
+		var choices = targets(from.position,LIGHTNING_LEAP).filter(func(e): return not e in struck)
+		if choices.is_empty(): break
+		choices.sort_custom(func(a,b): return a.position.distance_squared_to(from.position)<b.position.distance_squared_to(from.position))
+		var next = choices[0]
+		passing.append([RangerFx.bolt(game.world,from.position+Vector3.UP*1.1,next.position+Vector3.UP*1.1),.22])
+		struck.append(next)
+		from = next
+	hammer_striking = false
 
 # An attack reaching the hero, after armor: a shield in hand may block part of
 # it, as Shield Expertise improves (Spiked Shield answering the attacker), Defensive Rhythm lowers it and

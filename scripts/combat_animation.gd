@@ -70,7 +70,7 @@ static func flurry_contacts(count: int) -> Array:
 # the left's blows the right's mirrored (Visual.MIRRORED); bare fists jab.
 const FAMILIES = {
 	"one":{"clips":[SWORD_OPENER],"off":"OffCut","seconds":.84,"contacts":[.52],"reach":1.9,"prefix":"Skill"},
-	"heavy":{"clips":["HeavySwing1","HeavySwing2"],"fallback":"AxeChop","seconds":1.1,"contacts":[.5],"reach":2.3,"prefix":"Heavy"},
+	"heavy":{"clips":["HeavySwing1"],"fallback":"AxeChop","seconds":1.1,"contacts":[.5],"reach":2.3,"prefix":"Heavy"},
 	"pike":{"clips":["PikeThrust1","PikeThrust2"],"fallback":"SpearStab","seconds":.8,"contacts":[.5],"reach":2.9,"prefix":"Pike"},
 	"dagger":{"clips":["DaggerStab","DaggerSlash"],"off":"OffStab","seconds":.5,"contacts":[.45],"reach":1.9,"prefix":"Skill"},
 	"fist":{"clips":["DaggerStab","OffStab"],"seconds":.5,"contacts":[.45],"reach":1.6,"prefix":"Skill"},

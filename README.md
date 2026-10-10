@@ -394,8 +394,9 @@ with lion medallions and a baldric, a broad studded belt with a lion boss,
 leather strips at the shoulders, a steel manica on the sword arm, a kilt of
 leather pteruges (studded tabs, steel leaf motifs and a Greek-key band) that
 swings and folds over his legs like the ranger's cloak, over a tattered
-underskirt, steel greaves and knee guards, and strapped
-sandals. Ranger with bow: knee-high strapped leather boots,
+underskirt, and steel plated boots: hammered greaves with a shin ridge and
+knee cops, the feet plated under them. (Plated leg armor that drops shows as
+lamed steel cuisses over the thighs, in the kilt's place.) Ranger with bow: knee-high strapped leather boots,
 leather knee guards, a tattered green wool tunic, a broad belt and crossed
 straps, laced bracers, fingerless gloves, a beard, and a quiver, sheathed
 dagger, pouch and brooch; over it a weathered, frayed dark green hooded cloak
@@ -660,9 +661,9 @@ inventory.
   a common item with a prefix or a suffix (Swift, Sharpened, of Zeus...); a
   **rare** (blue) one has both, or one of the rare affixes alone (Hero's, of
   the Ancients...); the **uniques** (purple) are one of a kind, each with an
-  effect of its own: the Robe of the Lost Emperor (wizard), the Ancient
-  Gladiator's Helmet (warrior), the Bow of Odysseus (ranger) and the Marathon
-  Boots (everyone).
+  effect of its own: the Robe of the Lost Emperor and the Ice Queen's Gloves
+  (wizard), the Ancient Gladiator's Helmet and the Lightning Hammer
+  (warrior), the Bow of Odysseus (ranger) and the Marathon Boots (everyone).
 - **Armor** is a number: all the hero wears adds up (A), with his shield's,
   and takes A/(A+150) off every blow, to 75% at most. The starting sets add
   to 108 (heavy, with the buckler), 58 (medium) and 31 (light).

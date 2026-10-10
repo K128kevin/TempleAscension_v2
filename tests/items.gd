@@ -145,7 +145,7 @@ func test():
 		var pool: Array = Items.loot(class_id)
 		check(pool.size() >= 6 and pool.all(func(id): return Items.usable(class_id,id) and Items.BASES[id].rarity == "common"),"Every class has its own drops, all of them usable: %s (%d)" % [class_id,pool.size()])
 		var own: Array = Items.loot(class_id,true)
-		check(own.size() == 2 and own.all(func(id): return Items.BASES[id]["for"] in [class_id,""] and Items.usable(class_id,id)),"Each class has a unique of its own, and the boots made for everyone: %s %s" % [class_id,own])
+		check(own.size() == (2 if class_id == "ranger" else 3) and own.all(func(id): return Items.BASES[id]["for"] in [class_id,""] and Items.usable(class_id,id)),"Each class has its own uniques, and the boots made for everyone: %s %s" % [class_id,own])
 	check(Items.usable("warrior","marathon_boots") and Items.usable("ranger","marathon_boots") and Items.usable("wizard","marathon_boots") and not Items.usable("warrior","sandals"),"The Marathon Boots are light armor every class can wear; other light armor is the wizard's")
 
 	# --- Prefixes and suffixes: what goes on what.
@@ -216,7 +216,7 @@ func test():
 	for r in Items.RARITY_WEIGHTS: total_weight += Items.RARITY_WEIGHTS[r]
 	var shares_fair = true
 	for r in counts: shares_fair = shares_fair and absf(counts[r]/float(fell)-Items.RARITY_WEIGHTS[r]/total_weight) < .02
-	check(shares_fair and uniques_seen.keys().all(func(id): return id in ["ancient_gladiators_helmet","marathon_boots"]) and uniques_seen.size() == 2,"Each rarity by its weight, and a warrior's uniques are his helmet and the boots for everyone (%s, %s)" % [counts,uniques_seen.keys()])
+	check(shares_fair and uniques_seen.keys().all(func(id): return id in ["ancient_gladiators_helmet","lightning_hammer","marathon_boots"]) and uniques_seen.size() == 3,"Each rarity by its weight, and a warrior's uniques are his helmet, his hammer and the boots for everyone (%s, %s)" % [counts,uniques_seen.keys()])
 	var boss_rare = true
 	for i in 200:
 		var found: Dictionary = Items.roll_drop("wizard","boss",rng)
@@ -413,6 +413,40 @@ func test():
 		if victim.stunned: stunned += 1
 	check(stunned > 25 and stunned < 80,"One arrow in four stuns (%d of 200)" % stunned)
 	victim.end_stun()
+	hero("warrior",{"main":"lightning_hammer","off":""})
+	check(Items.effect(game.run,"lightning_hammer") and Data.span(game.run,"melee") == [60.0,76.0] and Data.stat(game.run,0) == 20 and Data.stat(game.run,3) == 17 and game.player.visual.weapon_kind == "heavy","The Lightning Hammer: 60 to 76 in both hands, with its Strength and Vitality")
+	victim = foe(1.5)
+	# (Two more within a leap of each other, and one far beyond any.)
+	var others: Array = []
+	for ahead in [4.0,8.0,30.0]:
+		var e = game.spawn_enemy("gladiator","hammer:%d" % others.size(),game.world.move(origin,Vector3(0,0,-ahead)))
+		e.puppet = true; e.awake = true; e.max_hp = 100000.0; e.hp = e.max_hp
+		others.append(e)
+	# (The far one may stand nearer than asked, where the floor's walls stop
+	# it: it is spared only if it is truly beyond a leap.)
+	var beyond: bool = others[2].position.distance_to(others[1].position) > game.skills.LIGHTNING_LEAP+.5
+	var bolts = 0; var leapt = 0; var spared = true
+	for i in 300:
+		var before: Array = [victim.hp,others[0].hp,others[1].hp]
+		game.skills.strike(victim,10.0)
+		if before[0]-victim.hp > 100.0:
+			bolts += 1
+			if others[0].hp < before[1] and others[1].hp < before[2]: leapt += 1
+			spared = spared and (others[2].hp == others[2].max_hp or not beyond)
+		game.skills.tick(.1)
+	check(bolts > 10 and bolts < 60 and leapt == bolts and spared,"One hit in ten calls lightning on the target, leaping to those near, not the far (%d of 300, %d leapt, far one %.1f m off)" % [bolts,leapt,others[2].position.distance_to(others[1].position)])
+	for e in others:
+		game.enemies.erase(e); e.queue_free()
+	hero("wizard",{"hands":"ice_queens_gloves"})
+	check(Items.effect(game.run,"ice_queen") and Data.stat(game.run,2) == 5+4+15 and is_equal_approx(Items.bonus(game.run,"spell_damage"),25.0),"The Ice Queen's Gloves are worn: Intelligence and a quarter more spell damage")
+	victim = foe(3.0)
+	hp = victim.hp
+	game.skills.spell_hit(victim,100.0,"fire")
+	check(hp-victim.hp > 0.0 and is_equal_approx(Data.damage_tag(game.run,"spell",100.0),100.0*(1.0+(Data.stat(game.run,2)-5)*.02)*1.25),"A spell deals a quarter more (%.1f)" % (hp-victim.hp))
+	game.run.skills["ice_bolt"] = 1; game.run.skills["fireball"] = 1
+	check("Ice Queen" in game.skills.reason("ice_bolt") and game.skills.reason("fireball") == "","and no frost spell may be cast, fire still may")
+	game.move_item("hands","bag:%d" % Items.free_bag_slot(game.run))
+	check(game.skills.reason("ice_bolt") == "","Gloves off, frost again")
 
 	# --- Every class's attacks with every kind of weapon it can hold.
 	var seen = {}
@@ -609,7 +643,7 @@ func test():
 	# --- Items show on the hero.
 	hero("warrior")
 	var look = game.player.visual
-	check(look.parts.HeroHelmet.visible and look.parts.HeroArmor.visible and look.parts.HeroKilt.visible and look.parts.HeroBracers.visible and not look.parts.Hair_SimpleParted.visible,"The warrior's starting kit is drawn")
+	check(look.parts.HeroHelmet.visible and look.parts.HeroArmor.visible and look.parts.HeroKilt.visible and look.parts.HeroBracers.visible and look.parts.HeroGreaves.visible and not look.parts.HeroCuisses.visible and not look.parts.Hair_SimpleParted.visible,"The warrior's starting kit is drawn, his greaves with it")
 	game.move_item("head","bag:0")
 	check(not look.parts.HeroHelmet.visible and look.parts.Hair_SimpleParted.visible,"Without his helm, his hair")
 	game.move_item("chest","bag:1")
@@ -618,6 +652,10 @@ func test():
 	check(look.parts.HeroArmor.visible and look.parts.HeroArmor.material_override != Art.hero_kit("warrior") and look.parts.SuperHero_Male.material_override.get_shader_parameter("recolor").x == 1.0 and look.parts.SuperHero_Male.material_override.get_shader_parameter("tint_chest") == Items.BASES.steel_breastplate.look.tint,"A steel breastplate is steel, affix or no")
 	game.move_item("legs","bag:3"); game.move_item("hands","bag:4")
 	check(not look.parts.HeroKilt.visible and not look.parts.HeroBelt.visible and not look.parts.HeroBracers.visible,"Kilt and gauntlets come off")
+	game.run.bag[9] = it("plated_leg_armor","tough"); game.move_item("bag:9","legs")
+	check(look.parts.HeroCuisses.visible and look.parts.HeroBelt.visible and not look.parts.HeroKilt.visible and look.parts.HeroCuisses.material_override.shader.resource_path.ends_with("plate.gdshader"),"Plated leg armor is steel cuisses in the kilt's place")
+	game.move_item("legs","bag:9"); game.move_item("feet","bag:%d" % Items.free_bag_slot(game.run))
+	check(not look.parts.HeroCuisses.visible and not look.parts.HeroGreaves.visible and look.parts.SuperHero_Male.material_override.get_shader_parameter("bare").z == 1.0,"Boots off: no greaves, his bare feet and shins")
 	game.run.bag[5] = it("war_hammer"); game.move_item("bag:5","main")
 	check(look.weapon_kind == "heavy" and look.family == "heavy" and is_instance_valid(look.weapon_item) and not is_instance_valid(look.shield_item) and look.idle_action() == "HeavyIdle" and look.two_hands.weight == 1.0,"The War Hammer is held in both hands, in its own stance")
 	game.run.bag[6] = it("tower_shield"); game.run.bag[7] = it("steel_longsword"); game.move_item("bag:7","main"); game.move_item("bag:6","off")

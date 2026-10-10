@@ -65,7 +65,11 @@ the lower legs) and a steel full helm matching the shield: the KayKit knight hel
 sized to the head and lowered over the jaw, its open face closed by mirroring its
 back half forward, whose eye-level seam becomes the visor slit. The
 helm hides the hair. `tools/outfit_hero.py` adds both after the enemy outfits are
-built; statues never inherit them. `assets/textures/wood_planks.png` (cut from the
+built; statues never inherit them. The warrior's leg plates are shells of his own
+body made there too: `HeroGreaves` (shins, knee cops and the feet, his Steel
+Plated Boots) and `HeroCuisses` (thighs and hips, for Plated Leg Armor, shown in
+the kilt's place), both drawn as hammered steel by `assets/shaders/plate.gdshader`
+on their rest pose. His kilt hangs close (12% wider at the hem than the hips). `assets/textures/wood_planks.png` (cut from the
 Quaternius furniture trim sheet by `tools/paint_hero.py`) remains available as a
 wood material. Hit reactions for anyone holding a shield (ShieldHit, ShieldHitHead, ShieldHitStagger,
 ShieldHitKnockdown) keep that 60° forearm turn, so a hit does not flip the shield.
@@ -532,7 +536,8 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   `scripts/skills.gd` picks each skill's
   clip, duration and contact point (`WARRIOR_CLIPS`).
 - A two-handed sword, axe or maul has its own clips (HeavyIdle, HeavySwing1,
-  HeavySwing2, HeavyCleave, HeavyStrike, HeavyExecute, HeavySlam, HeavyShockwave,
+  the one normal attack: a full-bodied cut that steps the rear foot through,
+  HeavyCleave, HeavyStrike, HeavyExecute, HeavySlam, HeavyShockwave,
   HeavyCry, HeavyLeap), authored by `tools/import_heavy.py`, and the spear in both
   hands its own (PikeIdle, PikeThrust1, PikeThrust2 and the same seven skills as
   `Pike...`), by `tools/import_pike.py`: keyed frame by frame as the sword's skill

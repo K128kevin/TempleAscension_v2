@@ -308,7 +308,7 @@ func test():
 		var ranger = hero.uid == "hero:ranger"
 		check(kit.all(func(n): return worn.get(n,not ranger) == ranger) and not worn.get("HeroBoots",false),"Only the ranger wears the ranger's kit (%s)" % hero.uid)
 	# The warrior and wizard have their own detailed kits too.
-	var kits = {"hero:warrior":["HeroBracers","HeroBelt","HeroKilt","HeroArmor","HeroHelmet"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardRobeSkirt","WizardHood"]}
+	var kits = {"hero:warrior":["HeroBracers","HeroBelt","HeroKilt","HeroGreaves","HeroArmor","HeroHelmet"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardRobeSkirt","WizardHood"]}
 	for hero in pg.heroes:
 		var worn = {}
 		for mesh in hero.visual.skin_meshes: worn[String(mesh.name)] = mesh.visible

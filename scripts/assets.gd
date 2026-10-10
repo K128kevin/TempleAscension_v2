@@ -42,12 +42,16 @@ static func dagger_material() -> ShaderMaterial:
 	return m
 
 # Arms hung in the smithy: steel from `metal_from` of their length up, wood below.
-static func arms_material(metal_from: float) -> ShaderMaterial:
-	var key = "arms%.2f" % metal_from
+static func arms_material(metal_from: float, steel = null, wood = null) -> ShaderMaterial:
+	var key = "arms%.2f%s%s" % [metal_from,steel.to_html() if steel != null else "",wood.to_html() if wood != null else ""]
 	if materials.has(key): return materials[key]
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/arms.gdshader")
 	m.set_shader_parameter("metal_from",metal_from)
+	# (An item's own colours of steel and haft: the Lightning Hammer's blued
+	# head on a dark haft.)
+	if steel != null: m.set_shader_parameter("steel",steel)
+	if wood != null: m.set_shader_parameter("wood",wood)
 	materials[key] = m
 	return m
 
@@ -391,16 +395,62 @@ const Items = preload("res://scripts/items.gd")
 # his hands begins.
 # (`only_from`: how far down what is on his legs comes, pictured by itself:
 # the warrior's kilt ends above his knees.)
-const BODY_PARTS = {"warrior":{"feet_top":.17,"waist":1.035,"arm_from":.47,"only_from":.62},"ranger":{"feet_top":.5,"waist":1.0,"arm_from":.47,"only_from":0.0},"wizard":{"feet_top":.36,"waist":1.0,"arm_from":.5,"only_from":0.0}}
+const BODY_PARTS = {"warrior":{"feet_top":.6,"waist":1.035,"arm_from":.47,"only_from":.62},"ranger":{"feet_top":.5,"waist":1.0,"arm_from":.47,"only_from":0.0},"wizard":{"feet_top":.36,"waist":1.0,"arm_from":.5,"only_from":0.0}}
 const BODY_SLOTS = ["chest","legs","feet","hands"]
 # The pieces of each class's kit that are meshes of their own, by slot (the
 # rest is painted on the body).
 const PIECES = {
-	"warrior":{"head":["HeroHelmet"],"chest":["HeroArmor"],"legs":["HeroKilt","HeroBelt"],"feet":[],"hands":["HeroBracers"]},
+	"warrior":{"head":["HeroHelmet"],"chest":["HeroArmor"],"legs":["HeroKilt","HeroBelt"],"feet":["HeroGreaves"],"hands":["HeroBracers"]},
 	"ranger":{"head":["RangerCloak","RangerBrooch"],"chest":["RangerBelt","RangerPouch"],"legs":[],"feet":["RangerBoots","RangerBootsFeet"],"hands":["RangerBracers"]},
 	"wizard":{"head":["WizardHood"],"chest":["WizardRobe","WizardRobeSkirt","WizardSash","WizardSashEnd0","WizardSashEnd1"],"legs":[],"feet":["WizardBoots","WizardBootsFeet"],"hands":["WizardBracers"]}}
 # The class that wears each weight of armor.
 const WEARER = {"heavy":"warrior","medium":"ranger","light":"wizard"}
+
+# The pieces an item is shown as: its own (scripts/items.gd `pieces`) or its
+# slot's of the kit.
+static func pieces_of(hero_class: String, item: Dictionary) -> Array:
+	return item.get("look",{}).get("pieces",PIECES[hero_class][item.slot])
+
+# Every piece any item worn in `slot` is shown as, the kit's and the items' own.
+static var slot_pieces_known: Dictionary = {}
+static func slot_pieces(hero_class: String, slot: String) -> Array:
+	var key = hero_class+slot
+	if slot_pieces_known.has(key): return slot_pieces_known[key]
+	var names: Array = PIECES[hero_class][slot].duplicate()
+	for id in Items.BASES:
+		var base: Dictionary = Items.BASES[id]
+		if base.get("slot","") != slot or not base.get("look",{}).has("pieces"): continue
+		if WEARER.get(base.get("weight",""),"") != hero_class and not base.get("any_class",false): continue
+		for n in base.look.pieces:
+			if not n in names: names.append(n)
+	slot_pieces_known[key] = names
+	return names
+
+# The hero's leg plates (assets/shaders/plate.gdshader): the greaves of his
+# plated boots (a shin ridge and knee cops, the feet plated under them) and
+# the cuisses of plated leg armor (lames down the thigh). `rest_pose`: on a
+# mesh carrying its rest pose (Art.rest_pose_mesh).
+static func plate(mesh_name: String, rest_pose: bool = false) -> ShaderMaterial:
+	var key = "plate%s%s" % [mesh_name,rest_pose]
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/plate.gdshader")
+	m.set_shader_parameter("rest_pose",rest_pose)
+	if "Cuisses" in mesh_name:
+		m.set_shader_parameter("rim_low",.59)
+		m.set_shader_parameter("rim_high",.94)
+		m.set_shader_parameter("lame",.1)
+		m.set_shader_parameter("knee",-1.0)
+		m.set_shader_parameter("ridge",1.0)
+	else:
+		m.set_shader_parameter("rim_low",.035)
+		m.set_shader_parameter("rim_high",.605)
+		m.set_shader_parameter("lame",0.0)
+		m.set_shader_parameter("knee",.545)
+		m.set_shader_parameter("ankle",.1)
+		m.set_shader_parameter("ridge",1.0)
+	materials[key] = m
+	return m
 
 # A hero's body drawn part by part, kit or skin (a new material each time:
 # the caller sets which parts are bare and how each is coloured). `shell`:
@@ -452,7 +502,7 @@ static func finish(look: Dictionary) -> Material:
 		"bow": made = bow_wood()
 		"lion": made = gladiator_shield()
 		"tower": made = tower_shield(look.size)
-		"arms": made = arms_material(look.get("metal_from",.5))
+		"arms": made = arms_material(look.get("metal_from",.5),look.get("steel"),look.get("wood"))
 		"staff":
 			made = wizard_staff()
 			if look.has("tint") or look.has("crystal"):
@@ -529,6 +579,9 @@ static func hero_mesh(mesh_name: String) -> Mesh:
 # The material of one mesh of a class's kit, as Visual dresses it: `tint` (or
 # null) is another make's colour.
 static func piece_material(mesh_name: String, hero_class: String, tint = null) -> Material:
+	if "Greaves" in mesh_name or "Cuisses" in mesh_name:
+		var steel: ShaderMaterial = plate(mesh_name,true)
+		return steel if tint == null else recolored(steel,tint)
 	if "Helmet" in mesh_name or "Kilt" in mesh_name:
 		var key = "piece%s" % mesh_name
 		if not materials.has(key):
@@ -589,7 +642,7 @@ static func item_model(thing) -> Node3D:
 	var root = Node3D.new()
 	var box = AABB()
 	var first = true
-	var names: Array = PIECES[hero_class][item.slot].duplicate()
+	var names: Array = pieces_of(hero_class,item).duplicate()
 	# (The cloak's brooch and the tunic's pouch are too small to stand for it.)
 	names = names.filter(func(n): return not ("Brooch" in n or "Pouch" in n))
 	for mesh_name in names:

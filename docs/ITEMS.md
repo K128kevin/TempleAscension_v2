@@ -89,6 +89,12 @@ Dexterity on top of its own. Its picture is its base's.
   target for 2 seconds (as Shield Bash's stun, shorter when repeated).
 - **Marathon Boots** (everyone): +6 to every attribute and 20% faster
   movement; light armor any class may wear.
+- **Lightning Hammer** (warrior): a two-handed hammer; each hit has a 10%
+  chance to call lightning down on its target for 200–300 damage, which
+  leaps to up to 4 more targets within 10 m, a quarter weaker with each leap.
+- **Ice Queen's Gloves** (wizard): +15 Intelligence, Vitality and Willpower
+  and 25% more spell damage, but no frost spell can be cast while they are
+  worn (Freeze Floor and Frost Blast end at once).
 
 ## Drops
 
@@ -245,6 +251,8 @@ An uncommon item is a common item with one of these; a rare item has a prefix an
 | Ancient Gladiator's Helmet | Heavy armor · Head | Warrior | 22 armor; +15 Strength; +12 Dexterity. Every attack has a 10% chance to grant Rallying Cry: 25% more attack speed and damage for 10 seconds, at most once every 30 seconds |
 | Marathon Boots | Light armor · Feet | Everyone | 8 armor; +6 Strength; +6 Dexterity; +6 Intelligence; +6 Vitality; +6 Willpower; +20% movement speed |
 | The Bow of Odysseus | Bow · Two-handed | Ranger | 43–55 damage; 1.5 attacks per second; +15 Dexterity; +8 Vitality. Your arrows have a 25% chance to stun the target for 2 seconds |
+| Lightning Hammer | Mace · Two-handed | Warrior | 60–76 damage; 0.8 attacks per second; +15 Strength; +12 Vitality. 10% chance on hit to call down lightning on the target for 200–300 damage, leaping to up to 4 more targets, 25% weaker with each leap |
+| Ice Queen's Gloves | Light armor · Hands | Wizard | 8 armor; +15 Intelligence; +15 Vitality; +15 Willpower; +25% spell damage. You cannot use any frost abilities |
 
 ### Drop chances
 

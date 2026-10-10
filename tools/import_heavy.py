@@ -19,10 +19,11 @@ hand's X; the left palm, hand_l's (0, .075, 0), sits at hand_r's
 
   HeavyIdle       the stance: the weapon held up before the right shoulder
                   in both hands, left foot forward, breathing (2 s, loops)
-  HeavySwing1     normal attack: a diagonal cut from over the right shoulder
-                  down to the lower left, the weight thrown onto the lead foot
-  HeavySwing2     normal attack: the return blow, a rising backhand sweep
-                  from the low left across to the high right
+  HeavySwing1     normal attack: the weapon hauled far back over the right
+                  shoulder, then the whole body hurled round and down behind
+                  a diagonal cut to the lower left, the rear foot driven
+                  through a long step forward as it lands (the game carries
+                  him on by Visual.ROOT_ADVANCE); the lead foot comes up after
   HeavyCleave     a level sweep through the half-circle before him, coiled
                   round to the right and unwound, behind a step
   HeavyStrike     Powerful Strike: a full chop from over the right shoulder
@@ -55,10 +56,10 @@ ROOT = Path(__file__).resolve().parents[1]
 GLB = Path(os.environ.get('HERO_GLB') or ROOT/'assets/models/character/warrior.glb')
 if not GLB.is_absolute(): GLB = ROOT/GLB
 # name: seconds
-CLIPS = {'HeavyIdle': 2.0, 'HeavySwing1': 1.1, 'HeavySwing2': 1.1, 'HeavyCleave': 1.0, 'HeavyStrike': 1.0, 'HeavyExecute': 1.3,
+CLIPS = {'HeavyIdle': 2.0, 'HeavySwing1': 1.1, 'HeavyCleave': 1.0, 'HeavyStrike': 1.0, 'HeavyExecute': 1.3,
     'HeavySlam': 1.1, 'HeavyShockwave': 1.2, 'HeavyCry': 1.0, 'HeavyLeap': 1.0}
 # name: the share of the clip at which the blow lands (the game's own figures).
-CONTACT = {'HeavySwing1': .50, 'HeavySwing2': .50, 'HeavyCleave': .52, 'HeavyStrike': .55, 'HeavyExecute': .58, 'HeavySlam': .52,
+CONTACT = {'HeavySwing1': .50, 'HeavyCleave': .52, 'HeavyStrike': .55, 'HeavyExecute': .58, 'HeavySlam': .52,
     'HeavyShockwave': .56, 'HeavyCry': .30, 'HeavyLeap': .56}
 ONLY = [n for n in os.environ.get('HEAVY_ONLY', '').split(',') if n]
 CHECK = int(os.environ.get('HEAVY_CHECK') or 0)
@@ -68,10 +69,13 @@ bpy.context.scene.render.fps = 30
 bpy.ops.import_scene.gltf(filepath=str(GLB))
 rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
 print('HEAVY_BEFORE', len(rig.animation_data.nla_tracks), 'clips')
+# (A clip authored here once and since dropped, such as the second swing
+# the normal attack had, goes too.)
+STALE = ['HeavySwing2']
 for track in list(rig.animation_data.nla_tracks):
-    if track.name in WANTED: rig.animation_data.nla_tracks.remove(track)
+    if track.name in WANTED or track.name in STALE: rig.animation_data.nla_tracks.remove(track)
 for a in list(bpy.data.actions):
-    if a.name in WANTED: bpy.data.actions.remove(a)
+    if a.name in WANTED or a.name in STALE: bpy.data.actions.remove(a)
 for track in rig.animation_data.nla_tracks: track.mute = True
 B = rig.pose.bones
 
@@ -537,54 +541,36 @@ def idle(t):
 # again; its clock says when it is where along that.
 FORWARD = (0, -1, 0)
 
-# The first cut: hauled up and back over the right shoulder, the weight on
-# the rear foot and the body turned away; then the lead foot driven out and
-# the whole body thrown round and down behind the blow, which lands before
-# him and runs on down to the lower left; and drawn back up to the shoulder.
+# The swing: the weapon hauled far up and back over the right shoulder until
+# its head hangs behind him, the body wound away after it and leaning back,
+# the weight on the rear foot; then the rear (right) foot driven through a
+# long step forward and the whole body hurled round and down behind the
+# blow, which lands before him as the foot does and runs on down to the lower
+# left and round behind him; and the left foot is brought up after as the
+# weapon comes back to the shoulder. The game carries him over the ground as
+# he steps (ROOT_ADVANCE, with these keys); here each foot is kept where it
+# is on the ground while he is carried past it.
 CUT = (.62, .1, .78)
-SWING1_CLOCK = [(0, 0, 0), (.26, .9, 1.6), (.37, 1, 1.0), (.50, 2, 11, 9), (.63, 3, 1.2), (1, 4, 0)]
+SWING1_ADVANCE = [(0, 0), (.3, 0), (.5, .44), (.64, .5), (.9, .62), (1, .62)]
+SWING1_CLOCK = [(0, 0, 0), (.27, .92, 1.5), (.37, 1, .6), (.50, 2, 12, 8), (.65, 3, 1.0), (1, 4, 0)]
 SWING1 = [K(0),
-    K(1, down=.06, fwd=-.1, side=-.03, turn=-.3, twist=-.6, lean=-.08, bend=-.05, g=(-.3, .1, 1.56), z=plane(CUT, FORWARD, 128), n=CUT,
-        er=(-.7, .3, -.2), el=(.3, -.5, -.5), lh=.2),
-    K(1.5, down=.08, fwd=.03, turn=-.05, twist=-.15, lean=.1, g=(-.2, -.46, 1.5), z=plane(CUT, FORWARD, 86), n=CUT,
-        er=(-.7, .0, -.3), el=(.4, -.4, -.6), rh=.25, lf=(.1, .07, 0)),
-    K(2, down=.15, fwd=.17, side=.03, turn=.2, twist=.36, lean=.28, bend=.05, g=(.08, -.7, 1.02), z=plane(CUT, FORWARD, 4), n=CUT,
-        er=(-.7, -.2, -.3), el=(.6, -.1, -.6), rh=.5, rp=.3, lf=(.18, 0, 0)),
-    K(2.5, down=.2, fwd=.2, side=.04, turn=.3, twist=.5, lean=.36, bend=.08, g=(.22, -.66, .9), z=plane(CUT, FORWARD, -48), n=CUT,
-        er=(-.6, -.4, -.2), el=(.7, .2, -.4), rh=.55, rp=.35, lf=(.18, 0, 0)),
-    K(3, down=.21, fwd=.19, side=.04, turn=.32, twist=.56, lean=.38, bend=.1, g=(.34, -.46, .9), z=plane(CUT, FORWARD, -92), n=CUT,
-        er=(-.5, -.5, -.2), el=(.7, .4, -.3), rh=.55, rp=.35, lf=(.18, 0, 0)),
-    K(3.33, down=.17, fwd=.15, turn=.22, twist=.34, lean=.3, g=(.12, -.46, 1.04), z=(.6, -.2, .75), n=(.5, .2, .8), rh=.4, rp=.25, lf=(.16, 0, 0)),
-    K(3.66, down=.1, fwd=.08, turn=.06, twist=.0, lean=.2, g=(.02, -.44, 1.12), z=(.05, -.3, .95), n=(.4, -.8, .4), rh=.15, rp=.1, lf=(.08, .04, 0)),
-    K(3.86, down=.05, fwd=.02, turn=-.04, twist=-.2, lean=.1, g=(-.15, -.34, 1.14), z=(-.42, .05, .9), n=(.6, -.6, .5), lf=(.02, .01, 0)),
-    K(4)]
+    K(1, down=.09, fwd=-.14, side=-.04, turn=-.42, tilt=-.04, twist=-.8, lean=-.16, bend=-.08, g=(-.36, .3, 1.66), z=plane(CUT, FORWARD, 158), n=CUT,
+        er=(-.7, .4, -.1), el=(.3, -.5, -.4), lh=.3),
+    K(1.5, down=.12, fwd=.1, side=-.02, turn=-.12, twist=-.25, lean=.14, bend=-.02, g=(-.22, -.36, 1.56), z=plane(CUT, FORWARD, 96), n=CUT,
+        er=(-.7, .1, -.3), el=(.4, -.4, -.6), lh=.1, rf=(.3, .14, 0)),
+    K(2, down=.17, fwd=.38, side=.04, turn=.3, tilt=.05, twist=.5, lean=.38, bend=.06, g=(.1, -.6, .94), z=plane(CUT, FORWARD, -12), n=CUT,
+        er=(-.7, -.3, -.2), el=(.7, -.1, -.5), rf=(.62, 0, 0), lh=.5, lp=.25),
+    K(2.5, down=.21, fwd=.44, side=.05, turn=.4, tilt=.07, twist=.66, lean=.44, bend=.1, g=(.28, -.5, .78), z=plane(CUT, FORWARD, -64), n=(.6, .0, .8),
+        er=(-.6, -.5, -.1), el=(.75, .25, -.35), rf=(.62, 0, 0), lh=.6, lp=.3),
+    K(3, down=.21, fwd=.46, side=.05, turn=.42, tilt=.07, twist=.72, lean=.44, bend=.12, g=(.4, -.32, .78), z=plane(CUT, FORWARD, -104), n=(.55, .15, .8),
+        er=(-.5, -.6, -.1), el=(.75, .45, -.25), rf=(.62, 0, 0), lh=.6, lp=.3),
+    K(3.33, down=.16, fwd=.5, turn=.3, twist=.5, lean=.32, g=(.2, -.44, .96), z=(.6, -.2, .75), n=(.5, .2, .8), rf=(.62, 0, 0), lf=(.3, .1, 0)),
+    K(3.66, down=.1, fwd=.56, turn=.1, twist=.1, lean=.2, g=(.02, -.44, 1.12), z=(.05, -.3, .95), n=(.4, -.8, .4), rf=(.62, 0, 0), lf=(.56, .03, 0)),
+    K(3.86, down=.05, fwd=.6, turn=-.04, twist=-.2, lean=.1, g=(-.15, -.34, 1.14), z=(-.42, .05, .9), n=(.6, -.6, .5), rf=(.62, 0, 0), lf=(.62, 0, 0)),
+    K(4, fwd=.62, lf=(.62, 0, 0), rf=(.62, 0, 0))]
 
 def swing1(t):
-    play(t, SWING1_CLOCK, SWING1)
-
-# The return blow: the weapon dropped to the low left behind him, the body
-# coiled round to the left over the lead leg; then unwound, the back of the
-# upper hand leading the weapon up across the front and away to the high
-# right, where it comes to the shoulder again.
-RISE = (.34, .1, .93)
-SWING2_CLOCK = [(0, 0, 0), (.3, .93, 1.0), (.38, 1, 1.0), (.50, 2, 11, 9), (.63, 3, 1.2), (1, 4, 0)]
-SWING2 = [K(0),
-    K(.35, down=.07, turn=.03, twist=-.05, lean=.12, g=(-.06, -.36, 1.13), z=(-.1, -.8, .6), n=(.6, -.1, .8)),
-    K(.7, down=.12, turn=.15, twist=.22, lean=.2, g=(.1, -.36, 1.05), z=(.6, -.75, -.25), n=(.45, .1, .9)),
-    K(1, down=.15, fwd=-.03, side=.05, turn=.25, twist=.45, lean=.22, bend=.08, g=(.2, -.22, 1.0), z=plane(RISE, FORWARD, -125), n=RISE,
-        er=(-.5, -.5, -.4), el=(.7, .4, -.4), rh=.15),
-    K(1.5, down=.15, fwd=.08, turn=.2, twist=.35, lean=.26, g=(.16, -.46, 1.02), z=plane(RISE, FORWARD, -82), n=RISE,
-        er=(-.6, -.3, -.5), el=(.7, .1, -.5), rh=.3),
-    K(2, down=.14, fwd=.2, turn=.1, twist=.25, lean=.3, g=(-.06, -.58, 1.06), z=plane(RISE, FORWARD, -4), n=RISE,
-        er=(-.7, -.1, -.5), el=(.6, -.2, -.6), rh=.45, rp=.25),
-    K(2.5, down=.07, fwd=.17, turn=-.1, twist=-.25, lean=.12, g=(-.27, -.44, 1.3), z=plane(RISE, FORWARD, 55), n=RISE,
-        er=(-.7, .2, -.4), el=(.4, -.5, -.5), rh=.4, rp=.25),
-    K(3, down=.02, fwd=.08, turn=-.25, twist=-.55, lean=-.06, g=(-.36, -.12, 1.42), z=plane(RISE, FORWARD, 105), n=RISE,
-        er=(-.7, .3, -.3), el=(.3, -.5, -.5), rh=.25, rp=.1),
-    K(4)]
-
-def swing2(t):
-    play(t, SWING2_CLOCK, SWING2)
+    play(t, SWING1_CLOCK, SWING1, SWING1_ADVANCE)
 
 # Cleave: the weapon drawn back level at the right side, the body coiled far
 # round after it; then the left foot driven forward and everything unwound,
@@ -741,7 +727,7 @@ LEAP = [K(0),
 def leap(t):
     play(t, LEAP_CLOCK, LEAP)
 
-AUTHORS = {'HeavyIdle': idle, 'HeavySwing1': swing1, 'HeavySwing2': swing2, 'HeavyCleave': cleave, 'HeavyStrike': strike, 'HeavyExecute': execute,
+AUTHORS = {'HeavyIdle': idle, 'HeavySwing1': swing1, 'HeavyCleave': cleave, 'HeavyStrike': strike, 'HeavyExecute': execute,
     'HeavySlam': slam, 'HeavyShockwave': shockwave, 'HeavyCry': cry, 'HeavyLeap': leap}
 for name in WANTED:
     if name in AUTHORS: author(name, AUTHORS[name])

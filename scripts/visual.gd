@@ -91,7 +91,7 @@ var ground_speed = 0.0
 # (Actor.tick).
 # (The sword chain's swings each walk him a stride on over the swing's share
 # of the clip, Motion.SWORD_SWING_SHARE; its recovery stands still.)
-const ROOT_ADVANCE = {"OffCut":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustR":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustL":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]],"SkillCleave":[[0.0,0.0],[.32,0.0],[.52,.38],[.66,.4],[1.0,.4]],"SkillBash":[[0.0,0.0],[.3,0.0],[.5,.38],[.66,.4],[1.0,.4]],"SkillShockwave":[[0.0,0.0],[.36,.1],[.56,.45],[.74,.5],[1.0,.5]],"PikeCleave":[[0.0,0.0],[.34,0.0],[.54,.36],[.68,.4],[1.0,.4]],"HeavyCleave":[[0.0,0.0],[.32,0.0],[.52,.38],[.66,.4],[1.0,.4]]}
+const ROOT_ADVANCE = {"OffCut":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"SwordOpen":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut1L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2R":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordCut2L":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustR":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordThrustL":[[0.0,0.0],[.12,0.0],[.3733,.42],[.5333,.5],[1.0,.5]],"SwordSlash":[[0.0,0.0],[.12,0.0],[.40,.2],[.66,.2],[.90,.4],[1.0,.4]],"ScutumSwordSwing":[[0.0,0.0],[.10,0.0],[.42,.24],[.62,.24],[.90,.5],[1.0,.5]],"ShieldStab":[[0.0,0.0],[.26,0.0],[.48,.2],[.64,.2],[.90,.45],[1.0,.45]],"SkillCleave":[[0.0,0.0],[.32,0.0],[.52,.38],[.66,.4],[1.0,.4]],"SkillBash":[[0.0,0.0],[.3,0.0],[.5,.38],[.66,.4],[1.0,.4]],"SkillShockwave":[[0.0,0.0],[.36,.1],[.56,.45],[.74,.5],[1.0,.5]],"PikeCleave":[[0.0,0.0],[.34,0.0],[.54,.36],[.68,.4],[1.0,.4]],"HeavyCleave":[[0.0,0.0],[.32,0.0],[.52,.38],[.66,.4],[1.0,.4]],"HeavySwing1":[[0.0,0.0],[.3,0.0],[.5,.44],[.64,.5],[.9,.62],[1.0,.62]]}
 var travelled = 0.0
 var pending_travel = 0.0
 
@@ -215,7 +215,15 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			# Every hero now has his own: the ranger's and the wizard's boots,
 			# the warrior's sandals (painted on his feet).
 			mesh.visible = false
-		elif mesh.name.begins_with("HeroGreaves") or mesh.name.begins_with("HeroBracers") or mesh.name.begins_with("HeroBelt"):
+		elif mesh.name.begins_with("HeroGreaves") or mesh.name.begins_with("HeroCuisses"):
+			# The warrior's leg plates: hammered steel of their own
+			# (assets/shaders/plate.gdshader), the cuisses only with plated
+			# leg armor on (wear()).
+			mesh.visible = hero_class == "warrior" and mesh.name.begins_with("HeroGreaves")
+			var rest: bool = mesh.skin != null and mesh.mesh is ArrayMesh
+			if rest: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
+			mesh.material_override = Art.plate(String(mesh.name),rest).duplicate()
+		elif mesh.name.begins_with("HeroBracers") or mesh.name.begins_with("HeroBelt"):
 			# The warrior's raised shells, painted with him (tools/paint_kits.py).
 			mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit("warrior")
@@ -342,7 +350,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			elif "HeroArmor" in mesh.name: mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit(hero_class)
 	for clip in animator.get_animation_list():
-		for expected in ["CastBolt","CastPoint","CastGround","CastSelf","CastChannel","HeavyIdle","HeavySwing1","HeavySwing2","HeavyCleave","HeavyStrike","HeavyExecute","HeavySlam","HeavyShockwave","HeavyCry","HeavyLeap","PikeIdle","PikeThrust1","PikeThrust2","PikeCleave","PikeStrike","PikeExecute","PikeSlam","PikeShockwave","PikeCry","PikeLeap","DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SkillVolley","SneakIdle","SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
+		for expected in ["CastBolt","CastPoint","CastGround","CastSelf","CastChannel","HeavyIdle","HeavySwing1","HeavyCleave","HeavyStrike","HeavyExecute","HeavySlam","HeavyShockwave","HeavyCry","HeavyLeap","PikeIdle","PikeThrust1","PikeThrust2","PikeCleave","PikeStrike","PikeExecute","PikeSlam","PikeShockwave","PikeCry","PikeLeap","DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SkillVolley","SneakIdle","SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["CastChannel","HeavyIdle","PikeIdle","SneakIdle","Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
@@ -497,7 +505,6 @@ func derive_walks() -> void:
 func wear(equipment: Dictionary) -> void:
 	if hero_class.is_empty(): return
 	worn = equipment.duplicate()
-	var pieces: Dictionary = Art.PIECES[hero_class]
 	var bare = Vector4.ZERO
 	var redone = Vector4.ZERO
 	var tints: Dictionary = {}
@@ -511,8 +518,10 @@ func wear(equipment: Dictionary) -> void:
 		var on: bool = Items.wears(hero_class,item)
 		var tint = item.get("look",{}).get("tint") if on else null
 		# A piece that is a mesh of its own (the wizard's hat) is worn in the
-		# kit's piece's place, on the whole body.
+		# kit's piece's place, on the whole body; one of other pieces of the
+		# kit (the warrior's plated legs) shows those in its place.
 		var own: bool = on and item.get("look",{}).has("mesh")
+		var shown: Array = Art.pieces_of(hero_class,item) if on else []
 		if not on or tint != null: plain = false
 		if not on or own: dressed = false
 		var part: int = Art.BODY_SLOTS.find(slot)
@@ -528,15 +537,15 @@ func wear(equipment: Dictionary) -> void:
 			var hat: Node3D = Art.worn_model(item.look)
 			hat_item.add_child(hat)
 			hat.transform = HAT_ON_HEAD
-		for mesh_name in pieces[slot]:
+		for mesh_name in Art.slot_pieces(hero_class,slot):
 			var mesh: MeshInstance3D = parts.get(mesh_name)
 			if mesh == null: continue
-			mesh.visible = on and not own
-			if not on or own: continue
+			mesh.visible = on and not own and mesh_name in shown
+			if not mesh.visible: continue
 			var finish: Material = mesh.material_override
 			if finish is ShaderMaterial and finish.shader.resource_path.ends_with("cloak.gdshader"):
 				finish.set_shader_parameter("cloth_color",tint if tint != null else (Color(.1,.19,.1) if hero_class == "ranger" else Color(.13,.16,.27)))
-			elif finish is ShaderMaterial and (finish.shader.resource_path.ends_with("gladiator_helm.gdshader") or finish.shader.resource_path.ends_with("kilt.gdshader")):
+			elif finish is ShaderMaterial and (finish.shader.resource_path.ends_with("gladiator_helm.gdshader") or finish.shader.resource_path.ends_with("kilt.gdshader") or finish.shader.resource_path.ends_with("plate.gdshader")):
 				finish.set_shader_parameter("tint",tint if tint != null else Color.WHITE)
 				finish.set_shader_parameter("recolor",1.0 if tint != null else 0.0)
 			elif not ("Sash" in mesh_name or "Pouch" in mesh_name or "Brooch" in mesh_name):
@@ -1832,7 +1841,7 @@ static func skill_contact(clip: String) -> float:
 		# (Each skill's swing lands at the same moment with every weapon.)
 		for swing in preload("res://scripts/skills.gd").WARRIOR_CLIPS.values():
 			for prefix in ["Skill","Heavy","Pike"]: skill_contacts[prefix+swing[0].trim_prefix("Skill")] = swing[2]
-		for swing in ["HeavySwing1","HeavySwing2"]: skill_contacts[swing] = Motion.FAMILIES.heavy.contacts[0]
+		skill_contacts["HeavySwing1"] = Motion.FAMILIES.heavy.contacts[0]
 	return skill_contacts.get(clip,-1.0)
 
 # The sword chain (Motion.SWORD_CHAIN): whether one of its swings is still

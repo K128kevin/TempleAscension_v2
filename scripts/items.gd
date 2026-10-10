@@ -59,7 +59,7 @@ const BOSS_WEIGHTS = {"rare":75,"unique":25}
 
 # What an item may add besides its armor or damage, and how each reads.
 # The five attributes count as points spent on them.
-const BONUS_TEXT = {"strength":"+%s Strength","dexterity":"+%s Dexterity","intelligence":"+%s Intelligence","vitality":"+%s Vitality","willpower":"+%s Willpower","speed":"+%s%% movement speed"}
+const BONUS_TEXT = {"strength":"+%s Strength","dexterity":"+%s Dexterity","intelligence":"+%s Intelligence","vitality":"+%s Vitality","willpower":"+%s Willpower","speed":"+%s%% movement speed","spell_damage":"+%s%% spell damage"}
 const ATTRIBUTES = ["strength","dexterity","intelligence","vitality","willpower"]
 
 # Every base item. Armor: its `slot`, `weight` and `armor`. Weapons: `kind`,
@@ -75,8 +75,9 @@ const ATTRIBUTES = ["strength","dexterity","intelligence","vitality","willpower"
 # worn by every class, whatever its weight. `look` is how it is shown (scripts/visual.gd): a
 # weapon's or shield's model, its size in metres, how far up from its butt
 # the fist holds it (`grip`), its `finish` and colours; armor shows as its
-# class's own piece, in a `tint` of its own, or as a `mesh` of its own (the
-# wizard's hat).
+# class's own piece, in a `tint` of its own, as other `pieces` of the kit
+# in its piece's place (the warrior's plated legs), or as a `mesh` of its own
+# (the wizard's hat).
 const BASES = {
 	# --- What the wizard starts with: wool, sandals and his twisted staff.
 	"wool_hood":{"name":"Wool Hood","rarity":"starting","slot":"head","weight":"light","armor":5.0},
@@ -97,7 +98,7 @@ const BASES = {
 	# --- The warrior: his gladiator's kit, a shortsword and a buckler.
 	"gladiators_helmet":{"name":"Gladiator's Helmet","rarity":"starting","slot":"head","weight":"heavy","armor":15.0},
 	"steel_plated_gauntlets":{"name":"Steel Plated Gauntlets","rarity":"starting","slot":"hands","weight":"heavy","armor":15.0},
-	"steel_plated_boots":{"name":"Steel Plated Boots","rarity":"starting","slot":"feet","weight":"heavy","armor":15.0,"look":{"tint":Color(.66,.68,.72)}},
+	"steel_plated_boots":{"name":"Steel Plated Boots","rarity":"starting","slot":"feet","weight":"heavy","armor":15.0},
 	"studded_war_kilt":{"name":"Studded War Kilt","rarity":"starting","slot":"legs","weight":"heavy","armor":23.0},
 	"simple_shortsword":{"name":"Simple Shortsword","rarity":"starting","slot":"weapon","kind":"sword","hands":1,"damage":[17.0,25.0],"speed":1.3,
 		"look":{"model":"sword","size":Vector3(.17,.92,.08),"grip":.16,"finish":"sword","blade":Color(.64,.65,.68),"fittings":Color(.46,.46,.48),"wrap":Color(.14,.09,.05)}},
@@ -121,7 +122,7 @@ const BASES = {
 	# Heavy armor.
 	"steel_breastplate":{"name":"Steel Breastplate","rarity":"common","slot":"chest","weight":"heavy","armor":21.0,"bonus":{"strength":2},"look":{"tint":Color(.72,.74,.78)}},
 	"scale_cuirass":{"name":"Scale Cuirass","rarity":"common","slot":"chest","weight":"heavy","armor":23.0},
-	"plated_leg_armor":{"name":"Plated Leg Armor","rarity":"common","slot":"legs","weight":"heavy","armor":26.0,"look":{"tint":Color(.68,.7,.74)}},
+	"plated_leg_armor":{"name":"Plated Leg Armor","rarity":"common","slot":"legs","weight":"heavy","armor":26.0,"look":{"pieces":["HeroCuisses","HeroBelt"]}},
 	"steel_full_helm":{"name":"Steel Full Helm","rarity":"common","slot":"head","weight":"heavy","armor":20.0,"look":{"tint":Color(.74,.76,.8)}},
 	# Weapons and shields.
 	"steel_longsword":{"name":"Steel Longsword","rarity":"common","slot":"weapon","kind":"sword","hands":1,"damage":[20.0,28.0],"speed":1.1,
@@ -165,6 +166,11 @@ const BASES = {
 	"bow_of_odysseus":{"name":"The Bow of Odysseus","rarity":"unique","for":"ranger","slot":"weapon","kind":"bow","hands":2,"damage":[43.0,55.0],"speed":1.5,"bonus":{"dexterity":15,"vitality":8},
 		"effect":"stunning_arrows","effect_text":"Your arrows have a 25% chance to stun the target for 2 seconds",
 		"look":{"model":"bow","size":Vector3(.27,1.5,.11),"grip":.62,"finish":"bow","tint":Color(.74,.56,.24)}},
+	"lightning_hammer":{"name":"Lightning Hammer","rarity":"unique","for":"warrior","slot":"weapon","kind":"mace","hands":2,"damage":[60.0,76.0],"speed":.8,"bonus":{"strength":15,"vitality":12},
+		"effect":"lightning_hammer","effect_text":"10% chance on hit to call down lightning on the target for 200–300 damage, leaping to up to 4 more targets, 25% weaker with each leap",
+		"look":{"model":"war_hammer","size":Vector3(.36,1.4,.15),"grip":.42,"finish":"arms","metal_from":.78,"edge":[.8,1.0],"haft":.088,"steel":Color(.58,.7,1.0),"wood":Color(.1,.08,.1)}},
+	"ice_queens_gloves":{"name":"Ice Queen's Gloves","rarity":"unique","for":"wizard","slot":"hands","weight":"light","armor":8.0,"bonus":{"intelligence":15,"vitality":15,"willpower":15,"spell_damage":25.0},
+		"effect":"ice_queen","effect_text":"You cannot use any frost abilities","look":{"tint":Color(.8,.92,1.0)}},
 
 	# --- Carried, not worn or held: the key to the arena basement's gate,
 	# which one of its bandits keeps (scripts/game.gd). Never random loot.

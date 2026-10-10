@@ -482,18 +482,35 @@ def ranger_kit():
     print('RANGER_KIT',[o.name for o in kit])
 ranger_kit()
 
-# The warrior's kit, after his concept art (painted by tools/paint_kits.py
-# through the body's UVs): steel greaves with knee guards and bracers, a broad
-# belt, as raised shells of the body, and an armoured kilt of plates (the
-# KayKit knight's, as the gladiator statue wears) over a tattered underskirt.
-# The warrior's kilt: its top (tucked under the belt), hem and flare.
+# The warrior's kit, after his concept art: bracers and a broad belt as raised
+# shells of the body (painted by tools/paint_kits.py through the body's UVs);
+# his steel plated boots (HeroGreaves: greaves over the shins up over the
+# knee, and the feet plated with them) and, for the plated leg armor that
+# drops, cuisses over the thighs (HeroCuisses), both shells of the body too but
+# drawn as hammered plate by assets/shaders/plate.gdshader; and an armoured
+# kilt of hanging plates over a tattered underskirt.
+# The warrior's kilt: its top (tucked under the belt), hem and flare (how much
+# wider at the hem than the hips: it hangs close, not out like a skirt).
 KILT_TOP = .995
 KILT_HEM = .64
-KILT_FLARE = .38
+KILT_FLARE = .12
+# The greaves' knee cops reach this far over the knee, and the cuisses come
+# down over them from here, so the two lap with no skin between.
+KNEE = (rig.matrix_world @ rig.data.bones['calf_l'].head_local).z
+GREAVE_TOP = KNEE+.07
+CUISSE_LOW = KNEE+.04
+CUISSE_TOP = .955
+CUISSE_FAULD = .76
 def warrior_kit():
     shells = []
     shells.append(outfits.body_shell(body,rig,'HeroBracers',lambda bone,z: bone.startswith('lowerarm'),.011,.009))
     shells.append(outfits.body_shell(body,rig,'HeroBelt',lambda bone,z: bone.startswith(('spine_01','pelvis','root','spine_02')) and .953<z<1.047,.03,.012))
+    shells.append(outfits.body_shell(body,rig,'HeroGreaves',lambda bone,z: (bone.startswith(('calf','foot','ball')) or (bone.startswith('thigh') and z<GREAVE_TOP)) and z<GREAVE_TOP,.014,.012))
+    # (The cuisses take in the hips under the belt too, a fauld round them.)
+    shells.append(outfits.body_shell(body,rig,'HeroCuisses',lambda bone,z: (bone.startswith(('thigh','calf')) or (bone.startswith(('pelvis','root','spine_01')) and z>CUISSE_FAULD)) and CUISSE_LOW<z<CUISSE_TOP,.02,.014))
+    for shell in shells[-2:]:
+        for poly in shell.data.polygons: poly.use_smooth = True
+    print('WARRIOR_KNEE %.3f' % KNEE)
     # The kilt: a ring of hanging cloth from under the belt to mid-thigh,
     # swung by chains of bones on the spring simulation and folded over the
     # legs by its shader, as the ranger's cloak is; the shader draws it as the
