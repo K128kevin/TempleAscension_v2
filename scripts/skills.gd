@@ -46,6 +46,20 @@ var surprise_time = 0.0
 var frenzy_bonus = 0.0
 var frenzy_time = 0.0
 var frenzy_aura: Node3D
+# Rallying Cry (the Ancient Gladiator's Helmet: scripts/items.gd): how long
+# it holds, and how long until it may come again.
+var rally_time = 0.0
+var rally_cooldown = 0.0
+const RALLY_CHANCE = 10.0
+const RALLY_BONUS = 25.0
+const RALLY_SECONDS = 10.0
+const RALLY_COOLDOWN = 30.0
+# The Robe of the Lost Emperor: the chance a spell's hit gives energy back,
+# and how much; the Bow of Odysseus: the chance an arrow stuns, and for how long.
+const EMPEROR_CHANCE = 10.0
+const EMPEROR_ENERGY = 20.0
+const ODYSSEUS_CHANCE = 25.0
+const ODYSSEUS_STUN = 2.0
 var charge_glow: Node3D
 # Power Shot being aimed: how long the aim is, and how much of it is left (the
 # HUD shows it as a bar over his head).
@@ -422,15 +436,16 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		duration = own[1]
 		contact = duration*own[2]
 	elif s.requirement in ["melee","shield"]:
-		# Dexterity quickens every melee swing.
-		var haste: float = (1.0+Data.attack_haste(game.run)*.01)*(DASH_CLEAVE_SPEED if free else 1.0)
+		# Dexterity quickens every melee swing (and Rallying Cry while it holds).
+		var haste: float = (1.0+Data.attack_haste(game.run)*.01)*(1.0+rally_haste()*.01)*(DASH_CLEAVE_SPEED if free else 1.0)
 		# The swing is the weapon's own: a one-handed sword's, mace's or axe's
 		# (a shield's skills too), a two-handed weapon's, or the spear's
 		# (Motion.FAMILIES); each skill has a clip in each.
 		var family: String = Data.family(game.run)
 		var normal: Dictionary = Motion.family(family)
 		clip = normal.clips[0] if game.player.visual.clips.has(normal.clips[0]) else normal.get("fallback",normal.clips[0])
-		duration = maxf(Data.MELEE_MINIMUM,normal.seconds/haste)
+		# (The swing takes the weapon's own time: its attacks a second.)
+		duration = maxf(Data.MELEE_MINIMUM,Data.attack_seconds(game.run,"melee")/haste)
 		contact = duration*normal.contacts[0]
 		var own_clip: String = Motion.skill_clip(family,s.effect)
 		if WARRIOR_CLIPS.has(s.effect) and game.player.visual.clips.has(own_clip):
@@ -514,6 +529,7 @@ func effects() -> Array:
 	var out: Array = []
 	if hidden: out.append(effect("hide_in_shadows","Hidden",0,0.0,"Unseen by enemies; moving %d%% slower." % roundi(hide_slow)))
 	if frenzy_time>0: out.append(effect("frenzy","Frenzy",0,frenzy_time,"Attacking %d%% faster." % roundi(frenzy_bonus)))
+	if rally_time>0: out.append(effect("rallying_cry","Rallying Cry",0,rally_time,"Attacking %d%% faster and dealing %d%% more damage." % [roundi(RALLY_BONUS),roundi(RALLY_BONUS)],false,RALLY_SECONDS))
 	if surprise_time>0: out.append(effect("element_of_surprise","Element of Surprise",0,surprise_time,"Dealing %d%% more damage." % roundi(surprise_bonus)))
 	if offense_stacks>0: out.append(effect("offensive_rhythm","Offensive Rhythm",offense_stacks,offense_time,"Dealing %d%% more damage." % roundi(offense_stacks*Data.passive(game.run,"offensive_rhythm"))))
 	if defense_stacks>0:
@@ -628,6 +644,10 @@ func spell_hit(enemy, percent: float, element: String, impact: Vector3 = Vector3
 	strike(enemy,amount,element,0.0,impact)
 	spell_striking = striking
 	var dealt: float = before-enemy.hp
+	# The Robe of the Lost Emperor: a spell that wounds may give energy back.
+	if dealt>0 and Data.Items.effect(game.run,"emperor") and randf()*100.0<EMPEROR_CHANCE and not game.player.dead:
+		game.run.energy = minf(Data.max_energy(game.run),game.run.energy+EMPEROR_ENERGY)
+		game.float_text(game.player.position+Vector3.UP*2.1,"+%d %s" % [roundi(EMPEROR_ENERGY),Data.energy_word(game.run)],Color(.55,.75,1))
 	if element=="frost":
 		var chill: Dictionary = Book.values("improved_chill",rank("improved_chill"))
 		enemy.chill(CHILL_SLOW+chill.x,CHILL_SECONDS+chill.y)
@@ -747,9 +767,24 @@ func aimed_target(at: Vector3, direction: Vector3):
 	choices.sort_custom(func(a,b): return a.position.distance_squared_to(at)<b.position.distance_squared_to(at))
 	return null if choices.is_empty() else choices[0]
 
-# How much faster the ranger attacks: Frenzy, while it lasts.
+# How much faster the hero attacks: Frenzy, and Rallying Cry, while they last.
 func haste() -> float:
-	return 1.0+(frenzy_bonus*.01 if frenzy_time>0 else 0.0)
+	return (1.0+(frenzy_bonus*.01 if frenzy_time>0 else 0.0))*(1.0+(RALLY_BONUS*.01 if rally_time>0 else 0.0))
+
+# Rallying Cry's percent faster, for the attributes tab.
+func rally_haste() -> float:
+	return RALLY_BONUS if rally_time>0 else 0.0
+
+# Every attack with the Ancient Gladiator's Helmet on may raise Rallying Cry,
+# once its time between has run out.
+func rally_chance() -> void:
+	if rally_cooldown>0 or game.player.dead or not Data.Items.effect(game.run,"rallying_cry"): return
+	if randf()*100.0>=RALLY_CHANCE: return
+	rally_time = RALLY_SECONDS
+	rally_cooldown = RALLY_COOLDOWN
+	lasting.rallying_cry = RALLY_SECONDS
+	game.float_text(game.player.position+Vector3.UP*2.3,"Rallying Cry",Color(1,.78,.4))
+	game.sound.play("power-whoosh",-12)
 
 # Into the shadows: no enemy sees him (those after him lose him), and he
 # moves slower, as Hide in Shadows' rank has it. `smoke`: Vanish's puff.
@@ -833,6 +868,10 @@ func arrow_hit(enemy, p: Dictionary) -> void:
 				struck.append(next)
 				from = next
 		_: strike(enemy,p.damage,"physical",0.0,impact,p.skill,2)
+	# The Bow of Odysseus: an arrow may stun whoever it strikes.
+	if is_instance_valid(enemy) and not enemy.dead and Data.Items.effect(game.run,"stunning_arrows") and randf()*100.0<ODYSSEUS_CHANCE:
+		enemy.stun(ODYSSEUS_STUN)
+		game.float_text(enemy.position+Vector3.UP*1.9,"Stunned",Color(1,.88,.35))
 
 func weaken(enemy, percent: float, cap: float) -> void:
 	if enemy.dead: return
@@ -918,10 +957,18 @@ func crit_numbers(weapon: int) -> Dictionary:
 	return {"crit":"Critical strike chance: %s%%" % figure(Data.crit_chance(game.run)+mastery.x),"crit_damage":"Critical strike damage: %s%%" % figure(Data.CRIT_MULTIPLIER*(1.0+mastery.y*.01)*100.0)}
 
 # The normal attack's speed bonus with `weapon`, in percent: Dexterity, and
-# for a melee weapon Quick Strikes. (The staff's bolt is never quickened.)
+# for a melee weapon Quick Strikes; Frenzy and Rallying Cry while they last.
+# (The staff's bolt is never quickened.)
 func basic_speed(weapon: int) -> float:
 	if weapon==4: return 0.0
-	return Data.attack_haste(game.run) if weapon==2 else Data.melee_attack_speed(game.run)
+	var own: float = Data.attack_haste(game.run) if weapon==2 else Data.melee_attack_speed(game.run)
+	return (1.0+own*.01)*haste()*100.0-100.0
+
+# How many attacks a second the normal attack makes now: the weapon's own,
+# quickened (Items.attack_speed).
+func attacks_a_second(weapon: int) -> float:
+	var tag: String = Data.scaling_tag(weapon)
+	return Data.Items.attack_speed(game.run,tag)*(1.0+basic_speed(weapon)*.01)
 
 # A number as few figures as it needs: 25, 22.5, 22.75.
 func figure(amount: float) -> String:
@@ -957,6 +1004,8 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 	var rhythm: Dictionary = Book.values("offensive_rhythm",rank("offensive_rhythm"))
 	amount *= rhythm_boost()
 	if surprise_time>0: amount *= 1.0+surprise_bonus*.01
+	if rally_time>0: amount *= 1.0+RALLY_BONUS*.01
+	if not spell_striking: rally_chance()
 	var mastery: Dictionary = Data.specialization(game.run,weapon)
 	var crit: bool = randf()*100.0<Data.crit_chance(game.run)+mastery.x+crit_bonus if crit_override<0 else crit_override==1
 	if crit: amount *= Data.CRIT_MULTIPLIER*(1.0+mastery.y*.01)*(1.0+enemy.weak_stacks*enemy.weak_bonus*.01)
@@ -978,6 +1027,7 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 # gains a stack, and a barrier absorbs what it can. Returns the damage left.
 func defend(damage: float, source) -> float:
 	var blocked = false
+	var blocked_damage: float = damage
 	var chance: float = Data.block_chance(game.run)
 	if chance>0 and (randf()*100.0<chance if block_override<0 else block_override==1):
 		blocked = true
@@ -1001,6 +1051,9 @@ func defend(damage: float, source) -> float:
 		game.float_text(game.player.position+Vector3.UP*2.4,"Blocked",Color(.72,.84,1))
 		var spikes: float = Data.passive(game.run,"spiked_shield")
 		if spikes>0 and is_instance_valid(source) and not source.dead: source.hit(attack_damage(spikes))
+		# A spiked shield (scripts/items.gd) gives back a share of the blow.
+		var barbs: float = Data.Items.spiked(game.run)
+		if barbs>0 and blocked_damage>0 and is_instance_valid(source) and not source.dead: source.hit(blocked_damage*barbs*.01)
 	return damage
 
 # The effects in play, for the HUD.
@@ -1311,6 +1364,8 @@ func tick(dt: float) -> void:
 	if aim_left<=0 or game.player.dead: aim_total = 0.0
 	if aim_total <= 0.0 and game.player.busy <= 0.0: powering = false
 	frenzy_time = maxf(0,frenzy_time-dt)
+	rally_time = maxf(0,rally_time-dt)
+	rally_cooldown = maxf(0,rally_cooldown-dt)
 	# Frenzy shows on him while it lasts.
 	if frenzy_time>0 and not is_instance_valid(frenzy_aura): frenzy_aura = RangerFx.aura(game.player.visual)
 	elif frenzy_time<=0 and is_instance_valid(frenzy_aura):

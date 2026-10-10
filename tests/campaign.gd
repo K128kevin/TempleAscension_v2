@@ -65,10 +65,10 @@ func start(owner_game):
 		check(game.remaining()==0 and (game.way_open() and game.has_way_on()),"Combat opens stairs on floor %d" % (floor_index+1))
 		# What fell is picked up (as far as the bag has room for it).
 		var fallen: int = game.pickups.size()
-		var room: int = game.run.bag.count("")
+		var room: int = Items.free_places(game.run)
 		for pickup in game.pickups.duplicate(): game.take_pickup(pickup)
-		check(game.pickups.size()==maxi(0,fallen-room) and game.run.bag.count("")==maxi(0,room-fallen) and game.run.gems.is_empty(),"Dropped items can be picked up into the bag; no permanent gems")
-		for item in game.run.bag: check(item.is_empty() or (Items.usable("warrior",item) and Items.ALL[item].has("rarity")),"Only items the class can use drop: "+item)
+		check(game.pickups.size()==maxi(0,fallen-room) and Items.free_places(game.run)==maxi(0,room-fallen) and game.run.gems.is_empty(),"Dropped items can be picked up into the bag; no permanent gems")
+		for item in game.run.bag: check(item.is_empty() or (Items.valid_instance(item) and Items.usable("warrior",item) and Items.BASES[item.base].rarity in ["common","unique"]),"Only items the class can use drop: "+str(item))
 		game.run.bag = Items.empty_bag()
 		var points: int = game.run.points
 		var xp: int = game.run.xp

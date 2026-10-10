@@ -1,7 +1,8 @@
 extends SceneTree
-## Pictures every item for the inventory: assets/ui/items/<id>.png, its own
-## model (Art.item_model: what lies on the ground when it drops) on a clear
-## ground, lit from the upper left. Run in a window (it renders):
+## Pictures every base item for the inventory: assets/ui/items/<id>.png, its
+## own model (Art.item_model: what lies on the ground when it drops) on a
+## clear ground, lit from the upper left. (A magic item shows its base's
+## picture.) Run in a window (it renders):
 ##
 ##   Godot --path . --script tools/render_item_icons.gd [-- --only=id,id]
 const Art = preload("res://scripts/assets.gd")
@@ -36,9 +37,9 @@ func render_icons():
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	scene.add_child(camera)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://assets/ui/items"))
-	for id in Items.ALL:
+	for id in Items.BASES:
 		if not only.is_empty() and not id in only: continue
-		var item: Dictionary = Items.ALL[id]
+		var item: Dictionary = Items.BASES[id]
 		var thing: Node3D = Art.item_model(id)
 		var holder = Node3D.new()
 		scene.add_child(holder)

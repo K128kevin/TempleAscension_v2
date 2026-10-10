@@ -59,9 +59,11 @@ void fragment() {
 	float off = shell ? 0.0 : clamp(dot(part, bare), 0.0, 1.0);
 	vec3 worn = texture(kit, UV).rgb;
 	vec3 colour = part.x * tint_chest + part.y * tint_legs + part.z * tint_feet + part.w * tint_hands + (1.0 - min(1.0, part.x + part.y + part.z + part.w)) * vec3(1.0);
-	float redo = clamp(dot(part, recolor), 0.0, 1.0);
-	worn = mix(worn, dot(worn, vec3(0.299, 0.587, 0.114)) * colour * 1.8, redo);
 	vec3 gloss = texture(kit_rough, UV).rgb;
+	// (Only the kit is recoloured, never the skin it leaves bare: the rough
+	// map's blue marks where it covers. A raised piece is kit throughout.)
+	float redo = clamp(dot(part, recolor), 0.0, 1.0) * (shell ? 1.0 : gloss.b);
+	worn = mix(worn, dot(worn, vec3(0.299, 0.587, 0.114)) * colour * 1.8, redo);
 	ALBEDO = mix(worn, texture(skin, UV).rgb, off);
 	NORMAL_MAP = mix(texture(kit_normal, UV).rgb, texture(skin_normal, UV).rgb, off);
 	ROUGHNESS = mix(gloss.r, max(0.55, texture(skin_rough, UV).r), off);

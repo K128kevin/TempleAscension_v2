@@ -12,6 +12,10 @@ uniform float GUARD_TOP = 0.33;
 // How far the blade sweeps back toward its point (the bandits' sica,
 // tools/make_bandits.py): its fuller follows the curve.
 uniform float SWEEP = 0.0;
+// The colours of its parts (an item's look may give its own: scripts/items.gd).
+uniform vec3 blade_color : source_color = vec3(0.82, 0.84, 0.87);
+uniform vec3 fittings_color : source_color = vec3(0.78, 0.58, 0.25);
+uniform vec3 wrap_color : source_color = vec3(0.16, 0.085, 0.04);
 const float FULLER_END = 0.86;
 const float FULLER_HALF_WIDTH = 0.04;
 
@@ -32,9 +36,9 @@ uniform float recolor = 0.0;
 
 void fragment() {
 	float y = local_position.y;
-	vec3 brass = vec3(0.78, 0.58, 0.25);
-	vec3 leather = vec3(0.16, 0.085, 0.04);
-	vec3 steel = vec3(0.82, 0.84, 0.87);
+	vec3 brass = fittings_color;
+	vec3 leather = wrap_color;
+	vec3 steel = blade_color;
 	if (y < POMMEL_TOP || (y >= GRIP_TOP && y < GUARD_TOP)) {
 		ALBEDO = brass;
 		METALLIC = 0.9;

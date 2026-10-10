@@ -504,23 +504,35 @@ func wear(equipment: Dictionary) -> void:
 	# (His class's own kit, whole, is drawn as it always was.)
 	var plain = true
 	var dressed = true
+	if is_instance_valid(hat_item): hat_item.queue_free()
+	hat_item = null
 	for slot in Items.ARMOR_SLOTS:
-		var item: Dictionary = Items.get_item(equipment.get(slot,""))
-		var on: bool = not item.is_empty() and item.get("weight","") == Items.ARMOR_OF[hero_class]
+		var item: Dictionary = Items.get_item(equipment.get(slot,{}))
+		var on: bool = Items.wears(hero_class,item)
 		var tint = item.get("look",{}).get("tint") if on else null
+		# A piece that is a mesh of its own (the wizard's hat) is worn in the
+		# kit's piece's place, on the whole body.
+		var own: bool = on and item.get("look",{}).has("mesh")
 		if not on or tint != null: plain = false
-		if not on: dressed = false
+		if not on or own: dressed = false
 		var part: int = Art.BODY_SLOTS.find(slot)
 		if part >= 0:
 			if not on: bare[part] = 1.0
 			if tint != null:
 				redone[part] = 1.0
 				tints[slot] = tint
+		if own and slot == "head" and skeleton.find_bone("Head") >= 0:
+			hat_item = BoneAttachment3D.new()
+			hat_item.bone_name = "Head"
+			skeleton.add_child(hat_item)
+			var hat: Node3D = Art.worn_model(item.look)
+			hat_item.add_child(hat)
+			hat.transform = HAT_ON_HEAD
 		for mesh_name in pieces[slot]:
 			var mesh: MeshInstance3D = parts.get(mesh_name)
 			if mesh == null: continue
-			mesh.visible = on
-			if not on: continue
+			mesh.visible = on and not own
+			if not on or own: continue
 			var finish: Material = mesh.material_override
 			if finish is ShaderMaterial and finish.shader.resource_path.ends_with("cloak.gdshader"):
 				finish.set_shader_parameter("cloth_color",tint if tint != null else (Color(.1,.19,.1) if hero_class == "ranger" else Color(.13,.16,.27)))
@@ -544,9 +556,9 @@ func wear(equipment: Dictionary) -> void:
 		for slot in Art.BODY_SLOTS: body_material.set_shader_parameter("tint_"+slot,tints.get(slot,Color.WHITE))
 	for body in [cut,whole]:
 		if body != null and not is_stone: body.material_override = Art.hero_kit(hero_class) if plain else body_material
-	held = Items.get_item(equipment.get("main","")).get("look",{})
-	off_held = Items.get_item(equipment.get("off",""))
-	var swung: String = Items.family(Items.get_item(equipment.get("main","")))
+	held = Items.get_item(equipment.get("main",{})).get("look",{})
+	off_held = Items.get_item(equipment.get("off",{}))
+	var swung: String = Items.family(Items.get_item(equipment.get("main",{})))
 	arm({"one":"sword","fist":""}.get(swung,swung),swung)
 	if shadowed: set_shadowed(true)
 	# (Sitting by his fire, his arms are laid by.)
@@ -555,13 +567,18 @@ func wear(equipment: Dictionary) -> void:
 			if is_instance_valid(item): item.visible = false
 
 func bare_headed() -> bool:
-	return not hero_class.is_empty() and not worn.is_empty() and Items.get_item(worn.get("head","")).get("weight","") != Items.ARMOR_OF[hero_class]
+	return not hero_class.is_empty() and not worn.is_empty() and not Items.wears(hero_class,Items.get_item(worn.get("head",{})))
+
+# A hat worn in the hood's place (scripts/items.gd `mesh`), on the head
+# bone: where it sits on the crown, in the bone's own space.
+var hat_item: BoneAttachment3D
+const HAT_ON_HEAD = Transform3D(Basis(Vector3.UP,PI),Vector3(0,.13,0))
 
 # The plain weapon of a kind in hand (a statue's, a bandit's; a hero's sword
 # with his round shield).
 func equip(weapon: String) -> void:
 	held = {}
-	off_held = Items.get_item("lion_shield") if weapon == "sword" and not is_stone and not bandit else {}
+	off_held = Items.get_item("gladiators_round_shield") if weapon == "sword" and not is_stone and not bandit else {}
 	arm(weapon,{"sword":"one","dagger":"dagger","bow":"bow","staff":"staff"}.get(weapon,""))
 
 # A two-handed weapon is carried through the run and the walk as its stance
@@ -834,7 +851,9 @@ func arm(weapon: String, swung: String = "") -> void:
 		# the outer forearm, keeping the wrist inside its face rather than at a rim.
 		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(board)
 		else: shield.rotation.y = PI
-		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5+(TOWER_DROP if tower else 0.0),0)
+		# (A tall board of the hero's hangs lower on the arm, as its look says.)
+		var drop: float = TOWER_DROP if tower else (0.0 if scutum else float(off_held.get("look",{}).get("drop",0.0)))
+		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5+drop,0)
 		shield_rest = shield.position
 		shield_box = AABB()
 		# A scutum is laid along the forearm every frame (strap_scutum), in

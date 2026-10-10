@@ -168,8 +168,9 @@ func test():
 	check(not game.hud.stair_arrow.visible,"No arrow points the way in the basement")
 	game.player.position = lying.node.position
 	game.pick_up(lying)
-	check(game.has_key() and game.key_pickup().is_empty() and Game.GATE_KEY in game.run.bag,"Picked up, it goes in the bag")
-	check(Items.describe(Game.GATE_KEY).kind=="Key" and Items.slot_for(game.run,Game.GATE_KEY)=="" and not Items.move(game.run,"bag:%d" % game.run.bag.find(Game.GATE_KEY),"main").is_empty(),"It is carried, not worn or held")
+	check(game.has_key() and game.key_pickup().is_empty() and Items.carries(game.run,Game.GATE_KEY),"Picked up, it goes in the bag")
+	var key_place: int = game.run.bag.find(Items.make(Game.GATE_KEY))
+	check(Items.describe(Game.GATE_KEY).kind=="Key" and Items.slot_for(game.run,Items.make(Game.GATE_KEY))=="" and key_place>=0 and not Items.move(game.run,"bag:%d" % key_place,"main").is_empty(),"It is carried, not worn or held")
 	# Killed, he rises again with the key still in his bag.
 	game.hurt_player(100000)
 	game.retry_floor()
@@ -178,7 +179,7 @@ func test():
 	for enemy in game.enemies:
 		if not enemy.dead: enemy.hit(100000)
 	game.player.hp = game.player.max_hp
-	check(game.key_pickup().is_empty() and game.run.bag.count(Game.GATE_KEY)==1,"No second key falls")
+	check(game.key_pickup().is_empty() and game.run.bag.count(Items.make(Game.GATE_KEY))==1,"No second key falls")
 	game.player.position = world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*1.5
 	game.hud.tick(0)
 	check("Unlock" in game.hud.prompt.text,"With it, the HUD offers to unlock the gate")

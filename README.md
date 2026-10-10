@@ -316,7 +316,7 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | F9 | Kill every enemy, award ordinary kill XP, drop loot, and unlock stairs/crown |
 | F | Refill health and energy |
 | H / J | Grant a battle axe / a bow, into the bag; equip through I (if the class can use it) |
-| F6 | Drop a random one of the items enemies drop (any class's) at the hero's feet |
+| F6 | Drop a random item (any class's, of any rarity) at the hero's feet |
 | Y | Reset skills: unlearn every skill, refund all skill points and empty the hotbar; attributes stay |
 | Ctrl + 1–3 | Jump directly to that floor, retaining stats and weapons |
 | N | Jump to the next floor without progression awards; on summit, defeat boss |
@@ -626,7 +626,9 @@ refunded to spend again under the new rules. Saves from before the ranger's new
 skills (version 7) gain the dagger slot; a ranger's skill points are refunded and
 he is given his dagger. Version 1/2 saves migrate to a Warrior (or Ranger if a bow was equipped).
 Saves from before items (version 10) are given their class's starting equipment, with any
-other weapon they owned and can use in the bag. Old stat/gem bonuses are
+other weapon they owned and can use in the bag; saves from before the items were remade as
+base items with prefixes and suffixes (version 15) are given the class's new starting gear,
+keeping only the gate key. Old stat/gem bonuses are
 refunded into a level-based point budget; use the + buttons (or C and K) to rebuild. Legacy gem
 drops are retired. Fixed-layout saves move safely to the generated entrance.
 Saves use Godot's native user-data directory,
@@ -637,9 +639,9 @@ separate from earlier games:
 
 ## Items
 
-The whole of it, with every item's numbers and its chance to drop from each
-kind of enemy for each class, is in **[docs/ITEMS.md](docs/ITEMS.md)**; all of
-it is defined in `scripts/items.gd`.
+The whole of it, with every item's numbers, every prefix and suffix, the
+uniques and each enemy's drop chances, is in **[docs/ITEMS.md](docs/ITEMS.md)**;
+all of it is defined in `scripts/items.gd`.
 
 A hero wears armor on his **head, chest, legs, feet and hands**, and holds
 things in his **main hand** and **off hand**: one two-handed weapon, two
@@ -653,21 +655,29 @@ inventory.
 | Ranger | Medium | Bows, daggers, swords |
 | Wizard | Light | Staves, daggers |
 
-- **Armor** takes its percent off every blow, the pieces adding up (75% at
-  most). The starting sets, which are the kits the heroes have always worn:
-  heavy 26% (helm 5, cuirass 9, kilt 6, sandals 3, manica 3), medium 17%
-  (3, 6, 4, 2, 2), light 10% (2, 4, 2, 1, 1).
+- **Rarity.** The starting gear and the common items are white; the common
+  items are what every magic item is made of. An **uncommon** (green) item is
+  a common item with a prefix or a suffix (Swift, Sharpened, of Zeus...); a
+  **rare** (blue) one has both, or one of the rare affixes alone (Hero's, of
+  the Ancients...); the **uniques** (purple) are one of a kind, each with an
+  effect of its own: the Robe of the Lost Emperor (wizard), the Ancient
+  Gladiator's Helmet (warrior), the Bow of Odysseus (ranger) and the Marathon
+  Boots (everyone).
+- **Armor** is a number: all the hero wears adds up (A), with his shield's,
+  and takes A/(A+150) off every blow, to 75% at most. The starting sets add
+  to 108 (heavy, with the buckler), 58 (medium) and 31 (light).
 - **A weapon's damage range** is what a normal attack hits for and the
   baseline of every skill made with it (a 200% skill deals 200% of that
-  roll), before Strength or Dexterity. The starting sword, bow and dagger
-  are all 10–15, as attacks were before items.
+  roll), before Strength or Dexterity; and each weapon has its own **attacks
+  per second**, which Dexterity, Quick Strikes, Frenzy and Rallying Cry
+  quicken from there.
 - **Wizards** are the exception: their spells and their staff's bolts have a
   fixed baseline of 10–15 raised by Intelligence, whatever they hold. A staff
-  has no damage range; it can carry **spell damage** (the starting staff +5%).
-- **Two weapons**: each blow adds half the off hand's damage range, and the
-  hands strike by turns. **Bare hands** hit for 1–3.
-- A **spear** reaches 2.9 m and a **two-handed** sword or axe 2.3 m, against
-  1.9 m for the rest.
+  has no damage range; staves add Intelligence.
+- **Two weapons**: each blow adds half the off hand's damage range, the main
+  hand sets the pace, and the hands strike by turns. **Bare hands** hit for
+  1–3, twice a second.
+- A **two-handed** sword or hammer reaches 2.3 m, against 1.9 m for the rest.
 - The ranger starts with his bow in hand and his dagger in his bag. **X**
   changes between them, and a skill made with the one in the bag takes it up.
   A warrior's skills do not: with a bow in hand he cannot use them (his
@@ -675,59 +685,36 @@ inventory.
 
 ### How each weapon is swung
 
-- **One-handed swords, maces and axes** are swung as the sword always was: its
+- **One-handed swords and axes** are swung as the sword always was: its
   chain of three swings, and a swing of its own for each of the warrior's
-  skills. An axe is not thrust: the one-handed axe's normal attack is the two
+  skills. An axe is not thrust: the hatchet's normal attack is the two
   cuts only, down one way and then the other, back and forth in an X.
-- **Two-handed swords and axes** are held in both hands in their own stance,
-  run and walk. The normal attack is two heavy blows by turns (a cut down from
-  the right shoulder, then the return from the low left), and Cleave, Powerful
-  Strike, Execute, Thunder Slam, Shockwave, War Cry and Leap each have their
-  own two-handed motion (`tools/import_heavy.py`).
-- **The spear** likewise, in both hands: two thrusts by turns (level, then
-  low and rising), and its own sweep, lunge, plunge, slam, butt-strike, cry
-  and leap for the same seven skills (`tools/import_pike.py`).
+- **The greatsword and the war hammer** are held in both hands in their own
+  stance, run and walk. The normal attack is two heavy blows by turns (a cut
+  down from the right shoulder, then the return from the low left), and
+  Cleave, Powerful Strike, Execute, Thunder Slam, Shockwave, War Cry and Leap
+  each have their own two-handed motion (`tools/import_heavy.py`). The
+  hammer's face leads the blow.
 - Vampiric and Shadow Strike are struck with the weapon's own normal swing,
-  the weapon glowing. Shield Bash and Shield Charge are the shield's, whatever
-  one-handed weapon is beside it.
+  at its own pace, the weapon glowing. Shield Bash and Shield Charge are the
+  shield's, whatever one-handed weapon is beside it.
 - **A weapon in each hand**: the right hand's blow and the left's by turns,
   the left's a mirror of the right's; standing and running, the left arm
   carries its weapon as the right does.
 - **Daggers, bows and staves** keep the motions they had (any class that can
-  hold them), and bare hands jab with each fist by turns.
+  hold them), the Bandit Blade's curved blade stabbing and slashing as a
+  dagger, and bare hands jab with each fist by turns.
 
 ### What drops
 
-Any enemy that grants experience can drop one item as it dies: bandits 8% of
-the time, gladiators, archers and lions 10%, Oracles and centurions 14%, and
-the Crowned Statue always (a rare one). The item is one the hero's class can
-use, common items five times as likely as rare ones (weights: common 10,
-uncommon 5, rare 2). It lies on the ground as its own model with its name over
-it; click the name to pick it up.
-
-| Item | Rarity | Kind | Used by | What it gives |
-|---|---|---|---|---|
-| Bandit's Sica | Common | Sword · One-handed | Warrior, Ranger | 12–17 damage; +5% attack speed |
-| Bronze Hatchet | Common | Axe · One-handed | Warrior | 13–19 damage; +3% critical strike chance |
-| Flanged Mace | Uncommon | Mace · One-handed | Warrior | 15–19 damage; +3 Strength |
-| Centurion's Greatsword | Uncommon | Sword · Two-handed | Warrior, Ranger | 22–32 damage; +2 Strength |
-| Executioner's Axe | Rare | Axe · Two-handed | Warrior | 25–37 damage; +5% critical strike chance |
-| Legionary's Hasta | Uncommon | Spear · Two-handed | Warrior | 18–26 damage; +2 Dexterity |
-| Hunter's Recurve | Uncommon | Bow · Two-handed | Warrior, Ranger | 13–18 damage; +4% critical strike chance |
-| Viper's Fang | Uncommon | Dagger · One-handed | Ranger, Wizard | 12–17 damage; Restores 2 health on each hit |
-| Oracle's Staff | Rare | Staff · Two-handed | Wizard | Spells take their damage from Intelligence; +20% spell damage; +3 Intelligence |
-| Ashwood Staff | Common | Staff · Two-handed | Wizard | Spells take their damage from Intelligence; +10% spell damage |
-| Bandit's Buckler | Common | Shield · Off hand | Warrior | 18% chance to block; Blocked attacks deal 30% less |
-| Bronze Aspis | Rare | Shield · Off hand | Warrior | 32% chance to block; Blocked attacks deal 28% less; +3 Vitality |
-| Bronze Arena Helm | Uncommon | Heavy armor · Head | Warrior | 8% less damage taken; +2 Vitality |
-| Bronze Scale Cuirass | Rare | Heavy armor · Chest | Warrior | 13% less damage taken; +25 maximum health |
-| Blackened Manica | Common | Heavy armor · Hands | Warrior | 5% less damage taken; +2 Strength |
-| Dusk Cloak | Uncommon | Medium armor · Head | Ranger | 5% less damage taken; +5% movement speed |
-| Stalker's Jerkin | Rare | Medium armor · Chest | Ranger | 9% less damage taken; +3 Dexterity |
-| Swiftfoot Boots | Common | Medium armor · Feet | Ranger | 3% less damage taken; +4% movement speed |
-| Crimson Hood | Uncommon | Light armor · Head | Wizard | 4% less damage taken; +2 Intelligence |
-| Ember Robe | Rare | Light armor · Chest | Wizard | 7% less damage taken; +10% spell damage |
-| Seer's Bracers | Common | Light armor · Hands | Wizard | 2% less damage taken; +3 Willpower |
+Any enemy that grants experience can drop one item as it dies: bandits 9% of
+the time, gladiators, archers and lions 11%, Oracles and centurions 15%, and
+the Crowned Statue always (rare or unique). What falls is made for the hero's
+class: its rarity drawn by weight (common 58, uncommon 28, rare 11, unique 3),
+then a common item the class can use given its affixes, or one of the class's
+uniques. It lies on the ground as its own model with its name over it in its
+rarity's colour; click the name to pick it up. The tables of every item, affix
+and drop chance are in [docs/ITEMS.md](docs/ITEMS.md).
 
 ## Adaptation decisions
 

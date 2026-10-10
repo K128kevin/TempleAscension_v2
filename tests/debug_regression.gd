@@ -53,24 +53,30 @@ func test():
 		check(not game.player.dead and game.player.hp==100,"God mode protects player")
 		key(KEY_H); key(KEY_J)
 		game.player.busy=0; game.combat_age=10
-		check(Items.PLAIN.axe in game.run.bag and Items.PLAIN.bow in game.run.bag and game.move_item("bag:%d" % game.run.bag.find(Items.PLAIN.bow),"main").is_empty() and Data.weapon(game.run)==2,"Debug grants weapons usable through the inventory")
+		check(Items.make(Items.PLAIN.axe) in game.run.bag and Items.make(Items.PLAIN.bow) in game.run.bag and game.move_item("bag:%d" % game.run.bag.find(Items.make(Items.PLAIN.bow)),"main").is_empty() and Data.weapon(game.run)==2,"Debug grants weapons usable through the inventory")
 		var browser=debug.browser
 		key(KEY_F5)
-		check(browser.is_open() and browser.list.get_child_count()==Items.ALL.size(),"F5 opens the item browser, listing every item")
+		var listed: int=Items.BASES.keys().filter(func(id): return Items.BASES[id].has("rarity")).size()
+		check(browser.is_open() and browser.list.get_child_count()==listed,"F5 opens the item browser, listing every base item but the key")
 		var sorted=0
-		for which in ["starting","common","uncommon","rare"]:
+		for which in ["starting","common","unique"]:
 			browser.filter_buttons[which].pressed.emit()
 			var shown: Array=browser.list.get_children().map(func(r): return String(r.name))
 			sorted+=shown.size()
-			check(not shown.is_empty() and shown.all(func(id): return Items.ALL[id].get("rarity","starting")==which),"The %s filter lists only %s items" % [which,which])
-		check(sorted==Items.ALL.size(),"The rarity filters between them hold every item")
-		var free_before: int=game.run.bag.count("")
-		var rare: Button=browser.list.get_child(0)
-		rare.pressed.emit()
-		check(String(rare.name) in game.run.bag and game.run.bag.count("")==free_before-1,"Clicking an item puts it in the bag")
+			check(not shown.is_empty() and shown.all(func(id): return Items.BASES[id].get("rarity","")==which),"The %s filter lists only %s items" % [which,which])
+		check(sorted==listed,"The rarity filters between them hold every item")
+		var free_before: int=Items.free_places(game.run)
+		var first: Button=browser.list.get_child(0)
+		first.pressed.emit()
+		check(Items.make(String(first.name)) in game.run.bag and Items.free_places(game.run)==free_before-1,"Clicking an item puts it in the bag")
+		browser.filter_buttons.common.pressed.emit()
+		var common: Button=browser.list.get_child(0)
+		common.get_node("rare").pressed.emit()
+		var magic: Array=game.run.bag.filter(func(i): return not i.is_empty() and i.base==String(common.name) and Items.rarity(i)=="rare")
+		check(magic.size()==1 and Items.valid_instance(magic[0]),"Its R button puts in a rare one made of it: %s" % Items.name_of(magic[0]) if not magic.is_empty() else "Its R button puts in a rare one made of it")
 		key(KEY_I)
 		check(game.mode=="character" and browser.is_open(),"The browser stays open beside the inventory")
-		game.run.bag[game.run.bag.find(String(rare.name))]=""
+		game.run.bag[game.run.bag.find(Items.make(String(first.name)))]={}
 		key(KEY_I)
 		key(KEY_F5)
 		check(not browser.is_open(),"F5 closes the browser")

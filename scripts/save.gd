@@ -4,7 +4,21 @@ const Items = preload("res://scripts/items.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=15: return d
+	if int(d.get("version",0))>=16: return d
+	if int(d.get("version",0))==15:
+		# Every item was remade (scripts/items.gd): what was an item's id is now
+		# an instance, a base with its prefix and suffix. A character from
+		# before is given its class's new starting gear; the gate key, if it
+		# carried one, stays in its bag; what lay on the ground is gone.
+		if not d.get("class_id","") in Data.CLASSES: return {}
+		var updated = d.duplicate(true)
+		updated.version = 16
+		var had_key: bool = d.get("bag") is Array and "gate_key" in d.bag
+		Items.outfit(updated,updated.class_id)
+		if had_key: Items.stow(updated,Items.make("gate_key"))
+		updated.drops = []
+		updated["migration_notice"] = true
+		return updated
 	if int(d.get("version",0))==14:
 		# The basement's gates and their keys: none held yet. Its levels were
 		# laid out anew, so the bandits slain there (known by their number on
@@ -14,7 +28,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 		updated.keys = []
 		updated.dead = updated.get("dead",[]).filter(func(id): return not str(id).begins_with("basement:"))
 		if updated.get("place","")=="basement": updated.drops = []
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==13:
 		# Easy, Moderate and Hard became Normal and Hard: Moderate is Normal.
 		var updated = d.duplicate(true)
@@ -50,7 +64,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 		var had: Array = d.get("owned",[]) if d.get("owned") is Array else []
 		for i in mini(had.size(),6):
 			var plain: String = Items.PLAIN.get(Data.WEAPONS[i],"")
-			if had[i] is bool and had[i] and not plain.is_empty() and Items.usable(updated.class_id,plain) and not plain in updated.equipment.values() and not plain in updated.bag: Items.stow(updated,plain)
+			if had[i] is bool and had[i] and not plain.is_empty() and Items.usable(updated.class_id,plain) and not Items.make(plain) in updated.equipment.values() and not Items.make(plain) in updated.bag: Items.stow(updated,Items.make(plain))
 		for key in ["owned","weapon","shield"]: updated.erase(key)
 		updated.drops = []
 		return migrate(updated)
@@ -149,7 +163,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<15:
+	if int(d.get("version",0))<16:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():
@@ -164,11 +178,11 @@ static func valid(d) -> bool:
 	# that fits it and that the class can use; a two-handed weapon alone.
 	if not d.equipment is Dictionary or d.equipment.size()!=Items.SLOTS.size() or not d.bag is Array or d.bag.size()!=Items.BAG_SIZE: return false
 	for slot in Items.SLOTS:
-		if not d.equipment.get(slot) is String: return false
-		if not d.equipment[slot].is_empty() and not Items.misfit(d,d.equipment[slot],slot).is_empty(): return false
+		if not d.equipment.get(slot) is Dictionary: return false
+		if not d.equipment[slot].is_empty() and not (Items.valid_instance(d.equipment[slot]) and Items.misfit(d,d.equipment[slot],slot).is_empty()): return false
 	if Items.two_handed(d.equipment.main) and not d.equipment.off.is_empty(): return false
-	for id in d.bag:
-		if not id is String or not (id.is_empty() or Items.exists(id)): return false
+	for inst in d.bag:
+		if not inst is Dictionary or not (inst.is_empty() or Items.valid_instance(inst)): return false
 	if not d.position is Array or d.position.size()!=2: return false
 	for value in d.position:
 		if not (value is int or value is float) or not is_finite(float(value)): return false
@@ -207,7 +221,7 @@ static func valid(d) -> bool:
 	for key in d.keys:
 		if not key is String: return false
 	for drop in d.drops:
-		if not drop is Dictionary or not drop.get("item") is String or not Items.exists(drop.item): return false
+		if not drop is Dictionary or not Items.valid_instance(drop.get("item")): return false
 		if not drop.get("position") is Array or drop.position.size()!=2: return false
 	return true
 

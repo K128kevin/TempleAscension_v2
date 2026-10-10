@@ -83,9 +83,12 @@ static func reach(swung: String) -> float:
 	return family(swung).reach
 # A family's normal attack as it is timed at `attack_speed_percent` (as
 # profile(), below): its "duration", and the "times" in it its blows land.
-static func timed(swung: String, attack_speed_percent: float, minimum_duration: float = 0.0, speed_floor: float = .65) -> Dictionary:
+# `seconds` is the weapon's own time for a blow (its attacks a second:
+# scripts/items.gd), in place of the family's.
+static func timed(swung: String, attack_speed_percent: float, minimum_duration: float = 0.0, speed_floor: float = .65, seconds: float = -1.0) -> Dictionary:
 	var result: Dictionary = family(swung).duplicate(true)
 	result.clip = result.clips[0]
+	if seconds > 0.0: result.seconds = seconds
 	result.duration = maxf(minimum_duration,result.seconds*maxf(speed_floor,1.0/(1.0+attack_speed_percent*.01)))
 	result.times = []
 	for fraction in result.contacts: result.times.append(fraction*result.duration)

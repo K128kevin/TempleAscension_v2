@@ -263,6 +263,7 @@ func test():
 		var cls: String = hero.uid.trim_prefix("hero:")
 		var shown = {}
 		for mesh in hero.visual.skin_meshes: shown[String(mesh.name)] = mesh.visible
+		# (The ranger's hood is his cloak, over a body cut to go under it.)
 		var kit = {"warrior":["HeroHelmet","HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardHood","WizardBody"]}[cls]
 		var hidden = ["HeroHelmet","RangerCloak","RangerBody","WizardRobe","WizardHood","WizardBody","HeroArmor","SuperHero_Male"].filter(func(n): return not n in kit)
 		check(kit.all(func(n): return shown.get(n,false)) and hidden.all(func(n): return not shown.get(n,true)),"The %s wears its own kit" % cls)
@@ -300,7 +301,7 @@ func test():
 		check(sim != null and sim.setting_count == 13 and cape_mesh != null and unit.visual.cloth_feel == unit.visual.CLOTH_HEAVY,"The %s's cape swings and folds over the legs" % pg.unit_name(unit))
 	# The ranger's detailed kit (tools/paint_kits.py, outfit_hero.py) is his
 	# alone, and replaces the plain boots.
-	var kit = ["RangerBoots","RangerBracers","RangerBelt","RangerQuiver","RangerDagger","RangerPouch","RangerBrooch","RangerBeard"]
+	var kit = ["RangerBoots","RangerBracers","RangerBelt","RangerQuiver","RangerDagger","RangerPouch","RangerBeard"]
 	for hero in pg.heroes:
 		var worn = {}
 		for mesh in hero.visual.skin_meshes: worn[String(mesh.name)] = mesh.visible

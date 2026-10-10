@@ -1,8 +1,9 @@
 extends SceneTree
 ## Renders a hero as he is dressed, for inspection: front and back.
 ##   Godot --path . --script tools/preview_gear.gd -- --class=warrior
-##     [--wear=head=,chest=bronze_cuirass,main=greatsword,off=]  changes to
-##         the class's starting equipment (slot=item id; nothing after = empty)
+##     [--wear=head=,chest=steel_breastplate,main=greatsword,off=]  changes to
+##         the class's starting equipment (slot=base item id, or
+##         prefix:base:suffix for a magic one; nothing after = empty)
 ##     [--clip=SwordIdle --phase=.5] [--yaw=0.5] [--size=2.5] [--height=1.0] [--out=name]
 ## The picture goes to test-results/gear-<out>.png.
 const Visual = preload("res://scripts/visual.gd")
@@ -38,7 +39,12 @@ func capture():
 	Items.outfit(run,hero_class)
 	for change in arg("wear","").split(",",false):
 		var pair = change.split("=")
-		run.equipment[pair[0]] = pair[1] if pair.size() > 1 else ""
+		# (A base item's id, or one with its prefix and suffix: "swift:steel_longsword:zeus".)
+		if pair.size() < 2 or pair[1].is_empty():
+			run.equipment[pair[0]] = {}
+			continue
+		var parts = pair[1].split(":")
+		run.equipment[pair[0]] = Items.make(parts[1],parts[0],parts[2]) if parts.size() == 3 else Items.make(parts[0])
 	var yaw = float(arg("yaw","0.5"))
 	for i in 2:
 		var stand = Node3D.new()

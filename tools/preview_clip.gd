@@ -7,7 +7,7 @@ extends SceneTree
 ##     [--glb=/abs/path/warrior.glb]   the model (default: the game's own)
 ##     [--weapon=sword --size=.19,1.3,.09 --grip=.22]   the prop, its size, and
 ##         how far up from its butt the right fist holds it
-##     [--item=bronze_hatchet]   or one of the game's items, held as the game
+##     [--item=hatchet]   or one of the game's items, held as the game
 ##         holds it (scripts/items.gd)
 ##     [--offhand=-.2]   marks where the left hand should hold the haft: this
 ##         many metres along the weapon from the right fist (negative: toward

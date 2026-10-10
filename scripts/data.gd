@@ -96,7 +96,7 @@ static func casts_left(run: Dictionary) -> bool:
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	var run = {"version":15,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"keys":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	var run = {"version":16,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"keys":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 	Items.outfit(run,class_id)
 	return run
 
@@ -198,9 +198,18 @@ static func roll(run: Dictionary, tag: String) -> float:
 	var between: Array = span(run,tag)
 	return randf_range(between[0],between[1])
 
-# Percent less damage the hero takes, for the armor he wears.
+# Percent less damage the hero takes, for the armor he wears (Items.reduction:
+# its points against Items.ARMOR_SCALE), and those points themselves.
 static func armor(run: Dictionary) -> float:
+	return Items.reduction(run)
+static func armor_points(run: Dictionary) -> float:
 	return Items.armor(run)
+
+# How long the normal attack with the weapon a blow of `tag` is made with
+# takes, before Dexterity and the rest quicken it: the weapon's own attacks a
+# second (Items.seconds).
+static func attack_seconds(run: Dictionary, tag: String = "melee") -> float:
+	return Items.seconds(run,tag)
 
 static func cooldown(_run: Dictionary) -> float: return .5
 

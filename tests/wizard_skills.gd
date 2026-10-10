@@ -12,7 +12,7 @@ const ShieldBubble = preload("res://scripts/shield_bubble.gd")
 const WizardFx = preload("res://scripts/wizard_fx.gd")
 const STEP = 1.0/60
 # The starting staff adds 5% to every spell.
-const STAFF = 1.05
+const STAFF = 1.08
 var game
 var origin: Vector3
 var forward = Vector3(0,0,-1)
@@ -484,7 +484,8 @@ func test():
 	check(bubble.crackles.size()==1 and bubble.crackles[0].from.dot(Vector3(toward.x,0,toward.z).normalized())>.7,"Absorbing it, the bubble crackles with electricity where the blow came from")
 	play(.6)
 	check(bubble.crackles.is_empty(),"and the crackle dies away")
-	game.hurt_player(30.0,"physical",foe)
+	# (A heavier blow: his wool takes more off a blow than it did.)
+	game.hurt_player(40.0,"physical",foe)
 	check(game.player.hp<game.player.max_hp and game.skills.barrier==0.0,"Spent, the rest gets through")
 	play(.1)
 	check(game.skills.shield_node == null and is_instance_valid(bubble) and bubble.ending and bubble in game.skills.waves,"Spent, the bubble gives out, its last crackle seen")
@@ -542,7 +543,7 @@ func test():
 
 	# Only a wizard's spells have an element; his bare-handed casting and tips.
 	hero({"fireball":1})
-	game.run.equipment.main = ""; game.refit()
+	game.run.equipment.main = {}; game.refit()
 	foe = dummy(6)
 	check(cast("fireball",foe.position),"Spells are cast with nothing in hand")
 	check("Damage:" in game.skills.damage_summary("fireball",1).damage and " a second" in game.skills.damage_summary("fire_tornado",1).damage and game.skills.damage_summary("ice_prison",1).is_empty(),"Tips show a spell's damage, a second for what lasts, and none for what deals none")
@@ -551,7 +552,7 @@ func test():
 	var old = Data.new_run("wizard"); old.version = 11; old.skills = {}; old.skill_points = 1
 	var migrated = Save.migrate(old)
 	check(Save.valid(old) and migrated.version==Data.new_run().version and migrated.skills.is_empty() and migrated.skill_points==1 and migrated.get("migration_notice",false),"A wizard's older save has its skill points refunded")
-	game.run.skills = {"fireball":1}; game.run.skill_points = 0; game.run.equipment.main = "silver_staff"
+	game.run.skills = {"fireball":1}; game.run.skill_points = 0; game.run.equipment.main = Items.make("twisted_silver_staff")
 	check(Save.valid(game.run),"The character is save-valid throughout")
 	# LMB is bound from the skill panel as the other slots are.
 	hero({})
@@ -623,7 +624,7 @@ func test():
 	check(run_grip>.999,"and running (%.3f)" % run_grip)
 	for i in 40: look.locomotion(false,false); look.advance(1.0/60)
 	# Its staffs are made in parts, each dressed for what it is made of.
-	for id in ["silver_staff","oracle_staff","ashwood_staff"]:
+	for id in ["twisted_silver_staff"]:
 		var made: Node3D = Art.held_model(Items.get_item(id).look)
 		var parts: Dictionary = {}
 		for mesh in made.find_children("*","MeshInstance3D",true,false):

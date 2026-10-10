@@ -328,7 +328,7 @@ func build_skills(body: VBoxContainer) -> void:
 func build_bag(body: VBoxContainer) -> void:
 	body.add_theme_constant_override("separation",8)
 	if slot_styles.is_empty():
-		for look in [["empty",Color(.3,.27,.2)],["common",Color(.5,.46,.36)],["uncommon",Items.RARITY_COLORS.uncommon.darkened(.25)],["rare",Items.RARITY_COLORS.rare.darkened(.15)],["no",Color(.75,.22,.16)],["yes",Color(.5,.85,.5)]]:
+		for look in [["empty",Color(.3,.27,.2)],["common",Color(.5,.46,.36)],["uncommon",Items.RARITY_COLORS.uncommon.darkened(.25)],["rare",Items.RARITY_COLORS.rare.darkened(.15)],["unique",Items.RARITY_COLORS.unique.darkened(.15)],["no",Color(.75,.22,.16)],["yes",Color(.5,.85,.5)]]:
 			var style = hud.panel_style(Color(.055,.055,.06,.98),look[1])
 			style.set_content_margin_all(0)
 			style.set_corner_radius_all(3)
@@ -394,8 +394,10 @@ func slot(place: String) -> Control:
 	return square_frame
 
 # An item's picture (tools/render_item_icons.gd makes them from its model).
-func item_icon(id: String) -> Texture2D:
-	var path = "res://assets/ui/items/%s.png" % id
+# An item's picture: its base's (tools/render_item_icons.gd).
+func item_icon(thing) -> Texture2D:
+	var base: String = thing.get("base","") if thing is Dictionary else str(thing)
+	var path = "res://assets/ui/items/%s.png" % base
 	return load(path) if ResourceLoader.exists(path) else null
 
 # The hero as he is dressed and armed, standing on a turntable (drag across
@@ -456,17 +458,17 @@ func make_drop_zone() -> void:
 
 # What is dragged from a square: its item (nothing from an empty one).
 func drag_from(place: String):
-	var id: String = Items.at(game.run,place)
-	if id.is_empty(): return null
+	var inst: Dictionary = Items.at(game.run,place)
+	if inst.is_empty(): return null
 	var shown = TextureRect.new()
-	shown.texture = item_icon(id)
+	shown.texture = item_icon(inst)
 	shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	shown.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	shown.size = Vector2(SLOT,SLOT)
 	shown.position = -shown.size*.5
 	var carried = Control.new()
 	carried.add_child(shown)
-	if shown.texture == null: text(Items.get_item(id).name,11,Items.color(id),carried)
+	if shown.texture == null: text(Items.name_of(inst),11,Items.color(inst),carried)
 	slots[place].frame.set_drag_preview(carried)
 	unhover_item()
 	return {"item_from":place}
@@ -485,11 +487,11 @@ func drop_on(place: String, data) -> void:
 # A right click (or a double click): an item in the bag is put on, one worn
 # or held goes into the bag.
 func quick_move(place: String) -> void:
-	var id: String = Items.at(game.run,place)
-	if id.is_empty(): return
+	var inst: Dictionary = Items.at(game.run,place)
+	if inst.is_empty(): return
 	var to = ""
 	if Items.in_bag(place):
-		to = Items.slot_for(game.run,id)
+		to = Items.slot_for(game.run,inst)
 		# (Nothing to put it on: a key is only carried.)
 		if to.is_empty(): return
 	else:
@@ -509,8 +511,8 @@ func unhover_item() -> void:
 
 # The hovered item's details, beside the window.
 func show_item_tip(place: String) -> void:
-	var id: String = Items.at(game.run,place)
-	if id.is_empty() or not slots.has(place):
+	var inst: Dictionary = Items.at(game.run,place)
+	if inst.is_empty() or not slots.has(place):
 		if is_instance_valid(item_tip): item_tip.visible = false
 		return
 	if not is_instance_valid(item_tip):
@@ -519,13 +521,13 @@ func show_item_tip(place: String) -> void:
 		var body = VBoxContainer.new()
 		body.add_theme_constant_override("separation",3)
 		item_tip.add_child(body)
-		for line in [["title",15,hud.gold],["kind",11,dim],["stats",12,hud.cream],["note",12,Color(1,.5,.4)],["hint",11,green]]:
+		for line in [["title",15,hud.gold],["kind",11,dim],["stats",12,hud.cream],["effect",12,Items.RARITY_COLORS.unique],["note",12,Color(1,.5,.4)],["hint",11,green]]:
 			var l = text("",line[1],line[2],body)
 			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			l.custom_minimum_size.x = 230
 			item_tip_lines[line[0]] = l
-	var about: Dictionary = Items.describe(id,game.run.class_id)
-	var lines = {"title":about.title,"kind":about.kind,"stats":"\n".join(about.stats),"note":about.note}
+	var about: Dictionary = Items.describe(inst,game.run.class_id)
+	var lines = {"title":about.title,"kind":about.kind,"stats":"\n".join(about.stats),"effect":about.effect,"note":about.note}
 	lines.hint = "Right-click: %s" % ("put on" if Items.in_bag(place) else "take off") if about.note.is_empty() else ""
 	for key in item_tip_lines:
 		item_tip_lines[key].text = lines[key]
@@ -542,19 +544,19 @@ func refresh_bag() -> void:
 	var r: Dictionary = game.run
 	for place in slots:
 		var s: Dictionary = slots[place]
-		var id: String = Items.at(r,place)
-		if s.shown == id: continue
-		s.shown = id
-		s.icon.texture = item_icon(id) if not id.is_empty() else null
+		var inst: Dictionary = Items.at(r,place)
+		if s.shown is Dictionary and s.shown == inst: continue
+		s.shown = inst
+		s.icon.texture = item_icon(inst) if not inst.is_empty() else null
 		# An empty equipment slot says what goes there; an item with no picture, its name.
-		s.name.text = (Items.SLOT_TITLES[place] if not Items.in_bag(place) else "") if id.is_empty() else (Items.get_item(id).name if s.icon.texture == null else "")
-		s.name.add_theme_color_override("font_color",Color(.42,.41,.38) if id.is_empty() else Items.color(id))
-		s.frame.add_theme_stylebox_override("panel",slot_styles["empty" if id.is_empty() else Items.rarity(id)])
+		s.name.text = (Items.SLOT_TITLES[place] if not Items.in_bag(place) else "") if inst.is_empty() else (Items.name_of(inst) if s.icon.texture == null else "")
+		s.name.add_theme_color_override("font_color",Color(.42,.41,.38) if inst.is_empty() else Items.color(inst))
+		s.frame.add_theme_stylebox_override("panel",slot_styles["empty" if inst.is_empty() else Items.rarity(inst)])
 	if is_instance_valid(figure):
 		if figure.worn != r.equipment: figure.wear(r.equipment)
 	var span: Array = Data.span(r,Data.scaling_tag(Data.weapon(r)))
 	var tag: String = Data.scaling_tag(Data.weapon(r))
-	bag_summary.text = "Armor: %s%% less damage taken\n%s: %d–%d" % [Items.figure(Data.armor(r)),"Spell damage" if tag=="spell" else "Attack damage",roundi(Data.damage_tag(r,tag,span[0])),roundi(Data.damage_tag(r,tag,span[1]))]
+	bag_summary.text = "Armor %s · %s%% less damage taken\n%s: %d–%d" % [Items.figure(Data.armor_points(r)),Items.figure(Data.armor(r)),"Spell damage" if tag=="spell" else "Attack damage",roundi(Data.damage_tag(r,tag,span[0])),roundi(Data.damage_tag(r,tag,span[1]))]
 
 # Skills that open together share a row: by points in the tree, then by level.
 func gate(s: Dictionary) -> int:
@@ -640,7 +642,7 @@ func refresh() -> void:
 			stat_splits[i].text = "%d base · %+d items" % [r.stats[i],gear] if gear != 0 else ""
 			stat_splits[i].visible = gear != 0
 			stat_buttons[i].disabled = r.points<=0
-		stat_summary.text = Data.in_his_words(r,"Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%") % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(game.skills.basic_speed(Data.weapon(r))),game.skills.figure(Data.crit_chance(r))]
+		stat_summary.text = Data.in_his_words(r,"Health %d · Energy %d · +%.1f energy/s\nArmor %s (%s%% less damage) · Critical strike %s%%\nAttack speed +%s%%%s") % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),Items.figure(Data.armor_points(r)),Items.figure(Data.armor(r)),game.skills.figure(Data.crit_chance(r)),game.skills.figure(game.skills.basic_speed(Data.weapon(r)))," · %s attacks/s" % game.skills.figure(game.skills.attacks_a_second(Data.weapon(r))) if Data.weapon(r)!=4 else ""]
 		stat_reset.disabled = not game.safe_checkpoint()
 	if skills_open():
 		tree_points.text = "%d point%s to spend" % [r.skill_points,"" if r.skill_points==1 else "s"]
@@ -690,7 +692,7 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 # The normal attack's tip: what the weapon in hand hits for.
 func attack_lines() -> Dictionary:
 	var weapon = Data.weapon(game.run)
-	var lines = {"title":"%s · Attack" % (Items.main(game.run).name if not Items.main(game.run).is_empty() else "Bare hands"),"kind":Data.in_his_words(game.run,"LMB · No energy cost")}
+	var lines = {"title":"%s · Attack" % (Items.main(game.run).name if not Items.main(game.run).is_empty() else "Bare hands"),"kind":Data.in_his_words(game.run,"LMB · No energy cost · %s attacks/s" % game.skills.figure(game.skills.attacks_a_second(weapon)))}
 	lines.merge(game.skills.crit_numbers(weapon))
 	lines.damage = "Damage: "+game.skills.span(100.0,Data.scaling_tag(weapon))
 	return lines

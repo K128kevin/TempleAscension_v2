@@ -49,7 +49,7 @@ func test():
 	var killed: String = game.enemies[0].uid
 	game.enemies[0].hit(10000)
 	game.player.position = game.world.exit_point
-	game.run.drops = [{"item":"hunters_recurve","position":[game.world.spawn.x,game.world.spawn.z]}]
+	game.run.drops = [{"item":Data.Items.make("hunters_bow"),"position":[game.world.spawn.x,game.world.spawn.z]}]
 	game.save_run()
 	var cells: Dictionary = game.world.layout.cells.duplicate()
 	var saved_position: Vector3 = game.player.position

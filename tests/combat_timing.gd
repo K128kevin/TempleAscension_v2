@@ -67,7 +67,9 @@ func held_attacks(game, victim, class_id: String, kind: String, dt: float):
 		clock+=dt
 		if clock>10: check(false,"Held attack test timed out: "+context); break
 	check(starts==4 and contacts==4,"Four held attacks produce four animated contacts: %s (%d starts, %d contacts, foe %.2f m off)" % [context,starts,contacts,game.player.position.distance_to(victim.position)])
-	if weapon==1: check(game.player.visual.state=="SwordCut1L" and game.sword_swing==0,"Held, the sword's swings follow one another round the chain: "+context)
+	# (The axe's chain is two cuts, the sword's three: after four swings each is somewhere else in it.)
+	var axe_held: bool = Items.kind(game.run)=="axe"
+	if weapon==1: check(game.player.visual.state==("SwordCut2L" if axe_held else "SwordCut1L") and game.sword_swing==(1 if axe_held else 0),"Held, the sword's swings follow one another round the chain: "+context)
 	victim.dead=true
 func live_attacks(game):
 	# Exercise the normal frame callbacks as well as deterministic playback.
@@ -127,7 +129,9 @@ func test():
 		game.tick_scheduled(profile.times[0]-.2+.001)
 		if swung in ["bow","staff"]: check(game.projectiles.size()==1,"Ranged basic releases at contact: "+kind)
 		else: check(victim.hp<10000,"Melee basic lands at contact: "+kind)
-		check(Motion.timed(swung,100).duration>=profile.duration*.65-.001,"Speed bonus respects animation readability floor")
+		# (The weapon's own time, but a staff's bolt keeps its family's.)
+		var own: float = -1.0 if swung=="staff" else Data.attack_seconds(game.run,Data.scaling_tag(Data.weapon(game.run)))
+		check(Motion.timed(swung,100,0.0,.65,own).duration>=profile.duration*.65-.001,"Speed bonus respects animation readability floor: "+kind)
 		victim.dead=true
 	# Fast and slow playback of every weapon clip, including multi-release bow.
 	for weapon in 5:
@@ -143,7 +147,8 @@ func test():
 			for duration in [.25,1.75]: playback(game.player.visual,clip,duration,Motion.FAMILIES[swung].contacts if not clip.begins_with("Sword") and clip!="OffCut" else [Motion.FAMILIES[swung].contacts[0]*Motion.SWORD_SWING_SHARE],"%s %.2fs" % [clip,duration])
 	# (The wizard has no normal attack: his left click casts a spell.)
 	for class_id in Data.CLASSES.filter(func(c): return not Data.casts_left(Data.new_run(c))):
-		for kind in Items.WIELDS[class_id].filter(func(k): return k!="shield")+["unarmed"]:
+		# (Only the kinds a weapon is made of: no spear yet.)
+		for kind in Items.WIELDS[class_id].filter(func(k): return k!="shield" and Items.PLAIN.has(k))+["unarmed"]:
 			for dt in [1.0/15,1.0/60]: held_attacks(game,victim,class_id,kind,dt)
 	# All active class skills share the same restart and duration contract.
 	for id in Book.all():

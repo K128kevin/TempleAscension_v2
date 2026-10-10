@@ -612,13 +612,13 @@ func show_item_labels() -> void:
 			b.remove_meta("pickup")
 			continue
 		var pickup: Dictionary = shown[i]
-		var id: String = pickup.drop.item
+		var inst: Dictionary = pickup.drop.item
 		b.set_meta("pickup",pickup)
-		if b.text != Items.get_item(id).name:
-			b.text = Items.get_item(id).name
-			var tone: Color = Items.color(id)
+		if b.text != Items.name_of(inst):
+			b.text = Items.name_of(inst)
+			var tone: Color = Items.color(inst)
 			for look in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]: b.add_theme_color_override(look,tone if look=="font_color" else tone.lightened(.3))
-			var key: String = Items.rarity(id)
+			var key: String = Items.rarity(inst)
 			if not item_label_styles.has(key):
 				var plain = panel_style(Color(.03,.03,.035,.82),tone.darkened(.35))
 				plain.set_content_margin_all(2)

@@ -28,7 +28,8 @@ leather sash knotted at the front.
 
 Three maps are written to assets/textures per hero: hero_kit_<hero>.png
 (colour), hero_kit_<hero>_normal.png (tangent-space, from the painted relief)
-and hero_kit_<hero>_rough.png. No geometry is changed. (hero_kit.png, from
+and hero_kit_<hero>_rough.png (red roughness, green metal, blue where the
+kit covers the skin). No geometry is changed. (hero_kit.png, from
 tools/paint_hero.py, stays: the gladiator statue's scales are cut from it.)
 """
 from pathlib import Path
@@ -584,7 +585,10 @@ def main():
             r = np.where(baked & ~bare & (metal<.5),np.maximum(r,.88),r)
         r[bare] = np.clip(skin_rough[bare],.35,.9)
         metal[bare] = 0
-        save('hero_kit_'+recipe+'_rough',np.stack([r,metal,np.zeros_like(r)],-1))
+        # Blue: where the kit covers the skin (an item of another make is
+        # recoloured there, and the bare skin left alone: hero_body.gdshader).
+        covered = np.zeros_like(r); covered[baked & ~bare] = 1.0
+        save('hero_kit_'+recipe+'_rough',np.stack([r,metal,covered],-1))
         # The relief as a height map (0.5 the bare surface, 1/255 = 0.04mm),
         # for the statues, which carve it into stone (statue_stone.gdshader).
         hm = np.full((SIZE,SIZE),.5,np.float32); hm[baked] = np.clip(.5+height*100.0,0,1)

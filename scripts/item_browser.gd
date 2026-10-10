@@ -1,13 +1,16 @@
 extends RefCounted
-## Debug item browser (F5 in debug mode, scripts/debug.gd): every item in the
-## game in one scrolling list, filtered by rarity, each put into the hero's
-## bag with a click, whether or not his class can use it. Hovering a row
-## shows what the item does, as its tip in the inventory does.
+## Debug item browser (F5 in debug mode, scripts/debug.gd): every base item
+## in the game in one scrolling list, filtered by its rarity, each put into
+## the hero's bag with a click, whether or not his class can use it; a common
+## item's row has buttons beside it that put in a random uncommon or rare
+## one made of it (scripts/items.gd enchant). Hovering a row shows what the
+## item does, as its tip in the inventory does.
 const Items = preload("res://scripts/items.gd")
-# The filters, in order: everything, the gear a class starts with (which has
-# no rarity and never drops), then each rarity.
-const FILTERS = ["all","starting","common","uncommon","rare"]
-const FILTER_TITLES = {"all":"All","starting":"Starting","common":"Common","uncommon":"Uncommon","rare":"Rare"}
+# The filters, in order: everything, the gear a class starts with (which
+# never drops), the common items (which drop, and the magic items are made
+# of), and the uniques.
+const FILTERS = ["all","starting","common","unique"]
+const FILTER_TITLES = {"all":"All","starting":"Starting","common":"Common","unique":"Unique"}
 const ICON = 40
 var game
 var hud
@@ -18,6 +21,7 @@ var filter_buttons: Dictionary = {}
 var filter = "all"
 # The class the rows were marked for (what it cannot use is dimmed).
 var marked_for = ""
+var rng = RandomNumberGenerator.new()
 
 func setup(owner_game) -> void:
 	game = owner_game
@@ -36,23 +40,23 @@ func open() -> void:
 	window.move_to_front()
 	show_filter(filter)
 
-# Its filter: which rarity's items are listed ("starting": the gear classes
-# start with; "all": everything).
+# Its filter: which base items are listed ("all": everything but the key).
 static func shows(id: String, which: String) -> bool:
-	var rarity: String = Items.ALL[id].get("rarity","")
+	var rarity: String = Items.BASES[id].get("rarity","")
+	if rarity.is_empty(): return false
 	if which == "all": return true
-	if which == "starting": return rarity.is_empty()
 	return rarity == which
 
-# The items under a filter, the starting gear first, then commoner before rarer.
+# The base items under a filter, the starting gear first, then the common
+# items, then the uniques.
 static func listed(which: String) -> Array:
-	var order = ["","common","uncommon","rare"]
-	var ids: Array = Items.ALL.keys().filter(func(id): return shows(id,which))
+	var order = ["starting","common","unique"]
+	var ids: Array = Items.BASES.keys().filter(func(id): return shows(id,which))
 	var place = {}
 	for i in ids.size(): place[ids[i]] = i
 	ids.sort_custom(func(a,b):
-		var ra = order.find(Items.ALL[a].get("rarity",""))
-		var rb = order.find(Items.ALL[b].get("rarity",""))
+		var ra = order.find(Items.BASES[a].get("rarity",""))
+		var rb = order.find(Items.BASES[b].get("rarity",""))
 		return ra < rb if ra != rb else place[a] < place[b])
 	return ids
 
@@ -98,10 +102,11 @@ func show_filter(which: String) -> void:
 	for id in listed(which): list.add_child(row(id))
 	refresh()
 
-# One item: its picture, its name in its rarity's colour, and what it is.
-# A click puts it in the bag.
+# One base item: its picture, its name in its rarity's colour, and what it
+# is. A click puts it in the bag; a common item's U and R buttons put in an
+# uncommon or a rare one made of it.
 func row(id: String) -> Button:
-	var item: Dictionary = Items.ALL[id]
+	var item: Dictionary = Items.BASES[id]
 	var about: Dictionary = Items.describe(id,game.run.class_id)
 	var b = Button.new()
 	b.name = id
@@ -112,9 +117,10 @@ func row(id: String) -> Button:
 		style.set_content_margin_all(4)
 		b.add_theme_stylebox_override(state,style)
 	var tip: Array = [about.kind]+about.stats
+	if not about.effect.is_empty(): tip.append(about.effect)
 	if not about.note.is_empty(): tip.append(about.note)
 	b.tooltip_text = "\n".join(tip)
-	b.pressed.connect(func(): add(id))
+	b.pressed.connect(func(): add(Items.make(id)))
 	var icon = TextureRect.new()
 	icon.texture = hud.panels.item_icon(id)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -127,12 +133,26 @@ func row(id: String) -> Button:
 	var rarity: String = item.get("rarity","starting")
 	var kind_label = hud.label("%s · %s%s" % [rarity.capitalize(),about.kind,"" if about.note.is_empty() else " · can't use"],11,Color(.62,.6,.53),b)
 	kind_label.position = Vector2(ICON+12,24)
+	if rarity == "common":
+		var x = 300.0
+		for roll in [["U","uncommon"],["R","rare"]]:
+			var magic = Button.new()
+			magic.text = roll[0]
+			magic.name = roll[1]
+			magic.focus_mode = Control.FOCUS_NONE
+			magic.custom_minimum_size = Vector2(26,26)
+			magic.position = Vector2(x,ICON*.5-9)
+			magic.tooltip_text = "Add a random %s %s" % [roll[1],item.name]
+			for look in ["font_color","font_hover_color","font_pressed_color","font_hover_pressed_color"]: magic.add_theme_color_override(look,Items.RARITY_COLORS[roll[1]])
+			magic.pressed.connect(func(): add(Items.enchant(id,roll[1],rng)))
+			b.add_child(magic)
+			x += 30.0
 	if not about.note.is_empty(): b.modulate = Color(1,1,1,.6)
 	return b
 
-func add(id: String) -> void:
-	if Items.stow(game.run,id):
-		game.toast("[Debug] %s added to the bag" % Items.get_item(id).name)
+func add(inst: Dictionary) -> void:
+	if Items.stow(game.run,inst):
+		game.toast("[Debug] %s added to the bag" % Items.name_of(inst))
 		game.save_run()
 		if game.hud.panels.any_open(): game.hud.panels.refresh()
 	else: game.toast("[Debug] The bag is full")
@@ -145,6 +165,6 @@ func refresh() -> void:
 	if marked_for != game.run.class_id:
 		show_filter(filter)
 		return
-	var room: int = game.run.bag.count("")
+	var room: int = Items.free_places(game.run)
 	count.text = "%d item%s · click one to add it to the bag · %d free place%s" % [list.get_child_count(),"" if list.get_child_count() == 1 else "s",room,"" if room == 1 else "s"]
 	window.reset_size()

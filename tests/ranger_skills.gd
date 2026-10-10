@@ -87,9 +87,11 @@ func play(seconds: float):
 		for e in game.enemies: e.tick(STEP)
 
 func lost(e) -> float: return e.max_hp-e.hp
-# `hits` blows of `percent` of a normal attack (10 to 15 a blow, at 5 Dexterity).
+# `hits` blows of `percent` of a normal attack with the weapon in hand (the
+# bow's 16 to 24, the dagger's 12 to 20: scripts/items.gd), at 5 Dexterity.
 func within(e, hits: float, percent: float) -> bool:
-	return lost(e) >= 10.0*hits*percent*.01-.01 and lost(e) <= 15.0*hits*percent*.01+.01
+	var span: Array = Data.span(game.run,"ranged" if Data.weapon(game.run)==2 else "melee")
+	return lost(e) >= span[0]*hits*percent*.01-.01 and lost(e) <= span[1]*hits*percent*.01+.01
 
 func test():
 	Save.directory = ProjectSettings.globalize_path("res://test-results/ranger-skills-save")
@@ -106,7 +108,7 @@ func test():
 	check(mine.size()==20 and Book.trees("ranger")==["attack","utility","passive"],"The ranger has twenty skills in Attacks, Utility and Passive")
 	check(mine.filter(func(s): return s.tree=="attack").size()==7 and mine.filter(func(s): return s.tree=="utility").size()==7 and mine.filter(func(s): return s.tree=="passive").size()==6,"Seven attacks, seven utility skills, six passives")
 	var fresh = Data.new_run("ranger")
-	check(fresh.equipment.main=="yew_longbow" and "hunting_dagger" in fresh.bag and fresh.skills.is_empty() and fresh.skill_points==1 and Save.valid(fresh),"A new ranger carries a bow and a dagger, and has a skill point to spend")
+	check(fresh.equipment.main==Items.make("rangers_bow") and Items.carries(fresh,"rangers_dagger") and fresh.skills.is_empty() and fresh.skill_points==1 and Save.valid(fresh),"A new ranger carries a bow and a dagger, and has a skill point to spend")
 	check(not Book.locked(fresh,"volley").is_empty() and not Book.locked(fresh,"frenzy").is_empty() and Book.locked(fresh,"flurry").is_empty(),"Skills open by the points spent in their own tree")
 	for clip in ["DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SneakIdle","SkillVolley"]:
 		check(game.player.visual.clips.has(clip),"The ranger's clip is there: "+clip)
@@ -127,12 +129,12 @@ func test():
 	foe.hp = foe.max_hp
 	game.attack(false,foe.position)
 	while game.player.busy>0: play(STEP)
-	check(lost(foe)>=10-.01 and lost(foe)<=15+.01,"Dexterity does not raise the dagger's damage")
+	check(within(foe,1,100),"Dexterity does not raise the dagger's damage")
 	game.run.stats[1] = 5; game.run.stats[0] = 30
 	foe.hp = foe.max_hp
 	game.attack(false,foe.position)
 	while game.player.busy>0: play(STEP)
-	check(lost(foe)>=10*1.5-.01 and lost(foe)<=15*1.5+.01,"Strength raises the dagger's damage as every melee weapon's")
+	check(lost(foe)>=12*1.5-.01 and lost(foe)<=20*1.5+.01,"Strength raises the dagger's damage as every melee weapon's")
 	clear()
 
 	# Rapid Fire.
@@ -208,7 +210,7 @@ func test():
 	# Flurry: he takes up the dagger for it.
 	hero({"flurry":1})
 	foe = dummy(1.6)
-	check(game.skills.reason("flurry").is_empty() and game.skills.cast("flurry",foe.position) and Data.weapon(game.run)==5 and "yew_longbow" in game.run.bag and game.player.visual.weapon_kind=="dagger","Cast with the bow in hand, Flurry takes up the dagger")
+	check(game.skills.reason("flurry").is_empty() and game.skills.cast("flurry",foe.position) and Data.weapon(game.run)==5 and Items.carries(game.run,"rangers_bow") and game.player.visual.weapon_kind=="dagger","Cast with the bow in hand, Flurry takes up the dagger")
 	check(game.player.visual.state=="SkillFlurry2" and is_equal_approx(game.run.energy,75.0),"Flurry costs 25 energy and has its own motion")
 	play(1.2)
 	check(within(foe,2,100),"Rank 1 stabs twice for 100%% (%.1f)" % lost(foe))
@@ -217,7 +219,7 @@ func test():
 	check(game.player.visual.state=="SkillFlurry4","Rank 5's four stabs have their own motion")
 	play(1.5)
 	check(within(foe,4,275),"Rank 5 stabs four times for 275%% (%.1f)" % lost(foe))
-	game.run.equipment.main = "yew_longbow"; game.run.bag = Items.empty_bag()
+	game.run.equipment.main = Items.make("rangers_bow"); game.run.bag = Items.empty_bag()
 	check(game.skills.reason("flurry")=="Requires dagger.","Without a dagger, Flurry cannot be used")
 	clear()
 
@@ -505,7 +507,7 @@ func test():
 	old.skills = {"power_shot":1}; old.skill_points = 0
 	old.level = 1
 	var migrated = Save.migrate(old)
-	check(Save.valid(old) and migrated.version==Data.new_run().version and "hunting_dagger" in migrated.bag and migrated.equipment.main=="yew_longbow" and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
+	check(Save.valid(old) and migrated.version==Data.new_run().version and Items.carries(migrated,"rangers_dagger") and migrated.equipment.main==Items.make("rangers_bow") and migrated.skills.is_empty() and migrated.skill_points==1,"An older ranger's save is carried over: skill points refunded, a dagger at his belt")
 	game.run.skills = {"power_shot":1}; game.run.skill_points = 0
 	check(Save.valid(game.run),"The character is save-valid throughout")
 	FileAccess.open("res://test-results/ranger-skills.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))

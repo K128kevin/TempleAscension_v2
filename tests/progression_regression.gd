@@ -14,7 +14,7 @@ func test():
 		var run = Data.new_run(class_id)
 		check(run.stats==[5,5,5,5,5] and run.level==1 and Data.max_health(run)==100 and Data.max_energy(run)==100 and Data.energy_regen(run)==10,"Shared base resources and attributes: "+class_id)
 		check(run.skills.is_empty() and run.skill_points==1 and run.hotbar==["","","","","",""] and Save.valid(run),"A new character has learned no skill and has one point to spend: "+class_id)
-		check(Data.weapon(run)=={"warrior":1,"ranger":2,"wizard":4}[class_id] and run.bag.count("")==(9 if class_id=="ranger" else 10) and ("hunting_dagger" in run.bag)==(class_id=="ranger"),"Each class holds only its starting weapon (the ranger his bow, with his dagger in his bag): "+class_id)
+		check(Data.weapon(run)=={"warrior":1,"ranger":2,"wizard":4}[class_id] and Items.free_places(run)==(9 if class_id=="ranger" else 10) and Items.carries(run,"rangers_dagger")==(class_id=="ranger"),"Each class holds only its starting weapon (the ranger his bow, with his dagger in his bag): "+class_id)
 		var active = 0; var passive = 0
 		for s in Book.all().values():
 			if s.class_id!=class_id: continue
@@ -39,10 +39,11 @@ func test():
 			var i: int = {"melee":0,"ranged":1,"spell":2}[tag]
 			run.stats[i] += 10
 			# (Whatever spell damage the class's starting staff adds is on top.)
-			var gear: float = 1.0+Items.bonus(run,"spell_damage")*.01 if tag=="spell" else 1.0
-			check(is_equal_approx(Data.damage_tag(run,tag,100),120*gear),"Shared +2%% scaling for %s / %s" % [class_id,tag])
+			# (Whatever attribute the class's starting gear adds is on top.)
+			check(is_equal_approx(Data.damage_tag(run,tag,100),100*(1.0+(10+Items.bonus(run,Items.ATTRIBUTES[i]))*.02)),"Shared +2%% scaling for %s / %s" % [class_id,tag])
 			for other in ["melee","ranged","spell"]:
-				if other!=tag: check(is_equal_approx(Data.damage_tag(run,other,100),100*(1.0+Items.bonus(run,"spell_damage")*.01 if other=="spell" else 1.0)),"Exclusive scaling tag %s does not affect %s" % [tag,other])
+				var j: int = {"melee":0,"ranged":1,"spell":2}[other]
+				if other!=tag: check(is_equal_approx(Data.damage_tag(run,other,100),100*(1.0+Items.bonus(run,Items.ATTRIBUTES[j])*.02)),"Exclusive scaling tag %s does not affect %s" % [tag,other])
 			run.stats[i] -= 10
 	# The warrior's trees, as listed in the design document.
 	var cleave = Book.values("cleave",1); var cleave_top = Book.values("cleave",5)

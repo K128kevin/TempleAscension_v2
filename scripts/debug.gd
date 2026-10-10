@@ -44,8 +44,8 @@ func apply_start(args: PackedStringArray) -> void:
 				destination = int(value)-1
 	if "--boss" in args: destination = Data.FLOORS-1
 	if destination>=0: prepare_floor(destination)
-	if "--axe" in args: Items.stow(game.run,Items.PLAIN.axe)
-	if "--bow" in args: Items.stow(game.run,Items.PLAIN.bow)
+	if "--axe" in args: Items.stow(game.run,Items.make(Items.PLAIN.axe))
+	if "--bow" in args: Items.stow(game.run,Items.make(Items.PLAIN.bow))
 	if destination>=0 or "--axe" in args or "--bow" in args:
 		game.run.health = Data.max_health(game.run)
 		game.run.energy = Data.max_energy(game.run)
@@ -159,13 +159,14 @@ func execute(action: String, floor_index: int = 0) -> void:
 			game.toast("[Debug] Health and energy refilled")
 		"axe", "bow":
 			# (Into the bag; whether the class can use it is the inventory's affair.)
-			var granted: String = Items.PLAIN[action]
-			if Items.stow(game.run,granted): game.toast("[Debug] %s granted · I: inventory" % Items.get_item(granted).name)
+			var granted: Dictionary = Items.make(Items.PLAIN[action])
+			if Items.stow(game.run,granted): game.toast("[Debug] %s granted · I: inventory" % Items.name_of(granted))
 			else: game.toast("[Debug] The bag is full")
 		"loot":
-			# One of the items enemies drop (any class's), at the hero's feet.
-			var all: Array = Items.ALL.keys().filter(func(id): return Items.ALL[id].has("rarity"))
-			game.drop_item(all[randi()%all.size()],game.player.position+game.player.forward()*1.2)
+			# One of the items enemies drop (for any class, of any rarity), at the hero's feet.
+			var rng = RandomNumberGenerator.new()
+			var found: Dictionary = Items.generate(Data.CLASSES[rng.randi_range(0,Data.CLASSES.size()-1)],Items.weighted(rng,Items.RARITY_WEIGHTS),rng)
+			if not found.is_empty(): game.drop_item(found,game.player.position+game.player.forward()*1.2)
 		"skills":
 			Data.reset_skills(game.run)
 			game.run.energy = minf(game.run.energy,Data.max_energy(game.run))

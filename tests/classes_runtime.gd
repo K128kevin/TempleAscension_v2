@@ -97,7 +97,7 @@ func test():
 		# the skill); the wizard with nothing at all (his spells need no weapon).
 		if class_id=="warrior": Items.arm(game.run,"bow")
 		elif class_id=="ranger": Items.take_up(game.run,["dagger"])
-		else: game.run.equipment.main = ""
+		else: game.run.equipment.main = {}
 		check(game.skills.reason(owned_id).begins_with("Requires")==(class_id=="warrior") and (class_id=="warrior" or game.skills.reason(owned_id).is_empty()),"Wrong weapon disables skill with explanation: "+class_id)
 		Items.outfit(game.run,class_id); game.refit()
 		game.world.zoom=15; game.world.follow(origin,1)

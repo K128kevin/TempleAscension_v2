@@ -870,9 +870,10 @@ func attack_profile() -> Dictionary:
 	var swung: String = Data.family(run)
 	# (Frenzy quickens the ranger's bow and dagger alike.)
 	var frenzy: float = (skills.haste()-1.0)*100.0
-	if swung=="bow": return CombatAnimation.timed(swung,(1.0+Data.attack_haste(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.cooldown(run)*.5,.35)
+	# (Each weapon has its own attacks a second: scripts/items.gd.)
+	if swung=="bow": return CombatAnimation.timed(swung,(1.0+Data.attack_haste(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.cooldown(run)*.5,.35,Data.attack_seconds(run,"ranged"))
 	if swung=="staff": return CombatAnimation.timed(swung,0,Data.cooldown(run)*.5,.35)
-	return CombatAnimation.timed(swung,(1.0+Data.melee_attack_speed(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.MELEE_MINIMUM,0.0)
+	return CombatAnimation.timed(swung,(1.0+Data.melee_attack_speed(run)*.01)*(1.0+frenzy*.01)*100.0-100.0,Data.MELEE_MINIMUM,0.0,Data.attack_seconds(run,"melee"))
 
 # Which swing of the sword's chain (CombatAnimation.SWORD_CHAIN) was last begun.
 # Coming back up a dungeon's stair; and whether the shut temple door has
@@ -1192,10 +1193,10 @@ func move_item(from: String, to: String) -> String:
 
 # Dragged out of the inventory: the item is dropped at his feet.
 func discard_item(from: String) -> void:
-	var id: String = Items.at(run,from)
-	if id.is_empty() or player.dead: return
-	Items.put(run,from,"")
-	drop_item(id,player.position+player.forward()*.9)
+	var inst: Dictionary = Items.at(run,from)
+	if inst.is_empty() or player.dead: return
+	Items.put(run,from,{})
+	drop_item(inst,player.position+player.forward()*.9)
 	refit()
 	save_run()
 
@@ -1277,13 +1278,13 @@ func enemy_died(enemy) -> void:
 			float_text(player.position+Vector3.UP*2.2,"LEVEL %d" % run.level,Color(1,.86,.45))
 			toast("Level %d: %d attribute points and %d skill point%s to spend." % [run.level,run.points,run.skill_points,"" if run.skill_points==1 else "s"])
 		# It may drop an item (scripts/items.gd; never a second time on a retry).
-		var found: String = loot_forced if not loot_forced.is_empty() else ("" if loot_off else Items.roll_drop(run.class_id,enemy.kind,randf(),randf()))
-		loot_forced = ""
+		var found: Dictionary = loot_forced if not loot_forced.is_empty() else ({} if loot_off else Items.roll_drop(run.class_id,enemy.kind,loot_rng))
+		loot_forced = {}
 		if not found.is_empty(): drop_item(found,enemy.position)
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
 	if enemy == key_holder and not has_key() and not gate_opened() and key_pickup().is_empty():
 		enemy.visual.drop_key()
-		drop_item(GATE_KEY,enemy.position)
+		drop_item(Items.make(GATE_KEY),enemy.position)
 		toast("A rusted iron key falls from the bandit's belt.")
 	if enemy.kind=="boss":
 		crown_available = true
@@ -1304,9 +1305,10 @@ func enemy_died(enemy) -> void:
 	save_run()
 
 # Tests fix what falls: the next enemy slain drops `loot_forced`; nothing
-# drops while `loot_off`.
-var loot_forced = ""
+# drops while `loot_off`. What falls is rolled with its own dice.
+var loot_forced = {}
 var loot_off = false
+var loot_rng = RandomNumberGenerator.new()
 # The thing on the ground he is walking to, to pick it up.
 var pickup_goal = null
 # How near he must be to pick something up, and how near to do so at once
@@ -1314,17 +1316,18 @@ var pickup_goal = null
 const PICKUP_REACH = 1.5
 const PICKUP_NEAR = 2.4
 
-# An item falls to the ground at `at` (near it, where there is floor).
-func drop_item(id: String, at: Vector3) -> void:
+# An item (an instance: scripts/items.gd) falls to the ground at `at` (near
+# it, where there is floor).
+func drop_item(inst: Dictionary, at: Vector3) -> void:
 	var spot: Vector3 = world.move(at,Vector3(randf_range(-.5,.5),0,randf_range(-.5,.5)))
-	var drop = {"item":id,"position":[spot.x,spot.z]}
+	var drop = {"item":inst,"position":[spot.x,spot.z]}
 	run.drops.append(drop)
 	create_pickup(drop)
 
 # An item lying on the ground: its own model, laid down, with its name over
 # it (scripts/hud.gd shows the names; clicking one picks the item up).
 func create_pickup(drop: Dictionary) -> void:
-	if not Items.exists(drop.get("item","")): return
+	if not Items.valid_instance(drop.get("item")): return
 	var node = Node3D.new()
 	world.add_child(node)
 	var at = Vector3(drop.position[0],0,drop.position[1])
@@ -1333,7 +1336,7 @@ func create_pickup(drop: Dictionary) -> void:
 	node.rotation.y = fposmod(at.x*12.9898+at.z*78.233,TAU)
 	node.add_child(Art.laid(drop.item))
 	# (A key is small: a glint round it, so it is seen lying in the dirt.)
-	if Items.get_item(drop.item).slot == "key":
+	if Items.get_item(drop.item).get("slot","") == "key":
 		var glint = Art.seal(.6,Color(1,.85,.45,.7))
 		glint.position = Vector3.UP*.02
 		node.add_child(glint)
@@ -1358,12 +1361,12 @@ func pick_up(pickup: Dictionary) -> void:
 func take_pickup(pickup: Dictionary) -> void:
 	pickup_goal = null
 	if not pickup in pickups: return
-	var id: String = pickup.drop.item
-	if not Items.stow(run,id):
+	var inst: Dictionary = pickup.drop.item
+	if not Items.stow(run,inst):
 		toast("Your bag is full.")
 		return
 	sound.play("gem-pickup")
-	toast("%s picked up · I: inventory" % Items.get_item(id).name)
+	toast("%s picked up · I: inventory" % Items.name_of(inst))
 	run.drops.erase(pickup.drop)
 	pickup.node.queue_free()
 	pickups.erase(pickup)
@@ -1571,12 +1574,12 @@ func gate_opened() -> bool:
 	return key_name()+":open" in run.keys
 
 func has_key() -> bool:
-	return gated() and GATE_KEY in run.bag
+	return gated() and Items.carries(run,GATE_KEY)
 
 # The key lying on the floor, if it is: its pickup, or {}.
 func key_pickup() -> Dictionary:
 	for p in pickups:
-		if p.drop.item == GATE_KEY: return p
+		if p.drop.item.get("base","") == GATE_KEY: return p
 	return {}
 
 # Whether the way on may be taken: the gate opened, or with no gate, the
@@ -1596,17 +1599,17 @@ func setup_key(came_up: bool) -> void:
 	# (A key taken before keys were things carried in the bag.)
 	if key_name() in run.keys:
 		run.keys.erase(key_name())
-		if not has_key(): Items.stow(run,GATE_KEY)
+		if not has_key(): Items.stow(run,Items.make(GATE_KEY))
 	if came_up and not gate_opened(): run.keys.append(key_name()+":open")
 	if gate_opened(): world.open_gate(true)
 	if key_holder == null or has_key() or gate_opened(): return
 	if not key_holder.dead: key_holder.visual.carry_key(Temple.BasementProps.key_model())
-	elif not run.drops.any(func(d): return d.item == GATE_KEY): run.drops.append({"item":GATE_KEY,"position":[key_holder.position.x,key_holder.position.z]})
+	elif not run.drops.any(func(d): return d.item.get("base","") == GATE_KEY): run.drops.append({"item":Items.make(GATE_KEY),"position":[key_holder.position.x,key_holder.position.z]})
 
 func unlock_gate() -> void:
 	world.open_gate()
-	var held: int = run.bag.find(GATE_KEY)
-	if held >= 0: run.bag[held] = ""
+	for i in run.bag.size():
+		if run.bag[i].get("base","") == GATE_KEY: run.bag[i] = {}
 	if not gate_opened(): run.keys.append(key_name()+":open")
 	toast("The key turns in the lock, and the gate swings open. The way down is open.")
 	save_run()

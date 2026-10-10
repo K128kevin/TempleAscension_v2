@@ -136,11 +136,41 @@ static func sica_material() -> ShaderMaterial:
 	materials.sica = m
 	return m
 
-static func sword_material() -> ShaderMaterial:
-	if materials.has("sword"): return materials.sword
+# (An item's look may colour its `blade`, `fittings` and grip `wrap`.)
+static func sword_material(look: Dictionary = {}) -> ShaderMaterial:
+	var key = "sword"
+	for part in ["blade","fittings","wrap"]:
+		if look.has(part): key += part+look[part].to_html()
+	if materials.has(key): return materials[key]
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/sword.gdshader")
-	materials.sword = m
+	for part in ["blade","fittings","wrap"]:
+		if look.has(part): m.set_shader_parameter(part+"_color",look[part])
+	materials[key] = m
+	return m
+
+# A tower shield (the KayKit square shield, as the town guards' are:
+# assets/shaders/guard_shield.gdshader), sized as the item is.
+static func tower_shield(size: Vector3) -> ShaderMaterial:
+	var key = "tower%s" % size
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/guard_shield.gdshader")
+	m.set_shader_parameter("grit",load("res://assets/textures/rock_detail.jpg"))
+	m.set_shader_parameter("size",size)
+	m.set_shader_parameter("seed",3.0)
+	materials[key] = m
+	return m
+
+# A hat's felt (the wizard's: tools/make_hat.py), in the item's colour.
+static func felt(tint: Color) -> StandardMaterial3D:
+	var key = "felt"+tint.to_html()
+	if materials.has(key): return materials[key]
+	var m = StandardMaterial3D.new()
+	m.albedo_color = tint
+	m.roughness = .95
+	m.metallic_specular = .15
+	materials[key] = m
 	return m
 
 # The ranger's yew longbow (assets/shaders/bow_wood.gdshader), over the
@@ -416,11 +446,12 @@ static func recolored(source: ShaderMaterial, tint: Color) -> ShaderMaterial:
 static func finish(look: Dictionary) -> Material:
 	var made: Material = null
 	match look.get("finish","own"):
-		"sword": made = sword_material()
+		"sword": made = sword_material(look)
 		"sica": made = sica_material()
 		"dagger": made = dagger_material()
 		"bow": made = bow_wood()
 		"lion": made = gladiator_shield()
+		"tower": made = tower_shield(look.size)
 		"arms": made = arms_material(look.get("metal_from",.5))
 		"staff":
 			made = wizard_staff()
@@ -434,6 +465,18 @@ static func finish(look: Dictionary) -> Material:
 				return materials[key]
 	if made is ShaderMaterial and look.has("tint") and look.finish != "arms": return recolored(made,look.tint)
 	return made
+
+# A piece of armor that is a mesh of its own (the wizard's hat: its `mesh`,
+# made in metres, its crown up +Y and its origin where it sits on the head),
+# in the item's colour.
+static func worn_model(look: Dictionary) -> Node3D:
+	var node: Node3D = model(look.mesh,Vector3.ONE)
+	for mesh in node.find_children("*","MeshInstance3D",true,false):
+		var part: String = String(mesh.name)
+		if part.begins_with("Band"): mesh.material_override = leather()
+		elif part.begins_with("Buckle"): mesh.material_override = bronze()
+		else: mesh.material_override = felt(look.get("tint",Color(.12,.13,.2)))
+	return node
 
 # A weapon's or shield's model as an item has it, standing along +Y from its
 # butt, at its true size.
@@ -517,9 +560,20 @@ static func piece_material(mesh_name: String, hero_class: String, tint = null) -
 # armor item is (and, where it is only painted on the body, that part of the
 # body's surface). It stands as it is worn or held, its foot at the origin;
 # `bounds` (metadata) is the box it fills.
-static func item_model(id: String) -> Node3D:
-	var item: Dictionary = Items.get_item(id)
+static func item_model(thing) -> Node3D:
+	var item: Dictionary = Items.get_item(thing)
 	var look: Dictionary = item.get("look",{})
+	# A piece that is a mesh of its own (the wizard's hat), as it is worn.
+	if look.has("mesh"):
+		var own: Node3D = worn_model(look)
+		var box = AABB()
+		var first = true
+		for mesh in own.find_children("*","MeshInstance3D",true,false):
+			var part: AABB = mesh.transform*mesh.get_aabb()
+			box = part if first else box.merge(part)
+			first = false
+		own.set_meta("bounds",box)
+		return own
 	# (A key lies flat; it is the one the basement's bandit wore.)
 	if item.slot == "key":
 		var key: Node3D = load("res://scripts/basement_props.gd").key_model()
@@ -582,11 +636,11 @@ static func item_model(id: String) -> Node3D:
 # An item as it lies on the ground: weapons, shields, and what is worn on the
 # body flat on their backs; a helm, boots and a bracer standing. Its middle
 # is over the origin and its underside on the ground.
-static func laid(id: String) -> Node3D:
-	var item: Dictionary = Items.get_item(id)
-	var thing: Node3D = item_model(id)
+static func laid(inst) -> Node3D:
+	var item: Dictionary = Items.get_item(inst)
+	var thing: Node3D = item_model(inst)
 	var box: AABB = thing.get_meta("bounds")
-	var flat: bool = item.slot in ["weapon","shield","chest","legs"] or (item.slot == "head" and item.weight != "heavy")
+	var flat: bool = item.slot in ["weapon","shield","chest","legs"] or (item.slot == "head" and item.weight != "heavy" and not item.get("look",{}).has("mesh"))
 	var turn: Basis = Basis(Vector3.RIGHT,-PI/2) if flat else Basis.IDENTITY
 	var lying: AABB = Transform3D(turn,Vector3.ZERO)*box
 	var holder = Node3D.new()

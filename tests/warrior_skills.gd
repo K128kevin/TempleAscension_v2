@@ -91,6 +91,16 @@ func play(seconds: float):
 		for e in game.enemies: e.tick(STEP)
 
 func lost(e) -> float: return e.max_hp-e.hp
+# The sword the warrior starts with (scripts/items.gd): what it hits for and
+# how long a swing takes; the hatchet's and the bow's times.
+const LOW = 17.0
+const HIGH = 25.0
+const SWING = 1.0/1.3
+const AXE_SWING = 1.0/1.6
+const BOW_SHOT = 1.0/1.2
+# Whether `e` has lost `percent` of a normal attack (LOW to HIGH, at 5 Strength).
+func hits(e, percent: float, extra: float = 0.0) -> bool:
+	return lost(e) >= LOW*percent*.01+extra-.01 and lost(e) <= HIGH*percent*.01+extra+.01
 
 func test():
 	Save.directory = ProjectSettings.globalize_path("res://test-results/warrior-skills-save")
@@ -109,11 +119,11 @@ func test():
 	wait(.3)
 	check(lost(front)==0,"Cleave waits for the swing to land")
 	wait(.3)
-	check(lost(front)>=12.5 and lost(front)<=18.75,"Cleave rank 1 deals 125%% of a normal attack (%.1f)" % lost(front))
+	check(hits(front,125),"Cleave rank 1 deals 125%% of a normal attack (%.1f)" % lost(front))
 	check(lost(side)>0 and lost(wide)==0 and lost(behind)==0 and lost(far)==0,"Cleave rank 1 sweeps a 140° arc within reach")
 	hero({"cleave":5})
 	game.skills.cast("cleave",origin+forward*2); wait(.6)
-	check(lost(wide)>=16.5 and lost(wide)<=24.75 and lost(behind)==0,"Cleave rank 5 sweeps 180° for 165%")
+	check(hits(wide,165) and lost(behind)==0,"Cleave rank 5 sweeps 180° for 165%")
 	check(game.attack_range(true,0)==game.skills.MELEE_REACH,"An ordered Cleave is walked into melee reach")
 	clear()
 
@@ -122,12 +132,12 @@ func test():
 	var near = dummy(4.5); var beyond = dummy(6.0); var off = dummy(4.5,45)
 	check(game.skills.cast("ground_slam",origin+forward*5) and game.run.energy==60,"Thunder Slam costs 40 energy")
 	wait(.6)
-	check(lost(near)>=10 and lost(near)<=15 and lost(beyond)==0 and lost(off)==0,"Thunder Slam rank 1: 100% damage in a 70° arc out to 5 metres")
+	check(hits(near,100) and lost(beyond)==0 and lost(off)==0,"Thunder Slam rank 1: 100% damage in a 70° arc out to 5 metres")
 	check(not game.effects.any(func(e): return not e.node is Label3D),"No coloured circles mark the ground it strikes")
 	hero({"cleave":5,"ground_slam":5})
 	var distant = dummy(8.5); var past_reach = dummy(10.5)
 	game.skills.cast("ground_slam",origin+forward*5); wait(.6)
-	check(lost(distant)>=25 and lost(distant)<=37.5 and lost(past_reach)==0 and lost(off)>0,"Thunder Slam rank 5: 250% damage in a 120° arc out to 9 metres")
+	check(hits(distant,250) and lost(past_reach)==0 and lost(off)>0,"Thunder Slam rank 5: 250% damage in a 120° arc out to 9 metres")
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillSlam","The slam sends out a shockwave of dust, shakes the screen, and has its own swing")
 	var sparks: Array = game.skills.waves.filter(func(w): return w is Crackle)
 	var spread_out = sparks.size()==1 and not sparks[0].arcs.is_empty() and is_equal_approx(sparks[0].reach,9.0)
@@ -171,7 +181,7 @@ func test():
 	var first = dummy(3.0); var second = dummy(6.0); var aside = dummy(5.0,40)
 	check(game.skills.cast("shield_charge",origin+forward*7.5) and game.run.energy==65,"Shield Charge costs 35 energy")
 	play(1.2)
-	check(lost(first)>=12 and lost(first)<=18 and lost(second)>=12 and lost(second)<=18 and lost(aside)==0,"Rank 1: everyone in the path takes 100%, raised 20% by the round shield's block")
+	check(hits(first,130) and hits(second,130) and lost(aside)==0,"Rank 1: everyone in the path takes 100%, raised 30% by the buckler's block")
 	check(first.stun_memory>0,"The first one hit was stunned")
 	check(game.player.position.distance_to(origin)>4.0,"He ran on through them (%.1f m)" % game.player.position.distance_to(origin))
 	check(first.position.distance_to(origin+forward*3.0)>.8 or second.position.distance_to(origin+forward*6.0)>.8,"and they were thrown aside")
@@ -182,7 +192,7 @@ func test():
 	var inside = dummy(3.0); var ring_edge = dummy(5.0)
 	check(game.skills.cast("shockwave",origin+forward) and game.run.energy==60,"Shockwave costs 40 energy")
 	wait(.8)
-	check(lost(inside)>=18 and lost(inside)<=27 and lost(ring_edge)==0,"Shockwave rank 1: 180% within 4 metres")
+	check(hits(inside,180) and lost(ring_edge)==0,"Shockwave rank 1: 180% within 4 metres")
 	check(game.skills.cooldowns.get("shockwave",0.0)>8.0 and not game.skills.cast("shockwave",origin+forward),"and a 10-second cooldown")
 	check(game.skills.waves.size()>=1 and game.player.visual.state=="SkillShockwave","It sends out a shockwave")
 	play(.6)
@@ -201,7 +211,7 @@ func test():
 	play(.5)
 	check(game.player.position.distance_to(origin+forward*6.5)<.6 and game.player.visual.position.y==0,"He lands at the target (%.2f m off)" % game.player.position.distance_to(origin+forward*6.5))
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillLeap","The landing sends out a shockwave all round and shakes the screen")
-	check(lost(landing)>=12.5 and lost(landing)<=18.75 and lost(beside)>0 and lost(start)==0,"Leap rank 1 deals 125% to everyone around the landing")
+	check(hits(landing,125) and lost(beside)>0 and lost(start)==0,"Leap rank 1 deals 125% to everyone around the landing")
 	check(game.skills.LEAP_RADIUS==4.5 and lost(reached)>0 and lost(past)==0,"Its blast reaches 4.5 metres from the landing")
 	hero({"cleave":5,"leap":5})
 	game.skills.cast("leap",origin+forward*20)
@@ -215,10 +225,10 @@ func test():
 	var aimed = dummy(1.6,-18); var other = dummy(1.6,18)
 	check(game.skills.cast("powerful_strike",aimed.position) and game.run.energy==75,"Powerful Strike costs 25 energy")
 	wait(.6)
-	check(lost(aimed)>=20 and lost(aimed)<=30 and lost(other)==0,"Powerful Strike rank 1 deals 200% to the one enemy it is aimed at")
+	check(hits(aimed,200) and lost(other)==0,"Powerful Strike rank 1 deals 200% to the one enemy it is aimed at")
 	hero({"powerful_strike":5})
 	game.skills.cast("powerful_strike",other.position); wait(.6)
-	check(lost(other)>=30 and lost(other)<=45,"Powerful Strike rank 5 deals 300%")
+	check(hits(other,300),"Powerful Strike rank 5 deals 300%")
 	clear()
 
 	# Shield Bash: damage, a stun that damage breaks, a cooldown, and less
@@ -227,7 +237,7 @@ func test():
 	var bashed = dummy(1.6)
 	check(game.skills.cast("shield_bash",bashed.position) and game.run.energy==65,"Shield Bash costs 35 energy")
 	wait(.5)
-	check(lost(bashed)>=2.5 and lost(bashed)<=3.75,"Shield Bash rank 1 deals 25%")
+	check(hits(bashed,25),"Shield Bash rank 1 deals 25%")
 	check(bashed.stunned and absf(bashed.stagger_time-5.0)<.1 and is_instance_valid(bashed.stun_mark),"It stuns for 5 seconds")
 	check(absf(game.skills.cooldowns.shield_bash-31.5)<.1 and game.skills.reason("shield_bash").begins_with("Recharging"),"It recharges for 32 seconds")
 	game.player.busy = 0
@@ -277,12 +287,12 @@ func test():
 	game.player.hp = 50
 	check(game.skills.cast("vampiric_strike",drained.position) and game.run.energy==75,"Vampiric Strike costs 25 energy")
 	wait(.6)
-	check(lost(drained)>=38 and lost(drained)<=42,"Vampiric Strike rank 1 deals 80%% plus 3%% of the target's total health (%.1f)" % lost(drained))
+	check(hits(drained,80,30.0),"Vampiric Strike rank 1 deals 80%% plus 3%% of the target's total health (%.1f)" % lost(drained))
 	check(is_equal_approx(game.player.hp,53.0),"and heals 3% of the hero's own")
 	hero({"vampiric_strike":5})
 	drained.hp = 1000; game.player.hp = 50
 	game.skills.cast("vampiric_strike",drained.position); wait(.6)
-	check(lost(drained)>=132.5 and lost(drained)<=138.75 and is_equal_approx(game.player.hp,62.0),"Vampiric Strike rank 5: 125% plus 12%, healing 12%")
+	check(hits(drained,125,120.0) and is_equal_approx(game.player.hp,62.0),"Vampiric Strike rank 5: 125% plus 12%, healing 12%")
 	clear()
 
 	# Shadow Strike: a blow, then its listed damage over five seconds.
@@ -291,9 +301,9 @@ func test():
 	check(game.skills.cast("shadow_strike",shadowed.position) and game.run.energy==75,"Shadow Strike costs 25 energy")
 	wait(.5)
 	var blow: float = lost(shadowed)
-	check(blow>=2.5 and blow<=4.5 and shadowed.dots.size()==1 and shadowed.dots[0].kind=="shadow","Shadow Strike rank 1 deals 25% and leaves its shadow")
+	check(blow>=LOW*.25-.3 and blow<=HIGH*.25+.3 and shadowed.dots.size()==1 and shadowed.dots[0].kind=="shadow","Shadow Strike rank 1 deals 25% and leaves its shadow")
 	wait(5.2)
-	check(lost(shadowed)-blow>=9.0 and lost(shadowed)-blow<=15.01 and shadowed.dots.is_empty(),"then 100%% more over 5 seconds (%.1f)" % (lost(shadowed)-blow))
+	check(lost(shadowed)-blow>=LOW-1.0 and lost(shadowed)-blow<=HIGH+.01 and shadowed.dots.is_empty(),"then 100%% more over 5 seconds (%.1f)" % (lost(shadowed)-blow))
 	# It refreshes Cursed Blade's stacks on the target.
 	hero({"shadow_strike":1,"cursed_blade":3})
 	for i in 3: game.skills.strike(shadowed,10)
@@ -315,21 +325,21 @@ func test():
 	doomed.hp = 190
 	check(game.skills.cast("execute",doomed.position) and game.run.energy==55,"Execute costs 45 energy, on an enemy below 20% health")
 	wait(.8)
-	check(190-doomed.hp>=20 and 190-doomed.hp<=30,"Execute rank 1 deals 200%")
+	check(190-doomed.hp>=LOW*2 and 190-doomed.hp<=HIGH*2,"Execute rank 1 deals 200%")
 	check(game.player.visual.state=="SkillExecute","with its own swing")
 	hero({"execute":5})
 	doomed.hp = 390
 	check(game.skills.cast("execute",doomed.position),"Execute rank 5 opens below 40% health")
 	wait(.8)
-	check(390-doomed.hp>=45 and 390-doomed.hp<=67.5,"and deals 450%")
+	check(390-doomed.hp>=LOW*4.5 and 390-doomed.hp<=HIGH*4.5,"and deals 450%")
 	clear()
 
 	# A skill's tip tells what it hits for now, and its critical strikes.
 	hero({"powerful_strike":1})
 	game.run.stats[0] = 15; game.run.stats[1] = 25
 	var tip: Dictionary = game.skills.damage_summary("powerful_strike",1)
-	check(tip=={"damage":"Damage: 24–36","crit":"Critical strike chance: 25%","crit_damage":"Critical strike damage: 200%"},"Powerful Strike's tip shows only its damage by Strength and its crits by Dexterity")
-	check(game.skills.damage_summary("cleave",1).damage=="Damage: 15–23","Cleave's tip shows one hit's damage, nothing more")
+	check(tip=={"damage":"Damage: %d–%d" % [roundi(LOW*2*1.2),roundi(HIGH*2*1.2)],"crit":"Critical strike chance: 25%","crit_damage":"Critical strike damage: 200%"},"Powerful Strike's tip shows only its damage by Strength and its crits by Dexterity (%s)" % [tip])
+	check(game.skills.damage_summary("cleave",1).damage=="Damage: %d–%d" % [roundi(LOW*1.25*1.2),roundi(HIGH*1.25*1.2)],"Cleave's tip shows one hit's damage, nothing more")
 	check(is_equal_approx(game.skills.basic_speed(1),6.0),"Dexterity's attack speed is the basic attack's")
 	game.run.skills["quick_strikes"] = 1
 	check(is_equal_approx(game.skills.basic_speed(1),26.0),"Quick Strikes quickens the basic attack's shown speed")
@@ -404,7 +414,7 @@ func test():
 		check(met.position.distance_to(before)>.4,"and pushes it back (%.2fm)" % met.position.distance_to(before))
 		check(game.dash_struck.size()==1 and not game.dash_attack,"each enemy once, and the striking ends with the dash")
 		clear()
-	check(dealt_by_rank[0]>=5.0 and dealt_by_rank[0]<=7.5 and dealt_by_rank[1]>=20.0 and dealt_by_rank[1]<=30.0,"Rank 1 hits for 50%% of a normal attack, rank 5 for 200%% (%.1f, %.1f)" % [dealt_by_rank[0],dealt_by_rank[1]])
+	check(dealt_by_rank[0]>=LOW*.5 and dealt_by_rank[0]<=HIGH*.5 and dealt_by_rank[1]>=LOW*2 and dealt_by_rank[1]<=HIGH*2,"Rank 1 hits for 50%% of a normal attack, rank 5 for 200%% (%.1f, %.1f)" % [dealt_by_rank[0],dealt_by_rank[1]])
 	check(Book.values("dash_attack",1)==({"x":50.0,"y":.4,"z":0.0}) and Book.values("dash_attack",3)==({"x":100.0,"y":1.2,"z":0.0}) and is_equal_approx(Book.values("dash_attack",5).y,2.0),"Dash Attack's damage and recharge cut run 50/75/100/150/200% and 0.4 seconds a rank")
 
 	# Critical hits: 20%, and 0.25% more a point of Dexterity, for double damage,
@@ -510,9 +520,9 @@ func test():
 		game.player.hp = 100; game.player.invulnerable = 0
 		game.hurt_player(10,"physical",attacker)
 		var taken: float = 100-game.player.hp
-		if is_equal_approx(taken,normal*.8): shield_blocks += 1
+		if is_equal_approx(taken,normal*.7): shield_blocks += 1
 		else: check(is_equal_approx(taken,normal),"An unblocked hit lands whole")
-	check(shield_blocks>=70 and shield_blocks<=130,"The round shield alone blocks a quarter of all attacks (%d of 400), which then deal 20%% less" % shield_blocks)
+	check(shield_blocks>=70 and shield_blocks<=130,"The buckler alone blocks a quarter of all attacks (%d of 400), which then deal 30%% less" % shield_blocks)
 	hero({"shield_expertise":5,"spiked_shield":5})
 	game.skills.block_override = -1
 	seed(20261002)
@@ -522,20 +532,25 @@ func test():
 		var attacker_hp: float = attacker.hp
 		game.hurt_player(10,"physical",attacker)
 		var taken: float = 100-game.player.hp
-		if is_equal_approx(taken,normal*.6):
+		if is_equal_approx(taken,normal*.5):
 			blocks += 1
 			var answer: float = attacker_hp-attacker.hp
-			if answer>=8.0 and answer<=12.0: spiked += 1
+			if answer>=LOW*.8-.01 and answer<=HIGH*.8+.01: spiked += 1
 		else: check(is_equal_approx(taken,normal) and attacker.hp==attacker_hp,"An unblocked hit lands whole and unanswered")
-	check(blocks>=150 and blocks<=230,"With Shield Expertise rank 5 the round shield blocks 45%% of all attacks (%d of 400), which then deal 40%% less" % blocks)
+	check(blocks>=150 and blocks<=230,"With Shield Expertise rank 5 the buckler blocks 45%% of all attacks (%d of 400), which then deal 50%% less" % blocks)
 	check(spiked==blocks,"Spiked Shield rank 5 answers every block with 80% of a normal attack")
 	hero({"shield_expertise":5},0)
+	# (Without the shield's armor a blow lands harder: its own baseline.)
+	game.skills.block_override = 0
+	game.player.hp = 100; game.hurt_player(10,"physical",attacker)
+	var bare: float = 100-game.player.hp
+	check(bare>normal,"Without the shield, its armor gone too, a blow lands harder (%.2f > %.2f)" % [bare,normal])
 	game.skills.block_override = -1
 	var unshielded = 0
 	for i in 60:
 		game.player.hp = 100; game.player.invulnerable = 0
 		game.hurt_player(10,"physical",attacker)
-		if not is_equal_approx(100-game.player.hp,normal): unshielded += 1
+		if not is_equal_approx(100-game.player.hp,bare): unshielded += 1
 	check(unshielded==0,"There is no blocking without the shield")
 	game.skills.block_override = 0
 	hero({"defensive_rhythm":5})
@@ -555,7 +570,7 @@ func test():
 	hero({})
 	game.shake_left = 0; game.shake_strength = 0
 	game.attack(false,origin+forward*1.6)
-	play(.84)
+	play(SWING)
 	check(game.shake_left==0,"A swing at nothing does not shake the screen")
 	var jolted = dummy(1.6)
 	ready()
@@ -574,29 +589,29 @@ func test():
 
 	# Strikes for normal melee attacks.
 	hero({})
-	check(is_equal_approx(game.attack_profile().duration,.84),"A sword swing takes .84 seconds")
+	check(is_equal_approx(game.attack_profile().duration,SWING),"A swing of the Simple Shortsword takes 1/1.3 seconds")
 	game.run.stats[1] = 25
-	check(is_equal_approx(game.attack_profile().duration,.84/1.06),"Twenty points of Dexterity make it 6% faster")
+	check(is_equal_approx(game.attack_profile().duration,SWING/1.06),"Twenty points of Dexterity make it 6% faster")
 	game.run.skills = {"cleave":1,"quick_strikes":1}
-	check(is_equal_approx(game.attack_profile().duration,.84/1.26),"Quick Strikes rank 1 adds 20% more")
+	check(is_equal_approx(game.attack_profile().duration,SWING/1.26),"Quick Strikes rank 1 adds 20% more")
 	var target = dummy(1.6)
 	game.attack(false,target.position)
-	check(is_equal_approx(game.player.busy,.84/1.26) and is_equal_approx(game.scheduled[-1].time,.84/1.26*.52),"The quicker swing lands and recovers sooner")
+	check(is_equal_approx(game.player.busy,SWING/1.26) and is_equal_approx(game.scheduled[-1].time,SWING/1.26*.52),"The quicker swing lands and recovers sooner")
 	ready()
 	game.skills.cast("cleave",target.position)
 	check(is_equal_approx(game.player.busy,1.0/1.06),"Skills quicken with Dexterity, not with Quick Strikes")
 	game.run.skills = {"quick_strikes":5}; game.run.stats[1] = 5
-	check(is_equal_approx(game.attack_profile().duration,.84/2.7),"Quick Strikes rank 5: 170% faster")
+	check(is_equal_approx(game.attack_profile().duration,SWING/2.7),"Quick Strikes rank 5: 170% faster")
 	game.run.stats[1] = 1000
 	check(is_equal_approx(game.attack_profile().duration,Data.MELEE_MINIMUM),"No swing is quicker than a fifth of a second")
 	game.arm("bow"); game.run.stats[1] = 25; game.run.skills = {"quick_strikes":5}
-	check(is_equal_approx(game.attack_profile().duration,.78/1.06),"Dexterity quickens a bowshot too; Quick Strikes does not")
+	check(is_equal_approx(game.attack_profile().duration,BOW_SHOT/1.06),"Dexterity quickens a bowshot too; Quick Strikes does not")
 	clear()
 
 	# A one-handed axe is not thrust: its two cuts, back and forth.
 	hero({})
 	game.player.visual.play(game.player.visual.idle_action())
-	Items.put(game.run,"main","bronze_hatchet")
+	Items.put(game.run,"main",Items.make("hatchet"))
 	game.refit()
 	target = dummy(1.6)
 	var axe_swings: Array = []
@@ -604,7 +619,7 @@ func test():
 	for i in 6:
 		game.attack(false,target.position)
 		axe_swings.append(game.player.visual.state)
-		axe_landed.append(is_equal_approx(game.player.busy,.84) and is_equal_approx(game.scheduled[-1].time,.84*.52))
+		axe_landed.append(is_equal_approx(game.player.busy,AXE_SWING) and is_equal_approx(game.scheduled[-1].time,AXE_SWING*.52))
 		while game.player.busy > 0: play(STEP)
 	check(axe_swings == ["SwordOpen","SwordCut2L","SwordCut1R","SwordCut2L","SwordCut1R","SwordCut2L"],"Swinging on, the axe cuts down one way and then the other, back and forth, and is never thrust: %s" % [axe_swings])
 	check(not false in axe_landed,"Each of the axe's cuts takes the same time and lands at the same moment of it")
@@ -620,7 +635,7 @@ func test():
 	for i in 5:
 		game.attack(false,target.position)
 		swings.append(game.player.visual.state)
-		landed.append(is_equal_approx(game.player.busy,.84) and is_equal_approx(game.scheduled[-1].time,.84*.52))
+		landed.append(is_equal_approx(game.player.busy,SWING) and is_equal_approx(game.scheduled[-1].time,SWING*.52))
 		while game.player.busy > 0: play(STEP)
 	check(swings == ["SwordOpen","SwordCut2L","SwordThrustR","SwordCut1L","SwordCut2R"],"Swinging on, the sword cuts down one way, then the other, then thrusts, and round again, stepping with each foot in turn: %s" % [swings])
 	check(not false in landed,"Every swing of the three takes the sword's time and lands at the same moment of it")
@@ -634,14 +649,14 @@ func test():
 	check(game.player.visual.state == "SwordOpen","Moving between swings starts them over too")
 	# The cuts leave a wake of air behind the blade; the thrust leaves none.
 	var wake = game.player.visual.sword_trail
-	play(.84*.4)
+	play(SWING*.4)
 	check(wake.samples.is_empty() and wake.mesh.get_surface_count() == 0,"Winding up, the blade leaves no wake")
-	play(.84*.15)
+	play(SWING*.15)
 	check(wake.samples.size() >= 3 and wake.mesh.get_surface_count() == 1,"Cutting, the blade trails a wake of air (%d places)" % wake.samples.size())
 	check(wake.samples[-1][2].distance_to(game.player.visual.weapon_item.global_transform*Vector3(0,1.02,0)) < .02,"The wake follows the blade's point")
 	while game.player.busy > 0: play(STEP)
 	check(wake.samples.is_empty(),"The wake is gone by the swing's end")
-	game.attack(false,target.position); play(.84*.5)
+	game.attack(false,target.position); play(SWING*.5)
 	game.attack(false,target.position)
 	while game.player.busy > 0: play(STEP)
 	game.attack(false,target.position)
