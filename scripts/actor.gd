@@ -444,7 +444,10 @@ func release_attack() -> void:
 		return
 	busy = attack_recovery
 	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]
-	if role == "archer": game.projectile(position,attack_point,damage,false,"arrow",false,self)
+	if role == "archer":
+		# (The bow heard as the hero's is: a statue's or a bandit's.)
+		game.sound.play("archer-arrow",-13)
+		game.projectile(position,attack_point,damage,false,"arrow",false,self)
 	elif role == "wizard":
 		cast_total = 0
 		# The fireball leaves the crown of the staff, where the flame formed.
@@ -459,7 +462,7 @@ func release_attack() -> void:
 				landed_on(other)
 	elif position.distance_to(game.player.position) <= strike_reach(game.player) and game.world.clear_line(position,game.player.position):
 		var d: Vector3 = (game.player.position-position).normalized()
-		if forward().dot(d) > .2: game.hurt_player(damage,"physical",self)
+		if forward().dot(d) > .2: game.hurt_player(damage,"physical",self,true)
 
 # How far (centre to centre) this statue's blow reaches `other` as it lands:
 # a little beyond where it attacks from, or as far as its weapon's point

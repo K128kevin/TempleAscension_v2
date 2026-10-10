@@ -20,8 +20,8 @@ with tools/make_sounds.py's helpers.
   frost-bolt.wav      Ice Bolt cast: an icy rush, frost crackling off it.
   ice-impact.wav      Ice Bolt striking: ice cracking and shattering (no
                       chiming: its shards are bursts of noise, not tones).
-  ice-spikes.wav      Ice Spikes: ice grinding up out of the floor and
-                      splintering apart.
+  ice-spikes.wav      Ice Spikes: ice rumbling up out of the floor, cracking
+                      and splintering apart (no hiss or static).
   ice-prison.wav      Ice Prison: ice creaking shut round its prisoner, a
                       solid clunk as it sets and the ice cracking through.
   frost-stream.wav    Freeze Floor and Frost Blast, looped while channelled:
@@ -275,13 +275,16 @@ def ice_impact():
 
 
 def ice_spikes():
+    # No hiss: the ice's grinding up is a low rumble, its crunching a few
+    # separate cracks (not a dense crackle, which is heard as static), its
+    # splintering kept below the hissing top of the range.
     seconds = 1.0
     t = times(seconds)
-    grind = band(tilt(noise(seconds), 1.5), 200, 2600)*rise_fall(t, .07, .18)*1.3
-    crunch = crackles(seconds, 900, 700, 4500, density=rise_fall(t, .05, .2))*2.8
-    thud = sweep_tone(t, 130, 45, .07)*rise_fall(t, .01, .15, .03)*1.0
-    shards = splinters(t, 40, .3, 1200, 9000, .06)*2.0
-    return finish(grind+crunch+thud+shards, drive=1.7)
+    grind = band(tilt(noise(seconds), 2.0), 90, 700)*rise_fall(t, .06, .16)*1.1
+    crunch = crackles(seconds, 140, 500, 2600, density=rise_fall(t, .05, .2))*2.2
+    thud = sweep_tone(t, 130, 45, .07)*rise_fall(t, .01, .15, .03)*1.1
+    shards = splinters(t, 26, .3, 900, 5500, .06)*2.0
+    return finish(grind+crunch+thud+shards, drive=1.4)
 
 
 def ice_prison():

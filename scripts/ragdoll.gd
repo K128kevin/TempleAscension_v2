@@ -108,8 +108,11 @@ static func body(skeleton: Skeleton3D, part: Dictionary) -> PhysicalBone3D:
 # statue's stones are thrown: StoneFragment.impact).
 static func drop(simulator: PhysicalBoneSimulator3D, impact: Vector3) -> void:
 	simulator.physical_bones_start_simulation()
-	impact = impact.normalized()*(BLAST_PUSH if impact.length() > BLAST else PUSH)
-	var topple: Vector3 = impact.limit_length(TOPPLE_MOST)
+	# (Thrown straight up, as off Ice Spikes, he goes at the blow's own
+	# speed, and nothing topples him any way.)
+	var upward: bool = impact.y > 0.0 and Vector2(impact.x,impact.z).length() < .001
+	if not upward: impact = impact.normalized()*(BLAST_PUSH if impact.length() > BLAST else PUSH)
+	var topple: Vector3 = Vector3.ZERO if upward else impact.limit_length(TOPPLE_MOST)
 	for bone in simulator.get_children():
 		if bone is PhysicalBone3D:
 			bone.linear_velocity = impact+topple*TOPPLE.get(String(bone.bone_name),0.0)

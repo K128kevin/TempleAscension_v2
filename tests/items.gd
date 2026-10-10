@@ -242,6 +242,12 @@ func test():
 	var gear: int = Data.stat(game.run,3)-int(game.run.stats[3])
 	check(gear > 0 and game.hud.panels.stat_values[3].text == str(Data.stat(game.run,3)) and game.hud.panels.stat_splits[3].visible and game.hud.panels.stat_splits[3].text == "%d base · +%d items" % [game.run.stats[3],gear],"The attributes tab shows Vitality in all, its base and what items add (%s, %s)" % [game.hud.panels.stat_values[3].text,game.hud.panels.stat_splits[3].text])
 	check(game.hud.panels.stat_values[0].text == str(game.run.stats[0]) and not game.hud.panels.stat_splits[0].visible,"An attribute no item raises shows only its value")
+	# A wizard's Willpower raises his mana, and is said to.
+	var wizard_run = Data.new_run("wizard")
+	check("mana" in Data.stat_help(wizard_run,4) and not "energy" in Data.stat_help(wizard_run,4) and "energy" in Data.stat_help(Data.new_run("warrior"),4),"Willpower raises a wizard's mana (%s), a warrior's energy" % Data.stat_help(wizard_run,4))
+	check(Data.energy_word(wizard_run) == "mana" and Data.energy_word(Data.new_run("ranger")) == "energy","A wizard's skills cost mana, the others' energy")
+	var energetic: Array = Items.ALL.keys().filter(func(id): return Items.ALL[id].get("bonus",{}).has("energy"))
+	if not energetic.is_empty(): check(Items.describe(energetic[0],"wizard").stats.any(func(l): return "mana" in l) and Items.describe(energetic[0],"warrior").stats.any(func(l): return "energy" in l),"An item's energy is a wizard's mana")
 	game.hud.panels.close()
 	check(game.move_item("chest","bag:5") == "" and game.player.max_hp == 120.0 and game.player.hp <= 120.0,"Taken off, its health goes with it")
 	game.run.bag[6] = "bandit_sica"

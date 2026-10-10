@@ -427,5 +427,6 @@ static func describe(id: String, class_id: String = "") -> Dictionary:
 		what = "%s · %s" % [KIND_TITLES[item.kind],"Two-handed" if item.hands == 2 else "One-handed"]
 		if item.has("damage"): lines.append("%s–%s damage" % [figure(item.damage[0]),figure(item.damage[1])])
 		else: lines.append("Spells take their damage from Intelligence")
-	for key in item.get("bonus",{}): lines.append(BONUS_TEXT[key] % figure(item.bonus[key]))
+	# (A wizard's energy is his mana.)
+	for key in item.get("bonus",{}): lines.append((BONUS_TEXT[key] % figure(item.bonus[key])).replace("energy","mana") if class_id == "wizard" else BONUS_TEXT[key] % figure(item.bonus[key]))
 	return {"title":item.name,"kind":what,"stats":lines,"note":"" if class_id.is_empty() else barred(class_id,id),"rarity":rarity(id)}

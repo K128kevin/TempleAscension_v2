@@ -8,6 +8,7 @@ const Temple = preload("res://scripts/temple.gd")
 const Actor = preload("res://scripts/actor.gd")
 const Fragment = preload("res://scripts/stone_fragment.gd")
 const Ragdoll = preload("res://scripts/ragdoll.gd")
+const Skills = preload("res://scripts/skills.gd")
 const STEP = 1.0/60
 var game
 var origin: Vector3
@@ -226,6 +227,21 @@ func test():
 	check(crowd.all(func(b): return b.visual.scorched) and smokers > 0 and Visual.smoking <= Visual.SMOKE_LIMIT,"Fourteen burnt at once are all charred; no more than %d smoke (%d)" % [Visual.SMOKE_LIMIT,smokers])
 	await frames(int((Visual.SMOKE_TIME+Visual.SMOKE_LIFE)*60)+30)
 	check(Visual.smoking == 0 and crowd.all(func(b): return not is_instance_valid(b.visual.smoke)),"Their smoke clears, and its emitters with it")
+
+	# Killed by Ice Spikes he is thrown straight up off them, at their own
+	# speed, and not aside.
+	var spiked = victim(origin+Vector3(4,0,-1))
+	await frames(4)
+	var stood_at: Vector3 = spiked.position
+	spiked.hit(100000,"frost",0.0,Skills.SPIKES_THROW)
+	await frames(2)
+	var rise = Vector3.ZERO
+	for b in Ragdoll.bodies(spiked.visual.ragdoll): rise += b.linear_velocity/Ragdoll.PARTS.size()
+	check(Vector2(rise.x,rise.z).length() < .3 and rise.y > .8 and rise.y < 1.6,"Ice Spikes throw him up at about 1.5 m/s, not aside (%s)" % str(rise.snapped(Vector3.ONE*.01)))
+	await frames(40)
+	var landed = Vector3.ZERO
+	for b in Ragdoll.bodies(spiked.visual.ragdoll): landed += b.global_position/Ragdoll.PARTS.size()
+	check(Vector2(landed.x-stood_at.x,landed.z-stood_at.z).length() < .6,"and he comes down where he stood")
 
 	# Dying of a curse there is no blow: he crumples where he stands.
 	var cursed = victim(origin+Vector3(2,0,-3))

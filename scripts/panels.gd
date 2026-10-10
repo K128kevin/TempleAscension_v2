@@ -255,7 +255,7 @@ func build_stats(body: VBoxContainer) -> void:
 		names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(names)
 		text(Data.STATS[i],14,hud.cream,names)
-		text(Data.STAT_HELP[i].replace("; ","\n"),11,dim,names)
+		text(Data.stat_help(game.run,i).replace("; ","\n"),11,dim,names)
 		# The attribute in all, and beneath it, where items add to it, how
 		# much is his own (what he has spent points on) and how much theirs.
 		var column = VBoxContainer.new()
@@ -640,7 +640,7 @@ func refresh() -> void:
 			stat_splits[i].text = "%d base · %+d items" % [r.stats[i],gear] if gear != 0 else ""
 			stat_splits[i].visible = gear != 0
 			stat_buttons[i].disabled = r.points<=0
-		stat_summary.text = "Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%" % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(game.skills.basic_speed(Data.weapon(r))),game.skills.figure(Data.crit_chance(r))]
+		stat_summary.text = Data.in_his_words(r,"Health %d · Energy %d · +%.1f energy/s\nAttack speed +%s%% · Critical strike %s%%") % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),game.skills.figure(game.skills.basic_speed(Data.weapon(r))),game.skills.figure(Data.crit_chance(r))]
 		stat_reset.disabled = not game.safe_checkpoint()
 	if skills_open():
 		tree_points.text = "%d point%s to spend" % [r.skill_points,"" if r.skill_points==1 else "s"]
@@ -690,7 +690,7 @@ func show_tip(id: String, slot: Rect2 = Rect2()) -> void:
 # The normal attack's tip: what the weapon in hand hits for.
 func attack_lines() -> Dictionary:
 	var weapon = Data.weapon(game.run)
-	var lines = {"title":"%s · Attack" % (Items.main(game.run).name if not Items.main(game.run).is_empty() else "Bare hands"),"kind":"LMB · No energy cost"}
+	var lines = {"title":"%s · Attack" % (Items.main(game.run).name if not Items.main(game.run).is_empty() else "Bare hands"),"kind":Data.in_his_words(game.run,"LMB · No energy cost")}
 	lines.merge(game.skills.crit_numbers(weapon))
 	lines.damage = "Damage: "+game.skills.span(100.0,Data.scaling_tag(weapon))
 	return lines
@@ -701,12 +701,12 @@ func skill_lines(id: String, on_hotbar: bool) -> Dictionary:
 	var rank = int(r.skills.get(id,0))
 	var active: bool = s.effect!="passive"
 	var lines = {"title":"%s · %d/%d" % [s.title,rank,s.max_rank]}
-	lines.kind = "Passive" if not active else "Active · %d energy" % game.skills.cost(id)
+	lines.kind = "Passive" if not active else "Active · %d %s" % [game.skills.cost(id),Data.energy_word(r)]
 	if active and s.requirement!="any": lines.kind += " · needs %s" % {"melee":"a melee weapon","shield":"a shield","bow":"a bow","dagger":"a dagger","bow_dagger":"a bow or dagger"}[s.requirement]
-	lines.now = Book.describe(id,maxi(1,rank))
+	lines.now = Data.in_his_words(r,Book.describe(id,maxi(1,rank)))
 	# What it hits for now, by the hero's attributes and passives.
 	lines.merge(game.skills.damage_summary(id,rank))
-	lines.next = "Next rank: "+Book.describe(id,rank+1) if rank>0 and rank<s.max_rank else ""
+	lines.next = "Next rank: "+Data.in_his_words(r,Book.describe(id,rank+1)) if rank>0 and rank<s.max_rank else ""
 	lines.lock = Book.locked(r,id)
 	if lines.lock.is_empty() and rank<s.max_rank and rank>=Book.rank_cap(id,int(r.level)): lines.lock = "Next rank requires level %d." % (s.unlock+rank*3)
 	if on_hotbar and lines.lock.is_empty(): lines.lock = game.skills.reason(id)

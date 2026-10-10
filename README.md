@@ -20,7 +20,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Left click ground | Move to destination |
 | Left click statue | Approach and attack; hold to repeat |
 | Shift + left click | Attack toward cursor without moving |
-| Right click | Cast active skill slot 1 |
+| Right click | Cast active skill slot 1 (once a press: held, it is cast once, though a channelled skill pours on while held) |
 | Hold left mouse | Continuously repath toward the cursor (a hold begun on the ground keeps walking when dragged over a statue) |
 | Space | Dash: a short sprint toward the cursor, untouchable while it lasts; no energy cost, recharges for 3 seconds |
 | R | Toggle between running and walking (a slower pace) |
@@ -40,8 +40,9 @@ Clicking the ground cancels a combat order. While idle, the hero faces the curso
 between the camera and the hero, or an enemy near a wall, turns semi-transparent. Once
 five or fewer statues remain, an arrow around the hero points to the nearest one; once a
 floor is cleared, a jade arrow points to the stairway on, and E at its foot takes
-it (but no arrow in the arena
-basement, whose way down is found).
+it. (In the arena basement there are no arrows, and nothing is said when it is
+cleared: its last bandits and its way down are to be found, and its stairs down
+are walked into, not taken with E.)
 
 The HUD keeps to the foot of the screen: a compact row of clickable ability
 icons in the middle (LMB basic attack, RMB and 1 to 4, each skill with its icon
@@ -62,7 +63,9 @@ game is paused while it is open. Gaining a level puts a small + button at each
 lower corner: the left one opens the window at the attributes, the right one
 at the skills. Each stays until its points are spent. The attributes tab
 shows each attribute in all; where items add to one, a line beneath it shows
-how much is its base (the points spent) and how much the items give.
+how much is its base (the points spent) and how much the items give. A
+wizard's energy is mana, and everything he reads says so: Willpower raises his
+maximum mana and its return, his spells cost mana, and so on.
 
 The inventory tab shows a figure of the hero as he is dressed and armed (drag
 across it to turn it), with his head, chest and legs slots to its left, his
@@ -126,7 +129,13 @@ The temple stands in a larger world, one continuous outdoor map
   takes up the mugs left where no one sits and carries them to the bar to be
   washed, and wipes down any table no one is at with her rag, round and
   round; between whiles she stands by the bar's west end. She lives in the
-  house nearest the inn and goes home once it is shut. Their clothes are
+  house nearest the inn and goes home once it is shut. Each mug comes full
+  of beer, a head of foam on it, and goes down a sip at a time until it is
+  drained; the drinker sets it by, and Anya, bringing him another, takes it
+  away, or Selene comes for it. Selene clears every mug set by or left on
+  the tables; with every table taken and none to clear, she gathers the mugs
+  at the bar's end, washes them in the tub behind it, and wipes the bar top
+  down. Their clothes are
   neutral and plain, and most are poor: fifteen in rags (frayed, patched,
   holed and filthy), nine in worn and patched tunics and gowns, six decently
   dressed. Most of those in rags are thin with hunger (the five come to the
@@ -136,7 +145,8 @@ The temple stands in a larger world, one continuous outdoor map
   the grown, sleep in the street. Six ragged children run about the streets at tag and
   follow-my-leader, resting in a huddle between games; they never go into the
   inn. No one goes into the arena, through the palace gate or out of the town,
-  and all give way to the hero.
+  and all give way to the hero, and to each other: two meeting head on each
+  step to his right and slip past, and one kept back goes round.
 - **Zeno, the bread seller.** A man in a wide straw hat and a floury apron
   pushes a wooden handcart round the streets by day: a bed of boards with
   plank sides, two big spoked, iron-tyred wheels that turn as it rolls, and
@@ -533,7 +543,7 @@ lasts; letting go, moving or casting anything else ends them.
 |---|---|---|---|---|
 | Ice | 0 | Ice Bolt | 15 | 100% → 140% ice damage; 4% → 20% chance to freeze the target for 3 seconds |
 | | 0 | Freeze Floor | 10 a second | Channelled: a ray of frost reaching 15 metres ices the floor 6 metres across where it falls for 12 seconds; enemies on it move 40% → 80% slower |
-| | 5 | Ice Spikes | 35 | Spikes across 4 metres where he aims: 100% → 180% |
+| | 5 | Ice Spikes | 35 | Spikes across 4 metres where he aims: 100% → 180% (the slain thrown straight up off them) |
 | | 5 | Ice Prison | 45 | One enemy frozen in a block of ice for 2 → 6 seconds, unable to act and taking 20% → 60% more damage (damage does not break it) |
 | | 5 | Improved Chill | | The chill slows 10% → 40% more and lasts 1 → 5 seconds longer |
 | | 10 | Frost Blast | 20 a second | Channelled: frost 10 metres ahead, 70% → 150% a second to everyone within 3 metres of the stream |

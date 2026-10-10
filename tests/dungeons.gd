@@ -185,10 +185,16 @@ func test():
 	game.interact()
 	check(world.gate_open and world.fits(world.gate_point()) and (game.way_open() and game.has_way_on()) and game.way_open() and "basement:0:open" in game.run.keys and not Game.GATE_KEY in game.run.bag,"The key opens the gate (and stays in its lock), and the way down")
 	check(not world.path(world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*2.0,world.exit_point).is_empty(),"Through the open gate the stair can be walked to")
-	game.player.position = world.exit_point
+	# The way down is walked into, not taken with E.
+	game.player.position = world.exit_point+(world.gate_point()-world.exit_point).normalized()*3.0
+	check(not game.pass_door() and game.stair_armed,"Away from the stairs nothing happens")
+	game.player.position = world.exit_point+(world.gate_point()-world.exit_point).normalized()*1.5
 	game.hud.tick(0)
-	check("descend" in game.hud.prompt.text.to_lower(),"The HUD says to descend")
+	check("lead down" in game.hud.prompt.text.to_lower() and not "E ·" in game.hud.prompt.text,"Near them the HUD says the stairs lead down, with no key to press")
 	game.interact()
+	check(game.run.floor==0,"E does not take them")
+	game.player.position = world.exit_point
+	check(game.pass_door(),"Walking into the stairs goes down them")
 	world = game.world
 	check(game.run.place=="basement" and game.run.floor==1 and world.layout.last and not game.has_way_on(),"The stair goes down to the second, last level")
 	check(game.enemies.all(func(e): return e.uid.begins_with("basement:1:")) and game.remaining()>expected,"More bandits wait below")
@@ -198,11 +204,26 @@ func test():
 	game.interact()
 	world = game.world
 	check(game.run.floor==0 and game.remaining()==0 and game.player.position.distance_to(world.exit_point)<.01,"The stair leads back up to the cleared level, at the head of the stair")
-	game.interact()
+	check(not game.pass_door() and game.run.floor==0,"Come up, he is not sent straight back down")
+	var foot: Vector3 = world.exit_point
+	for d in [Vector3(3,0,0),Vector3(-3,0,0),Vector3(0,0,3),Vector3(0,0,-3)]:
+		game.player.position = world.move(foot,d)
+		if game.player.position.distance_to(foot) > Game.STAIR_ARM: break
+	game.pass_door()
+	game.player.position = foot
+	check(game.pass_door(),"Stepping away and back onto them, he goes down again")
 	world = game.world
 	check(game.run.floor==1 and game.remaining()>0,"And down again")
+	# No arrow points the way to the last of them here, and the level's
+	# clearing goes unremarked.
+	var standing: Array = game.enemies.filter(func(e): return not e.dead)
+	for enemy in standing.slice(0,standing.size()-3): enemy.hit(100000)
+	game.hud.tick(0)
+	check(game.remaining()==3 and not game.hud.enemy_arrow.visible,"No arrow points to the basement's last bandits")
+	game.hud.notice.text = ""
 	for enemy in game.enemies:
 		if not enemy.dead: enemy.hit(100000)
+	check(not "routed" in game.hud.notice.text and not "silent" in game.hud.notice.text,"Nothing is said of the basement's being cleared")
 	check(game.remaining()==0 and game.run.cleared==["basement"] and not Data.temple_open(game.run) and not (game.way_open() and game.has_way_on()),"Clearing the last level clears the dungeon; the temple stays shut for the cave")
 	check(Save.valid(game.run),"The run is valid to save")
 	# A save from before the basement was laid out anew: its bandits stand again.

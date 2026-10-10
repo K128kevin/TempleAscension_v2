@@ -44,6 +44,8 @@ var move_hold = false
 var hold_timer = 0.0
 var pursuit_timer = 0.0
 var order_pending = false
+# Whether the right button's present press has cast its skill yet.
+var right_press_cast = false
 var ordered_special = false
 # The skill slot a special order casts (RMB is 0; the 1 to 4 keys, 1 to 4).
 var ordered_slot = 0
@@ -181,6 +183,7 @@ func load_floor() -> void:
 	pickup_goal = null
 	talk_goal = null
 	key_holder = null
+	stair_armed = false
 	scheduled.clear()
 	carriers.clear()
 	target = null
@@ -318,9 +321,21 @@ func pass_door() -> bool:
 		load_floor()
 		save_run()
 		return true
+	# The arena basement's stairs down are walked into, not taken with E;
+	# but not by a hero just come up them, until he has stepped away.
+	if run.place == "basement" and way_open() and has_way_on():
+		var gap: float = Vector2(player.position.x-world.exit_point.x,player.position.z-world.exit_point.z).length()
+		if gap > STAIR_ARM: stair_armed = true
+		elif stair_armed and gap < STAIR_STEP:
+			next_floor()
+			return true
 	if not world.leaving_temple(player.position): return false
 	leave_to_world()
 	return true
+
+const STAIR_STEP = .7
+const STAIR_ARM = 2.5
+var stair_armed = false
 
 # Out of a dungeon or the temple, into the world beside its way in.
 func leave_to_world() -> void:
@@ -524,6 +539,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				speak_with(guard)
 				return
 			right_held = true
+			right_press_cast = false
 			issue_click(true)
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
@@ -594,7 +610,10 @@ func enemy_at_screen(mouse: Vector2, exclude = null):
 # when it is targeted (its red ring showing), otherwise the ground under the
 # cursor. So an arrow loosed while hovering a statue flies at its middle.
 # `screen` is a viewport position; by default, the mouse.
+# Tests fix where the cursor points (`aim_fixed`, unless left at INF).
+var aim_fixed = Vector3.INF
 func aim_point(screen = null) -> Vector3:
+	if screen == null and aim_fixed != Vector3.INF: return aim_fixed
 	if screen == null:
 		var hovered = clicked_enemy() if mode=="playing" else null
 		return hovered.position if is_instance_valid(hovered) else world.pointer()
@@ -774,12 +793,15 @@ func player_control(dt: float) -> void:
 		target = null
 		order_pending = false
 		route.clear()
-		if left_held or right_held: attack(right_held,aim_point())
+		if left_held or (right_held and not right_press_cast): attack(right_held,aim_point())
 	else:
 		if is_instance_valid(target) and (target.dead or (not order_pending and not left_held and not right_held)):
 			target = null
 			route.clear()
-		if right_held and hold_timer <= 0:
+		# (Held, the right button's skill is tried again until it is cast,
+		# then not again: one press, one cast. A channelled one lasts as long
+		# as it is held, as its own.)
+		if right_held and hold_timer <= 0 and not right_press_cast:
 			issue_click(true)
 		elif left_held and not is_instance_valid(target) and hold_timer <= 0:
 			issue_click(false,0,true)
@@ -870,9 +892,11 @@ func attack(special: bool, point: Vector3, slot: int = 0) -> void:
 		special = true
 		slot = Data.LEFT_SLOT
 	if special:
-		# A skill that cannot be cast (no energy, recharging) ends the order
-		# rather than leaving the hero waiting on it.
-		if not skills.cast_slot(slot,point): order_pending = false
+		# One press, one cast: the order ends with it, cast or not (no energy,
+		# recharging), rather than casting again once he is free. (A button
+		# held issues another order of its own.)
+		skills.cast_slot(slot,point)
+		order_pending = false
 		return
 	order_pending = false
 	# Attacking brings the ranger out of the shadows.
@@ -1102,7 +1126,7 @@ func teleport(aim: Vector3) -> void:
 func heal() -> void:
 	if mode!="playing" or player.dead or heal_cd>0 or player.hp>=Data.max_health(run): return
 	if run.energy<60:
-		toast("Healing needs 60 energy.")
+		toast("Healing needs 60 %s." % Data.energy_word(run))
 		return
 	sound.play("heal")
 	run.energy -= 60
@@ -1199,7 +1223,11 @@ func awaken(enemy) -> void:
 		if other.position.distance_to(enemy.position)<AWAKEN_REACH and other.position.distance_to(player.position)<18 and world.clear_line(enemy.position,other.position): awaken(other)
 
 # `source` is the enemy whose attack this is; landing it resets its pushback.
-func hurt_player(damage: float, type: String = "physical", source = null) -> void:
+# A blow (`blow`: an enemy's strike, not a shot or a spell) that lands is
+# heard as the first Temple Ascension's were: a lion's swipe with one of its
+# two cries, any other a sword's hit.
+const LION_CRIES = ["lion-attack-1","lion-attack-2"]
+func hurt_player(damage: float, type: String = "physical", source = null, blow: bool = false) -> void:
 	if playground != null:
 		# The playground shows the hit, but the hero takes no damage.
 		if not player.dead: player.react_to_hit(false)
@@ -1214,6 +1242,7 @@ func hurt_player(damage: float, type: String = "physical", source = null) -> voi
 	player.hp -= damage
 	combat_age = 0
 	if is_instance_valid(source): source.landed_attack()
+	if blow and damage > 0 and is_instance_valid(source): sound.play(LION_CRIES[randi()%2] if source.role == "lion" else "sword-hit",-8)
 	float_text(player.position+Vector3.UP*1.8,"−%d" % roundi(damage),Color(1,.35,.25))
 	if player.hp<=0:
 		player.dead = true
@@ -1264,13 +1293,14 @@ func enemy_died(enemy) -> void:
 		place_crown()
 		toast("The statue falls. The emperor's crown is yours to claim.")
 	elif remaining()==0 and has_way_on() and gated() and not world.gate_open:
-		toast("The level is silent. %s" % ("Unlock the gate to go down." if has_key() else "Take the key and unlock the gate to go down."))
+		# (The arena basement says nothing of its being cleared.)
+		if run.place != "basement": toast("The level is silent. %s" % ("Unlock the gate to go down." if has_key() else "Take the key and unlock the gate to go down."))
 	elif remaining()==0 and has_way_on():
-		toast("The floor is silent. The stairway up is open." if run.place=="temple" else "The level is silent. The way down is open.")
+		if run.place != "basement": toast("The floor is silent. The stairway up is open." if run.place=="temple" else "The level is silent. The way down is open.")
 	elif remaining()==0 and run.place in Data.DUNGEONS and not run.place in run.cleared:
 		# The dungeon's last level is cleared: one step nearer the temple.
 		run.cleared.append(run.place)
-		toast("The bandits are routed. %s" % ("The temple's door will open to you now." if Data.temple_open(run) else "Their fellows %s remain." % ("in the cave in the northern desert" if run.place=="basement" else "beneath the arena")))
+		if run.place != "basement": toast("The bandits are routed. %s" % ("The temple's door will open to you now." if Data.temple_open(run) else "Their fellows %s remain." % ("in the cave in the northern desert" if run.place=="basement" else "beneath the arena")))
 	save_run()
 
 # Tests fix what falls: the next enemy slain drops `loot_forced`; nothing
@@ -1593,7 +1623,7 @@ func interact() -> void:
 	elif at_locked_gate():
 		if has_key(): unlock_gate()
 		else: toast("The gate is locked.")
-	elif way_open() and has_way_on() and player.position.distance_to(world.exit_point)<4:
+	elif way_open() and has_way_on() and run.place != "basement" and player.position.distance_to(world.exit_point)<4:
 		next_floor()
 	elif run.place in Data.DUNGEONS and world.layout.arrival.has_area() and out_of_combat() and player.position.distance_to(world.layout.arrival_position())<3.5:
 		# Up the stair: to the level above, or from the basement's first

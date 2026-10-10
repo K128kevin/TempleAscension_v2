@@ -116,8 +116,9 @@ func setup(appearance: Dictionary) -> void:
 	arm.name = "ArmReach"
 	skeleton.add_child(arm)
 	# In the palm, upright when the forearm is level; a thing keeps its own
-	# size in a child's hand.
-	grip.transform = Transform3D(GRIP_MUG.scaled(Vector3.ONE/size),GRIP_AT)
+	# size and shape in any hand (pin).
+	pin_to_hand(grip,"hand_l",GRIP_MUG,GRIP_AT)
+	skeleton.skeleton_updated.connect(pin)
 	arms = {"l":arm}
 	hands = {"l":hand}
 	play("Idle",0.0)
@@ -421,9 +422,32 @@ func drinking_arm(side: String) -> SkeletonModifier3D:
 		hands[side].add_child(handle)
 		# (Its +X, from the mug's body to its handle, is away from the palm.)
 		var turn = Basis(-face,reaching.across,(-face).cross(reaching.across)).orthonormalized()
-		handle.transform = Transform3D(turn.scaled(Vector3.ONE/size),reaching.palm)
+		pin_to_hand(handle,"hand_"+side,turn,reaching.palm)
 		handle_grips[side] = handle
 	return arms[side]
+
+# What is held is held in the hand's place and turn, but never in its scale:
+# a starving or heavy figure is drawn narrower or broader across than up
+# (starve, setup's bulk), and a mug in such a hand, turned with it, would be
+# sheared out of true. So each holder (a grip, a handle's place) stands apart
+# from the hand (top-level) and is set every time the skeleton is posed:
+# where the hand's bone puts `at`, turned as the bone is (squared up, unscaled)
+# and then by `turn`.
+var pins: Array = []
+func pin_to_hand(holder: Node3D, bone: String, turn: Basis, at: Vector3) -> void:
+	holder.top_level = true
+	pins.append({"node":holder,"bone":skeleton.find_bone(bone),"turn":turn,"at":at})
+	pin()
+
+# (Only while the skeleton is posed, when its bones are where its reaching
+# arms have put them: read at any other time they are the clip's alone.)
+func pin() -> void:
+	if not skeleton.is_inside_tree(): return
+	for p in pins:
+		var bone: Transform3D = skeleton.global_transform*skeleton.get_bone_global_pose(p.bone)
+		p.node.global_transform = Transform3D(bone.basis.orthonormalized()*p.turn,bone*p.at)
+	# (Beer in what is held is levelled again where the hand now has it.)
+	if is_instance_valid(held) and held.has_meta("beer") and is_instance_valid(held.get_meta("beer")): held.get_meta("beer").settle()
 
 # The mug in the `side` hand, its handle in the fist: placed as it is now
 # (`settle` 0) or as the fist holds it (1), between the two as it settles.
@@ -444,7 +468,9 @@ func settle_grasp(settle: float) -> void:
 	var scale: Vector3 = held.transform.basis.get_scale()
 	var fist = Transform3D(Basis.from_scale(scale),-(Basis.from_scale(scale)*MUG_HANDLE))
 	var taken: Transform3D = held.get_meta("taken")
-	held.transform = Transform3D(Basis(taken.basis.get_rotation_quaternion().slerp(fist.basis.get_rotation_quaternion(),settle)).scaled(scale),taken.origin.lerp(fist.origin,settle))
+	# (Turned, then sized in its own frame: sized first, it would be
+	# stretched along whatever way it is turned.)
+	held.transform = Transform3D(Basis(taken.basis.get_rotation_quaternion().slerp(fist.basis.get_rotation_quaternion(),settle))*Basis.from_scale(scale),taken.origin.lerp(fist.origin,settle))
 
 # Carries the `side` hand to hold a handle at `handle_point` running along
 # `up` (the mug's own up), the wrist straight, the whole arm turning to tip

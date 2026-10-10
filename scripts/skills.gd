@@ -139,6 +139,8 @@ const PATCH_REFRESH = .5
 const MAX_PATCHES = 40
 const SPELL_REACH = 15.0
 const SPIKES_RADIUS = 2.0
+# A man the spikes kill is thrown straight up off them, not aside.
+const SPIKES_THROW = Vector3(0,1.5,0)
 const FROST_REACH = 10.0
 const FROST_RADIUS = 3.0
 const STORM_RADIUS = 4.0
@@ -262,7 +264,7 @@ func reason(id: String) -> String:
 	# the skill is made with.)
 	if not Book.in_reach(game.run,id): return "Requires %s." % {"shield":"a shield","bow_dagger":"bow or dagger","melee":"a melee weapon"}.get(s.requirement,s.requirement)
 	if cooldowns.get(id,0.0)>0: return "Recharging: %d seconds." % ceili(cooldowns[id])
-	if game.run.energy<cost(id): return "Not enough energy."
+	if game.run.energy<cost(id): return "Not enough %s." % Data.energy_word(game.run)
 	if s.effect=="hide":
 		if hidden: return "Already hidden."
 		if not game.out_of_combat(): return "Hide in Shadows needs you out of combat."
@@ -319,6 +321,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	if s.effect in ["frenzy","vanish"]:
 		game.run.energy -= cost(id)
 		game.order_pending = false
+		if casting_slot == 0: game.right_press_cast = true
 		if s.effect=="frenzy":
 			var f: Dictionary = Book.values(id,level)
 			frenzy_bonus = f.x
@@ -364,6 +367,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	# Any attack brings him out of the shadows (the ambush, as it lands).
 	if s.effect not in ["hide","ambush"]: leave_shadows()
 	game.order_pending = false
+	if casting_slot == 0: game.right_press_cast = true
 	game.route.clear()
 	game.player.face(at)
 	# Stepping into a strike, he stops short of the unit it is aimed at (or
@@ -1114,7 +1118,7 @@ func execute(job: Dictionary) -> void:
 			waves.append(WizardFx.spikes(spot+Vector3.UP*game.world.lift(spot),SPIKES_RADIUS))
 			game.world.add_child(waves[-1])
 			game.sound.play("ice-spikes",-11)
-			for enemy in targets(spot,SPIKES_RADIUS+.5).filter(func(e): return e.position.distance_to(spot)<=SPIKES_RADIUS+bulk(e)): spell_hit(enemy,v.x,"frost",StoneFragment.impact(enemy.position-spot,true))
+			for enemy in targets(spot,SPIKES_RADIUS+.5).filter(func(e): return e.position.distance_to(spot)<=SPIKES_RADIUS+bulk(e)): spell_hit(enemy,v.x,"frost",SPIKES_THROW)
 			lay_ice(spot,SPIKES_RADIUS,PATCH_SECONDS,0.0)
 		"prison":
 			var caged = aimed_target(at,direction)

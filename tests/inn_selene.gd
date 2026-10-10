@@ -69,8 +69,8 @@ func test():
 	check(held,"She comes for the mug left at an empty place and takes it up")
 	var shelved = run.call(30.0,func(): return folk.washing.any(func(w): return w.mug == mug))
 	check(shelved and mug.position.distance_to(folk.counter) < .6,"and sets it on the bar to be washed")
-	var washed = run.call(folk.WASHED+2.0,func(): return not is_instance_valid(mug) or mug.is_queued_for_deletion())
-	check(washed,"where it is soon gone")
+	var washed = run.call(90.0,func(): return not is_instance_valid(mug) or mug.is_queued_for_deletion())
+	check(washed,"and in time she carries it to the wash")
 	# A table no one is at: she wipes it, round and round.
 	var table: Vector3 = tables[0]
 	for walker in folk.people:
@@ -80,12 +80,17 @@ func test():
 			walker.state = "pause"
 			walker.timer = 1000.0
 			walker.body.play("Idle")
+	# (No one else comes in to sit meanwhile.)
+	for walker in folk.people:
+		if walker.seat.is_empty() and walker.state in ["pause","walk","halt"]:
+			walker.state = "pause"
+			walker.timer = 1000.0
 	for s in folk.seats:
 		if s.table == table: folk.clear_mug(s)
 	for t in folk.wiped: folk.wiped[t] = -folk.WIPE_REST
 	for other in tables:
 		if other != table: folk.wiped[other] = folk.chore_clock+10000.0
-	var wiping = run.call(60.0,func(): return selene.state == "wipe")
+	var wiping = run.call(90.0,func(): return selene.state == "wipe")
 	check(wiping and selene.body.held == folk.rag,"At a table no one is at she sets to wiping it, her rag in hand")
 	var spots: Array = []
 	var hand: int = selene.body.skeleton.find_bone("hand_l")

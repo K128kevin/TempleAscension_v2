@@ -55,6 +55,20 @@ const SPECIALS = ["Jab","Slash","Rapid Fire","Whirl","Arcane Bolt","Stab"]
 const COSTS = [15.0,20.0,18.0,35.0,12.0,15.0]
 const STATS = ["Strength","Dexterity","Intelligence","Vitality","Willpower"]
 const STAT_HELP = ["+2% melee damage (dagger too)","+2% bow damage; +0.3% attack speed; +0.25% critical strike chance","+2% spell damage","+10 maximum health","+3 maximum energy; +0.1 energy/sec"]
+
+# What the hero's skills are paid with, as he knows it: a wizard's is mana.
+static func energy_word(run: Dictionary) -> String:
+	return "mana" if run.get("class_id","") == "wizard" else "energy"
+
+# Words about energy, as the hero's class calls it (`text` written of
+# energy; a wizard reads mana).
+static func in_his_words(run: Dictionary, text: String) -> String:
+	if energy_word(run) != "mana": return text
+	return text.replace("Energy","Mana").replace("energy","mana")
+
+# What an attribute does, in the hero's own words.
+static func stat_help(run: Dictionary, index: int) -> String:
+	return in_his_words(run,STAT_HELP[index])
 # A wizard's spells are worked from a set baseline (a hit's least and most
 # before Intelligence), not from the weapon in hand; a staff may raise them.
 const SPELL_SPAN = [10.0,15.0]

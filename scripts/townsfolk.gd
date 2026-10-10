@@ -41,6 +41,7 @@ const Town = preload("res://scripts/world_town.gd")
 const Interiors = preload("res://scripts/world_interiors.gd")
 const Art = preload("res://scripts/assets.gd")
 const Smith = preload("res://scripts/smith.gd")
+const Beer = preload("res://scripts/beer.gd")
 const Daylight = preload("res://scripts/daylight.gd")
 const ADULTS = 30
 # (The five last of LOOKS are drawn by a die of their own, so the rest of the
@@ -50,8 +51,12 @@ const CHILDREN = 6
 # How many of the grown townspeople are in the inn at once.
 const INN_LEAST = 3
 const INN_MOST = 8
-# How long a drink lasts, and a sip between whiles.
+# How long a drink lasts, and a sip between whiles. A mug of beer is drunk
+# in SIPS sips, the last one emptying it; Anya fills it at the tap in POUR
+# seconds.
 const DRINK_TIME = 60.0
+const SIPS = 5
+const POUR = 1.1
 const WALK = 1.15
 const ANYA_WALK = 1.7
 const CHILD_RUN = 3.0
@@ -175,6 +180,12 @@ class Walker:
 	var basket: Node3D
 	# A loaf of Zeno's bread in its hand, for this long yet.
 	var loaf_left = 0.0
+	# Whether he is getting on (advance): where he was, the way he meant to
+	# go and how far, and how long he has been kept back.
+	var last_at = Vector3.ZERO
+	var last_heading = Vector3.ZERO
+	var last_step = 0.0
+	var stuck = 0.0
 	var at: Vector3:
 		get: return body.position
 		set(value): body.position = value
@@ -202,6 +213,8 @@ var smith
 var round: Array[Walker] = []
 # Where the mug rides in her fist as she carries it, relative to her.
 const CARRY = Vector3(.22,1.02,.3)
+# The drained mug she takes away from where she has just served.
+var empty: Node3D
 var post = Vector3.ZERO
 var tap = Vector3.ZERO
 var bar_end: Array[Vector3] = []
@@ -508,12 +521,34 @@ func tick(delta: float, hero: Vector3) -> void:
 			for walker in strollers:
 				if go_to_inn(walker): break
 
-# Walks a walker along its route; true once it has arrived.
+# Walks a walker along its route; true once it has arrived. One kept back
+# (another walking into him, pushing him back as he pushes on: part) for
+# STUCK seconds goes round: a pace to his right (or left) first, then on.
+const STUCK = .8
+const DETOUR = .9
 func advance(walker: Walker, delta: float) -> bool:
-	if walker.route.is_empty(): return true
+	if walker.route.is_empty():
+		walker.last_step = 0.0
+		return true
 	var to: Vector3 = walker.route[0]-walker.at
 	to.y = 0
 	var step = walker.speed*delta
+	# (How far he truly came since last time, toward where he was going.)
+	var made: float = (walker.at-walker.last_at).dot(walker.last_heading)
+	walker.stuck = walker.stuck+delta if walker.last_step > 0.0 and made < walker.last_step*.3 else maxf(0.0,walker.stuck-delta)
+	if walker.stuck > STUCK and to.length() > DETOUR:
+		walker.stuck = 0.0
+		var right: Vector3 = to.normalized().cross(Vector3.UP)
+		for side in [right,-right]:
+			var round_by: Vector3 = walker.at+side*DETOUR+to.normalized()*DETOUR*.5
+			if open_at(round_by) and clear_way(walker.at,round_by):
+				walker.route.insert(0,Vector3(round_by.x,0,round_by.z))
+				to = walker.route[0]-walker.at
+				to.y = 0
+				break
+	walker.last_at = walker.at
+	walker.last_heading = to.normalized() if to.length() > .001 else Vector3.ZERO
+	walker.last_step = minf(step,to.length())
 	if to.length() <= step:
 		walker.at = Vector3(walker.route[0].x,0,walker.route[0].z)
 		walker.route.remove_at(0)
@@ -619,8 +654,14 @@ func tend(walker: Walker, delta: float) -> void:
 					walker.sip = rng.randf_range(7.0,13.0)
 					walker.phase = "reach"
 					walker.phase_time = 0.0
-			if walker.timer <= 0.0 and walker.phase == "":
+			# The mug drained, he sets it by (for Anya or Selene to clear) and
+			# has done with it.
+			if walker.phase == "" and Beer.left_in(walker.mug) <= .001:
 				walker.drinks += 1
+				if walker.mug != null:
+					set_down(walker.mug,walker.seat,true)
+					walker.seat.left = walker.mug
+					walker.mug = null
 				var stays = staying()
 				if abed(walker) or can_leave() and (walker.drinks >= 3 or rng.randf() < LEAVE_CHANCE.get(stays,1.0 if stays > 8 else 0.0)): leave(walker)
 				else:
@@ -660,6 +701,8 @@ const TIP = .8
 # up and goes down.
 const TO_LIPS = .35
 const APPROACH = .07
+# (At the sip the rim rests on his lips, never pressed into them.)
+const TOUCH = .006
 
 func sip(walker: Walker, delta: float) -> void:
 	var seat: Dictionary = walker.seat
@@ -682,7 +725,7 @@ func sip(walker: Walker, delta: float) -> void:
 	# Where the near edge of its rim is to be: at his lips for the sip, and
 	# APPROACH before them as it comes up and goes down, so it comes to his
 	# mouth from in front and never across his face.
-	var approach: float = {"reach":APPROACH,"lift":APPROACH*(1.0-smoothstep(.6,1.0,t)),"sip":0.0,"lower":APPROACH*smoothstep(0.0,.4,t),"return":APPROACH}[walker.phase]
+	var approach: float = {"reach":APPROACH,"lift":lerpf(APPROACH,TOUCH,smoothstep(.6,1.0,t)),"sip":TOUCH,"lower":lerpf(TOUCH,APPROACH,smoothstep(0.0,.4,t)),"return":APPROACH}[walker.phase]
 	var goal: Vector3 = lips+forward*approach
 	# Where the handle must be for that: worked out from how the mug sits in
 	# his fist now (its rim's edge nearest the goal, from the handle), eased.
@@ -702,7 +745,15 @@ func sip(walker: Walker, delta: float) -> void:
 		"lift":
 			body.settle_grasp(smoothstep(0.0,.6,t))
 			body.drink_reach(side,on_table.lerp(at_mouth,eased),lean.call(LEAN*eased),1.0,1.0)
-		"sip": body.drink_reach(side,at_mouth,lean.call(lerpf(LEAN,TIP,smoothstep(0.0,.35,t)*(1.0-smoothstep(.65,1.0,t)))),1.0,1.0)
+		"sip":
+			body.drink_reach(side,at_mouth,lean.call(lerpf(LEAN,TIP,smoothstep(0.0,.35,t)*(1.0-smoothstep(.65,1.0,t)))),1.0,1.0)
+			# A mouthful's worth goes down while it is tipped to him.
+			var beer = Beer.of(mug)
+			var was: float = body.get_meta("beer_was",beer.fill)
+			if walker.phase_time <= delta:
+				was = beer.fill
+				body.set_meta("beer_was",was)
+			beer.fill = maxf(0.0,was-smoothstep(.3,.7,t)/SIPS)
 		"lower":
 			body.settle_grasp(1.0-smoothstep(.4,1.0,t))
 			body.drink_reach(side,at_mouth.lerp(on_table,eased),lean.call(LEAN*(1.0-eased)),1.0,1.0)
@@ -730,11 +781,16 @@ func drinking_side(body, at: Vector3) -> String:
 
 # A mug stood on the table before a seat, its handle turned out toward the
 # drinker's hand on that side (the mug's +X), a little back toward him.
-func set_down(mug: Node3D, seat: Dictionary) -> void:
+# Set `aside` (an empty, or one left), it stands further in on the table and
+# toward the other hand, out of the way of the next he is brought.
+const ASIDE = Vector2(.15,.14)
+func set_down(mug: Node3D, seat: Dictionary, aside: bool = false) -> void:
 	if mug.get_parent() != null: mug.get_parent().remove_child(mug)
 	add_child(mug)
 	var handle: Vector3 = (seat.get("side",-seat.face)*.85-seat.face*.5).normalized()
-	mug.transform = Transform3D(Basis(Vector3.UP,atan2(-handle.z,handle.x)).scaled(Kit.sized("mug",.17)),seat.mug+Vector3.UP*world.lift(seat.at))
+	var at: Vector3 = seat.mug+(seat.face*ASIDE.x-seat.get("side",Vector3.ZERO)*ASIDE.y if aside else Vector3.ZERO)
+	# (Turned, then sized in its own frame, so it is never stretched.)
+	mug.transform = Transform3D(Basis(Vector3.UP,atan2(-handle.z,handle.x))*Basis.from_scale(Kit.sized("mug",.17)),at+Vector3.UP*world.lift(seat.at))
 
 func leave(walker: Walker) -> void:
 	# The mug is left on the table for Anya to clear.
@@ -742,7 +798,7 @@ func leave(walker: Walker) -> void:
 	walker.body.reach(Vector3.ZERO,0.0,0.0)
 	walker.phase = ""
 	if walker.mug != null:
-		set_down(walker.mug,seat)
+		set_down(walker.mug,seat,true)
 		seat.left = walker.mug
 		walker.mug = null
 	walker.state = "stand_up"
@@ -785,8 +841,12 @@ func serve(delta: float) -> void:
 			var t = anya.phase_time
 			var spout: Vector3 = body.hand_for(body.global_transform*Vector3(.12,.95,.55))
 			if t < .6: body.reach(spout,smoothstep(0.0,1.0,t/.6),smoothstep(0.0,1.0,t/.6))
-			elif t < .8 and anya.body.held == null: body.hold(anya.mug)
-			elif t >= 2.0:
+			elif t < .8 and anya.body.held == null:
+				body.hold(anya.mug)
+				Beer.of(anya.mug).fill = 0.0
+			# The beer runs in from the tap, a head of foam on it.
+			if t >= .8: Beer.of(anya.mug).fill = smoothstep(0.0,1.0,(t-.8)/POUR)
+			if t >= 2.0:
 				next_table(true)
 		"carry":
 			body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
@@ -818,15 +878,33 @@ func serve(delta: float) -> void:
 						patron.timer = DRINK_TIME
 						patron.sip = rng.randf_range(2.0,5.0)
 					else: set_down(anya.mug,seat)
+					# His last, drained, she takes away with her.
+					if seat.left != null and is_instance_valid(seat.left):
+						empty = seat.left
+						seat.left = null
 				body.reach(on_table,1.0,0.0)
-			elif t < 1.4: body.reach(on_table,1.0-smoothstep(0.0,1.0,(t-.9)/.5),0.0)
+			elif empty != null and is_instance_valid(empty) and t < 1.6:
+				var to_empty: Vector3 = body.hand_for(empty.global_position) if body.held != empty else on_table
+				if t < 1.2: body.reach(on_table.lerp(to_empty,smoothstep(0.0,1.0,(t-.9)/.3)),1.0,smoothstep(.9,1.2,t))
+				else:
+					if body.held != empty: body.hold(empty)
+					body.reach(to_empty.lerp(carried,smoothstep(0.0,1.0,(t-1.2)/.4)),1.0,1.0)
+			elif empty == null and t < 1.4: body.reach(on_table,1.0-smoothstep(0.0,1.0,(t-.9)/.5),0.0)
 			else:
-				body.reach(on_table,0.0,0.0)
+				if body.held == null: body.reach(on_table,0.0,0.0)
 				round.remove_at(0)
 				next_table(false)
 		"return":
-			body.reach(Vector3.ZERO,0.0,0.0)
+			# (Carrying back an empty, if she took one up; it goes to be washed.)
+			if body.held != null: body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
+			else: body.reach(Vector3.ZERO,0.0,0.0)
 			if advance(anya,delta):
+				if body.held != null:
+					var washed: Node3D = body.held
+					body.hold(null)
+					washed.queue_free()
+					body.reach(Vector3.ZERO,0.0,0.0)
+				empty = null
 				anya.state = "post"
 				anya.timer = rng.randf_range(1.0,3.0)
 				body.play("Idle")
@@ -835,9 +913,15 @@ func serve(delta: float) -> void:
 func next_table(from_bar: bool) -> void:
 	while not round.is_empty() and round[0].state != "wait": round.remove_at(0)
 	var route = PackedVector3Array()
+	# (An empty taken up is carried back behind the bar, to be washed; with
+	# another to serve, it is put by at once.)
+	if anya.body.held != null and anya.body.held == empty and not round.is_empty():
+		anya.body.hold(null)
+		empty.queue_free()
+		empty = null
 	if round.is_empty():
 		# Back behind the bar.
-		if anya.body.held != null:
+		if anya.body.held != null and anya.body.held == anya.mug:
 			anya.body.hold(null)
 			stow(anya.mug)
 		route.append_array(way(anya.at,bar_end[1]))
@@ -1212,6 +1296,8 @@ func release(walker: Walker) -> void:
 		walker.stall = {}
 	if walker == anya:
 		round.clear()
+		if is_instance_valid(empty): empty.queue_free()
+		empty = null
 		stow(anya.mug)
 	elif walker.mug != null:
 		walker.mug.queue_free()
@@ -1475,8 +1561,12 @@ func part(hero: Vector3) -> void:
 			var gap = .62 if not (a.state == "chat" and b.state == "chat") else .95
 			if apart.length() >= gap or apart.length() < .01: continue
 			var push = apart.normalized()*(gap-apart.length())*.5
-			nudge(a,push)
-			nudge(b,-push)
+			# Walking into each other, each steps aside to his right as well,
+			# so they slip past rather than shoving face to face.
+			var aside = Vector3.ZERO
+			if a.last_heading.dot(b.last_heading) < -.3: aside = a.last_heading.cross(Vector3.UP)*(gap-apart.length())*.5
+			nudge(a,push+aside)
+			nudge(b,-push-aside)
 
 func nudge(walker: Walker, by: Vector3) -> void:
 	if open_at(walker.at+by): walker.at += by
@@ -1607,7 +1697,9 @@ const WIPE_ROUND = .09
 const WIPE_BEAT = 1.1
 const WIPE_ABOVE = .016
 const WIPE_LEAN = .12
-const WASHED = 8.0
+# Mugs set on the bar's end wait there for her to carry them to the wash;
+# any she has not, after WASHED, are taken in by Anya (gone).
+const WASHED = 240.0
 const CHORE_LOOK = .5
 # Her apron: a linen sheet from her waist to her thighs, standing out this
 # far from her hips' middle; and her clothes.
@@ -1645,6 +1737,7 @@ func hire_selene() -> void:
 	idle(selene)
 	rag = make_rag()
 	stow(rag)
+	lay_tub()
 	# Her house: the free one nearest the inn.
 	var taken: Array = (people+children+[orion]+keepers).filter(func(w): return w.bed.get("kind") == "house").map(func(w): return w.bed.at)
 	var homes: Array = world.places.filter(func(p): return p.kind == "house" and p.name == "house")
@@ -1750,12 +1843,15 @@ func table_in_use(table: Vector3) -> bool:
 		if not patron.seat.is_empty() and patron.seat.table == table: return true
 	return false
 
-# A mug left at an empty place, if there is one: she goes to fetch it.
+# A mug set by on a table (drained, or left by one who has gone), if there
+# is one, wherever it stands: she goes to fetch it. (Not where Anya is
+# bringing a drink: she takes the empty there herself.)
 func fetch_mug() -> bool:
 	var best = {}
 	var nearest = INF
+	var serving: Dictionary = round[0].seat if not round.is_empty() and anya.state in ["carry","place"] else {}
 	for seat in seats:
-		if seat.taken != null or seat.left == null or not is_instance_valid(seat.left): continue
+		if seat == serving or seat.left == null or not is_instance_valid(seat.left): continue
 		var d: float = seat.serve.distance_to(selene.at)
 		if d < nearest:
 			nearest = d
@@ -1809,6 +1905,90 @@ func done_wiping() -> void:
 	chore = {}
 	back_to_post()
 
+# The bar, when there is nothing else for her: no mug to fetch and no table
+# free to wipe. She takes up the mugs set at its end (STACK apart in her
+# hand), carries them to the wash tub behind it (tub_at, its water TUB_WATER
+# up), and wipes the bar's top down from behind it at BAR_SPOTS places
+# along its west half (BAR_WIPE_TIME at each), keeping clear of Anya's end
+# and of Anya (ANYA_CLEAR). Not again for BAR_REST, unless mugs are set
+# there meanwhile.
+const BAR_REST = 60.0
+const BAR_SPOTS = [3.7,4.9,6.1]
+const BAR_TOP = 1.12
+const BAR_ACROSS = 8.13
+const BEHIND_BAR = 7.72
+const BAR_WIPE_TIME = 3.0
+const ANYA_CLEAR = 1.3
+const STACK = .9
+const TUB_WATER = .5
+var bar_wiped = -BAR_REST
+var bar_spots: Array = []
+var tub_at = Vector3.ZERO
+var tub_stand = Vector3.ZERO
+
+func lay_tub() -> void:
+	var c = Interiors.INN
+	tub_at = Vector3(c.x+1.55,0,c.z+7.35)
+	tub_stand = nearest_open(Vector3(c.x+2.3,0,c.z+7.55))
+	var tub = Kit.prop("barrel",.62)
+	tub.name = "WashTub"
+	add_child(tub)
+	tub.position = tub_at
+	# Its water, dark and still, a little below the brim.
+	var water = MeshInstance3D.new()
+	var face = CylinderMesh.new()
+	face.top_radius = .2; face.bottom_radius = .2; face.height = .01
+	water.mesh = face
+	var dark = StandardMaterial3D.new()
+	dark.albedo_color = Color(.12,.11,.09)
+	dark.roughness = .1
+	dark.metallic_specular = .8
+	water.material_override = dark
+	add_child(water)
+	water.position = tub_at+Vector3.UP*.55
+
+func tend_bar() -> bool:
+	if washing.is_empty() and chore_clock-bar_wiped < BAR_REST: return false
+	chore = {"bar":true}
+	if not washing.is_empty():
+		selene.route = way(selene.at,counter_stand)
+		selene.route.append(counter_stand)
+		selene.state = "to_counter"
+	else: start_bar_wipe()
+	return true
+
+func start_bar_wipe() -> void:
+	var c = Interiors.INN
+	bar_spots = BAR_SPOTS.map(func(x): return Vector3(c.x+x,BAR_TOP,c.z+BAR_ACROSS))
+	chore = {"bar":true}
+	next_bar_wipe()
+
+func next_bar_wipe() -> void:
+	# (A mug to fetch meanwhile, and she leaves the bar for it.)
+	while not bar_spots.is_empty() and anya_near(bar_spots[0]): bar_spots.pop_front()
+	if bar_spots.is_empty() or seats.any(func(s): return s.left != null and is_instance_valid(s.left)):
+		done_bar()
+		return
+	var spot: Vector3 = bar_spots.pop_front()
+	chore.spot = spot
+	# (Close behind the bar, where Anya stands to draw.)
+	var stand = Vector3(spot.x,0,Interiors.INN.z+BEHIND_BAR)
+	selene.route = way(selene.at,nearest_open(stand))
+	selene.route.append(stand)
+	selene.state = "to_bar"
+
+func done_bar() -> void:
+	bar_wiped = chore_clock
+	bar_spots.clear()
+	if selene.body.held == rag:
+		selene.body.hold(null)
+		stow(rag)
+	chore = {}
+	idle(selene)
+
+func anya_near(spot: Vector3) -> bool:
+	return Vector2(anya.at.x-spot.x,anya.at.z-spot.z).length() < ANYA_CLEAR
+
 # Puts down whatever she is about (the inn shut, the clock jumped).
 func drop_chores() -> void:
 	selene.body.reach(Vector3.ZERO,0.0,0.0)
@@ -1821,6 +2001,7 @@ func drop_chores() -> void:
 	elif chore.has("mug") and is_instance_valid(chore.mug): chore.mug.queue_free()
 	chore = {}
 	wiping.clear()
+	bar_spots.clear()
 
 func chores(delta: float) -> void:
 	chore_clock += delta
@@ -1850,7 +2031,7 @@ func chores(delta: float) -> void:
 				if abed(selene) and people.all(func(w): return not w.state in ["to_inn","sit_down","wait","drink"]):
 					drop_chores()
 					go_to_bed(selene)
-				elif not fetch_mug(): wipe_next()
+				elif not fetch_mug() and not wipe_next(): tend_bar()
 		"to_mug":
 			if not is_instance_valid(chore.get("mug")):
 				chore = {}
@@ -1902,6 +2083,85 @@ func chores(delta: float) -> void:
 			else:
 				chore = {}
 				back_to_post()
+		"to_counter":
+			if advance(selene,delta):
+				selene.state = "gather"
+				selene.phase_time = 0.0
+				body.play("Idle",.2)
+		"gather":
+			# The mugs at the bar's end taken up, one stacked in another.
+			var t = selene.phase_time
+			var first: Node3D = washing[0].mug if not washing.is_empty() and is_instance_valid(washing[0].mug) else null
+			if first == null and body.held == null:
+				start_bar_wipe()
+				return
+			var at_bar: Vector3 = body.hand_for(first.global_position) if body.held == null else body.hand_for(counter)
+			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
+			body.turn_to(counter-selene.at,delta,8.0)
+			if t < .6: body.reach(at_bar,smoothstep(0.0,1.0,t/.6),smoothstep(0.0,1.0,t/.6))
+			elif t < 1.2:
+				if body.held == null:
+					body.hold(first)
+					var stacked = 1
+					for w in washing.slice(1):
+						if not is_instance_valid(w.mug): continue
+						if w.mug.get_parent() != null: w.mug.get_parent().remove_child(w.mug)
+						first.add_child(w.mug)
+						w.mug.transform = Transform3D(Basis.IDENTITY,Vector3(0,STACK*stacked,0))
+						stacked += 1
+					washing.clear()
+				body.reach(at_bar.lerp(carried,smoothstep(0.0,1.0,(t-.6)/.6)),1.0,1.0)
+			else:
+				selene.route = way(selene.at,tub_stand)
+				selene.route.append(tub_stand)
+				selene.state = "to_tub"
+		"to_tub":
+			body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
+			if advance(selene,delta):
+				selene.state = "wash"
+				selene.phase_time = 0.0
+				body.play("Idle",.2)
+		"wash":
+			# Into the tub with them, and gone (washed, and in to Anya).
+			var t = selene.phase_time
+			body.turn_to(tub_at-selene.at,delta,8.0)
+			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
+			var dipped: Vector3 = body.hand_for(tub_at+Vector3.UP*TUB_WATER)
+			if t < .7: body.reach(carried.lerp(dipped,smoothstep(0.0,1.0,t/.7)),1.0,1.0)
+			elif t < 1.3:
+				if body.held != null:
+					var washed: Node3D = body.held
+					body.hold(null)
+					washed.queue_free()
+				body.reach(dipped,1.0-smoothstep(0.0,1.0,(t-.7)/.6),0.0)
+			else:
+				body.reach(Vector3.ZERO,0.0,0.0)
+				start_bar_wipe()
+		"to_bar":
+			if anya_near(chore.spot):
+				next_bar_wipe()
+			elif advance(selene,delta):
+				selene.state = "bar_wipe"
+				selene.phase_time = 0.0
+				selene.timer = BAR_WIPE_TIME
+				body.play("Idle",.2)
+				body.hold(rag)
+		"bar_wipe":
+			if anya_near(chore.spot):
+				body.reach(Vector3.ZERO,0.0,0.0)
+				next_bar_wipe()
+				return
+			var t = selene.phase_time
+			var spot: Vector3 = chore.spot
+			body.turn_to(spot-selene.at,delta,8.0)
+			var turn: float = t/WIPE_BEAT*TAU
+			var rag_at: Vector3 = spot+Vector3(cos(turn),0,sin(turn))*WIPE_ROUND+Vector3.UP*WIPE_ABOVE
+			var down: Basis = palm_down(body)
+			body.reach(rag_at-down*body.GRIP_AT,smoothstep(0.0,.5,t)*smoothstep(0.0,.5,selene.timer),.55)
+			body.arm.grip = down
+			if selene.timer <= 0.0:
+				body.reach(Vector3.ZERO,0.0,0.0)
+				next_bar_wipe()
 		"to_table":
 			if table_in_use(chore.table):
 				done_wiping()
