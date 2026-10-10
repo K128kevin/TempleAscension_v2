@@ -1,7 +1,7 @@
 extends Node3D
 ## The town's people (scripts/townsperson.gd draws each).
 ##
-## Twenty-five grown townspeople wander the street that rings the arena, the
+## Thirty grown townspeople wander the street that rings the arena, the
 ## market and, now and then, an alley, stopping here and there; two who pass
 ## may stop a moment to talk. They drift in and out of the inn so that between
 ## three and eight of them are inside at any moment: one who comes in sits at
@@ -42,7 +42,10 @@ const Interiors = preload("res://scripts/world_interiors.gd")
 const Art = preload("res://scripts/assets.gd")
 const Smith = preload("res://scripts/smith.gd")
 const Daylight = preload("res://scripts/daylight.gd")
-const ADULTS = 25
+const ADULTS = 30
+# (The five last of LOOKS are drawn by a die of their own, so the rest of the
+# town comes out as it did before they came.)
+const RAGGED_LATER = 25
 const CHILDREN = 6
 # How many of the grown townspeople are in the inn at once.
 const INN_LEAST = 3
@@ -114,8 +117,9 @@ const AT_HOME = Vector2(12.0,30.0)
 # Clothes: neutral, undyed or faded.
 const CLOTHS = [Color(.74,.68,.56),Color(.52,.50,.47),Color(.42,.33,.25),Color(.60,.52,.40),Color(.42,.42,.30),Color(.38,.40,.42),Color(.50,.36,.28),Color(.78,.75,.68),Color(.30,.29,.27)]
 const HAIRS = [Color(.07,.05,.04),Color(.13,.08,.05),Color(.2,.14,.09),Color(.26,.2,.14),Color(.42,.41,.4)]
-# The twenty-five: [body, garment, cloth, wear, hair, beard, belt, skin]. Ten
-# are in rags, nine in worn and patched clothes, six decently dressed.
+# The thirty: [body, garment, cloth, wear, hair, beard, belt, skin]. Fifteen
+# are in rags (the last five came to the town since: RAGGED_LATER), nine in
+# worn and patched clothes, six decently dressed.
 const LOOKS = [
 	["man","Sack",3,.95,"Hair_Buzzed",true,false,"dark"],["man","Sack",1,.9,"Hair_SimpleParted",false,false,"light"],
 	["man","Tunic",8,.88,"",true,true,"light"],["woman","Shift",3,.92,"Hair_Buns",false,false,"dark"],
@@ -129,7 +133,10 @@ const LOOKS = [
 	["man","Tunic",2,.9,"Hair_Buzzed",false,false,"light"],["woman","Shift",4,.95,"Hair_Buns",false,false,"light"],
 	["man","Robe",3,.58,"Hair_SimpleParted",true,true,"dark"],["woman","Gown",1,.52,"Hair_Long",false,true,"light"],
 	["man","Tunic",5,.64,"",false,true,"light"],["man","Sack",0,.56,"Hair_Buzzed",true,true,"dark"],
-	["woman","Gown",7,.18,"Hair_Buns",false,true,"light"],["man","Tunic",6,.24,"Hair_SimpleParted",false,true,"dark"]]
+	["woman","Gown",7,.18,"Hair_Buns",false,true,"light"],["man","Tunic",6,.24,"Hair_SimpleParted",false,true,"dark"],
+	["man","Sack",2,.96,"Hair_SimpleParted",true,false,"dark"],["woman","Shift",8,.93,"Hair_Long",false,false,"light"],
+	["man","Tunic",3,.91,"",true,true,"light"],["woman","Shift",2,.94,"Hair_Buns",false,false,"dark"],
+	["man","Robe",8,.9,"Hair_Buzzed",false,true,"dark"]]
 
 class Walker:
 	var body: Node3D
@@ -166,6 +173,8 @@ class Walker:
 	# there.
 	var stall = {}
 	var basket: Node3D
+	# A loaf of Zeno's bread in its hand, for this long yet.
+	var loaf_left = 0.0
 	var at: Vector3:
 		get: return body.position
 		set(value): body.position = value
@@ -182,6 +191,9 @@ var seats: Array[Dictionary] = []
 var people: Array[Walker] = []
 var children: Array[Walker] = []
 var anya: Walker
+# Selene, who works for Anya: she clears the mugs left on the tables and
+# wipes them down (see chores).
+var selene: Walker
 # Orion, the blacksmith, and his work: the anvil he hammers at, the
 # grindstone, and the forge he stokes.
 var orion: Walker
@@ -234,26 +246,29 @@ func setup(overworld) -> void:
 	orion.body.name = "Orion"
 	smith = Smith.new()
 	smith.setup(self,world,orion)
+	var later = RandomNumberGenerator.new()
+	later.seed = 4411
 	for i in ADULTS:
+		var die: RandomNumberGenerator = rng if i < RAGGED_LATER else later
 		var look: Array = LOOKS[i]
 		var wear: float = look[3]
 		var walker = Walker.new()
 		walker.body = figure({"who":look[0],"garment":look[1],"cloth":CLOTHS[look[2]],"wear":wear,"weave":"hessian" if wear>.8 else "linen",
-			"hair":look[4],"beard":look[5],"hair_colour":HAIRS[rng.randi_range(0,HAIRS.size()-1)],"belt":(Color(.42,.36,.26) if wear>.5 else Color(.3,.2,.12)) if look[6] else null,
-			"skin":look[7],"tone":Color(1.0,.93,.86) if look[7]=="light" else Color.WHITE,"dirt":clampf(wear*1.1-.1,0.0,1.0),"size":rng.randf_range(.93,1.02),"seed":rng.randf(),
+			"hair":look[4],"beard":look[5],"hair_colour":HAIRS[die.randi_range(0,HAIRS.size()-1)],"belt":(Color(.42,.36,.26) if wear>.5 else Color(.3,.2,.12)) if look[6] else null,
+			"skin":look[7],"tone":Color(1.0,.93,.86) if look[7]=="light" else Color.WHITE,"dirt":clampf(wear*1.1-.1,0.0,1.0),"size":die.randf_range(.93,1.02),"seed":die.randf(),
 			"gaunt":1.0 if wear >= GAUNT_WEAR else 0.0})
 		walker.body.name = "Townsperson%d" % i
-		walker.speed = WALK*rng.randf_range(.88,1.12)
+		walker.speed = WALK*die.randf_range(.88,1.12)
 		people.append(walker)
 		# Five begin at the inn's tables; the rest about the streets.
-		if i%5 == 0:
+		if i%5 == 0 and i < RAGGED_LATER:
 			walker.seat = free_seat()
 			walker.seat.taken = walker
 			sit(walker)
 		else:
-			walker.at = haunts[rng.randi_range(0,haunts.size()-1)].at+Vector3(rng.randf_range(-.4,.4),0,rng.randf_range(-.4,.4))
-			walker.body.rotation.y = rng.randf_range(0,TAU)
-			walker.timer = rng.randf_range(0.0,6.0)
+			walker.at = haunts[die.randi_range(0,haunts.size()-1)].at+Vector3(die.randf_range(-.4,.4),0,die.randf_range(-.4,.4))
+			walker.body.rotation.y = die.randf_range(0,TAU)
+			walker.timer = die.randf_range(0.0,6.0)
 	for i in CHILDREN:
 		var girl = i%2 == 1
 		var walker = Walker.new()
@@ -268,6 +283,8 @@ func setup(overworld) -> void:
 	play.spot = haunts[3].at
 	lay_beds()
 	hire_keepers()
+	hire_selene()
+	hire_zeno()
 
 func figure(look: Dictionary) -> Node3D:
 	var person = Person.new()
@@ -464,6 +481,8 @@ func tick(delta: float, hero: Vector3) -> void:
 	for keeper in keepers: keep(keeper,delta)
 	bedding()
 	serve(delta)
+	chores(delta)
+	zeno_tick(delta,hero)
 	# Orion goes to bed between jobs.
 	if orion.state in ABED: retire(orion,delta)
 	elif smith.plan.is_empty() and abed(orion): go_to_bed(orion)
@@ -512,7 +531,10 @@ func rest(walker: Walker, least: float, most: float) -> void:
 func wander(walker: Walker) -> void:
 	var occupancy = staying()+inbound()
 	if can_enter() and rng.randf() < INN_CHANCE.get(occupancy,1.0 if occupancy < 4 else 0.0) and go_to_inn(walker): return
-	if rng.randf() < SHOP_CHANCE and go_shopping(walker): return
+	# (Zeno's bread: thrown for with a die of his own, so the town's other
+	# comings and goings fall as they did.)
+	if walker.basket == null and bread_open(walker) and bread_rng.randf() < BREAD_CHANCE and buy_bread(walker): return
+	if walker.basket == null and rng.randf() < SHOP_CHANCE and go_shopping(walker): return
 	# Mostly round the arena, sometimes the market, now and then an alley;
 	# and somewhere not too near.
 	var roll = rng.randf()
@@ -530,7 +552,7 @@ func tend(walker: Walker, delta: float) -> void:
 	# Bedtime: off home from the street (or from the way to the inn); one
 	# waiting at a table gets up and goes, unless Anya is bringing his drink.
 	if abed(walker):
-		if walker.state in ["walk","pause","halt","leaving","to_inn","to_buy","buying","laden","from_home"]:
+		if walker.state in ["walk","pause","halt","leaving","to_inn","to_buy","buying","laden","from_home","to_bread","bread"]:
 			go_to_bed(walker)
 			return
 		if walker.state == "wait" and not walker in round: leave(walker)
@@ -541,6 +563,13 @@ func tend(walker: Walker, delta: float) -> void:
 			return
 	walker.chat_rest = maxf(0.0,walker.chat_rest-delta)
 	walker.timer -= delta
+	# A loaf bought of Zeno, eaten in a while.
+	if walker.loaf_left > 0.0:
+		walker.loaf_left -= delta
+		if walker.loaf_left <= 0.0 and walker.basket != null and walker.basket.name == "Loaf":
+			walker.body.hold(null)
+			walker.basket.queue_free()
+			walker.basket = null
 	match walker.state:
 		"pause":
 			if walker.timer <= 0.0: wander(walker)
@@ -613,50 +642,99 @@ func tend(walker: Walker, delta: float) -> void:
 			if advance(walker,delta): rest(walker,2.0,6.0)
 			elif not inside(walker): walker.state = "walk"
 		"to_buy","buying","laden","home","from_home": shop(walker,delta)
+		"to_bread","bread": buy(walker,delta)
 
-# A sip: the hand goes to the mug on the table, closes on its handle, lifts
-# it to the lips (MOUTH, from the head's root, in his own frame), the elbow
-# coming up and out from his side as it rises, tips it to drink (TIP, eased
-# in and out over the sip), sets it down again and lets go.
-const SIP = {"reach":.55,"lift":.7,"sip":1.2,"lower":.65,"return":.5}
-const MOUTH = Vector3(0,-.05,.13)
-const TIP = .55
+# A sip, made deliberately: the hand on the mug's side of him goes to it on
+# the table and the fingers close round its handle; the arm lifts it,
+# upright, until the near edge of its rim meets his lips (found again every
+# moment, so it touches and never presses into his face); it is tipped back
+# (TIP, the whole arm turning, the wrist kept straight: scripts/arm_reach.gd
+# upright) while he drinks, and righted; it is set down again as it stood,
+# and the hand lets go and goes back.
+const SIP = {"reach":.7,"lift":.9,"sip":1.3,"lower":.8,"return":.6}
+# How far the mug leans back as it comes to his lips, and at the sip.
+const LEAN = .26
+const TIP = .8
+# How quickly the handle's place is found again as the mug turns in his fist
+# (a share of the way, each moment); how far before his lips the rim comes
+# up and goes down.
+const TO_LIPS = .35
+const APPROACH = .07
 
 func sip(walker: Walker, delta: float) -> void:
 	var seat: Dictionary = walker.seat
 	var body = walker.body
+	var mug: Node3D = walker.mug
 	walker.phase_time += delta
 	var t = clampf(walker.phase_time/SIP[walker.phase],0.0,1.0)
 	var eased = smoothstep(0.0,1.0,t)
-	var on_table: Vector3 = body.hand_for(seat.mug+Vector3.UP*world.lift(seat.at))
-	var head: Vector3 = body.skeleton.global_transform*body.skeleton.get_bone_global_pose(body.skeleton.find_bone("Head")).origin
-	var at_mouth: Vector3 = body.hand_for(head+body.global_transform.basis*MOUTH)
+	# The hand on the mug's side; the handle where the mug stands.
+	if walker.phase == "reach" and walker.phase_time <= delta:
+		body.set_meta("drink_side",drinking_side(body,mug.global_position))
+		body.remove_meta("to_lips")
+		body.set_meta("on_table",mug.global_transform*body.MUG_HANDLE)
+	var side: String = body.get_meta("drink_side","l")
+	var on_table: Vector3 = body.get_meta("on_table")
+	var frame: Basis = body.global_transform.basis.orthonormalized()
+	var forward: Vector3 = frame.z
+	var out: Vector3 = frame.x*(1.0 if body.skeleton.get_bone_global_rest(body.skeleton.find_bone("hand_"+side)).origin.x > 0.0 else -1.0)
+	var lips: Vector3 = body.lips()
+	# Where the near edge of its rim is to be: at his lips for the sip, and
+	# APPROACH before them as it comes up and goes down, so it comes to his
+	# mouth from in front and never across his face.
+	var approach: float = {"reach":APPROACH,"lift":APPROACH*(1.0-smoothstep(.6,1.0,t)),"sip":0.0,"lower":APPROACH*smoothstep(0.0,.4,t),"return":APPROACH}[walker.phase]
+	var goal: Vector3 = lips+forward*approach
+	# Where the handle must be for that: worked out from how the mug sits in
+	# his fist now (its rim's edge nearest the goal, from the handle), eased.
+	var at_mouth: Vector3 = body.get_meta("to_lips",lips+forward*.085+out*.075+Vector3.DOWN*.07)
+	if mug.get_parent() != self and walker.phase in ["lift","sip","lower"]:
+		var held: Transform3D = mug.global_transform
+		var up: Vector3 = held.basis.y.normalized()
+		var rim: Vector3 = held*body.MUG_RIM
+		var toward: Vector3 = goal-rim
+		toward -= up*toward.dot(up)
+		var near: Vector3 = rim+toward.normalized()*body.MUG_RIM_RADIUS
+		at_mouth = at_mouth.lerp(goal-(near-held*body.MUG_HANDLE),TO_LIPS)
+		body.set_meta("to_lips",at_mouth)
+	var lean = func(angle: float) -> Vector3: return (Vector3.UP*cos(angle)-forward*sin(angle)).normalized()
 	match walker.phase:
-		"reach": body.reach(on_table,eased,eased)
-		# (The elbow rises out from the side as the mug comes up.)
-		"lift": body.reach(on_table.lerp(at_mouth,eased),1.0,1.0,eased,TIP*.25*eased)
-		"sip": body.reach(at_mouth,1.0,1.0,1.0,TIP*(.25+.75*smoothstep(0.0,.3,t)*(1.0-smoothstep(.7,1.0,t))))
-		"lower": body.reach(at_mouth.lerp(on_table,eased),1.0,1.0,1.0-eased,TIP*.25*(1.0-eased))
-		"return": body.reach(on_table,1.0-eased,1.0-eased)
+		"reach": body.drink_reach(side,on_table,Vector3.UP,eased,smoothstep(.55,1.0,t))
+		"lift":
+			body.settle_grasp(smoothstep(0.0,.6,t))
+			body.drink_reach(side,on_table.lerp(at_mouth,eased),lean.call(LEAN*eased),1.0,1.0)
+		"sip": body.drink_reach(side,at_mouth,lean.call(lerpf(LEAN,TIP,smoothstep(0.0,.35,t)*(1.0-smoothstep(.65,1.0,t)))),1.0,1.0)
+		"lower":
+			body.settle_grasp(1.0-smoothstep(.4,1.0,t))
+			body.drink_reach(side,at_mouth.lerp(on_table,eased),lean.call(LEAN*(1.0-eased)),1.0,1.0)
+		"return": body.drink_reach(side,on_table,Vector3.UP,1.0-smoothstep(.25,1.0,t),1.0-smoothstep(0.0,.4,t))
 	if t < 1.0: return
 	walker.phase_time = 0.0
 	match walker.phase:
 		"reach":
-			body.hold(walker.mug)
+			body.grasp(mug,side,0.0)
 			walker.phase = "lift"
 		"lift": walker.phase = "sip"
 		"sip": walker.phase = "lower"
 		"lower":
-			set_down(walker.mug,seat)
+			set_down(mug,seat)
+			body.held = null
 			walker.phase = "return"
-		"return": walker.phase = ""
+		"return":
+			body.let_go()
+			walker.phase = ""
 
-# A mug stood on the table before a seat.
+# Which hand ("l" or "r") is nearer the mug at `at`.
+func drinking_side(body, at: Vector3) -> String:
+	var hand_at = func(side: String) -> Vector3: return body.skeleton.global_transform*body.skeleton.get_bone_global_pose(body.skeleton.find_bone("hand_"+side)).origin
+	return "l" if hand_at.call("l").distance_to(at) <= hand_at.call("r").distance_to(at) else "r"
+
+# A mug stood on the table before a seat, its handle turned out toward the
+# drinker's hand on that side (the mug's +X), a little back toward him.
 func set_down(mug: Node3D, seat: Dictionary) -> void:
 	if mug.get_parent() != null: mug.get_parent().remove_child(mug)
 	add_child(mug)
-	mug.position = seat.mug+Vector3.UP*world.lift(seat.at)
-	mug.rotation = Vector3(0,atan2(seat.face.x,seat.face.z)+PI/2,0)
+	var handle: Vector3 = (seat.get("side",-seat.face)*.85-seat.face*.5).normalized()
+	mug.transform = Transform3D(Basis(Vector3.UP,atan2(-handle.z,handle.x)).scaled(Kit.sized("mug",.17)),seat.mug+Vector3.UP*world.lift(seat.at))
 
 func leave(walker: Walker) -> void:
 	# The mug is left on the table for Anya to clear.
@@ -825,10 +903,13 @@ func lay_beds() -> void:
 		homes[i] = homes[j]
 		homes[j] = swap
 	var street: Array[Dictionary] = street_beds(sleep)
+	var later = RandomNumberGenerator.new()
+	later.seed = 4412
 	for i in ADULTS:
 		var walker: Walker = people[i]
-		walker.bedtime = sleep.randf_range(BEDTIME.x,BEDTIME.y)
-		walker.rising = sleep.randf_range(RISING.x,RISING.y)
+		var die: RandomNumberGenerator = sleep if i < RAGGED_LATER else later
+		walker.bedtime = die.randf_range(BEDTIME.x,BEDTIME.y)
+		walker.rising = die.randf_range(RISING.x,RISING.y)
 		if i in LODGERS:
 			walker.bed = loft.pop_front()
 			walker.climbs = true
@@ -840,8 +921,10 @@ func lay_beds() -> void:
 		child.rising = CHILD_RISING
 		child.bed = street.pop_front() if i in STREET_CHILDREN and not street.is_empty() else house_bed(homes.pop_front())
 	# Each street sleeper's pallet, and a bundle just beyond his head. (A spot
-	# no one sleeps at has nothing laid out there.)
-	for walker in people+children:
+	# no one sleeps at has nothing laid out there.) (The five come since are
+	# seen to last.)
+	var in_turn: Array = people.slice(0,RAGGED_LATER)+children+people.slice(RAGGED_LATER)
+	for walker in in_turn:
 		if walker.bed.kind != "ground": continue
 		var bed: Dictionary = walker.bed
 		var ground: Vector3 = bed.at-Vector3.UP*PALLET
@@ -855,7 +938,7 @@ func lay_beds() -> void:
 	# his left side or his right.
 	var turns = RandomNumberGenerator.new()
 	turns.seed = 3307
-	for walker in people+children:
+	for walker in in_turn:
 		if walker.bed.kind in ["ground","inn"]: walker.body.sleep_pose = SLEEP_POSES[turns.randi_range(0,SLEEP_POSES.size()-1)]
 
 # Going into a house (a place of the world's): to its doorstep, then to the
@@ -1093,6 +1176,9 @@ func up(walker: Walker) -> void:
 		anya.body.play("Idle")
 	# (Orion goes back to his work: scripts/smith.gd takes him there.)
 	elif walker == orion: orion.state = "work"
+	# Selene goes to the inn, to her work; Zeno to his cart.
+	elif walker == selene: to_work()
+	elif walker == zeno: zeno_up()
 	elif walker.child:
 		walker.state = "idle"
 		walker.body.play("Idle")
@@ -1114,6 +1200,8 @@ func release(walker: Walker) -> void:
 		walker.seat.taken = null
 		walker.seat = {}
 	walker.drinks = 0
+	if walker == bread_customer: bread_customer = null
+	walker.loaf_left = 0.0
 	# Shopping put down, a stall's customer gone.
 	if walker.basket != null:
 		walker.basket.queue_free()
@@ -1159,9 +1247,10 @@ func rouse(walker: Walker) -> void:
 # The clock has jumped (a game begun or loaded, the day hurried on): each is
 # put at once where the hour has him, as though he had gone there.
 func at_once() -> void:
-	for walker in people+children+[anya,orion]+keepers:
+	for walker in people+children+[anya,orion,selene]+keepers:
 		if abed(walker) and not walker.state in ["asleep","indoors"]: tuck(walker)
 		elif not abed(walker) and walker.state in ABED: rouse(walker)
+	zeno_at_once()
 	# The stalls are open or shut as the hour has them, their keepers behind
 	# the open ones.
 	for keeper in keepers:
@@ -1486,9 +1575,671 @@ func flee(child: Walker, it: Walker) -> Vector3:
 
 # ---- For the HUD ----
 
-# The named townsperson at a point of the ground (only Anya has a name).
+# The named townsperson at a point of the ground (Anya, Orion, Selene and Zeno).
 func named_at(point: Vector3) -> Dictionary:
 	# (Not while she is in the kitchen, under the loft; nor Orion indoors.)
 	if not kitchen.has_point(Vector2(anya.at.x,anya.at.z)) and Vector2(point.x-anya.at.x,point.z-anya.at.z).length() < 1.1: return {"name":"Anya","at":anya.at+Vector3.UP*1.9}
 	if orion.body.visible and Vector2(point.x-orion.at.x,point.z-orion.at.z).length() < 1.2: return {"name":"Orion","at":orion.at+Vector3.UP*2.0}
+	if selene.body.visible and Vector2(point.x-selene.at.x,point.z-selene.at.z).length() < 1.1: return {"name":"Selene","at":selene.at+Vector3.UP*1.9}
+	if zeno.body.visible and Vector2(point.x-zeno.at.x,point.z-zeno.at.z).length() < 1.1: return {"name":"Zeno","at":zeno.at+Vector3.UP*2.05}
 	return {}
+
+# ---- Selene ----
+
+# Selene, who works for Anya: from the morning until the inn is shut she
+# keeps its common room. A mug left on a table where no one sits she goes and
+# takes up (claimed, so no one clears it from under her hand), carries to the
+# west end of the bar and sets down there to be washed (gone a while after:
+# WASHED); a table no one sits at, clear of mugs and not wiped this while
+# (WIPE_REST), she wipes down with her rag, round and round where a
+# drinker's mug stands (WIPE_TIME at each of WIPE_SPOTS places), leaning to
+# it; between whiles she stands by the bar's west end, looking over the room.
+# She lives in the house nearest the inn, comes to work a while after Anya is
+# up (SELENE_RISING), and goes home once the inn is shut.
+const SELENE_WALK = 1.45
+const SELENE_RISING = ANYA_RISING+25.0
+const WIPE_REST = 90.0
+const WIPE_TIME = 4.0
+const WIPE_SPOTS = 2
+# Her rag's round on the table (metres across, and seconds a turn), lying on
+# its top; and how far she leans to it.
+const WIPE_ROUND = .09
+const WIPE_BEAT = 1.1
+const WIPE_ABOVE = .016
+const WIPE_LEAN = .12
+const WASHED = 8.0
+const CHORE_LOOK = .5
+# Her apron: a linen sheet from her waist to her thighs, standing out this
+# far from her hips' middle; and her clothes.
+const APRON = Vector2(.36,.4)
+const APRON_OUT = .14
+const SELENE_LOOK = {"who":"woman","garment":"Gown","under":"Blouse","cloth":Color(.30,.34,.30),"under_cloth":Color(.86,.83,.76),"wear":.12,
+	"hair":"Hair_Buns","hair_colour":Color(.24,.15,.08),"skin":"light","tone":Color(.98,.9,.82),"belt":Color(.35,.24,.15),"size":.95,"seed":.43}
+var selene_spot = Vector3.ZERO
+var counter_stand = Vector3.ZERO
+var counter = Vector3.ZERO
+var rag: Node3D
+var chore_rng = RandomNumberGenerator.new()
+var chore_clock = 0.0
+# What she is about: the mug she fetches (and the seat it stood at), the
+# places at a table she has still to wipe; when each table was last wiped;
+# and the mugs on the bar waiting to be washed.
+var chore = {}
+var wiping: Array = []
+var wiped: Dictionary = {}
+var washing: Array = []
+
+func hire_selene() -> void:
+	chore_rng.seed = 5150
+	var c = Interiors.INN
+	selene_spot = nearest_open(c+Vector3(2.4,0,10.6))
+	counter_stand = nearest_open(c+Vector3(2.4,0,8.7))
+	counter = Vector3(c.x+3.45,1.12,c.z+8.6)
+	selene = Walker.new()
+	selene.body = figure(SELENE_LOOK)
+	selene.body.name = "Selene"
+	tie_apron(selene.body)
+	selene.speed = SELENE_WALK
+	selene.at = selene_spot
+	selene.body.rotation.y = atan2(1.0,.4)
+	idle(selene)
+	rag = make_rag()
+	stow(rag)
+	# Her house: the free one nearest the inn.
+	var taken: Array = (people+children+[orion]+keepers).filter(func(w): return w.bed.get("kind") == "house").map(func(w): return w.bed.at)
+	var homes: Array = world.places.filter(func(p): return p.kind == "house" and p.name == "house")
+	var free = homes.filter(func(h): return taken.all(func(t): return house_bed(h).at.distance_to(t) > .5))
+	if free.is_empty(): free = homes
+	var door: Vector3 = world.rooms[0].door
+	free.sort_custom(func(a, b): return a.at.distance_to(door) < b.at.distance_to(door))
+	selene.bed = house_bed(free[0])
+	selene.bedtime = ANYA_BEDTIME
+	selene.rising = SELENE_RISING
+	for seat in seats: wiped[seat.table] = -WIPE_REST
+
+# Her apron, tied at her waist (on her pelvis, so it goes with her).
+func tie_apron(body: Node3D) -> void:
+	var skeleton: Skeleton3D = body.skeleton
+	var pelvis: int = skeleton.find_bone("pelvis")
+	var waist: Vector3 = skeleton.get_bone_global_rest(skeleton.find_bone("spine_01")).origin
+	var hang = BoneAttachment3D.new()
+	hang.bone_name = "pelvis"
+	skeleton.add_child(hang)
+	var tool = SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rows = 6
+	var columns = 6
+	for j in rows:
+		for i in columns:
+			var quad = [Vector2(i,j),Vector2(i+1,j),Vector2(i+1,j+1),Vector2(i,j),Vector2(i+1,j+1),Vector2(i,j+1)]
+			for corner in quad:
+				var u: float = corner.x/columns
+				var v: float = corner.y/rows
+				# Curved a little round her, and flaring as it falls.
+				var across: float = (u-.5)*APRON.x*(1.0+v*.25)
+				var point = Vector3(across,-v*APRON.y,-across*across*1.4+v*.03)
+				tool.set_uv(Vector2(u,v))
+				tool.set_normal(Vector3(0,0,1))
+				tool.add_vertex(point)
+	var sheet = MeshInstance3D.new()
+	sheet.name = "Apron"
+	sheet.mesh = tool.commit()
+	var linen = StandardMaterial3D.new()
+	linen.albedo_color = Color(.8,.76,.66)
+	linen.roughness = .95
+	linen.cull_mode = BaseMaterial3D.CULL_DISABLED
+	sheet.material_override = linen
+	hang.add_child(sheet)
+	# (Made where it hangs on her at rest, in the pelvis bone's own space:
+	# before her, the way her toes point.)
+	var toes: Vector3 = skeleton.get_bone_global_rest(skeleton.find_bone("ball_l")).origin-skeleton.get_bone_global_rest(skeleton.find_bone("foot_l")).origin
+	toes.y = 0.0
+	var front: Vector3 = toes.normalized() if toes.length() > .01 else Vector3.BACK
+	var hips: Vector3 = skeleton.get_bone_global_rest(pelvis).origin
+	var at_rest = Transform3D(Basis(Vector3.UP.cross(front),Vector3.UP,front),Vector3(hips.x,waist.y,hips.z)+front*APRON_OUT)
+	sheet.transform = skeleton.get_bone_global_rest(pelvis).affine_inverse()*at_rest
+
+# Her rag: a wad of grey linen, damp and worn.
+func make_rag() -> Node3D:
+	var holder = Node3D.new()
+	holder.name = "Rag"
+	var wad = MeshInstance3D.new()
+	var lump = SphereMesh.new()
+	lump.radius = .075; lump.height = .028
+	lump.radial_segments = 10; lump.rings = 5
+	wad.mesh = lump
+	var cloth = StandardMaterial3D.new()
+	cloth.albedo_texture = load("res://assets/textures/cloth_linen.jpg")
+	cloth.albedo_color = Color(.62,.6,.55)
+	cloth.roughness = .95
+	wad.material_override = cloth
+	# (Held where a mug's base is held, scripts/townsperson.gd GRIP_AT: its
+	# flat across the palm's face, which the grip's X stands out from.)
+	wad.rotation = Vector3(0,0,PI/2)
+	wad.scale = Vector3(1.0,1.3,1.05)
+	holder.add_child(wad)
+	return holder
+
+# Her hand turned palm down, fingers forward, as she wipes (in the world).
+func palm_down(body: Node3D) -> Basis:
+	return body.global_transform.basis*Basis(Vector3(0,-1,0),Vector3(0,0,1),Vector3(-1,0,0))
+
+func idle(walker: Walker) -> void:
+	walker.state = "idle"
+	walker.timer = CHORE_LOOK
+	walker.body.play("Idle",.3)
+
+# In the morning, from her door to her place in the inn.
+func to_work() -> void:
+	selene.route = way(selene.at,selene_spot)
+	selene.route.append(selene_spot)
+	selene.state = "to_post"
+
+func back_to_post() -> void:
+	selene.body.reach(Vector3.ZERO,0.0,0.0)
+	selene.route = way(selene.at,selene_spot)
+	selene.route.append(selene_spot)
+	selene.state = "to_post"
+
+# Whether anyone sits at a table, or is on his way to sit there, or Anya is
+# bringing a drink to it.
+func table_in_use(table: Vector3) -> bool:
+	for seat in seats:
+		if seat.table == table and seat.taken != null: return true
+	for patron in round:
+		if not patron.seat.is_empty() and patron.seat.table == table: return true
+	return false
+
+# A mug left at an empty place, if there is one: she goes to fetch it.
+func fetch_mug() -> bool:
+	var best = {}
+	var nearest = INF
+	for seat in seats:
+		if seat.taken != null or seat.left == null or not is_instance_valid(seat.left): continue
+		var d: float = seat.serve.distance_to(selene.at)
+		if d < nearest:
+			nearest = d
+			best = seat
+	if best.is_empty(): return false
+	chore = {"seat":best,"mug":best.left}
+	best.left = null
+	selene.route = way(selene.at,best.serve)
+	selene.route.append(best.serve)
+	selene.state = "to_mug"
+	return true
+
+# A table no one is at, clear of mugs, and not wiped for a while: she wipes
+# it at a place or two.
+func wipe_next() -> bool:
+	var tables: Array = []
+	for seat in seats:
+		if not seat.table in tables: tables.append(seat.table)
+	tables = tables.filter(func(t): return chore_clock-wiped[t] >= WIPE_REST and not table_in_use(t) and not seats.any(func(s): return s.table == t and s.left != null and is_instance_valid(s.left)))
+	if tables.is_empty(): return false
+	tables.sort_custom(func(a, b): return a.distance_to(selene.at) < b.distance_to(selene.at))
+	var table: Vector3 = tables[0]
+	var places: Array = seats.filter(func(s): return s.table == table)
+	places.sort_custom(func(a, b): return a.serve.distance_to(selene.at) < b.serve.distance_to(selene.at))
+	# The nearest place, and the one furthest from it.
+	wiping = [places[0]]
+	if WIPE_SPOTS > 1 and places.size() > 1:
+		var far = places.slice(1)
+		far.sort_custom(func(a, b): return a.serve.distance_to(places[0].serve) > b.serve.distance_to(places[0].serve))
+		wiping.append(far[0])
+	chore = {"table":table}
+	next_wipe()
+	return true
+
+func next_wipe() -> void:
+	if wiping.is_empty():
+		done_wiping()
+		return
+	var seat: Dictionary = wiping.pop_front()
+	chore.seat = seat
+	selene.route = way(selene.at,seat.serve)
+	selene.route.append(seat.serve)
+	selene.state = "to_table"
+
+func done_wiping() -> void:
+	if chore.has("table"): wiped[chore.table] = chore_clock
+	wiping.clear()
+	if selene.body.held == rag:
+		selene.body.hold(null)
+		stow(rag)
+	chore = {}
+	back_to_post()
+
+# Puts down whatever she is about (the inn shut, the clock jumped).
+func drop_chores() -> void:
+	selene.body.reach(Vector3.ZERO,0.0,0.0)
+	selene.body.figure.rotation.x = 0.0
+	if selene.body.held != null:
+		var held = selene.body.held
+		selene.body.hold(null)
+		if held == rag: stow(rag)
+		else: held.queue_free()
+	elif chore.has("mug") and is_instance_valid(chore.mug): chore.mug.queue_free()
+	chore = {}
+	wiping.clear()
+
+func chores(delta: float) -> void:
+	chore_clock += delta
+	for i in range(washing.size()-1,-1,-1):
+		washing[i].left -= delta
+		if washing[i].left <= 0.0:
+			if is_instance_valid(washing[i].mug): washing[i].mug.queue_free()
+			washing.remove_at(i)
+	if selene.state in ABED:
+		if not chore.is_empty() or selene.body.held != null: drop_chores()
+		retire(selene,delta)
+		return
+	selene.timer -= delta
+	selene.phase_time += delta
+	var body = selene.body
+	# She leans to the table as she wipes it, and straightens again.
+	body.figure.rotation.x = move_toward(body.figure.rotation.x,WIPE_LEAN if selene.state == "wipe" else 0.0,delta*.5)
+	match selene.state:
+		"to_post":
+			if advance(selene,delta): idle(selene)
+		"idle":
+			body.turn_to(Vector3(1.0,0,.4),delta,5.0)
+			if body.state != "Idle" and body.state != "Arms": body.play("Idle")
+			if selene.timer <= 0.0:
+				selene.timer = CHORE_LOOK
+				# Once the inn is shut and the last has gone, home to bed.
+				if abed(selene) and people.all(func(w): return not w.state in ["to_inn","sit_down","wait","drink"]):
+					drop_chores()
+					go_to_bed(selene)
+				elif not fetch_mug(): wipe_next()
+		"to_mug":
+			if not is_instance_valid(chore.get("mug")):
+				chore = {}
+				back_to_post()
+			elif advance(selene,delta):
+				selene.state = "take"
+				selene.phase_time = 0.0
+				body.play("Idle",.2)
+		"take":
+			var mug: Node3D = chore.mug
+			if not is_instance_valid(mug):
+				drop_chores()
+				back_to_post()
+				return
+			var t = selene.phase_time
+			var on_table: Vector3 = body.hand_for(mug.global_position) if body.held != mug else body.hand_for(chore.seat.mug)
+			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
+			body.turn_to(chore.seat.mug-selene.at,delta,8.0)
+			if t < .6: body.reach(on_table,smoothstep(0.0,1.0,t/.6),smoothstep(0.0,1.0,t/.6))
+			elif t < 1.2:
+				if body.held != mug: body.hold(mug)
+				body.reach(on_table.lerp(carried,smoothstep(0.0,1.0,(t-.6)/.6)),1.0,1.0)
+			else:
+				selene.route = way(selene.at,counter_stand)
+				selene.route.append(counter_stand)
+				selene.state = "carry"
+		"carry":
+			body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
+			if advance(selene,delta):
+				selene.state = "put_away"
+				selene.phase_time = 0.0
+				body.play("Idle",.2)
+		"put_away":
+			var spot: Vector3 = counter+Vector3(.17*mini(washing.size(),3),0,0)
+			body.turn_to(spot-selene.at,delta,8.0)
+			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
+			var down: Vector3 = body.hand_for(spot)
+			var t = selene.phase_time
+			if t < .7: body.reach(carried.lerp(down,smoothstep(0.0,1.0,t/.7)),1.0,1.0)
+			elif t < 1.2:
+				if body.held != null:
+					var mug: Node3D = body.held
+					body.hold(null)
+					add_child(mug)
+					mug.position = spot
+					mug.rotation = Vector3(0,chore_rng.randf_range(0,TAU),0)
+					washing.append({"mug":mug,"left":WASHED})
+				body.reach(down,1.0-smoothstep(0.0,1.0,(t-.7)/.5),0.0)
+			else:
+				chore = {}
+				back_to_post()
+		"to_table":
+			if table_in_use(chore.table):
+				done_wiping()
+			elif advance(selene,delta):
+				selene.state = "wipe"
+				selene.phase_time = 0.0
+				selene.timer = WIPE_TIME
+				body.play("Idle",.2)
+				body.hold(rag)
+		"wipe":
+			# Someone come to sit here: she leaves it be.
+			if table_in_use(chore.table):
+				done_wiping()
+				return
+			var seat: Dictionary = chore.seat
+			var t = selene.phase_time
+			body.turn_to(seat.mug-selene.at,delta,8.0)
+			var turn: float = t/WIPE_BEAT*TAU
+			# The rag goes round on the table's top, her hand on it, palm down.
+			var rag_at: Vector3 = seat.mug+Vector3(cos(turn),0,sin(turn))*WIPE_ROUND+Vector3.UP*(WIPE_ABOVE+world.lift(seat.at))
+			var down: Basis = palm_down(body)
+			var ease_in: float = smoothstep(0.0,.5,t)*smoothstep(0.0,.5,selene.timer)
+			body.reach(rag_at-down*body.GRIP_AT,ease_in,.55)
+			body.arm.grip = down
+			if selene.timer <= 0.0:
+				body.reach(Vector3.ZERO,0.0,0.0)
+				next_wipe()
+
+# ---- Zeno ----
+
+# Zeno, who sells bread from a handcart (scripts/bread_cart.gd): through the
+# day he pushes it round the town's streets, stopping a while at the places
+# the townsfolk go (ZENO_STOP); while he stands there, now and then one of
+# them comes up to the cart (BREAD_CHANCE, each time one sets off somewhere),
+# talks a moment and is handed a loaf, and goes on with it in his hand (for
+# LOAF_KEPT). Every so often (CALL, give or take CALL_SPREAD), while no one is
+# buying, he calls out his bread. At nightfall he pushes the cart home, parks
+# it beside his door, tipped back onto its legs, and goes in; in the morning
+# he comes out and takes it up again. His house is his alone.
+const BreadCart = preload("res://scripts/bread_cart.gd")
+const ZENO_WALK = WALK*.85
+const ZENO_STOP = Vector2(14.0,28.0)
+const BREAD_CHANCE = .05
+const BREAD_REACH = 30.0
+const BREAD_TIME = 6.0
+const LOAF_KEPT = 60.0
+const CALL = 20.0
+const CALL_SPREAD = 3.0
+const CRY = "Fresh bread for sale!"
+# How near the hero must be for Zeno's call to be heard (shown over him).
+const HEARD = 30.0
+# How far behind the cart's axle he walks, his hands on its grips; and how
+# fast the cart comes round to its way.
+const BEHIND = 1.58
+const CART_TURN = 2.6
+const ZENO_LOOK = {"who":"man","garment":"Tunic","cloth":Color(.64,.58,.46),"wear":.22,"hair":"Hair_Buzzed","beard":true,"hair_colour":Color(.18,.12,.08),
+	"skin":"light","tone":Color(1.0,.9,.8),"belt":Color(.35,.24,.15),"shoes":Color(.3,.21,.13),"size":1.0,"seed":.58}
+var zeno: Walker
+var cart = {}
+var cart_at = Vector3.ZERO
+var cart_heading = 0.0
+var cart_tilt = 0.0
+# Where the cart stands for the night, beside his door, and which way.
+var cart_home = Vector3.ZERO
+var cart_home_heading = 0.0
+var bread_rng = RandomNumberGenerator.new()
+var bread_customer: Walker
+# Whether any may come to buy (tests stop them, to hear him cry his bread).
+var bread_buyers = true
+var call_left = CALL
+# How often he has called out, and how many loaves he has sold.
+var calls = 0
+var sold = 0
+
+func hire_zeno() -> void:
+	bread_rng.seed = 6061
+	zeno = Walker.new()
+	zeno.body = figure(ZENO_LOOK)
+	zeno.body.name = "Zeno"
+	tie_apron(zeno.body)
+	BreadCart.put_on(BreadCart.straw_hat(),zeno.body)
+	zeno.speed = ZENO_WALK
+	cart = BreadCart.handcart(bread_rng)
+	add_child(cart.node)
+	# His house: a free one, nearest the market, which no one else sleeps in.
+	var taken: Array = (people+children+[orion,selene]+keepers).filter(func(w): return w.bed.get("kind") == "house").map(func(w): return w.bed.at)
+	var homes: Array = world.places.filter(func(p): return p.kind == "house" and p.name == "house")
+	var free = homes.filter(func(h): return taken.all(func(t): return house_bed(h).at.distance_to(t) > .5))
+	var market: Vector3 = Vector3(Town.MARKET.get_center().x,0,Town.MARKET.get_center().y)
+	free.sort_custom(func(a, b): return a.at.distance_to(market) < b.at.distance_to(market))
+	# (Of them, one with room beside its doorstep for the cart.)
+	for home in free:
+		var bed: Dictionary = house_bed(home)
+		var spot = park_by(bed)
+		if spot.is_empty(): continue
+		zeno.bed = bed
+		cart_home = spot.at
+		cart_home_heading = spot.heading
+		break
+	if zeno.bed.is_empty():
+		zeno.bed = house_bed(free[0])
+		cart_home = nearest_open(zeno.bed.way[0],3)
+		cart_home_heading = zeno.bed.yaw+PI/2
+	zeno.bedtime = bread_rng.randf_range(KEEPER_BEDTIME.x,KEEPER_BEDTIME.y)
+	zeno.rising = bread_rng.randf_range(KEEPER_RISING.x,KEEPER_RISING.y)
+	# He begins at a place in the streets, his cart before him.
+	var start: Vector3 = haunts.filter(func(h): return h.kind == "market")[0].at
+	cart_at = start
+	cart_heading = 0.0
+	place_cart()
+	follow_cart(0.0)
+	sell()
+
+# Room for the cart beside a house's doorstep: along the wall, clear of the
+# door, all of it on open ground; {} if there is none.
+func park_by(bed: Dictionary) -> Dictionary:
+	var step: Vector3 = bed.way[0]
+	var inward = Vector3(sin(bed.yaw),0,cos(bed.yaw))
+	var along: Vector3 = inward.cross(Vector3.UP)
+	# (Out from the wall a little, into the street, so it stands clear of it.)
+	for out in [.7,1.1]:
+		for side in [1.0,-1.0]:
+			for reach in [1.8,2.4,3.0]:
+				var at: Vector3 = step+along*side*reach-inward*out
+				var heading: float = atan2(along.x*side,along.z*side)
+				var ahead = Vector3(sin(heading),0,cos(heading))
+				var clear = true
+				for p in [at,at+ahead*.75,at-ahead*.9,at-ahead*1.7,at-inward*.5]:
+					if not open_at(p): clear = false
+				if clear: return {"at":at,"heading":heading}
+	return {}
+
+# The cart where it stands (and tipped onto its legs, `cart_tilt`); its
+# wheels turned on by `rolled` metres.
+func place_cart(rolled: float = 0.0) -> void:
+	var node: Node3D = cart.node
+	node.position = Vector3(cart_at.x,world.lift(cart_at),cart_at.z)
+	node.rotation.y = cart_heading
+	cart.body.rotation.x = cart_tilt
+	for wheel in cart.wheels: wheel.rotation.x += rolled/BreadCart.WHEEL
+
+# Zeno behind his cart, his hands on its grips (scripts/arm_reach.gd), or
+# standing by it with them free (`hands` 0).
+func follow_cart(delta: float, hands: float = 1.0) -> void:
+	var ahead = Vector3(sin(cart_heading),0,cos(cart_heading))
+	zeno.at = Vector3(cart_at.x,0,cart_at.z)-ahead*BEHIND
+	zeno.body.rotation.y = cart_heading
+	var frame: Transform3D = cart.body.global_transform
+	for k in 2:
+		var side: String = ["l","r"][k]
+		# (His left hand on the cart's left grip: the cart's -X is his left.)
+		var grip: Vector3 = cart.grips[1-k]
+		var reaching = zeno.body.drinking_arm(side)
+		reaching.tool = true
+		reaching.upright = false
+		reaching.target = frame*(grip-Vector3(0,BreadCart.WHEEL,0))
+		reaching.axis = (frame.basis*Vector3(0,.3,1.0)).normalized()
+		reaching.weight = move_toward(reaching.weight,hands,delta*3.0) if delta > 0.0 else hands
+		reaching.curl = reaching.weight
+
+func sell() -> void:
+	zeno.state = "selling"
+	zeno.timer = bread_rng.randf_range(ZENO_STOP.x,ZENO_STOP.y)
+	zeno.body.play("Idle",.3)
+
+# On to another place the townsfolk go, by the streets.
+func push_on() -> void:
+	var roll = bread_rng.randf()
+	var kind = "ring" if roll < .55 else ("market" if roll < .85 else "alley")
+	var choices = haunts.filter(func(h): return h.kind == kind and h.at.distance_to(cart_at) > 15.0 and h.at.distance_to(cart_at) < 90.0)
+	if choices.is_empty(): choices = haunts.filter(func(h): return h.at.distance_to(cart_at) > 10.0)
+	push_to(choices[bread_rng.randi_range(0,choices.size()-1)].at)
+
+func push_to(goal: Vector3) -> void:
+	zeno.route = way(cart_at,goal)
+	zeno.route.append(goal)
+	zeno.state = "push"
+
+# The cart pushed along its way, its axle on it, coming round to it as it
+# goes; true once it is there.
+func roll(delta: float) -> bool:
+	if zeno.route.is_empty(): return true
+	var to: Vector3 = zeno.route[0]-cart_at
+	to.y = 0
+	var heading: float = atan2(to.x,to.z)
+	var off: float = absf(angle_difference(cart_heading,heading))
+	cart_heading = rotate_toward(cart_heading,heading,CART_TURN*delta)
+	# (Slower while it comes round a corner.)
+	var step: float = zeno.speed*delta*clampf(1.2-off,.25,1.0)
+	var moved = minf(step,to.length())
+	if to.length() <= step:
+		cart_at = Vector3(zeno.route[0].x,0,zeno.route[0].z)
+		zeno.route.remove_at(0)
+	else: cart_at += to.normalized()*step
+	place_cart(moved)
+	zeno.body.stride("Walk",moved/maxf(delta,.0001))
+	return zeno.route.is_empty()
+
+func zeno_tick(delta: float, hero: Vector3) -> void:
+	zeno.timer -= delta
+	if zeno.state in ABED:
+		retire(zeno,delta)
+		return
+	match zeno.state:
+		"to_cart":
+			# Out of his door, round to the back of the cart.
+			if advance(zeno,delta):
+				zeno.state = "take_up"
+				zeno.timer = .8
+				zeno.body.play("Idle",.2)
+		"take_up":
+			cart_tilt = move_toward(cart_tilt,0.0,delta*.4)
+			place_cart()
+			follow_cart(delta)
+			if zeno.timer <= 0.0:
+				cart_tilt = 0.0
+				place_cart()
+				push_on()
+		"push":
+			var there: bool = roll(delta)
+			follow_cart(delta)
+			if there: sell()
+		"selling":
+			follow_cart(delta,0.0 if bread_customer != null else 1.0)
+			var customer: Walker = bread_customer
+			if customer != null and customer.state == "bread":
+				zeno.body.turn_to(customer.at-zeno.at,delta,5.0)
+				zeno.body.play("Reach" if customer.timer < HAND_OVER else "Talk")
+			elif customer == null:
+				if abed(zeno): go_home()
+				elif zeno.timer <= 0.0: push_on()
+				elif not zeno.body.state in ["Idle","Arms"]: zeno.body.play("Idle",.3)
+		"home_cart":
+			var home: bool = roll(delta)
+			follow_cart(delta)
+			if home:
+				zeno.state = "parking"
+				zeno.timer = 1.0
+				zeno.body.play("Idle",.2)
+		"parking":
+			cart_heading = rotate_toward(cart_heading,cart_home_heading,delta*1.5)
+			cart_tilt = move_toward(cart_tilt,BreadCart.REST_TILT,delta*.4)
+			place_cart()
+			follow_cart(delta,0.0)
+			if zeno.timer <= 0.0:
+				cart_heading = cart_home_heading
+				cart_tilt = BreadCart.REST_TILT
+				place_cart()
+				zeno.body.let_go()
+				go_to_bed(zeno)
+	# His cry, while no one is buying and he is about the streets.
+	if zeno.state in ["push","selling"] and bread_customer == null:
+		call_left -= delta
+		if call_left <= 0.0:
+			call_left = CALL+bread_rng.randf_range(-CALL_SPREAD,CALL_SPREAD)
+			calls += 1
+			cry(hero)
+
+# Calls his bread: over his head, if the hero is near enough to hear.
+func cry(hero: Vector3) -> void:
+	if Vector2(hero.x-zeno.at.x,hero.z-zeno.at.z).length() > HEARD: return
+	var game = world.get_parent()
+	if game == null or game.get("hud") == null or not game.hud.has_method("speak"): return
+	game.hud.speak(zeno.body,CRY)
+
+# Home with the cart at nightfall, to park it by his door.
+func go_home() -> void:
+	zeno.route = way(cart_at,cart_home)
+	zeno.route.append(cart_home)
+	zeno.state = "home_cart"
+
+# Out of his door in the morning: round behind the cart to take it up.
+func zeno_up() -> void:
+	var ahead = Vector3(sin(cart_heading),0,cos(cart_heading))
+	var behind: Vector3 = Vector3(cart_at.x,0,cart_at.z)-ahead*BEHIND
+	zeno.route = way(zeno.at,behind)
+	zeno.route.append(behind)
+	zeno.state = "to_cart"
+
+# Whether one setting off might go to buy bread of him: he is stopped in the
+# streets, no one else is buying, and he is not too far off.
+func bread_open(walker: Walker) -> bool:
+	return bread_buyers and zeno.state == "selling" and bread_customer == null and not walker.child and not abed(walker) and not abed(zeno) \
+		and walker.at.distance_to(cart_at) < BREAD_REACH and not inside(walker)
+
+# Off to the cart, to stand beside it, at its side by the handles.
+func buy_bread(walker: Walker) -> bool:
+	var ahead = Vector3(sin(cart_heading),0,cos(cart_heading))
+	var side: Vector3 = ahead.cross(Vector3.UP)*(1.0 if bread_rng.randf() < .5 else -1.0)
+	var stand_at: Vector3 = nearest_open(Vector3(cart_at.x,0,cart_at.z)+side*.85-ahead*.6,2)
+	var route = way(walker.at,stand_at)
+	if route.is_empty() and walker.at.distance_to(stand_at) > 1.0: return false
+	route.append(stand_at)
+	walker.route = route
+	walker.state = "to_bread"
+	bread_customer = walker
+	return true
+
+# At the cart: a word, a loaf handed over, and on his way with it.
+func buy(walker: Walker, delta: float) -> void:
+	match walker.state:
+		"to_bread":
+			# (Zeno gone on, or gone home: he goes about his day.)
+			if zeno.state != "selling":
+				release(walker)
+				rest(walker,1.0,3.0)
+			elif advance(walker,delta):
+				walker.state = "bread"
+				walker.timer = BREAD_TIME
+				walker.body.play("Talk")
+		"bread":
+			walker.body.turn_to(cart_at-walker.at,delta,6.0)
+			if walker.timer < HAND_OVER and walker.body.state != "Reach": walker.body.play("Reach")
+			if walker.timer <= 0.0:
+				bread_customer = null
+				sold += 1
+				var bread = BreadCart.loaf(bread_rng)
+				walker.body.hold(bread)
+				walker.basket = bread
+				walker.loaf_left = LOAF_KEPT
+				rest(walker,2.0,5.0)
+
+# Night or day at once (the clock has jumped): the cart parked by his door
+# and he indoors, or he out with it in the streets.
+func zeno_at_once() -> void:
+	if abed(zeno):
+		if zeno.state in ["asleep","indoors"]: return
+		if bread_customer != null: release(bread_customer)
+		bread_customer = null
+		cart_at = cart_home
+		cart_heading = cart_home_heading
+		cart_tilt = BreadCart.REST_TILT
+		place_cart()
+		zeno.body.let_go()
+		tuck(zeno)
+	elif zeno.state in ABED:
+		zeno.body.visible = true
+		cart_tilt = 0.0
+		place_cart()
+		follow_cart(0.0)
+		sell()

@@ -77,7 +77,7 @@ func test():
 	world.set_time(110.0)
 	check(world.environment.fog_enabled and world.environment.fog_density>.004 and world.sun.light_color.r>world.sun.light_color.b*2.0 and world.sun.global_transform.basis.z.x>.5,"At sunrise a red-gold sun stands in the east, in mist")
 	world.set_time(600.0)
-	check(not world.environment.fog_enabled and world.night==0.0 and world.fires.all(func(f): return f.light.light_cull_mask==0 and f.glow.material_override.albedo_color.a==0.0) and world.sun.light_energy>.9,"By day the fires are seen but give no light, and the mist is gone")
+	check(not world.environment.fog_enabled and world.night==0.0 and world.fires.all(func(f): return f.light.light_cull_mask==0 and f.glow.material_override.albedo_color.a==0.0) and world.sun.light_energy>.75,"By day the fires are seen but give no light, and the mist is gone")
 	world.set_time(1000.0)
 	check(world.sun.global_transform.basis.z.x< -.5,"In the evening the sun stands in the west")
 	world.set_time(1500.0)

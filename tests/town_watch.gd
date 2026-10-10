@@ -31,15 +31,15 @@ func test():
 	var world = game.world
 	var watch = world.watch
 	check(watch.posts.size() == 4 and watch.posts.all(func(p): return p.guards.size() == 2 and p.guards.all(func(g): return g.get_script() == Guard)),"Four posts, two guards at each: the town's gates and the palace's")
-	check(watch.patrols.size() == Watch.PAIRS and watch.patrols.all(func(p): return p.guards.size() == 2),"Six pairs walk the town")
-	check(watch.guards().size() == 20 and watch.guards().all(func(g): return g.animator.has_animation("Walk")),"Twenty guards in all, every one able to walk")
+	check(watch.patrols.size() == Watch.PAIRS and Watch.PAIRS == 8 and watch.patrols.all(func(p): return p.guards.size() == 2),"Eight pairs walk the town")
+	check(watch.guards().size() == 24 and watch.guards().all(func(g): return g.animator.has_animation("Walk")),"Twenty-four guards in all, every one able to walk")
 	# Walking the town, two by two.
 	var started: Array = watch.patrols.map(func(p): return p.guards[0].position)
 	run_for(game,40.0)
 	var moved: int = 0
 	for i in watch.patrols.size():
 		if watch.patrols[i].guards[0].position.distance_to(started[i]) > 2.0: moved += 1
-	check(moved >= 4,"The pairs walk about the town (%d of 6 moved on)" % moved)
+	check(moved >= 5,"The pairs walk about the town (%d of 8 moved on)" % moved)
 	var together = true
 	var footing = true
 	for t in 40:
@@ -64,6 +64,33 @@ func test():
 	for i in range(1,speeds.size()):
 		if absf(speeds[i]-speeds[i-1]) > .6: jolts += 1
 	check(jolts <= 2,"The second man walks smoothly behind the first (%d jolts in pace)" % jolts)
+	# Every man walking faces the way he goes; the second, stopped, faces
+	# the first; and a man's feet keep pace with the ground.
+	var facing_ok = true
+	var feet_ok = true
+	var was: Dictionary = {}
+	for g in watch.guards(): was[g] = g.position
+	for t in 600:
+		watch.tick(1.0/60,game.player.position)
+		for p in watch.patrols:
+			for k in 2:
+				var g = p.guards[k]
+				var shift: Vector3 = g.position-was[g]
+				shift.y = 0
+				was[g] = g.position
+				var ahead = Vector3(sin(g.rotation.y),0,cos(g.rotation.y))
+				var speed: float = shift.length()*60.0
+				if speed > .3 and t > 30:
+					facing_ok = facing_ok and ahead.dot(shift.normalized()) > .5
+					# (The clip's feet pass back at STRIDE times its speed scale.)
+					if g.stride_blend > .95:
+						feet_ok = feet_ok and absf(speed-g.stride_rate*Guard.STRIDE)/speed < .15
+				elif k == 1 and speed < .01 and t > 120:
+					var lead: Vector3 = p.guards[0].position-g.position
+					lead.y = 0
+					if lead.length() > .5 and not g.walking: facing_ok = facing_ok and ahead.dot(lead.normalized()) > -.2
+	check(facing_ok,"Each man faces the way he walks, and the second, standing, toward the first")
+	check(feet_ok,"Their feet keep pace with the ground (the stride's speed matches theirs)")
 	# Shields on forearms, standing and walking.
 	var strapped = true
 	for g in watch.guards():
@@ -111,7 +138,9 @@ func test():
 	check(game.speech_cursor().get_width() == 32,"Over him the cursor is a speech bubble")
 	# Spoken to from further off, the hero walks to him first, and speaks
 	# once within TALK_REACH.
-	game.player.position = world.move(man.position,Vector3(5,0,0)) if world.fits(man.position+Vector3(5,0,0)) else man.position+Vector3(0,0,5)
+	for d in [Vector3(5,0,0),Vector3(-5,0,0),Vector3(0,0,5),Vector3(0,0,-5),Vector3(3.5,0,3.5),Vector3(-3.5,0,-3.5)]:
+		game.player.position = world.move(man.position,d)
+		if Vector2(game.player.position.x-man.position.x,game.player.position.z-man.position.z).length() > 3.0: break
 	game.speak_with(man)
 	check(not watch.talking.has(man) and game.talk_goal == man,"Too far off to be heard, the hero walks to him")
 	var spoke_at = -1.0

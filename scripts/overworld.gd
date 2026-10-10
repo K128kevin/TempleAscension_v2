@@ -242,6 +242,9 @@ func setup_sky() -> void:
 	e.ambient_light_color = Color(.70,.78,.96)
 	e.ambient_light_energy = .4
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# (Its white point raised, so the brightest marble eases into white
+	# rather than clipping to it.)
+	e.tonemap_white = 1.3
 	e.fog_enabled = false
 	e.fog_sky_affect = 0.0
 	env.environment = e

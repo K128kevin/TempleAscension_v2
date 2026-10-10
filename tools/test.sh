@@ -38,6 +38,8 @@ run "$godot_bin" --headless --path . --script tests/basement_props.gd --log-file
 run "$godot_bin" --headless --path . --script tests/rats.gd --log-file "$PWD/test-results/rats.log"
 run "$godot_bin" --headless --path . --script tests/town_watch.gd --log-file "$PWD/test-results/town-watch.log"
 run "$godot_bin" --headless --path . --script tests/inn_sip.gd --log-file "$PWD/test-results/inn-sip.log"
+run "$godot_bin" --headless --path . --script tests/inn_selene.gd --log-file "$PWD/test-results/inn-selene.log"
+run "$godot_bin" --headless --path . --script tests/zeno.gd --log-file "$PWD/test-results/zeno.log"
 run "$godot_bin" --headless --path . --script tests/procedural_maps.gd --log-file "$PWD/test-results/procedural-maps.log"
 run "$godot_bin" --headless --path . --script tests/map_integration.gd --log-file "$PWD/test-results/map-integration.log"
 run "$godot_bin" --headless --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-regression.log"

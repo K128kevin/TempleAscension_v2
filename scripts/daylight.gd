@@ -19,15 +19,17 @@ const GOLD = Color(1.0,.55,.28)
 const RED = Color(1.0,.38,.20)
 # Through the cycle: when, the light's colour and strength, the ambient
 # light's, the sky's colour, and how far it is night (fires light the ground).
+# (At its height the day is held below full strength, so the town's white
+# marble keeps its carving rather than burning out to a flat white.)
 const KEYS = [
 	[0.0,MOON,.21,Color(.30,.38,.66),.29,Color(.035,.05,.10),1.0],
 	[40.0,MOON,0.0,Color(.50,.44,.56),.42,Color(.30,.21,.24),.7],
 	[40.01,RED,0.0,Color(.50,.44,.56),.42,Color(.30,.21,.24),.7],
 	[110.0,GOLD,.72,Color(.80,.62,.55),.38,Color(.86,.52,.32),.1],
-	[180.0,Color(1.0,.74,.50),.9,Color(.74,.72,.80),.4,Color(.84,.62,.42),0.0],
-	[300.0,Color(1.0,.95,.88),1.0,Color(.70,.78,.96),.42,Color(.80,.68,.50),0.0],
-	[900.0,Color(1.0,.95,.88),1.0,Color(.70,.78,.96),.42,Color(.80,.68,.50),0.0],
-	[1020.0,Color(1.0,.86,.68),.95,Color(.72,.76,.90),.4,Color(.80,.66,.46),0.0],
+	[180.0,Color(1.0,.74,.50),.78,Color(.74,.72,.80),.36,Color(.84,.62,.42),0.0],
+	[300.0,Color(1.0,.95,.88),.8,Color(.70,.78,.96),.36,Color(.80,.68,.50),0.0],
+	[900.0,Color(1.0,.95,.88),.8,Color(.70,.78,.96),.36,Color(.80,.68,.50),0.0],
+	[1020.0,Color(1.0,.86,.68),.79,Color(.72,.76,.90),.36,Color(.80,.66,.46),0.0],
 	[1100.0,GOLD,.75,Color(.80,.62,.55),.38,Color(.86,.50,.30),.1],
 	[1159.99,RED,0.0,Color(.52,.42,.54),.42,Color(.34,.21,.25),.7],
 	[1160.0,MOON,0.0,Color(.52,.42,.54),.42,Color(.34,.21,.25),.7],

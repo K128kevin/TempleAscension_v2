@@ -17,7 +17,7 @@ extends Node3D
 const Guard = preload("res://scripts/town_guard.gd")
 const Daylight = preload("res://scripts/daylight.gd")
 const Town = preload("res://scripts/world_town.gd")
-const PAIRS = 6
+const PAIRS = 8
 const SHIFT = Daylight.CYCLE/3.0
 const WALK = 1.2
 # How far the second man keeps behind the first, and how long a pair stands
@@ -82,6 +82,7 @@ func tick(delta: float, _hero: Vector3) -> void:
 	for man in talking.keys():
 		talking[man] -= delta
 		if talking[man] <= 0.0: talking.erase(man)
+	for man in guards(): man.ease_pace(delta)
 	for patrol in patrols: walk_patrol(patrol,delta)
 	for post in posts:
 		for k in 2: keep_post(post.guards[k],post.spots[k],delta)
@@ -152,7 +153,10 @@ func walk_patrol(patrol: Dictionary, delta: float) -> void:
 # pace round every corner).
 func step(man: Node3D, route: PackedVector3Array, delta: float) -> void:
 	var at = Vector3(man.position.x,0,man.position.z)
-	var reach: float = WALK*delta
+	# (Setting off, he comes up to his pace as his legs come into their
+	# stride, so they never slide.)
+	var reach: float = WALK*delta*clampf(man.stride_blend+.2,0.0,1.0)
+	var start: Vector3 = at
 	var way = Vector3.ZERO
 	while reach > 0.0 and not route.is_empty():
 		way = route[0]-at
@@ -164,7 +168,8 @@ func step(man: Node3D, route: PackedVector3Array, delta: float) -> void:
 		route.remove_at(0)
 	man.position = at+Vector3.UP*world.lift(at)
 	man.turn_to(way,delta)
-	man.walk(WALK)
+	# (His stride at the pace he makes, to the last short step of the way.)
+	man.walk(start.distance_to(at)/delta)
 
 # The second man keeps BEHIND the first, along the very way the first has
 # walked (`trail`, the first man's footsteps, newest last): he makes for the
@@ -192,9 +197,14 @@ func follow(man: Node3D, trail: Array, delta: float) -> void:
 	for i in oldest: trail.pop_front()
 	var way: Vector3 = goal-man.position
 	way.y = 0
-	var reach: float = minf(way.length(),WALK*CATCH_UP*delta)
-	if reach < .002:
+	var to_lead: Vector3 = lead.position-man.position
+	to_lead.y = 0
+	var reach: float = minf(way.length(),WALK*CATCH_UP*delta*clampf(man.stride_blend+.2,0.0,1.0))
+	# Never back: his goal behind him (the first man stopped, or turned back
+	# on him), he stands, turned to the first man.
+	if reach < .002 or way.dot(to_lead) < 0.0:
 		man.stand()
+		if to_lead.length() > .3: man.turn_to(to_lead,delta,3.0)
 		return
 	var at: Vector3 = man.position+way.normalized()*reach
 	at.y = world.lift(at)

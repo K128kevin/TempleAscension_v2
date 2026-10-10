@@ -118,6 +118,8 @@ func setup(appearance: Dictionary) -> void:
 	# In the palm, upright when the forearm is level; a thing keeps its own
 	# size in a child's hand.
 	grip.transform = Transform3D(GRIP_MUG.scaled(Vector3.ONE/size),GRIP_AT)
+	arms = {"l":arm}
+	hands = {"l":hand}
 	play("Idle",0.0)
 
 # The library's drinker stands. A seated one keeps the sitting pose and takes
@@ -382,6 +384,117 @@ func stride(clip: String, speed: float) -> void:
 func length(clip: String) -> float:
 	return animator.get_animation(clip).length
 
+# --- A mug taken up by its handle (a patron drinking: scripts/townsfolk.gd
+# sip) -------------------------------------------------------------------------
+
+# Each arm and hand by side ("l", "r"); the right ones made when first wanted.
+var arms: Dictionary = {}
+var hands: Dictionary = {}
+# Where a handle sits in each fist: through it, across the palm toward the
+# thumb (the thing's own up), its body out on the palm's side.
+var handle_grips: Dictionary = {}
+# The mug model's handle, rim (middle) and base (middle), in its own unit
+# box (assets: the "mug" prop, its handle on its +X side); its rim's radius
+# at its own size, in metres.
+const MUG_HANDLE = Vector3(.42,.6,0)
+const MUG_RIM = Vector3(-.125,.985,0)
+const MUG_BASE = Vector3(-.125,0,0)
+const MUG_RIM_RADIUS = .068
+
+func drinking_arm(side: String) -> SkeletonModifier3D:
+	if not arms.has(side):
+		var other = preload("res://scripts/arm_reach.gd").new()
+		other.name = "ArmReach_"+side
+		other.side = side
+		skeleton.add_child(other)
+		arms[side] = other
+		var attached = BoneAttachment3D.new()
+		attached.bone_name = "hand_"+side
+		skeleton.add_child(attached)
+		hands[side] = attached
+	if not handle_grips.has(side):
+		var reaching = arms[side]
+		reaching.measure(skeleton,skeleton.find_bone("hand_"+side))
+		var face: Vector3 = reaching.along.cross(reaching.across)
+		if face.dot(reaching.palm-reaching.along*reaching.palm.dot(reaching.along)) < 0.0: face = -face
+		var handle = Node3D.new()
+		hands[side].add_child(handle)
+		# (Its +X, from the mug's body to its handle, is away from the palm.)
+		var turn = Basis(-face,reaching.across,(-face).cross(reaching.across)).orthonormalized()
+		handle.transform = Transform3D(turn.scaled(Vector3.ONE/size),reaching.palm)
+		handle_grips[side] = handle
+	return arms[side]
+
+# The mug in the `side` hand, its handle in the fist: placed as it is now
+# (`settle` 0) or as the fist holds it (1), between the two as it settles.
+func grasp(mug: Node3D, side: String, settle: float = 1.0) -> void:
+	drinking_arm(side)
+	var handle: Node3D = handle_grips[side]
+	var was: Transform3D = mug.global_transform
+	if mug.get_parent() != handle:
+		if mug.get_parent() != null: mug.get_parent().remove_child(mug)
+		handle.add_child(mug)
+		mug.global_transform = was
+		mug.set_meta("taken",mug.transform)
+	held = mug
+	settle_grasp(settle)
+
+func settle_grasp(settle: float) -> void:
+	if not is_instance_valid(held) or not held.has_meta("taken"): return
+	var scale: Vector3 = held.transform.basis.get_scale()
+	var fist = Transform3D(Basis.from_scale(scale),-(Basis.from_scale(scale)*MUG_HANDLE))
+	var taken: Transform3D = held.get_meta("taken")
+	held.transform = Transform3D(Basis(taken.basis.get_rotation_quaternion().slerp(fist.basis.get_rotation_quaternion(),settle)).scaled(scale),taken.origin.lerp(fist.origin,settle))
+
+# Carries the `side` hand to hold a handle at `handle_point` running along
+# `up` (the mug's own up), the wrist straight, the whole arm turning to tip
+# it (scripts/arm_reach.gd upright); `weight` and `curl` as reach's.
+func drink_reach(side: String, handle_point: Vector3, up: Vector3, weight: float, curl: float) -> void:
+	var reaching = drinking_arm(side)
+	reaching.tool = true
+	reaching.upright = true
+	reaching.target = handle_point
+	reaching.axis = up
+	reaching.weight = weight
+	reaching.curl = curl
+
+# Lets the arms go back to the animation, and whatever was held go.
+func let_go() -> void:
+	for side in arms:
+		arms[side].weight = 0.0
+		arms[side].curl = 0.0
+		arms[side].tool = false
+		arms[side].upright = false
+
+# His lips, in the world: from his nose's tip (found once a figure, from the
+# head's own vertices: the furthest forward), a little below and behind it.
+static var lip_points: Dictionary = {}
+const LIPS_BELOW_NOSE = Vector3(0,-.05,-.012)
+func lips() -> Vector3:
+	var head = skeleton.find_bone("Head")
+	if not lip_points.has(look.who):
+		var nose = Vector3.ZERO
+		var front = -INF
+		for mesh in skeleton.find_children("*","MeshInstance3D",true,false):
+			if mesh.name != "Body" or mesh.skin == null: continue
+			var bind = -1
+			for b in mesh.skin.get_bind_count():
+				if mesh.skin.get_bind_name(b) == "Head" or mesh.skin.get_bind_bone(b) == head: bind = b
+			var arrays = mesh.mesh.surface_get_arrays(0)
+			var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var bones = arrays[Mesh.ARRAY_BONES]
+			var weights = arrays[Mesh.ARRAY_WEIGHTS]
+			var per: int = bones.size()/maxi(points.size(),1)
+			for i in points.size():
+				var on_head = 0.0
+				for k in per:
+					if bones[i*per+k] == bind: on_head += weights[i*per+k]
+				if on_head > .5 and points[i].z > front:
+					front = points[i].z
+					nose = points[i]
+		lip_points[look.who] = skeleton.get_bone_global_rest(head).affine_inverse()*(nose+LIPS_BELOW_NOSE)
+	return skeleton.global_transform*skeleton.get_bone_global_pose(head)*lip_points[look.who]
+
 # Puts a thing in its left hand (or takes it away, with null).
 func hold(thing: Node3D) -> void:
 	if is_instance_valid(held) and held.get_parent() == grip: grip.remove_child(held)
@@ -397,6 +510,9 @@ func hold(thing: Node3D) -> void:
 # elbow swings out from the body as `splay` says (scripts/arm_reach.gd).
 # `tip` tilts what is held (radians) toward him, as a mug at the lips is.
 func reach(point: Vector3, weight: float, curl: float = -1.0, splay: float = 0.0, tip: float = 0.0) -> void:
+	arm.tool = false
+	arm.upright = false
+	if weight <= 0.0 and curl <= 0.0: let_go()
 	arm.target = point
 	arm.splay = splay
 	arm.weight = weight

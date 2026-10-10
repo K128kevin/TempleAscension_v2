@@ -108,7 +108,7 @@ The temple stands in a larger world, one continuous outdoor map
   corner. Five streets and alleys run off the ring, each with houses down both
   sides: thirty-five in all. A wall with a towered gateway closes the town off
   from the desert.
-- **The townspeople.** Twenty-five grown townspeople wander the ring street, the
+- **The townspeople.** Thirty grown townspeople wander the ring street, the
   market and, now and then, an alley, stopping here and there; two who pass
   may stop a moment to talk (no words, just the gestures). They drift in and
   out of the inn so that between three and eight of them are inside at any
@@ -117,22 +117,40 @@ The temple stands in a larger world, one continuous outdoor map
   name shows when the cursor is on her), fills a mug at the barrels behind her
   bar, carries it upright in her fist round to the table and sets it down in
   front of the drinker, clearing the empties; a patron drinks for a minute,
-  lifting the mug to his lips and tipping it for a sip now and then, his
-  elbow held out from his side, and setting it back on the table, then
-  leaves or waits for another. Their clothes are
-  neutral and plain, and most are poor: ten in rags (frayed, patched, holed
-  and filthy), nine in worn and patched tunics and gowns, six decently
-  dressed. Most of those in rags are thin with hunger, their arms and legs
-  stick-thin, their frames narrow and their skin sallow (their belts drawn
-  in with them, never left standing off their waists); all ten of them,
-  and no one else among the grown, sleep in the street. Six ragged children run about the streets at tag and
+  now and then taking it up with the hand on its side, his fingers round its
+  handle, lifting it upright, his wrist kept straight and his elbow out from
+  his side, until its rim meets his lips, tipping it back for a sip and
+  setting it down again as it stood; then leaves or waits for another. The
+  candles on the inn's tables and its bar burn day and night. Selene, a
+  serving woman in an apron who works for Anya, keeps the common room: she
+  takes up the mugs left where no one sits and carries them to the bar to be
+  washed, and wipes down any table no one is at with her rag, round and
+  round; between whiles she stands by the bar's west end. She lives in the
+  house nearest the inn and goes home once it is shut. Their clothes are
+  neutral and plain, and most are poor: fifteen in rags (frayed, patched,
+  holed and filthy), nine in worn and patched tunics and gowns, six decently
+  dressed. Most of those in rags are thin with hunger (the five come to the
+  town lately all of them), their arms and legs stick-thin, their frames
+  narrow and their skin sallow (their belts drawn in with them, never left
+  standing off their waists); all fifteen of them, and no one else among
+  the grown, sleep in the street. Six ragged children run about the streets at tag and
   follow-my-leader, resting in a huddle between games; they never go into the
   inn. No one goes into the arena, through the palace gate or out of the town,
   and all give way to the hero.
+- **Zeno, the bread seller.** A man in a wide straw hat and a floury apron
+  pushes a wooden handcart round the streets by day: a bed of boards with
+  plank sides, two big spoked, iron-tyred wheels that turn as it rolls, and
+  long push handles, which he holds; on a coarse cloth in it, the day's
+  loaves, long and round, heaped two deep. He stops a while at the places
+  the townsfolk go; now and then one comes up, talks a moment and goes on
+  with a loaf in his hand; and every twenty seconds or so, while no one is
+  buying, "Fresh bread for sale!" rises over his head. At nightfall he pushes
+  the cart home, parks it beside his door tipped back on its legs, and goes
+  in; his house is his alone. His name shows when the cursor is on him.
 - **The watch.** Armored guards in steel gauntlets, spear in the right fist
   and scutum on the left forearm, stand two at each of
   the town's gates (east and south) and two at each of the palace's (its
-  precinct gate and its door), and six pairs more walk the town's streets
+  precinct gate and its door), and eight pairs more walk the town's streets
   (round the arena, never through it), the second man a pace behind the
   first, stopping a while at each place they come to.
   Every eight hours of the day (every ten minutes of play) the watch

@@ -83,6 +83,15 @@ static func put(world, id: String, at: Vector3, height: float, yaw: float = 0.0,
 static func made(world, id: String, at: Vector3, size: Vector3, material: Material, yaw: float = 0.0) -> Node3D:
 	return world.place(id,at,size,material,yaw)
 
+# A candlestick, its candles lit (scripts/candle_flame.gd): with a light of its
+# own (`with_light`), or, where a lamp already lights it, by its flames only.
+static func candle(world, at: Vector3, height: float, with_light: bool) -> Node3D:
+	var stick = put(world,"candlestick",at,height)
+	var lit = preload("res://scripts/candle_flame.gd").new()
+	world.add_child(lit)
+	lit.setup(stick,Kit.sized("candlestick",height),with_light)
+	return lit
+
 # A warm lamp's light, indoors.
 static func lamp(world, at: Vector3, energy: float, reach: float, colour: Color = Color(1.0,.72,.42)) -> OmniLight3D:
 	var light = OmniLight3D.new()
@@ -96,7 +105,8 @@ static func lamp(world, at: Vector3, energy: float, reach: float, colour: Color 
 
 # The inn: a common room with its tables and its bar, the kitchen's wall and
 # door behind the bar (Anya's bed is in the kitchen), and above the kitchen a
-# loft of beds, up a stair by the east wall.
+# loft of beds, up a stair by the east wall. The candles on its tables and its
+# bar burn day and night.
 static func inn(world, tint: Color, wood: Color) -> Dictionary:
 	var c = INN
 	var size = Vector2(INN_BAYS.x*BAY,INN_BAYS.y*BAY)
@@ -141,7 +151,7 @@ static func inn(world, tint: Color, wood: Color) -> Dictionary:
 	put(world,"shelf_bottles",Vector3(c.x+9.2,2.0,edge-.2),.65)
 	for spot in [[3.5,.1],[4.4,-.15],[6.1,.12],[7.9,-.1],[9.6,.05],[10.5,-.12]]: put(world,"mug",Vector3(c.x+spot[0],1.12,bar+spot[1]),.17,spot[0]*2.0)
 	for spot in [[5.2,-.1],[5.45,.12],[8.7,.08]]: put(world,"bottle",Vector3(c.x+spot[0],1.12,bar+spot[1]),.36)
-	put(world,"candlestick",Vector3(c.x+7.0,1.12,bar-.1),.44)
+	candle(world,Vector3(c.x+7.0,1.12,bar-.1),.44,false)
 	lamp(world,Vector3(c.x+7.0,2.4,bar+.4),1.1,7.0)
 	put(world,"lantern",Vector3(c.x+2.2,1.9,edge-.4),.8)
 	put(world,"lantern",Vector3(c.x+12.2,1.9,edge-.4),.8)
@@ -155,7 +165,7 @@ static func inn(world, tint: Color, wood: Color) -> Dictionary:
 	world.block_rect(Rect2(east.x-.6,east.z-1.5,1.2,3.0),world.LOW,false)
 	for seat in [Vector3(-.95,0,-.8),Vector3(-.95,0,.7),Vector3(.95,0,-.6),Vector3(.95,0,.8),Vector3(0,0,1.9)]: put(world,"stool",east+seat,.55,seat.z,.3)
 	for table in [west,east]:
-		put(world,"candlestick",table+Vector3(0,.85,0),.4)
+		candle(world,table+Vector3(0,.85,0),.4,true)
 		for spot in [Vector3(-.8,0,.2),Vector3(.7,0,-.2),Vector3(.2,0,.3)]:
 			var turned: Vector3 = spot if table==west else Vector3(spot.z,0,spot.x)
 			put(world,"plate",table+turned+Vector3(0,.85,0),.03)

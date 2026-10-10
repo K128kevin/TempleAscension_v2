@@ -86,16 +86,17 @@ func setup(variant: float) -> void:
 	pose_tree()
 
 # Walking, he carries his spear and shield CARRY metres off the ground, at
-# a stride that covers STRIDE metres a second at the clip's own pace.
+# a stride that covers STRIDE metres a second at the clip's own pace (its
+# feet, planted, pass back under him at that speed), so his feet never slide.
 const CARRY = .12
-const STRIDE = 1.25
+const STRIDE = 1.0
 var walking = false
 # How fast he means to go, and how far into his walk he is (0 standing his
 # watch, 1 walking), eased toward it (PACE_EASE a second) so a man who stops
 # and starts again never jerks between the two.
 var pace = 0.0
 var stride_blend = 0.0
-const PACE_EASE = 3.0
+const PACE_EASE = 6.0
 
 func walk(speed: float) -> void:
 	walking = true
@@ -155,10 +156,16 @@ func turn_to(direction: Vector3, delta: float, quickness: float = 7.0) -> void:
 
 # The spear's hand goes to its grip wherever he stands (found in the world,
 # so he must be placed first), and the shield is laid along his left forearm.
-func _process(delta: float) -> void:
+# Into his stride or out of it, as he means to go (scripts/town_watch.gd
+# moves him at the pace his legs have come to).
+var stride_rate = 1.0
+func ease_pace(delta: float) -> void:
 	stride_blend = move_toward(stride_blend,clampf(pace/STRIDE,0.0,1.0),delta*PACE_EASE)
+	stride_rate = maxf(pace,STRIDE*.5)/STRIDE
+
+func _process(delta: float) -> void:
 	tree.set("parameters/body/blend_amount",stride_blend)
-	tree.set("parameters/speed/scale",maxf(pace,STRIDE*.5)/STRIDE)
+	tree.set("parameters/speed/scale",stride_rate)
 	var lift = Vector3.UP*CARRY*stride_blend
 	spear.position = Vector3(SPEAR_FIST.x,0,SPEAR_FIST.z)+lift
 	var frame: Transform3D = global_transform

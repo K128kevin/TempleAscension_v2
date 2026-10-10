@@ -508,7 +508,8 @@ func test():
 
 	# The town's people.
 	var folk = world.townsfolk
-	check(folk.people.size()==25 and folk.children.size()==6 and folk.anya != null and folk.anya.body.name=="Anya","Twenty-five townspeople, six children and Anya the innkeeper are about")
+	check(folk.people.size()==30 and folk.children.size()==6 and folk.anya != null and folk.anya.body.name=="Anya","Thirty townspeople, six children and Anya the innkeeper are about")
+	check(folk.people.filter(func(w): return w.body.look.wear >= folk.HOMELESS_WEAR).size() == 15 and folk.people.slice(folk.RAGGED_LATER).all(func(w): return w.body.look.wear >= folk.GAUNT_WEAR and w.body.look.gaunt > 0.0),"Fifteen are in rags; the five come since all in tatters and thin with hunger")
 	var anya_look: Dictionary = folk.anya.body.look
 	check(anya_look.who=="woman" and anya_look.garment=="Dress" and anya_look.under=="Blouse" and anya_look.braid and anya_look.hair_colour.r<.1 and anya_look.cloth.r>anya_look.cloth.b*1.8 and anya_look.under_cloth.r>.85,"Anya: a young woman, dark hair in a braid, a white blouse under a brown dress")
 	var ragged = folk.people.filter(func(w): return w.body.look.wear>=.8).size()
@@ -539,7 +540,9 @@ func test():
 		for w in folk.people+folk.children:
 			var a = Vector2((w.at.x-Town.ARENA.x)/Town.ARENA_RADII.x,(w.at.z-Town.ARENA.z)/Town.ARENA_RADII.y)
 			if a.length()<1.0 or w.at.z<-77 or w.at.x>Overworld.TOWN_GATE.x: strayed += 1
-			if step%20==0 and not w.state in ["sit_down","wait","drink","stand_up"] and not folk.open_at(w.at): walled += 1
+			# (One home with his shopping is in at his door, unseen, and steps
+			# out of it again.)
+			if step%20==0 and not w.state in ["sit_down","wait","drink","stand_up","home","from_home"] and not folk.open_at(w.at): walled += 1
 		for c in folk.children:
 			if folk.inside(c): kids_in += 1
 	check(least>=3 and most<=8,"Between three and eight are in the inn at every moment (%d to %d)" % [least,most])
