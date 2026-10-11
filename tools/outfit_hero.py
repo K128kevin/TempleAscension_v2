@@ -515,11 +515,50 @@ GREAVE_TOP = KNEE+.07
 CUISSE_LOW = KNEE+.04
 CUISSE_TOP = .955
 CUISSE_FAULD = .76
+# The plated boots' toes: a sabaton's smooth rounded cap, not the shape of
+# the toes beneath (the shell is a copy of the foot). Over the fore part of
+# each foot the shell's outer skin is laid on a cap of its own: a rounded
+# section (a superellipse, flat underneath) whose width and height draw in
+# toward a blunt tip, blended into the instep behind it.
+TOE_HEIGHT = .11
+TOE_FROM = -.03
+TOE_BLEND = .035
+def round_toes(shell):
+    mesh = bmesh.new(); mesh.from_mesh(shell.data)
+    mesh.verts.ensure_lookup_table()
+    mesh.normal_update()
+    for side in (-1, 1):
+        toes = [v for v in mesh.verts if v.co.z < TOE_HEIGHT and v.co.y < TOE_FROM+TOE_BLEND and (v.co.x > 0) == (side > 0)]
+        if not toes: continue
+        centre = sum((v.co for v in toes), Vector((0, 0, 0)))/len(toes)
+        outer = [v for v in toes if (v.co-centre).dot(v.normal) > 0]
+        if not outer: continue
+        xs = [v.co.x for v in outer]; zs = [v.co.z for v in outer]; ys = [v.co.y for v in outer]
+        xc = (max(xs)+min(xs))/2
+        sole = min(zs)
+        top0 = max(v.co.z for v in outer if v.co.y > TOE_FROM-.04)
+        w0 = (max(xs)-min(xs))/2
+        tip = min(ys)-.006
+        n = 2.6
+        for v in outer:
+            s = max(0.0, min(1.0, (v.co.y-TOE_FROM)/(tip-TOE_FROM)))
+            width = w0*(1-s**3)**.5
+            top = top0-(top0-sole-.022)*s**1.3
+            zc = (top+sole)/2; h = (top-sole)/2
+            a = math.atan2(v.co.z-zc, v.co.x-xc)
+            c, sn = math.cos(a), math.sin(a)
+            cap = Vector((xc+width*math.copysign(abs(c)**(2/n), c), v.co.y, zc+h*math.copysign(abs(sn)**(2/n), sn)))
+            cap.z = max(cap.z, sole)
+            blend = max(0.0, min(1.0, (TOE_FROM-v.co.y)/TOE_BLEND+1.0)) if v.co.y > TOE_FROM else 1.0
+            v.co = v.co.lerp(cap, blend)
+    mesh.to_mesh(shell.data); mesh.free()
+
 def warrior_kit():
     shells = []
     shells.append(outfits.body_shell(body,rig,'HeroBracers',lambda bone,z: bone.startswith('lowerarm'),.011,.009))
     shells.append(outfits.body_shell(body,rig,'HeroBelt',lambda bone,z: bone.startswith(('spine_01','pelvis','root','spine_02')) and .953<z<1.047,.03,.012))
     shells.append(outfits.body_shell(body,rig,'HeroGreaves',lambda bone,z: (bone.startswith(('calf','foot','ball')) or (bone.startswith('thigh') and z<GREAVE_TOP)) and z<GREAVE_TOP,.014,.012))
+    round_toes(shells[-1])
     # (The cuisses take in the hips under the belt too, a fauld round them.)
     shells.append(outfits.body_shell(body,rig,'HeroCuisses',lambda bone,z: (bone.startswith(('thigh','calf')) or (bone.startswith(('pelvis','root','spine_01')) and z>CUISSE_FAULD)) and CUISSE_LOW<z<CUISSE_TOP,.02,.014))
     for shell in shells[-2:]:

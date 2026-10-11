@@ -858,7 +858,13 @@ func leave_shadows() -> void:
 # normal attack; `extra` is what else it carries (RangerFx.arrow dresses it).
 func loose(direction: Vector3, percent: float, extra: Dictionary = {}) -> void:
 	game.sound.play("archer-arrow")
-	game.projectile(game.player.position,game.player.position+direction*game.RANGED_REACH,attack_damage(percent,"ranged"),true,"arrow",Data.passive(game.run,"penetrating_arrows")>0,null,true,extra)
+	# The arrow leaves from where it was nocked on the string, the middle of
+	# the bow as he holds it (the projectile stands a metre over the point it
+	# is given), and flies level from there.
+	var from: Vector3 = game.player.position
+	var nocked = game.player.visual.nocked_arrow
+	if is_instance_valid(nocked) and nocked.is_inside_tree() and game.player.visual.state in game.player.visual.BOW_READY_STATES: from = nocked.global_position-Vector3.UP
+	game.projectile(from,from+direction*game.RANGED_REACH,attack_damage(percent,"ranged"),true,"arrow",Data.passive(game.run,"penetrating_arrows")>0,null,true,extra)
 
 # One of the hero's arrows striking `enemy`: its damage, and whatever it
 # carries.

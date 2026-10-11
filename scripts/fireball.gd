@@ -57,7 +57,8 @@ func setup(owner_game, from: Vector3, to: Vector3, blast_radius: float, blast_da
 	origin = from
 	# (The Oracle's bursts on the floor at the hero's feet; the hero's flight
 	# ends in the air, at the end of its reach.)
-	target = to if friendly else to+Vector3.UP*.35
+	target = over_ground(to if friendly else to+Vector3.UP*.35)
+	origin = over_ground(origin)
 	radius = blast_radius
 	damage = blast_damage
 	flight_time = seconds
@@ -128,6 +129,14 @@ func billboard(material: ShaderMaterial, size: float) -> MeshInstance3D:
 	return node
 
 # Returns false once every part of the effect has finished.
+# A point given over the world's flat plane, raised onto the ground where
+# that stands higher (the dune): a point already over the ground is kept.
+func over_ground(p: Vector3) -> Vector3:
+	if not game.world.has_method("lift"): return p
+	var ground: float = game.world.lift(p)
+	if p.y-ground < .25: p.y = ground+maxf(p.y,.35)
+	return p
+
 func tick(dt: float) -> bool:
 	age += dt
 	if fizzled >= 0.0:
@@ -145,19 +154,23 @@ func tick(dt: float) -> bool:
 		return fizzled < FIZZLE_TIME+embers.lifetime
 	if not exploded:
 		var u = minf(1.0,age/flight_time)
-		# Straight from the staff's crown to the burst point.
+		# Straight from the staff's crown to the burst point, carried over
+		# the ground's rises (the dune) at the height above it the flight
+		# runs between: it travels along a hill, not into it.
 		var before: Vector3 = position
 		position = origin.lerp(target,u)
+		if game.world.has_method("lift"):
+			position.y = game.world.lift(position)+lerpf(origin.y-game.world.lift(origin),target.y-game.world.lift(target),u)
 		# The hero's bursts on the first enemy in its way, as an arrow strikes,
 		# or against a wall in its way.
 		if friendly:
 			var struck = first_struck(before,position)
 			if struck != null:
-				target = struck.position+Vector3.UP*.35
+				target = over_ground(struck.position+Vector3.UP*.35)
 				explode()
 				return true
 			if not game.world.clear_line(Vector3(before.x,0,before.z),Vector3(position.x,0,position.z)):
-				target = Vector3(before.x,.35,before.z)
+				target = over_ground(Vector3(before.x,.35,before.z))
 				explode()
 				return true
 		core_material.set_shader_parameter("flame_time",age)

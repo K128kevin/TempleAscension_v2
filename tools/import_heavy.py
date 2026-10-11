@@ -648,26 +648,41 @@ EXECUTE = [K(0),
 def execute(t):
     play(t, EXECUTE_CLOCK, EXECUTE)
 
-# Thunder Slam, as a man splits a log: the weapon swung down and back
-# behind the hip as the body coils, then hoisted far back over the shoulders,
-# the back arched, up on the toes; then the lead foot driven a long stride
-# forward and the whole body hurled down behind the weapon, its head smashed
-# into the ground ahead; held; a slow rise.
-# (Slow and wide through the wind-up, the weapon's head drawing one great
-# circle: down past the hip, far back, up and over; the blow fast and late.)
-SLAM_CLOCK = [(0, 0, 0), (.18, .5, 1.6), (.4, 1, 1.4), (.56, 1.4, 3.0), (.66, 2, 8, 1.5), (.84, 3, 0), (1, 4, 0)]
+# Thunder Slam, as a man splits a log: the weapon's head draws one great
+# slow circle beside him, from pointing down and forward at his toes, down
+# and back past the right hip (the left arm reaching across the front of the
+# body to the haft), up behind the right shoulder, over the head as the back
+# arches and the heels rise; then the lead foot driven a long stride forward
+# and the whole body hurled down behind the weapon, its head smashed into the
+# ground ahead; held; a slow rise. The hands keep to his right side, never
+# behind the body.
+SLAM_CLOCK = [(0, 0, 0), (.07, .15, 2.0), (.14, .3, 2.2), (.25, .6, 2.4), (.36, .9, 2.4), (.46, 1.2, 2.6), (.56, 1.5, 3.2), (.6, 1.65, 4.5), (.66, 2, 8, 1.5), (.84, 3, 0), (1, 4, 0)]
+
+def outboard(direction, by):
+    """`direction` tipped out to his right by `by` (the weapon's head swung
+    wide of the legs as it passes them)."""
+    v = Vector(direction)+V(-by, 0, 0)
+    return tuple(v.normalized())
 DOWN = dict(er=(-.9, -.3, -.1), el=(.9, .1, -.1))
 LUNGE = dict(rh=.8, rk=(0, .1, -.4))
 STRIDE = dict(lf=(.6, 0, 0), rh=.7, rp=.2)
 SLAM = [K(0),
-    K(.5, down=.14, fwd=-.04, turn=-.22, twist=-.45, lean=.16, hp=.1, g=(-.32, .42, .8), z=plane(OVER, FORWARD, 215), n=OVER, er=(-.8, .3, -.4), el=(.8, .0, -.5), rh=.1),
-    K(1, down=.02, fwd=-.1, turn=-.12, twist=-.15, lean=-.2, tilt=-.04, hp=-.2, g=(-.3, .62, 1.5), z=plane(OVER, FORWARD, 165), n=OVER, lh=.3, rh=.3, **HIGH),
-    K(1.4, down=-.06, fwd=-.04, turn=.04, twist=.2, lean=-.1, hp=-.3, g=(-.12, -.08, 2.1), z=plane(OVER, FORWARD, 100), n=OVER, lf=(.22, .16, 0), lh=.5, rh=.5, **HIGH),
-    K(1.7, down=.2, fwd=.24, side=-.03, turn=.14, twist=.48, lean=.28, tilt=.08, hp=-.3, g=(.06, -.66, 1.34), z=plane(OVER, FORWARD, 24), n=OVER, lf=(.54, .05, 0), rh=.65,
+    # (Lowered forward first, the haft level before him, then the head
+    # dropped to his toes.)
+    K(.15, down=.05, fwd=.0, turn=-.02, twist=-.1, lean=.1, hp=.1, g=(-.3, -.42, 1.25), z=outboard(plane(OVER, FORWARD, -22), .3), n=OVER, er=(-.85, .1, -.5), el=(.8, -.2, -.5)),
+    K(.3, down=.1, fwd=.02, turn=-.06, twist=-.2, lean=.14, hp=.15, g=(-.28, -.16, 1.0), z=outboard(plane(OVER, FORWARD, -62), .15), n=OVER, er=(-.85, .1, -.5), el=(.8, -.2, -.5)),
+    K(.6, down=.1, fwd=-.02, turn=-.14, twist=-.34, lean=.1, hp=.1, g=(-.42, .02, 1.06), z=outboard(plane(OVER, FORWARD, -98), .4), n=OVER, er=(-.9, .35, -.3), el=(.85, -.1, -.5), rh=.1),
+    K(.9, down=.06, fwd=-.06, turn=-.2, twist=-.42, lean=.0, hp=.0, g=(-.44, .26, 1.12), z=outboard(plane(OVER, FORWARD, -160), .3), n=OVER, er=(-.9, .5, -.1), el=(.9, .1, -.4), rh=.2),
+    K(1.2, down=.02, fwd=-.1, turn=-.14, twist=-.25, lean=-.16, tilt=-.04, hp=-.2, g=(-.38, .3, 1.46), z=plane(OVER, FORWARD, -215), n=OVER, er=(-.9, .5, .2), el=(.9, .2, -.2), lh=.3, rh=.3),
+    K(1.5, down=-.06, fwd=-.06, turn=-.02, twist=.05, lean=-.26, tilt=-.04, hp=-.3, g=(-.24, .1, 1.95), z=plane(OVER, FORWARD, -268), n=OVER, lh=.5, rh=.5, **HIGH),
+    # (The hands carried forward high over the head, so the haft's butt
+    # passes above the face, before they drive down.)
+    K(1.65, down=.02, fwd=.08, turn=.04, twist=.2, lean=.04, hp=-.4, g=(-.12, -.46, 1.76), z=plane(OVER, FORWARD, -290), n=OVER, lf=(.36, .12, 0), rh=.55, **HIGH),
+    K(1.8, down=.15, fwd=.16, turn=.1, twist=.4, lean=.16, hp=-.4, g=(-.02, -.62, 1.4), z=plane(OVER, FORWARD, -335), n=OVER, lf=(.5, .06, 0), rh=.6,
         er=(-.9, -.2, -.1), el=(.9, .0, -.1)),
-    K(2, 'hit', down=.42, fwd=.36, side=-.05, turn=.18, twist=.58, lean=.7, tilt=.2, hp=-.2, g=(.14, -.88, .56), z=plane(OVER, FORWARD, -40), n=OVER, **STRIDE, **DOWN),
-    K(3, down=.45, fwd=.36, side=-.05, turn=.18, twist=.58, lean=.74, tilt=.2, hp=-.1, g=(.14, -.88, .56), z=plane(OVER, FORWARD, -40), n=OVER, **STRIDE, **DOWN),
-    K(3.5, down=.28, fwd=.24, twist=.25, lean=.48, g=(.04, -.6, .95), z=plane(OVER, FORWARD, 25), n=(.8, -.5, .2), lf=(.4, .02, 0), rh=.5),
+    K(2, 'hit', down=.42, fwd=.36, side=-.05, turn=.18, twist=.58, lean=.66, tilt=.2, hp=-.25, g=(.14, -1.0, .64), z=plane(OVER, FORWARD, -400), n=OVER, **STRIDE, **DOWN),
+    K(3, down=.45, fwd=.36, side=-.05, turn=.18, twist=.58, lean=.7, tilt=.2, hp=-.15, g=(.14, -1.0, .64), z=plane(OVER, FORWARD, -400), n=OVER, **STRIDE, **DOWN),
+    K(3.5, down=.28, fwd=.24, twist=.25, lean=.48, g=(.04, -.6, .95), z=plane(OVER, FORWARD, -335), n=(.8, -.5, .2), lf=(.4, .02, 0), rh=.5),
     K(4)]
 
 def slam(t):

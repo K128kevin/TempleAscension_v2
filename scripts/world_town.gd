@@ -175,8 +175,9 @@ static func streets(world) -> void:
 static func gate_wall(world) -> void:
 	var material = Kit.masonry(CREAM,BROWN,.4,.65)
 	var x = world.TOWN_GATE.x
-	var z = -96.0
-	while z<96.0:
+	# (From corner to corner of the town's wall, no further.)
+	var z = -world.WALL_SOUTH
+	while z<world.WALL_SOUTH-.1:
 		var middle = z+BAY*.5
 		z += BAY
 		if absf(middle)<5.0 or world.margin_at(Vector3(x,0,middle))<-9.0: continue
@@ -202,8 +203,10 @@ static func gate_wall(world) -> void:
 # runs along the north and south sides from the gate wall to the west end,
 # and from the north side out round the palace hill's ground; the south
 # gate (south_gate) fills a gap left in the south side.
+# It is old: its stone far more worn than the gate's, its top ragged, and
+# here and there a bay crumbled down to a broken stub.
 static func town_wall(world) -> void:
-	var material = Kit.masonry(CREAM,BROWN,.4,.65)
+	var material = Kit.masonry(CREAM,BROWN,.4,.92)
 	var south: float = world.WALL_SOUTH
 	var west: float = world.WALL_WEST
 	var east: float = world.TOWN_GATE.x
@@ -228,7 +231,12 @@ static func town_wall(world) -> void:
 			for opening in openings:
 				if opening.has_point(Vector2(middle.x,middle.z)): skipped = true
 			if skipped: continue
-			var piece = world.place("wall",middle,Vector3(bay,5.6,1.4),material,yaw)
+			# (Its own place in the ring decides a bay's state, the same every
+			# time: most stand, worn, at an uneven height; a few have fallen.)
+			var lot: float = fposmod(middle.x*7.31+middle.z*3.17,13.0)
+			var crumbled: bool = lot < 1.7
+			var height: float = 3.9+lot*.1 if crumbled else 5.1+fposmod(lot*2.9,1.0)*.9
+			var piece = world.place("wall_broken" if crumbled else "wall",middle,Vector3(bay,height,1.4),material,yaw)
 			world.block_rect(Rect2(middle.x-(bay*.5 if yaw == 0.0 else .7),middle.z-(.7 if yaw == 0.0 else bay*.5),bay if yaw == 0.0 else 1.4,1.4 if yaw == 0.0 else bay))
 			world.screen([piece])
 	# A tower at every corner but the gate wall's own ends.

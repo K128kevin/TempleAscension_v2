@@ -298,6 +298,25 @@ func test():
 	var fresh = Data.new_character("warrior")
 	check(fresh.place=="world" and Vector3(fresh.position[0],0,fresh.position[1])==Overworld.START and Save.valid(fresh),"A new character starts outside the temple, at the camp on the dune")
 	check(Data.new_run().place=="temple","A bare run still starts on the temple's first floor")
+	# A wizard's fireball cast down the dune travels along the hill's slope,
+	# a little over the sand all the way, not into it.
+	game.run = Data.new_character("wizard")
+	game.load_floor()
+	game.run.skills["fireball"] = 1
+	game.run.energy = Data.max_energy(game.run)
+	game.player.busy = 0; game.player.cooldown = 0
+	var aim: Vector3 = Overworld.START+Vector3(0,0,-14)
+	var cast_ok: bool = game.skills.cast("fireball",aim)
+	var fire_low = INF; var fire_high = -INF; var flew = 0
+	for i in 80:
+		game.player.tick(.05); game.tick_scheduled(.05); game.skills.tick(.05); game.tick_fireballs(.05)
+		for f in game.fireballs:
+			if f.exploded or f.fizzled >= 0.0: continue
+			var over: float = f.position.y-game.world.lift(f.position)
+			fire_low = minf(fire_low,over); fire_high = maxf(fire_high,over); flew += 1
+	check(cast_ok and flew > 10 and fire_low > .15 and fire_high < 2.5,"A fireball cast down the dune flies along the slope, %.2f to %.2f m over the sand (%d frames)" % [fire_low,fire_high,flew])
+	for f in game.fireballs: f.queue_free()
+	game.fireballs.clear()
 	game.run = fresh
 	game.load_floor()
 	var world = game.world

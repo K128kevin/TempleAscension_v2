@@ -420,29 +420,35 @@ LEAP_BLADE = V(0, -1, -.25)
 # struck down flat along the ground ahead (its length meets the floor, not
 # its point); held there, and a slow rise.
 # (The wind-up is slow and wide, the weapon's point drawing one great
-# circle: down past the hip, far back behind the shoulder, up and over the
-# head, and only then the fast blow, two thirds of the way through the clip.)
+# circle beside him: from pointing down and forward at his toes, swung down
+# and back past the right hip, up behind the right shoulder with the elbow
+# bending, over the head, and only then the fast blow, two thirds of the way
+# through the clip. The hand keeps to his right side throughout, never
+# behind the body, so the arm bends as an arm does and the blade stays
+# clear of him.)
 def slam_body(t):
-    drop = sample([(0, 0), (.18, 1), (.4, 0), (1, 0)], t)
-    back = sample([(0, 0), (.18, 0), (.4, 1), (.56, 0), (1, 0)], t)
-    up = sample([(0, 0), (.4, 0), (.56, 1), (.66, 0), (1, 0)], t)
+    drop = sample([(0, 0), (.12, 1), (.36, 0), (1, 0)], t)
+    back = sample([(0, 0), (.12, 0), (.36, 1), (.56, 0), (1, 0)], t)
+    up = sample([(0, 0), (.36, 0), (.56, 1), (.66, 0), (1, 0)], t)
     down = sample([(0, 0), (.56, 0), (.66, 1), (.84, 1), (1, 0)], t)
-    hips(down=.08*drop+.02*back-.08*up+.5*down, forward=-.06*drop-.14*back-.1*up+.28*down)
-    rotate('pelvis', (1, 0, 0), .1*drop-.1*back-.25*up+.35*down)
-    rotate('spine_01', (1, 0, 0), .06*drop-.2*back-.42*up+.55*down)
-    rotate('spine_02', (1, 0, 0), .05*drop-.15*back-.3*up+.4*down)
-    rotate('spine_03', (1, 0, 0), -.05*back-.15*up+.25*down)
-    rotate('pelvis', (0, 0, 1), -.25*drop-.35*back-.15*up+.15*down)
+    hips(down=.1*drop+.04*back-.08*up+.5*down, forward=-.02*drop-.1*back-.1*up+.28*down)
+    rotate('pelvis', (1, 0, 0), .12*drop-.05*back-.25*up+.35*down)
+    rotate('spine_01', (1, 0, 0), .12*drop-.12*back-.42*up+.55*down)
+    rotate('spine_02', (1, 0, 0), .08*drop-.1*back-.3*up+.4*down)
+    rotate('spine_03', (1, 0, 0), .03*drop-.05*back-.15*up+.25*down)
+    rotate('pelvis', (0, 0, 1), -.15*drop-.4*back-.15*up+.15*down)
     rotate('neck_01', (1, 0, 0), -.05*back-.2*up+.1*down)
-    rotate('Head', (1, 0, 0), .1*back+.35*up-.2*down)
+    rotate('Head', (1, 0, 0), -.1*drop+.15*back+.35*up-.2*down)
     plant(lead='l', forward=.65*down, lift=.16*math.sin(math.pi*sample([(0, 0), (.54, 0), (.68, 1), (1, 1)], t)))
     return drop, back, up, down
 
-SLAM_HAND_PATH = [(0, SWORD_HOME), (.18, V(-.32, .5, .75)), (.4, V(-.34, .74, 1.5)), (.56, V(-.24, .2, 2.25)), (.66, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.84, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)]
-SLAM_BLADE_PATH = [(0, V(-.2, -1, .3)), (.18, V(0, .7, -.7)), (.4, V(0, .65, .75)), (.56, V(0, -.45, .9)), (.66, FLAT_BLADE), (.84, FLAT_BLADE), (1, V(-.2, -1, .3))]
+SLAM_HAND_PATH = [(0, SWORD_HOME), (.12, V(-.28, -.08, .9)), (.24, V(-.36, .12, .8)), (.36, V(-.42, .3, 1.0)), (.46, V(-.4, .3, 1.5)), (.56, V(-.26, .1, 2.05)), (.62, V(-.12, -.3, 2.1)), (.66, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.84, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)]
+SLAM_BLADE_PATH = [(0, V(-.2, -1, .3)), (.12, V(-.1, -.5, -.85)), (.24, V(0, .35, -.92)), (.36, V(0, .96, -.2)), (.46, V(0, .7, .7)), (.56, V(0, .15, .98)), (.62, V(0, -.6, .8)), (.66, FLAT_BLADE), (.84, FLAT_BLADE), (1, V(-.2, -1, .3))]
 
 def slam_pole(t):
-    return V(-.9, .3, 1.1) if t < .3 else (V(-.9, .3, 1.8) if t < .6 else V(-.9, -.4, .9))
+    # (The elbow out to the right and back as the blade swings behind, up
+    # and out as it rises over the head, down and forward for the blow.)
+    return V(-.95, .25, 1.0) if t < .3 else (V(-.95, .4, 1.85) if t < .6 else V(-.9, -.4, .9))
 
 def slam(t):
     drop, back, up, down = slam_body(t)

@@ -451,6 +451,7 @@ static func plate(mesh_name: String, rest_pose: bool = false) -> ShaderMaterial:
 		m.set_shader_parameter("lame",0.0)
 		m.set_shader_parameter("knee",.545)
 		m.set_shader_parameter("ankle",.1)
+		m.set_shader_parameter("toe_lame",.034)
 		m.set_shader_parameter("ridge",1.0)
 	materials[key] = m
 	return m

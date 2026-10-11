@@ -27,6 +27,9 @@ uniform float lame = 0.0;
 uniform float knee = -1.0;
 uniform float ankle = -1.0;
 uniform float ridge = 1.0;
+// Below the ankle, lames across the foot every `toe_lame` metres from the
+// ankle to the toes (0: one plate): a sabaton.
+uniform float toe_lame = 0.0;
 // The legs' axes, out from the figure's middle.
 uniform float leg_x = 0.1;
 
@@ -116,6 +119,16 @@ void fragment() {
 		float ur = rivets(around, upper + 0.022, 0.03, 0.0036);
 		h += 0.0015 * ur;
 		color = mix(color, vec3(0.78), ur * 0.5);
+	}
+	// The foot's lames, each lapping the one ahead, seamed and riveted.
+	if (toe_lame > 0.0 && ankle > 0.0 && p.y < ankle - 0.012 && p.z > 0.0) {
+		float ahead = fract(p.z / toe_lame) * toe_lame;
+		float toe_seam = smoothstep(0.01, 0.0, ahead);
+		h -= 0.0014 * toe_seam;
+		color *= 1.0 - 0.4 * toe_seam;
+		float tr = rivets(p.x - sign(p.x) * leg_x, ahead - 0.016, 0.028, 0.0034);
+		h += 0.0015 * tr;
+		color = mix(color, vec3(0.78), tr * 0.5);
 	}
 	// The ankle: a rolled rim where the foot's plates meet the greave.
 	float shin = p.y - ankle;
