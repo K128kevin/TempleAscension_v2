@@ -155,14 +155,18 @@ static func sword_material(look: Dictionary = {}) -> ShaderMaterial:
 
 # A tower shield (the KayKit square shield, as the town guards' are:
 # assets/shaders/guard_shield.gdshader), sized as the item is.
-static func tower_shield(size: Vector3) -> ShaderMaterial:
-	var key = "tower%s" % size
+# (`face`: an iron-faced board's colour in place of the painted leather.)
+static func tower_shield(size: Vector3, face = null) -> ShaderMaterial:
+	var key = "tower%s%s" % [size,face.to_html() if face != null else ""]
 	if materials.has(key): return materials[key]
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/guard_shield.gdshader")
 	m.set_shader_parameter("grit",load("res://assets/textures/rock_detail.jpg"))
 	m.set_shader_parameter("size",size)
 	m.set_shader_parameter("seed",3.0)
+	if face != null:
+		m.set_shader_parameter("iron_face",true)
+		m.set_shader_parameter("face_color",face)
 	materials[key] = m
 	return m
 
@@ -206,6 +210,16 @@ static func bronze() -> StandardMaterial3D:
 	m.metallic = .8
 	m.roughness = .36
 	materials.bronze = m
+	return m
+
+# Gold: a gilded robe's sash (scripts/items.gd `gilded`).
+static func gold() -> StandardMaterial3D:
+	if materials.has("gold"): return materials.gold
+	var m = StandardMaterial3D.new()
+	m.albedo_color = Color(.84,.62,.26)
+	m.metallic = .8
+	m.roughness = .38
+	materials.gold = m
 	return m
 
 # Matte woven cloth for hoods and robes, seen from inside as well.
@@ -501,7 +515,7 @@ static func finish(look: Dictionary) -> Material:
 		"dagger": made = dagger_material()
 		"bow": made = bow_wood()
 		"lion": made = gladiator_shield()
-		"tower": made = tower_shield(look.size)
+		"tower": made = tower_shield(look.size,look.get("face"))
 		"arms": made = arms_material(look.get("metal_from",.5),look.get("steel"),look.get("wood"))
 		"staff":
 			made = wizard_staff()
@@ -578,7 +592,7 @@ static func hero_mesh(mesh_name: String) -> Mesh:
 
 # The material of one mesh of a class's kit, as Visual dresses it: `tint` (or
 # null) is another make's colour.
-static func piece_material(mesh_name: String, hero_class: String, tint = null) -> Material:
+static func piece_material(mesh_name: String, hero_class: String, tint = null, gilded: bool = false) -> Material:
 	if "Greaves" in mesh_name or "Cuisses" in mesh_name:
 		var steel: ShaderMaterial = plate(mesh_name,true)
 		return steel if tint == null else recolored(steel,tint)
@@ -593,17 +607,18 @@ static func piece_material(mesh_name: String, hero_class: String, tint = null) -
 		return materials[key] if tint == null else recolored(materials[key],tint)
 	if "Cloak" in mesh_name or "Hood" in mesh_name or "Robe" in mesh_name:
 		var colour: Color = tint if tint != null else (Color(.1,.19,.1) if "Cloak" in mesh_name else Color(.13,.16,.27))
-		var key = "piece%s%s" % [mesh_name,colour.to_html()]
+		var key = "piece%s%s%s" % [mesh_name,colour.to_html(),"gilded" if gilded else ""]
 		if not materials.has(key):
 			var m = ShaderMaterial.new()
 			m.shader = load("res://assets/shaders/cloak.gdshader")
 			m.set_shader_parameter("cloth_color",colour)
 			m.set_shader_parameter("rest_pose",true)
-			m.set_shader_parameter("tatter",1.0 if "Cloak" in mesh_name else .35)
+			m.set_shader_parameter("tatter",cloth_tatter(mesh_name,gilded))
+			m.set_shader_parameter("gilded",1.0 if gilded else 0.0)
 			m.set_shader_parameter("hem_height",.3 if "Cloak" in mesh_name else (.14 if "Robe" in mesh_name else -1.0))
 			materials[key] = m
 		return materials[key]
-	if mesh_name.begins_with("WizardSash"): return two_sided(leather(),Color(.62,.55,.5))
+	if mesh_name.begins_with("WizardSash"): return sash_material(gilded)
 	if "Pouch" in mesh_name: return leather()
 	if "Brooch" in mesh_name: return bronze()
 	return hero_kit(hero_class) if tint == null else kit_shell(hero_class,tint)
@@ -613,6 +628,24 @@ static func piece_material(mesh_name: String, hero_class: String, tint = null) -
 # armor item is (and, where it is only painted on the body, that part of the
 # body's surface). It stands as it is worn or held, its foot at the origin;
 # `bounds` (metadata) is the box it fills.
+# How worn a cloak, hood or robe is (assets/shaders/cloak.gdshader `tatter`):
+# the ranger's cloak weathered and torn, the wizard's wool lightly worn, a
+# gilded robe not at all.
+static func cloth_tatter(mesh_name: String, gilded: bool = false) -> float:
+	if gilded: return 0.0
+	return 1.0 if "Cloak" in mesh_name else .35
+
+# The wizard's sash: dark leather, or gold on a gilded robe.
+static func sash_material(gilded: bool = false) -> StandardMaterial3D:
+	return two_sided(gold() if gilded else leather(),Color.WHITE if gilded else Color(.62,.55,.5))
+
+# The ends of his sash as a gilded robe has them, or as his own
+# (assets/shaders/sash_end.gdshader).
+static func gild_sash_end(sash: ShaderMaterial, gilded: bool) -> void:
+	sash.set_shader_parameter("leather_color",gold().albedo_color if gilded else Color(.21,.11,.05))
+	sash.set_shader_parameter("metallic",gold().metallic if gilded else 0.0)
+	sash.set_shader_parameter("roughness",gold().roughness if gilded else .88)
+
 static func item_model(thing) -> Node3D:
 	var item: Dictionary = Items.get_item(thing)
 	var look: Dictionary = item.get("look",{})
@@ -650,12 +683,13 @@ static func item_model(thing) -> Node3D:
 		if mesh == null: continue
 		var piece = MeshInstance3D.new()
 		piece.mesh = rest_pose_mesh(mesh) if mesh is ArrayMesh else mesh
-		piece.material_override = piece_material(mesh_name,hero_class,tint)
+		piece.material_override = piece_material(mesh_name,hero_class,tint,look.get("gilded",false))
 		if item.slot == "hands":
 			# One of the pair (they are made on arms held wide apart).
 			var one: ShaderMaterial = hero_body(hero_class,true)
 			one.set_shader_parameter("rest_pose",true)
 			one.set_shader_parameter("keep_side",1.0)
+			one.set_shader_parameter("gloved",1.0 if look.get("gloved",false) else 0.0)
 			if tint != null:
 				one.set_shader_parameter("tint_chest",tint)
 				one.set_shader_parameter("recolor",Vector4(1,0,0,0))
@@ -663,6 +697,17 @@ static func item_model(thing) -> Node3D:
 		root.add_child(piece)
 		box = piece.get_aabb() if first else box.merge(piece.get_aabb())
 		first = false
+	if item.slot == "hands" and look.get("gloved",false):
+		# Gloves to the fingertips: the hand they cover, one of the pair.
+		var hand = MeshInstance3D.new()
+		hand.mesh = rest_pose_mesh(hero_mesh("SuperHero_Male"))
+		var glove: ShaderMaterial = hero_body(hero_class)
+		glove.set_shader_parameter("only",3)
+		glove.set_shader_parameter("keep_side",1.0)
+		glove.set_shader_parameter("gloved",1.0)
+		glove.set_shader_parameter("tint_hands",tint if tint != null else Color.WHITE)
+		hand.material_override = glove
+		root.add_child(hand)
 	if item.slot in BODY_SLOTS and (first or item.slot in ["chest","legs"]):
 		# Painted on the body: that part of the body's own surface.
 		var body = MeshInstance3D.new()
@@ -682,7 +727,7 @@ static func item_model(thing) -> Node3D:
 		var region: AABB = {"chest":AABB(Vector3(-parts.arm_from,parts.waist,-.2),Vector3(parts.arm_from*2,1.5-parts.waist,.4)),"legs":AABB(Vector3(-.25,parts.feet_top,-.2),Vector3(.5,parts.waist-parts.feet_top,.4)),
 			"feet":AABB(Vector3(-.2,0,-.15),Vector3(.4,parts.feet_top,.32)),"hands":AABB(Vector3(-.93,1.3,-.1),Vector3(1.86,.2,.2))}[item.slot]
 		box = region if first else box.merge(region)
-	if item.slot == "hands": box = AABB(Vector3(BODY_PARTS[hero_class].arm_from-.04,1.34,-.1),Vector3(.3,.16,.2))
+	if item.slot == "hands": box = AABB(Vector3(BODY_PARTS[hero_class].arm_from-.04,1.34,-.1),Vector3(.52 if look.get("gloved",false) else .3,.16,.2))
 	root.set_meta("bounds",box)
 	return root
 

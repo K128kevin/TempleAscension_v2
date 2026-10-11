@@ -97,7 +97,7 @@ var dots: Array = []
 # Damage over time is shown by kind: Cursed Blade's in purple, Shadow
 # Strike's (a skill's) in yellow.
 const HIT_COLORS = {"normal":Color(1,1,1),"skill":Color(1,.88,.3),"crit":Color(1,.5,.08)}
-const DOT_COLORS = {"curse":Color(.72,.45,1),"shadow":Color(1,.88,.3),"poison":Color(.45,.95,.3)}
+const DOT_COLORS = {"curse":Color(.72,.45,1),"shadow":Color(1,.88,.3),"poison":Color(.45,.95,.3),"burn":Color(1,.55,.2)}
 var dot_shown: Dictionary = {}
 var dot_clock = 0.0
 var hit_reactions = 0
@@ -739,12 +739,20 @@ func end_stun() -> void:
 	stun_mark = null
 
 # Adds `total` damage over `seconds`. At most `cap` of a kind run at once: the
-# oldest gives way.
-func add_dot(dot_kind: String, total: float, seconds: float, cap: int) -> void:
+# oldest gives way; or, `strongest`, the one with least left to deal, and only
+# to one that deals more (Slow Burn: a Fire Tornado's many small burns do not
+# put out a Fireball's).
+func add_dot(dot_kind: String, total: float, seconds: float, cap: int, strongest: bool = false) -> void:
 	if dead or dormant or total<=0 or seconds<=0: return
 	game.provoke(self)
 	var same: Array = dots.filter(func(d): return d.kind==dot_kind)
-	if same.size()>=cap: dots.erase(same[0])
+	if same.size()>=cap:
+		var gives_way: Dictionary = same[0]
+		if strongest:
+			for d in same:
+				if d.rate*d.left<gives_way.rate*gives_way.left: gives_way = d
+			if gives_way.rate*gives_way.left>=total: return
+		dots.erase(gives_way)
 	dots.append({"kind":dot_kind,"rate":total/seconds,"left":seconds,"seconds":seconds})
 
 # Weakening Strike: another stack (up to `cap`), each making critical strikes
@@ -841,7 +849,9 @@ func tick_dots(dt: float) -> void:
 			total += d.rate*step
 		if d.left<=0: dots.remove_at(i)
 	if total<=0: return
-	var dealt: float = Data.mitigate(total,armor(),0.0,int(game.run.level),"physical")
+	# (Slow Burn's flames are fire, as the spell was: armor does not turn them.)
+	var burnt: float = by_kind.get("burn",0.0)
+	var dealt: float = Data.mitigate(total-burnt,armor(),0.0,int(game.run.level),"physical")+burnt
 	hp -= dealt
 	if dealt>0 and not daze in ["ambush","freeze","prison"]: end_stun()
 	if dealt>0 and rod_time>0: game.skills.rod_jolt(self)
@@ -857,7 +867,10 @@ func tick_dots(dt: float) -> void:
 				rise += .3
 		dot_shown.clear()
 		dot_clock = 0.0
-	if hp<=0: die()
+	if hp<=0:
+		die()
+		# Burnt to death, a bandit is left as black as fire leaves him.
+		if burnt>0 and visual.bandit: visual.scorch()
 
 func armor() -> float:
 	return 35.0 if role=="boss" else (20.0 if role=="centurion" else 0.0)

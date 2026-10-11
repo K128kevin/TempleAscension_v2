@@ -107,6 +107,8 @@ const LIGHTNING_LEAP = 10.0
 # How much of the last strike's damage Lightning Shot carries to the next.
 const LIGHTNING_FADE = .75
 const POISON_SECONDS = 5.0
+# Slow Burn: how long the flames a fire spell leaves on its target burn.
+const SLOW_BURN_SECONDS = 5.0
 const FRENZY_COOLDOWN = 30.0
 const SAND_COOLDOWN = 45.0
 const TRANQ_COOLDOWN = 45.0
@@ -191,7 +193,16 @@ const DOT_SLACK = .0001
 # cast it may stray.
 const TORNADO_SPEED = 1.1
 const TORNADO_WANDER = 4.0
+# The Immovable Object: the chance a block sends out a shockwave, how far it
+# reaches and what it deals (percent of a normal attack). (A test forces it:
+# immovable_override, with block_override.)
+const IMMOVABLE_CHANCE = 20.0
+const IMMOVABLE_RADIUS = 4.0
+const IMMOVABLE_PERCENT = 100.0
+var immovable_override = false
 const BLAZING_RUN = 75.0
+# (And casts this much faster.)
+const BLAZING_CAST = 50.0
 const BLAZING_COOLDOWN = 60.0
 const SHIELD_SECONDS = 60.0
 const SHOCK_COOLDOWN = 45.0
@@ -452,7 +463,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		# Each spell is cast with its own gesture (tools/import_wizard.py).
 		var own: Array = CAST_CLIPS[s.effect]
 		clip = own[0] if game.player.visual.clips.has(own[0]) else "Cast"
-		duration = own[1]
+		duration = own[1]/cast_haste()
 		contact = duration*own[2]
 	elif s.requirement in ["melee","shield"]:
 		# Dexterity quickens every melee swing (and Rallying Cry while it holds).
@@ -557,7 +568,7 @@ func effects() -> Array:
 		out.append(effect("defensive_rhythm","Defensive Rhythm",defense_stacks,defense_time,"Taking %d%% less damage." % roundi(defense_stacks*cut)))
 	if barrier>0 and barrier_time>0: out.append(effect("lightning_shield" if shield_time>0 else "barrier","Lightning Shield" if shield_time>0 else "Barrier",0,barrier_time,"Absorbing the next %d damage%s." % [ceili(barrier),", and shocking whoever strikes you" if shield_time>0 else ""]))
 	if storm_time>0: out.append(effect("ice_storm","Ice Storm",0,storm_time,"Frost whirls about you: your frost spells deal double damage, and you can cast nothing else."))
-	if blazing_time>0: out.append(effect("blazing_speed","Blazing Speed",0,blazing_time,"Running 75%% faster; fire spells cost nothing."))
+	if blazing_time>0: out.append(effect("blazing_speed","Blazing Speed",0,blazing_time,"Running 75%% faster and casting 50%% faster; fire spells cost nothing."))
 	if burn_left>0: out.append(effect("burning","Burning",0,burn_left,"Pyromaniac's fire: %d damage a second." % ceili(burn_rate),true))
 	if game.slowed>0: out.append(effect("chilled","Chilled",0,game.slowed,"Frozen to the bone: moving at half speed.",true,game.CHILL_SECONDS))
 	return out
@@ -664,6 +675,11 @@ func spell_hit(enemy, percent: float, element: String, impact: Vector3 = Vector3
 	strike(enemy,amount,element,0.0,impact)
 	spell_striking = striking
 	var dealt: float = before-enemy.hp
+	# Slow Burn: a fire spell that wounds leaves its target burning for a
+	# share of the blow over SLOW_BURN_SECONDS, each burn a stack of its own.
+	if element=="fire" and dealt>0 and not enemy.dead:
+		var slow_burn: Dictionary = Book.values("slow_burn",rank("slow_burn"))
+		if slow_burn.y>0: enemy.add_dot("burn",dealt*slow_burn.x*.01,SLOW_BURN_SECONDS,int(slow_burn.y),true)
 	# The Robe of the Lost Emperor: a spell that wounds may give energy back.
 	if dealt>0 and Data.Items.effect(game.run,"emperor") and randf()*100.0<EMPEROR_CHANCE and not game.player.dead:
 		game.run.energy = minf(Data.max_energy(game.run),game.run.energy+EMPEROR_ENERGY)
@@ -786,6 +802,11 @@ func aimed_target(at: Vector3, direction: Vector3):
 	var choices: Array = targets(game.player.position,SPELL_REACH).filter(func(e): return direction.dot((e.position-game.player.position).normalized())>.2 or e.position.distance_to(at)<1.5)
 	choices.sort_custom(func(a,b): return a.position.distance_squared_to(at)<b.position.distance_squared_to(at))
 	return null if choices.is_empty() else choices[0]
+
+# How much faster the wizard casts: Blazing Speed while it lasts, and what
+# his gear adds (the Staff of the Lost Emperor).
+func cast_haste() -> float:
+	return (1.0+(BLAZING_CAST*.01 if blazing_time>0 else 0.0))*(1.0+Data.Items.bonus(game.run,"cast_speed")*.01)
 
 # How much faster the hero attacks: Frenzy, and Rallying Cry, while they last.
 func haste() -> float:
@@ -1121,6 +1142,15 @@ func defend(damage: float, source) -> float:
 		# A spiked shield (scripts/items.gd) gives back a share of the blow.
 		var barbs: float = Data.Items.spiked(game.run)
 		if barbs>0 and blocked_damage>0 and is_instance_valid(source) and not source.dead: source.hit(blocked_damage*barbs*.01)
+		# The Immovable Object: a block may send a shockwave out through the ground.
+		if Data.Items.effect(game.run,"immovable") and (randf()*100.0<IMMOVABLE_CHANCE if block_override<0 else immovable_override):
+			var origin: Vector3 = game.player.position
+			for enemy in targets(origin,IMMOVABLE_RADIUS):
+				strike(enemy,attack_damage(IMMOVABLE_PERCENT))
+				var away: Vector3 = enemy.position-origin
+				away.y = 0
+				if away.length()>.05: enemy.shove(away.normalized(),SHOCKWAVE_THROW)
+			ground_blow(origin,IMMOVABLE_RADIUS,SHAKE_SLAM,Vector3.ZERO,360.0,"rock-impact")
 	return damage
 
 # The effects in play, for the HUD.

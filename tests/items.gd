@@ -145,7 +145,7 @@ func test():
 		var pool: Array = Items.loot(class_id)
 		check(pool.size() >= 6 and pool.all(func(id): return Items.usable(class_id,id) and Items.BASES[id].rarity == "common"),"Every class has its own drops, all of them usable: %s (%d)" % [class_id,pool.size()])
 		var own: Array = Items.loot(class_id,true)
-		check(own.size() == (4 if class_id == "ranger" else 3) and own.all(func(id): return Items.BASES[id]["for"] in [class_id,""] and Items.usable(class_id,id)),"Each class has its own uniques, and the boots made for everyone: %s %s" % [class_id,own])
+		check(own.size() == 4 and own.all(func(id): return Items.BASES[id]["for"] in [class_id,""] and Items.usable(class_id,id)),"Each class has its own uniques, and the boots made for everyone: %s %s" % [class_id,own])
 	check(Items.usable("warrior","marathon_boots") and Items.usable("ranger","marathon_boots") and Items.usable("wizard","marathon_boots") and not Items.usable("warrior","sandals"),"The Marathon Boots are light armor every class can wear; other light armor is the wizard's")
 
 	# --- Prefixes and suffixes: what goes on what.
@@ -216,7 +216,7 @@ func test():
 	for r in Items.RARITY_WEIGHTS: total_weight += Items.RARITY_WEIGHTS[r]
 	var shares_fair = true
 	for r in counts: shares_fair = shares_fair and absf(counts[r]/float(fell)-Items.RARITY_WEIGHTS[r]/total_weight) < .02
-	check(shares_fair and uniques_seen.keys().all(func(id): return id in ["ancient_gladiators_helmet","lightning_hammer","marathon_boots"]) and uniques_seen.size() == 3,"Each rarity by its weight, and a warrior's uniques are his helmet, his hammer and the boots for everyone (%s, %s)" % [counts,uniques_seen.keys()])
+	check(shares_fair and uniques_seen.keys().all(func(id): return id in ["ancient_gladiators_helmet","lightning_hammer","immovable_object","marathon_boots"]) and uniques_seen.size() == 4,"Each rarity by its weight, and a warrior's uniques are his helmet, his hammer, his shield and the boots for everyone (%s, %s)" % [counts,uniques_seen.keys()])
 	var boss_rare = true
 	for i in 200:
 		var found: Dictionary = Items.roll_drop("wizard","boss",rng)
@@ -481,6 +481,36 @@ func test():
 	game.skills.enter_shadows(); game.skills.leave_shadows()
 	game.skills.tick(5.1)
 	check(game.skills.night_time == 0.0,"Five seconds out of the shadows, the chance is gone")
+	hero("wizard",{"main":"staff_of_the_lost_emperor"})
+	check(Items.effect(game.run,"emperors_staff") and Data.stat(game.run,2) == 5+22 and is_equal_approx(Items.bonus(game.run,"cast_speed"),20.0) and game.player.visual.weapon_kind == "staff","The Staff of the Lost Emperor: its Intelligence and a fifth faster casting, held as a staff")
+	game.run.skills["fireball"] = 1
+	victim = foe(4.0)
+	check(game.skills.cast("fireball",victim.position) and is_equal_approx(game.player.busy,game.skills.CAST_CLIPS.fireball[1]/1.2),"Casting takes a fifth less time... (%.3f s)" % game.player.busy)
+	game.run.energy = Data.max_energy(game.run)
+	var whole: float = Data.damage_tag(game.run,"spell",100.0)
+	game.run.energy = Data.max_energy(game.run)*.6
+	check(is_equal_approx(Data.damage_tag(game.run,"spell",100.0),whole*1.4),"and with 40%% of his mana spent, his spells deal 40%% more (%.1f to %.1f)" % [whole,Data.damage_tag(game.run,"spell",100.0)])
+	game.run.energy = 0.0
+	check(is_equal_approx(Data.damage_tag(game.run,"spell",100.0),whole*2.0),"all of it spent, double (%.1f)" % Data.damage_tag(game.run,"spell",100.0))
+	hero("warrior",{"off":"immovable_object"})
+	check(Items.effect(game.run,"immovable") and Data.block_chance(game.run) >= 40.0 and Data.block_mitigation(game.run) >= 40.0 and Data.stat(game.run,3) == 25 and Data.stat(game.run,4) == 13,"The Immovable Object: 40% to block, 40% off a blocked blow, its Vitality and Willpower")
+	victim = foe(1.5)
+	var near_one = game.spawn_enemy("gladiator","immovable:0",game.world.move(origin,Vector3(0,0,-3.0)))
+	near_one.puppet = true; near_one.awake = true; near_one.max_hp = 100000.0; near_one.hp = near_one.max_hp
+	var far_one = game.spawn_enemy("gladiator","immovable:1",game.world.move(origin,Vector3(0,0,-7.0)))
+	far_one.puppet = true; far_one.awake = true; far_one.max_hp = 100000.0; far_one.hp = far_one.max_hp
+	var hps: Array = [victim.hp,near_one.hp,far_one.hp]
+	game.skills.block_override = 1
+	game.skills.defend(50.0,victim)
+	check(victim.hp == hps[0] and near_one.hp == hps[1],"A block without its chance sends nothing out")
+	game.skills.immovable_override = true
+	game.skills.defend(50.0,victim)
+	check(victim.hp < hps[0] and near_one.hp < hps[1] and far_one.hp == hps[2],"With it, a shockwave strikes all within 4 metres, not beyond (%.0f, %.0f, %.0f)" % [hps[0]-victim.hp,hps[1]-near_one.hp,hps[2]-far_one.hp])
+	game.skills.immovable_override = false
+	game.skills.block_override = 0
+	check(game.skills.IMMOVABLE_CHANCE == 20.0 and game.skills.IMMOVABLE_RADIUS == 4.0 and game.skills.IMMOVABLE_PERCENT == 100.0,"One block in five, 4 metres round, a normal attack's damage")
+	for e in [near_one,far_one]:
+		game.enemies.erase(e); e.queue_free()
 
 	# --- Every class's attacks with every kind of weapon it can hold.
 	var seen = {}
@@ -703,7 +733,19 @@ func test():
 	hero("wizard")
 	look = game.player.visual
 	game.run.bag[0] = it("robe_of_the_lost_emperor"); game.move_item("bag:0","chest")
-	check(look.parts.WizardRobe.visible and look.parts.WizardRobe.material_override.get_shader_parameter("cloth_color") == Items.BASES.robe_of_the_lost_emperor.look.tint and look.parts.WizardHood.material_override.get_shader_parameter("cloth_color") != Items.BASES.robe_of_the_lost_emperor.look.tint,"The Robe of the Lost Emperor is purple, his hood still his own")
+	check(look.parts.WizardRobe.visible and look.parts.WizardRobe.material_override.get_shader_parameter("cloth_color") == Items.BASES.robe_of_the_lost_emperor.look.tint and look.parts.WizardHood.material_override.get_shader_parameter("cloth_color") != Items.BASES.robe_of_the_lost_emperor.look.tint,"The Robe of the Lost Emperor is black, his hood still his own")
+	var robe: ShaderMaterial = look.parts.WizardRobe.material_override
+	check(robe.get_shader_parameter("gilded") == 1.0 and robe.get_shader_parameter("tatter") == 0.0 and look.parts.WizardHood.material_override.get_shader_parameter("gilded") == 0.0,"stitched in gold swirls, and not worn or tattered")
+	check(look.parts.WizardSash.material_override.metallic > .5 and look.parts.WizardSashEnd0.material_override.get_shader_parameter("metallic") > .5,"with a gold sash")
+	game.move_item("chest","bag:%d" % Items.free_bag_slot(game.run))
+	game.run.bag[0] = it("silk_robe"); game.move_item("bag:0","chest")
+	check(look.parts.WizardRobe.material_override.get_shader_parameter("gilded") == 0.0 and look.parts.WizardRobe.material_override.get_shader_parameter("tatter") == .35 and look.parts.WizardSashEnd0.material_override.get_shader_parameter("metallic") == 0.0,"Another robe in its place is plain wool, its sash leather again")
+	game.run.bag[1] = it("ice_queens_gloves"); game.move_item("bag:1","hands")
+	var body: ShaderMaterial = look.parts.WizardBody.material_override if look.parts.WizardBody.visible else look.parts.SuperHero_Male.material_override
+	check(body.get_shader_parameter("gloved") == 1.0 and body.get_shader_parameter("tint_hands") == Items.BASES.ice_queens_gloves.look.tint and Items.BASES.ice_queens_gloves.look.tint.b > Items.BASES.ice_queens_gloves.look.tint.r+.3,"The Ice Queen's Gloves are light blue, and cover his hands to the fingertips")
+	game.move_item("hands","bag:%d" % Items.free_bag_slot(game.run))
+	body = look.parts.WizardBody.material_override if look.parts.WizardBody.visible else look.parts.SuperHero_Male.material_override
+	check(body.get_shader_parameter("gloved") != 1.0,"Off, his hands are bare again")
 	game.run.bag[1] = it("wizard_hat"); game.move_item("bag:1","head")
 	check(not look.parts.WizardHood.visible and is_instance_valid(look.hat_item) and look.hat_item.bone_name == "Head" and not look.hat_item.find_children("*","MeshInstance3D",true,false).is_empty() and not look.parts.Hair_SimpleParted.visible,"A Wizard Hat is a hat of its own on his head, his hood put away")
 	game.move_item("head","bag:%d" % Items.free_bag_slot(game.run))

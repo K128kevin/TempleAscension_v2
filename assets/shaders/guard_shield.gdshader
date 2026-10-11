@@ -11,6 +11,10 @@ uniform sampler2D grit : source_color, filter_linear_mipmap, repeat_enable;
 uniform float seed = 0.0;
 // Its size in metres, so the trim keeps its width.
 uniform vec3 size = vec3(0.6, 1.0, 0.2);
+// Faced with iron plate of `face_color` instead (the Immovable Object:
+// scripts/items.gd), dented and scraped bright.
+uniform bool iron_face = false;
+uniform vec3 face_color : source_color = vec3(0.17, 0.19, 0.22);
 
 varying vec3 unit;
 
@@ -60,6 +64,15 @@ void fragment() {
 		colour = mix(vec3(0.38, 0.26, 0.11), vec3(0.6, 0.44, 0.22), wear);
 		rough = 0.5;
 		metal = 0.45;
+	} else if (iron_face) {
+		// Iron plate, hammered and dented, scraped bright where blows landed,
+		// riveted along its edge.
+		colour = face_color * (0.75 + wear * 0.5);
+		colour = mix(colour, vec3(0.5, 0.51, 0.53), scrape * 0.7);
+		float rivets = step(length(fract(vec2(m.x, m.y) / 0.07) - 0.5), 0.18) * step(edge, 0.05);
+		colour = mix(colour, vec3(0.36, 0.25, 0.12), rivets);
+		rough = mix(0.55, 0.35, scrape);
+		metal = 0.6;
 	} else {
 		// Red-painted leather over the wood, faded, scraped through to the
 		// board in places.

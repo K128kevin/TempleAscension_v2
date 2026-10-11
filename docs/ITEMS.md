@@ -92,7 +92,7 @@ Dexterity on top of its own. Its picture is its base's.
 - **Lightning Hammer** (warrior): a two-handed hammer; each hit has a 10%
   chance to call lightning down on its target for 200–300 damage, which
   leaps to up to 4 more targets within 10 m, a quarter weaker with each leap.
-- **Ice Queen's Gloves** (wizard): +15 Intelligence, Vitality and Willpower
+- **Ice Queen's Gloves** (wizard): light blue, covering the whole hand; +15 Intelligence, Vitality and Willpower
   and 25% more spell damage, but no frost spell can be cast while they are
   worn (Freeze Floor and Frost Blast end at once).
 - **Cerberus's Fang** (ranger): a dagger; the Poisons passive's poison deals
@@ -100,6 +100,14 @@ Dexterity on top of its own. Its picture is its base's.
 - **Night Vest** (ranger): +15 Dexterity, +8 Willpower and Vitality; he moves
   20% faster while hidden in shadows, and his first attack within 5 seconds
   of leaving them deals double damage (**Night Strike**, on the buff bar).
+- **Staff of the Lost Emperor** (wizard): +22 Intelligence and 20% faster
+  casting (with Blazing Speed's 50%, faster still); every spell deals as much
+  more as the share of his mana that is spent: 40% spent, 40% more; all of
+  it, double.
+- **Immovable Object** (warrior): a tower shield, 35 armor, 40% to block and
+  40% off a blocked blow, +20 Vitality and +8 Willpower; one block in five
+  sends a shockwave through the ground, striking every enemy within 4 m for
+  a normal attack's damage and throwing them back.
 
 ## Drops
 
@@ -260,6 +268,8 @@ An uncommon item is a common item with one of these; a rare item has a prefix an
 | Ice Queen's Gloves | Light armor · Hands | Wizard | 8 armor; +15 Intelligence; +15 Vitality; +15 Willpower; +25% spell damage. You cannot use any frost abilities |
 | Cerberus's Fang | Dagger · One-handed | Ranger | 26–34 damage; 2 attacks per second; +8 Strength; +8 Dexterity. Your poison deals 50% more, and every time you poison a target it poisons up to 3 more within 3 metres |
 | Night Vest | Medium armor · Chest | Ranger | 24 armor; +15 Dexterity; +8 Vitality; +8 Willpower. 20% faster while hidden in shadows, and your first attack within 5 seconds of leaving them deals double damage |
+| Staff of the Lost Emperor | Staff · Two-handed | Wizard | Spells take their damage from Intelligence; +22 Intelligence; +20% cast speed. All your attacks deal bonus damage equal to the percentage of your energy that is missing |
+| Immovable Object | Shield · Off hand | Warrior | 35 armor; 40% chance to block; Blocked attacks deal 40% less; +20 Vitality; +8 Willpower. Blocked attacks have a 20% chance to set off a shockwave, blasting every enemy around you for 100% damage |
 
 ### Drop chances
 

@@ -100,8 +100,8 @@ func test():
 
 	# The roster and the trees.
 	var mine: Array = Book.all().values().filter(func(s): return s.class_id=="wizard")
-	check(mine.size()==19 and Book.trees("wizard")==["ice","fire","lightning"],"The wizard has nineteen spells in Ice, Fire and Lightning")
-	check(mine.filter(func(s): return s.tree=="ice").size()==7 and mine.filter(func(s): return s.tree=="fire").size()==6 and mine.filter(func(s): return s.tree=="lightning").size()==6,"Seven of ice, six of fire, six of lightning")
+	check(mine.size()==20 and Book.trees("wizard")==["ice","fire","lightning"],"The wizard has twenty spells in Ice, Fire and Lightning")
+	check(mine.filter(func(s): return s.tree=="ice").size()==7 and mine.filter(func(s): return s.tree=="fire").size()==7 and mine.filter(func(s): return s.tree=="lightning").size()==6,"Seven of ice, seven of fire, six of lightning")
 	var fresh = Data.new_run("wizard")
 	check(Book.locked(fresh,"ice_bolt").is_empty() and Book.locked(fresh,"fireball").is_empty() and Book.locked(fresh,"lightning_bolt").is_empty() and not Book.locked(fresh,"ice_spikes").is_empty() and not Book.locked(fresh,"ice_storm").is_empty(),"Spells open by the points spent in their own tree")
 	for clip in ["CastBolt","CastPoint","CastGround","CastSelf","CastChannel"]:
@@ -272,6 +272,38 @@ func test():
 	check(within(foe,1,220) and game.skills.burn_left>0 and game.player.hp<game.player.max_hp,"Pyromaniac doubles fire, and burns him (%.1f dealt, %.1f burnt)" % [lost(foe),game.player.max_hp-game.player.hp])
 	play(3.0)
 	check(absf((game.player.max_hp-game.player.hp)-lost(foe)*.1)<.5,"for a tenth of what it dealt, over 3 seconds")
+	# Slow Burn: open from the first, with no points in Fire; each fire spell
+	# that wounds leaves a burn of a share of its blow over 5 seconds.
+	check(range(1,6).map(func(r): return [Book.values("slow_burn",r).x,Book.values("slow_burn",r).y])==[[10.0,2.0],[20.0,2.0],[35.0,3.0],[50.0,3.0],[65.0,4.0]],"Slow Burn: 10/2, 20/2, 35/3, 50/3 and 65/4 by rank")
+	check(Book.all().slow_burn.tree=="fire" and Book.all().slow_burn.points==0 and Book.locked(fresh,"slow_burn").is_empty(),"Slow Burn needs no points spent in Fire")
+	var burns_on = func(e) -> Array: return e.dots.filter(func(d): return d.kind=="burn")
+	hero({"fireball":1,"slow_burn":1}); foe.hp = foe.max_hp; foe.dots.clear()
+	game.skills.spell_hit(foe,100.0,"fire")
+	var blow: float = lost(foe)
+	check(burns_on.call(foe).size()==1 and absf(burns_on.call(foe)[0].rate*5.0-blow*.1)<.01,"Rank 1: a fire spell's hit leaves a burn of 10%% of it (%.1f of %.1f)" % [burns_on.call(foe)[0].rate*5.0 if not burns_on.call(foe).is_empty() else 0.0,blow])
+	play(2.5)
+	check(absf(lost(foe)-blow-blow*.05)<blow*.01+.1,"half of it burnt in 2.5 seconds (%.2f)" % (lost(foe)-blow))
+	play(2.7)
+	check(absf(lost(foe)-blow-blow*.1)<.01 and burns_on.call(foe).is_empty(),"all of it in 5 seconds, and then it goes out (%.2f)" % (lost(foe)-blow))
+	game.skills.spell_hit(foe,100.0,"frost"); game.skills.spell_hit(foe,100.0,"lightning")
+	check(burns_on.call(foe).is_empty(),"Only fire leaves a burn")
+	hero({"slow_burn":3}); foe.dots.clear()
+	for i in 5: game.skills.spell_hit(foe,100.0,"fire")
+	check(burns_on.call(foe).size()==3,"Rank 3 stacks up to 3 burns (%d)" % burns_on.call(foe).size())
+	hero({"slow_burn":1}); foe.dots.clear()
+	game.skills.spell_hit(foe,200.0,"fire"); game.skills.spell_hit(foe,200.0,"fire")
+	var strong: float = burns_on.call(foe).map(func(d): return d.rate).reduce(func(a,b): return a+b)
+	for i in 10: game.skills.spell_hit(foe,5.0,"fire")
+	check(burns_on.call(foe).size()==2 and absf(burns_on.call(foe).map(func(d): return d.rate).reduce(func(a,b): return a+b)-strong)<.001,"At the cap, small burns (a Fire Tornado's) do not put out the great ones")
+	foe.dots.clear(); foe.hp = foe.max_hp
+	var torch = game.spawn_enemy("bandit","slow-burn",origin+forward*3.0)
+	torch.puppet = true; torch.awake = true
+	torch.max_hp = 1000.0; torch.hp = 1000.0
+	var xp_was: int = int(game.run.xp)
+	game.skills.spell_hit(torch,100.0,"fire")
+	torch.hp = .01
+	play(1.0)
+	check(torch.dead and torch.visual.scorched and int(game.run.xp)>xp_was,"A bandit burnt to death is charred, and his death counts (%s, %s, xp %d to %d)" % [torch.dead,torch.visual.scorched,xp_was,int(game.run.xp)])
 	clear()
 	# Bolts strike the first enemy in their way, as arrows do.
 	hero({"ice_bolt":1,"fireball":1})
@@ -433,12 +465,15 @@ func test():
 	var pace: float = game.player_pace()
 	check(cast("blazing_speed",at) and is_equal_approx(game.run.energy,50.0),"Blazing Speed costs 50")
 	play(.6)
-	check(game.skills.blazing_time>0 and is_equal_approx(game.player_pace(),pace*1.75) and game.skills.cost("fireball")==0.0 and game.skills.cooldowns.blazing_speed>58.0,"For 6 seconds he runs 75% faster and fire costs nothing; 60-second cooldown")
+	check(game.skills.blazing_time>0 and is_equal_approx(game.player_pace(),pace*1.75) and game.skills.cost("fireball")==0.0 and game.skills.cooldowns.blazing_speed>58.0,"For 15 seconds he runs 75% faster and fire costs nothing; 60-second cooldown")
 	foe = dummy(6)
 	game.player.busy = 0
 	check(cast("fireball",foe.position) and is_equal_approx(game.run.energy,50.0),"Fireball is free")
+	check(is_equal_approx(game.player.busy,game.skills.CAST_CLIPS.fireball[1]/1.5),"and he casts 50%% faster (%.3f s)" % game.player.busy)
 	play(1.0)
-	play(6.0)
+	play(10.0)
+	check(game.skills.blazing_time>0,"It still holds at 12 seconds")
+	play(4.0)
 	check(game.skills.blazing_time==0 and is_equal_approx(game.player_pace(),pace),"It passes")
 	clear()
 

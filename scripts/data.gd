@@ -181,7 +181,14 @@ static func scaling_tag(kind: int) -> String:
 static func damage_tag(run: Dictionary, tag: String, base: float) -> float:
 	var index: int = {"melee":0,"ranged":1,"spell":2}[tag]
 	var gear = Items.bonus(run,"spell_damage")*.01 if tag=="spell" else 0.0
-	return base*(1.0+(stat(run,index)-5)*.02)*(1.0+gear)
+	return base*(1.0+(stat(run,index)-5)*.02)*(1.0+gear)*(1.0+emperors_staff(run))
+
+# The Staff of the Lost Emperor: every attack deals as much more as the
+# share of his energy that is spent (half gone, half as much again).
+static func emperors_staff(run: Dictionary) -> float:
+	if not Items.effect(run,"emperors_staff"): return 0.0
+	var most: float = max_energy(run)
+	return clampf(1.0-float(run.get("energy",most))/most,0.0,1.0) if most > 0 else 0.0
 
 static func damage(run: Dictionary, roll: float = 12.5) -> float:
 	return damage_tag(run,scaling_tag(weapon(run)),roll)

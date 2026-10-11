@@ -253,7 +253,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			if hero_class == "wizard": cloth_followers.append(mesh)
 		elif mesh.name == "WizardSash":
 			mesh.visible = hero_class == "wizard"
-			mesh.material_override = Art.two_sided(Art.leather(),Color(.62,.55,.5))
+			mesh.material_override = Art.sash_material()
 		elif mesh.name.begins_with("WizardBoots") or mesh.name.begins_with("WizardBracers") or mesh.name.begins_with("WizardSash"):
 			mesh.visible = hero_class == "wizard"
 			mesh.material_override = Art.hero_kit("wizard")
@@ -517,6 +517,7 @@ func wear(equipment: Dictionary) -> void:
 		var item: Dictionary = Items.get_item(equipment.get(slot,{}))
 		var on: bool = Items.wears(hero_class,item)
 		var tint = item.get("look",{}).get("tint") if on else null
+		var gilded: bool = on and item.get("look",{}).get("gilded",false)
 		# A piece that is a mesh of its own (the wizard's hat) is worn in the
 		# kit's piece's place, on the whole body; one of other pieces of the
 		# kit (the warrior's plated legs) shows those in its place.
@@ -545,6 +546,12 @@ func wear(equipment: Dictionary) -> void:
 			var finish: Material = mesh.material_override
 			if finish is ShaderMaterial and finish.shader.resource_path.ends_with("cloak.gdshader"):
 				finish.set_shader_parameter("cloth_color",tint if tint != null else (Color(.1,.19,.1) if hero_class == "ranger" else Color(.13,.16,.27)))
+				finish.set_shader_parameter("gilded",1.0 if gilded else 0.0)
+				finish.set_shader_parameter("tatter",Art.cloth_tatter(mesh_name,gilded))
+			elif mesh_name == "WizardSash":
+				mesh.material_override = Art.sash_material(gilded)
+			elif finish is ShaderMaterial and finish.shader.resource_path.ends_with("sash_end.gdshader"):
+				Art.gild_sash_end(finish,gilded)
 			elif finish is ShaderMaterial and (finish.shader.resource_path.ends_with("gladiator_helm.gdshader") or finish.shader.resource_path.ends_with("kilt.gdshader") or finish.shader.resource_path.ends_with("plate.gdshader")):
 				finish.set_shader_parameter("tint",tint if tint != null else Color.WHITE)
 				finish.set_shader_parameter("recolor",1.0 if tint != null else 0.0)
@@ -563,6 +570,9 @@ func wear(equipment: Dictionary) -> void:
 		body_material.set_shader_parameter("bare",bare)
 		body_material.set_shader_parameter("recolor",redone)
 		for slot in Art.BODY_SLOTS: body_material.set_shader_parameter("tint_"+slot,tints.get(slot,Color.WHITE))
+		# (Gloves to the fingertips: assets/shaders/hero_body.gdshader `gloved`.)
+		var hands: Dictionary = Items.get_item(equipment.get("hands",{}))
+		body_material.set_shader_parameter("gloved",1.0 if Items.wears(hero_class,hands) and hands.get("look",{}).get("gloved",false) else 0.0)
 	for body in [cut,whole]:
 		if body != null and not is_stone: body.material_override = Art.hero_kit(hero_class) if plain else body_material
 	held = Items.get_item(equipment.get("main",{})).get("look",{})

@@ -59,7 +59,7 @@ const BOSS_WEIGHTS = {"rare":75,"unique":25}
 
 # What an item may add besides its armor or damage, and how each reads.
 # The five attributes count as points spent on them.
-const BONUS_TEXT = {"strength":"+%s Strength","dexterity":"+%s Dexterity","intelligence":"+%s Intelligence","vitality":"+%s Vitality","willpower":"+%s Willpower","speed":"+%s%% movement speed","spell_damage":"+%s%% spell damage"}
+const BONUS_TEXT = {"strength":"+%s Strength","dexterity":"+%s Dexterity","intelligence":"+%s Intelligence","vitality":"+%s Vitality","willpower":"+%s Willpower","speed":"+%s%% movement speed","spell_damage":"+%s%% spell damage","cast_speed":"+%s%% cast speed"}
 const ATTRIBUTES = ["strength","dexterity","intelligence","vitality","willpower"]
 
 # Every base item. Armor: its `slot`, `weight` and `armor`. Weapons: `kind`,
@@ -77,7 +77,8 @@ const ATTRIBUTES = ["strength","dexterity","intelligence","vitality","willpower"
 # the fist holds it (`grip`), its `finish` and colours; armor shows as its
 # class's own piece, in a `tint` of its own, as other `pieces` of the kit
 # in its piece's place (the warrior's plated legs), or as a `mesh` of its own
-# (the wizard's hat).
+# (the wizard's hat); `gloved` hands are covered to the fingertips; a `gilded` robe is clean, stitched in gold swirls, with
+# a gold sash.
 const BASES = {
 	# --- What the wizard starts with: wool, sandals and his twisted staff.
 	"wool_hood":{"name":"Wool Hood","rarity":"starting","slot":"head","weight":"light","armor":5.0},
@@ -156,7 +157,7 @@ const BASES = {
 
 	# --- Unique: one for each class, which drops for that class alone.
 	"robe_of_the_lost_emperor":{"name":"Robe of the Lost Emperor","rarity":"unique","for":"wizard","slot":"chest","weight":"light","armor":10.0,"bonus":{"intelligence":12,"willpower":10,"vitality":8},
-		"effect":"emperor","effect_text":"Every time your spells damage a target there is a 10% chance you recover 20 energy","look":{"tint":Color(.3,.08,.34)}},
+		"effect":"emperor","effect_text":"Every time your spells damage a target there is a 10% chance you recover 20 energy","look":{"tint":Color(.055,.05,.055),"gilded":true}},
 	"ancient_gladiators_helmet":{"name":"Ancient Gladiator's Helmet","rarity":"unique","for":"warrior","slot":"head","weight":"heavy","armor":22.0,"bonus":{"dexterity":12,"strength":15},
 		"effect":"rallying_cry","effect_text":"Every attack has a 10% chance to grant Rallying Cry: 25% more attack speed and damage for 10 seconds, at most once every 30 seconds","look":{"tint":Color(.88,.68,.32)}},
 	# (Light armor, but made for anyone: it drops for every class, and every
@@ -170,12 +171,20 @@ const BASES = {
 		"effect":"lightning_hammer","effect_text":"10% chance on hit to call down lightning on the target for 200–300 damage, leaping to up to 4 more targets, 25% weaker with each leap",
 		"look":{"model":"war_hammer","size":Vector3(.36,1.4,.15),"grip":.42,"finish":"arms","metal_from":.78,"edge":[.8,1.0],"haft":.088,"steel":Color(.58,.7,1.0),"wood":Color(.1,.08,.1)}},
 	"ice_queens_gloves":{"name":"Ice Queen's Gloves","rarity":"unique","for":"wizard","slot":"hands","weight":"light","armor":8.0,"bonus":{"intelligence":15,"vitality":15,"willpower":15,"spell_damage":25.0},
-		"effect":"ice_queen","effect_text":"You cannot use any frost abilities","look":{"tint":Color(.8,.92,1.0)}},
+		"effect":"ice_queen","effect_text":"You cannot use any frost abilities","look":{"tint":Color(.56,.78,1.0),"gloved":true}},
 	"cerberuss_fang":{"name":"Cerberus's Fang","rarity":"unique","for":"ranger","slot":"weapon","kind":"dagger","hands":1,"damage":[26.0,34.0],"speed":2.0,"bonus":{"strength":8,"dexterity":8},
 		"effect":"cerberus","effect_text":"Your poison deals 50% more, and every time you poison a target it poisons up to 3 more within 3 metres",
 		"look":{"model":"dagger","size":Vector3(.1,.56,.05),"grip":.11,"finish":"dagger","tint":Color(.34,.46,.32)}},
 	"night_vest":{"name":"Night Vest","rarity":"unique","for":"ranger","slot":"chest","weight":"medium","armor":24.0,"bonus":{"dexterity":15,"willpower":8,"vitality":8},
 		"effect":"night_vest","effect_text":"20% faster while hidden in shadows, and your first attack within 5 seconds of leaving them deals double damage","look":{"tint":Color(.1,.1,.17)}},
+	# (A staff to go with the Robe: black metal, gold fittings, a golden
+	# crystal.)
+	"staff_of_the_lost_emperor":{"name":"Staff of the Lost Emperor","rarity":"unique","for":"wizard","slot":"weapon","kind":"staff","hands":2,"bonus":{"intelligence":22,"cast_speed":20.0},
+		"effect":"emperors_staff","effect_text":"All your attacks deal bonus damage equal to the percentage of your energy that is missing",
+		"look":{"model":"silver_staff","size":Vector3.ONE,"length":1.85,"grip":1.254,"finish":"parts","tint":Color(.09,.085,.09),"crystal":Color(1.0,.74,.3)}},
+	"immovable_object":{"name":"Immovable Object","rarity":"unique","for":"warrior","slot":"shield","kind":"shield","armor":35.0,"block":40.0,"mitigation":40.0,"bonus":{"vitality":20,"willpower":8},
+		"effect":"immovable","effect_text":"Blocked attacks have a 20% chance to set off a shockwave, blasting every enemy around you for 100% damage",
+		"look":{"model":"scutum","size":Vector3(.64,1.16,.22),"finish":"tower","drop":.1,"face":Color(.17,.19,.22)}},
 
 	# --- Carried, not worn or held: the key to the arena basement's gate,
 	# which one of its bandits keeps (scripts/game.gd). Never random loot.

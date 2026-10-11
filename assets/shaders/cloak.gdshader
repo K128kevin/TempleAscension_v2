@@ -23,6 +23,10 @@ uniform float fold_depth = 0.004;
 // far out along the arms they reach, in the rest pose).
 uniform float robe = 0.0;
 uniform float sleeve_end = 0.56;
+// A gilded robe (1: the Robe of the Lost Emperor): cleanly hemmed, never worn,
+// with swirls stitched all over it in gold thread, its stitching gold too.
+uniform float gilded = 0.0;
+uniform vec3 gold_color : source_color = vec3(0.86, 0.63, 0.25);
 
 varying vec3 cloth_position;
 
@@ -53,6 +57,35 @@ float fbm3(vec3 p) {
 	return total / 0.9375;
 }
 
+// How far `q` (metres, on a flat of the cloth) lies from the arms of a swirl
+// at the origin: an Archimedean spiral `pitch` apart, turning `chirality`
+// (1 or -1), ending `reach` out.
+float spiral(vec2 q, float pitch, float reach, float chirality) {
+	float r = length(q);
+	float a = atan(q.y, q.x * chirality);
+	float d = abs(fract(r / pitch - a / 6.2832 + 0.5) - 0.5) * pitch;
+	return d + max(r - reach, 0.0) * 3.0;
+}
+
+// Stitched swirls on a flat of the cloth: in each cell a pair of opposed
+// swirls joined as an S, the cells staggered row on row and each pair turned
+// its own way. Gives the stitching's cover (0 to 1).
+float swirls(vec2 q) {
+	const float CELL = 0.2;
+	vec2 at = q / CELL;
+	float row = floor(at.y);
+	at.x += mod(row, 2.0) * 0.5;
+	vec2 cell = floor(at);
+	float turn = hash3(vec3(cell, 7.0)) * 6.2832;
+	vec2 shift = (vec2(hash3(vec3(cell, 3.0)), hash3(vec3(cell, 5.0))) - 0.5) * 0.04;
+	vec2 f = (fract(at) - 0.5) * CELL - shift;
+	f = mat2(vec2(cos(turn), sin(turn)), vec2(-sin(turn), cos(turn))) * f;
+	// (Each coil's outer arm runs on round to meet the other's in the middle.)
+	float d = min(spiral(f - vec2(0.032, 0.0), 0.021, 0.036, 1.0), spiral(vec2(0.032, 0.0) - f, 0.021, 0.036, 1.0));
+	float blur = max(fwidth(d), 0.0005);
+	return 1.0 - smoothstep(0.0022 - blur * 0.5, 0.0022 + blur * 0.5, d);
+}
+
 void vertex() {
 	cloth_position = rest_pose ? CUSTOM0.xyz : VERTEX;
 	VERTEX = fold_cloth(VERTEX);
@@ -61,6 +94,17 @@ void vertex() {
 void fragment() {
 	vec3 p = cloth_position;
 	float thin = 0.0;
+	// (Gilded: hemmed straight, and of an even, unworn cloth.)
+	if (gilded > 0.5 && p.y < hem_height) discard;
+	// The gold stitched into a gilded robe: its swirls, laid on the flat of
+	// the rest pose the cloth most faces.
+	float gold = 0.0;
+	if (gilded > 0.5) {
+		vec3 n = abs(normalize(cross(dFdx(p), dFdy(p))));
+		vec3 w = pow(n, vec3(6.0));
+		w /= w.x + w.y + w.z;
+		gold = swirls(p.zy) * w.x + swirls(p.xz + 0.37) * w.y + swirls(p.xy + 0.71) * w.z;
+	}
 	if (tatter > 0.0) {
 		// The hem frays into ragged tongues of differing length.
 		float ragged = fbm3(vec3(p.x, 0.0, p.z) * 9.0) * 0.11 + noise3(vec3(p.x, 0.0, p.z) * 55.0) * 0.025;
@@ -75,7 +119,7 @@ void fragment() {
 	float mottle = fbm3(p * 4.5);
 	float grain = noise3(p * 60.0);
 	float fuzz = noise3(p * 260.0);
-	vec3 color = cloth_color * (0.72 + mottle * 0.55);
+	vec3 color = cloth_color * mix(0.72 + mottle * 0.55, 0.9 + mottle * 0.2, gilded);
 	color *= 0.9 + grain * 0.14 + fuzz * 0.08;
 	// Paler, olive patches where the dye has faded.
 	color = mix(color, color * vec3(1.25, 1.2, 0.95), smoothstep(0.62, 0.8, fbm3(p * 2.2 + 5.0)) * tatter);
@@ -103,15 +147,21 @@ void fragment() {
 	if (robe > 0.5) {
 		vec3 trim = color * 0.55;
 		vec3 thread = mix(cloth_color * 2.4, vec3(0.42, 0.44, 0.48), 0.35);
+		// (Gilded, the stitching is gold: `gold` is 1 where it runs, 0 on the
+		// plain trim.)
+		float stitch = 0.0;
+		// (Its lines bolder and unbroken, gilded.)
+		float tw = mix(0.0016, 0.003, gilded);
+		float dash = mix(0.55, 1.01, gilded);
 		bool front = p.z > 0.03 && abs(p.x) < 0.3;
 		// The hem band, with a line of stitching along its top.
 		float band = hem_height + 0.075;
-		if (p.y < band) { color = trim; h += 0.0012; }
-		if (abs(p.y - band + 0.008) < 0.0016 && fract(around * 60.0) < 0.55) color = thread;
+		if (p.y < band) { color = trim; h += 0.0012; gold = 0.0; }
+		if (abs(p.y - band + 0.008) < tw && fract(around * 60.0) < dash) { color = thread; stitch = 1.0; }
 		// The cuffs of the wide sleeves.
 		float reach = abs(p.x);
-		if (reach > sleeve_end - 0.06 && reach > 0.4) { color = trim; h += 0.0012; }
-		if (reach > 0.4 && abs(reach - sleeve_end + 0.068) < 0.0016 && fract(p.y * 220.0 + p.z * 220.0) < 0.55) color = thread;
+		if (reach > sleeve_end - 0.06 && reach > 0.4) { color = trim; h += 0.0012; gold = 0.0; }
+		if (reach > 0.4 && abs(reach - sleeve_end + 0.068) < tw && fract(p.y * 220.0 + p.z * 220.0) < dash) { color = thread; stitch = 1.0; }
 		if (front && p.y < 0.975) {
 			// Below the sash the robe falls open a little over a dark under-robe,
 			// wider toward the hem, each edge bound in a darker trim. (The
@@ -119,21 +169,29 @@ void fragment() {
 			// draws the opening wide it reads as cloth in shadow, not a hole.)
 			float open = 0.004 + 0.03 * clamp((0.975 - p.y) / 0.8, 0.0, 1.0);
 			float edge = abs(p.x - 0.012);
-			if (edge < open) { color = cloth_color * 0.42 * (0.8 + mottle * 0.4) * (0.9 + grain * 0.14); h -= 0.003; }
-			else if (edge < open + 0.02) { color = trim; h += 0.0015; }
-			if (abs(edge - open - 0.024) < 0.0015 && fract(p.y * 110.0) < 0.55) color = thread;
+			if (edge < open) { gold = 0.0; color = cloth_color * 0.42 * (0.8 + mottle * 0.4) * (0.9 + grain * 0.14); h -= 0.003; }
+			else if (edge < open + 0.02) { color = trim; h += 0.0015; gold = 0.0; }
+			if (abs(edge - open - 0.024) < tw && fract(p.y * 110.0) < dash) { color = thread; stitch = 1.0; }
 		} else if (front && p.y < 1.55) {
 			// The wrap collar: the right lapel crossing over to the left hip,
 			// the left one's edge showing at the neck.
 			float lapel = -0.06 + (p.y - 1.0) * 0.31;
 			float under = 0.07 - (p.y - 1.0) * 0.36;
 			float d = min(abs(p.x - lapel), p.y > 1.3 ? abs(p.x + under) : 1.0);
-			if (d < 0.022) { color = trim * (0.9 + 0.2 * smoothstep(0.022, 0.0, d)); h += 0.0018 * smoothstep(0.022, 0.012, d); }
-			if (abs(d - 0.027) < 0.0015 && fract(p.y * 110.0) < 0.55) color = thread;
+			if (d < 0.022) { gold = 0.0; color = trim * (0.9 + 0.2 * smoothstep(0.022, 0.0, d)); h += 0.0018 * smoothstep(0.022, 0.012, d); }
+			if (abs(d - 0.027) < tw && fract(p.y * 110.0) < dash) { color = thread; stitch = 1.0; }
 			// The overlapping lapel casts a little shadow on the cloth beneath.
 			if (p.x < lapel - 0.022 && p.x > lapel - 0.05) color *= 0.8;
 		}
+		// A gilded robe's hem is edged in gold just above its cut.
+		if (gilded > 0.5 && p.y < hem_height + 0.012 && p.y > hem_height + 0.004) stitch = 1.0;
+		gold = max(gold, stitch * gilded);
 	}
+	// The gold thread: raised a little, its satin stitches catching the
+	// light along them.
+	float satin = 0.85 + 0.25 * step(0.5, fract((p.x + p.y + p.z) * 260.0));
+	color = mix(color, gold_color * satin * (0.9 + grain * 0.2), gold);
+	h += gold * 0.0008;
 	// (Hidden in the shadows: scripts/visual.gd set_shadowed.)
 	ALBEDO = mix(color, vec3(0.02, 0.02, 0.04), shadowed * 0.92);
 	vec3 sx = dFdx(VERTEX);
@@ -144,6 +202,7 @@ void fragment() {
 	vec3 gradient = (dFdx(h) * r1 + dFdy(h) * r2) * sign(det) / max(abs(det), 0.000001);
 	NORMAL = normalize(NORMAL - gradient);
 	// A dull, matte wool.
-	ROUGHNESS = 1.0;
-	SPECULAR = 0.03;
+	ROUGHNESS = mix(1.0, 0.4, gold);
+	SPECULAR = mix(0.03, 0.5, gold);
+	METALLIC = gold * 0.75;
 }

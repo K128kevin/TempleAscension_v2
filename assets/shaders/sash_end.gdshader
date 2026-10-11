@@ -7,6 +7,9 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 #include "res://assets/shaders/cloth_fold.gdshaderinc"
 uniform float shadowed = 0.0;
 uniform vec3 leather_color : source_color = vec3(0.21, 0.11, 0.05);
+// (Gold, on a gilded robe: Art.gild_sash_end.)
+uniform float metallic = 0.0;
+uniform float roughness = 0.88;
 
 void vertex() {
 	VERTEX = fold_cloth(VERTEX);
@@ -15,6 +18,7 @@ void vertex() {
 void fragment() {
 	// (Hidden in the shadows: scripts/visual.gd set_shadowed.)
 	ALBEDO = mix(leather_color, vec3(0.02, 0.02, 0.04), shadowed * 0.92);
-	ROUGHNESS = 0.88;
-	SPECULAR = 0.3;
+	ROUGHNESS = roughness;
+	METALLIC = metallic;
+	SPECULAR = mix(0.3, 0.5, metallic);
 }

@@ -550,10 +550,11 @@ lasts; letting go, moving or casting anything else ends them.
 | | 10 | Frost Blast | 20 a second | Channelled: frost 10 metres ahead, 70% → 150% a second to everyone within 3 metres of the stream |
 | | 10 | Ice Storm | 40 | Frost about him for 6 → 15 seconds: 60% → 100% a second within 4 metres; frost spells deal double, and nothing else can be cast; 60-second cooldown |
 | Fire | 0 | Fireball | 15 | 110% → 200% fire damage (its burst throws the slain no harder than a blow) |
+| | 0 | Slow Burn | | Each fire spell that wounds leaves its target burning for 10% → 65% more of the blow over 5 seconds, stacking 2 → 4 times (10/2, 20/2, 35/3, 50/3, 65/4); the burn is fire, so armor does not turn it and a bandit it kills is charred; at the cap the weakest burn gives way, and only to a stronger one |
 | | 5 | Blast Wave | 45 | Flame 5 metres in every direction: 125% → 235% |
 | | 5 | Frostburn | | Fire deals 50% → 175% more to chilled enemies |
 | | 10 | Fire Tornado | 65 | A tornado 4 metres across for 8 seconds: 75% → 140% a second; each burn a 1% → 5% chance to make an enemy in it a Lightning Rod (if known) |
-| | 10 | Blazing Speed | 50 | 6 seconds: run 75% faster, fire spells free; 60-second cooldown |
+| | 10 | Blazing Speed | 50 | 15 seconds: run 75% faster, cast 50% faster, fire spells free; 60-second cooldown |
 | | 10 | Pyromaniac | | Fire deals double, but each fire spell burns him for 10% of what it dealt, over 3 seconds |
 | Lightning | 0 | Lightning Bolt | 15 | 100% → 160% lightning damage, instantly |
 | | 0 | Lightning Shield | 50 | Absorbs 50 → 150 damage and shocks whoever strikes him for 20% → 50%, for 60 seconds; 60-second cooldown |
@@ -661,8 +662,9 @@ inventory.
   a common item with a prefix or a suffix (Swift, Sharpened, of Zeus...); a
   **rare** (blue) one has both, or one of the rare affixes alone (Hero's, of
   the Ancients...); the **uniques** (purple) are one of a kind, each with an
-  effect of its own: the Robe of the Lost Emperor and the Ice Queen's Gloves
-  (wizard), the Ancient Gladiator's Helmet and the Lightning Hammer
+  effect of its own: the Robe of the Lost Emperor (black, stitched in gold),
+  the Staff of the Lost Emperor and the Ice Queen's Gloves (wizard), the
+  Ancient Gladiator's Helmet, the Lightning Hammer and the Immovable Object
   (warrior), the Bow of Odysseus, Cerberus's Fang and the Night Vest (ranger)
   and the Marathon Boots (everyone).
 - **Armor** is a number: all the hero wears adds up (A), with his shield's,

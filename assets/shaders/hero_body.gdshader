@@ -38,6 +38,11 @@ uniform float only_reach = 0.27;
 uniform float only_from = 0.0;
 // One of a pair (a single bracer): the side of the body kept, +1 or -1.
 uniform float keep_side = 0.0;
+// Gloves that cover the whole hand (the Ice Queen's Gloves: scripts/items.gd
+// `gloved`), of `tint_hands`, from `glove_from` out (just short of the wrist,
+// at rest) to the fingertips, a cuff at their opening.
+uniform float gloved = 0.0;
+uniform float glove_from = 0.665;
 uniform float specular = 0.5;
 uniform float kit_metal = 0.45;
 varying vec3 rest;
@@ -56,6 +61,8 @@ void fragment() {
 	if (shell) part = vec4(1.0, 0.0, 0.0, 0.0);
 	if (only >= 0 && (part[only] < 0.5 || (only == 0 && abs(rest.x) > only_reach) || (only == 1 && rest.y < only_from))) discard;
 	if (keep_side != 0.0 && rest.x * keep_side < 0.0) discard;
+	// (Gloves pictured alone: the hand, without the arm above them.)
+	if (only == 3 && gloved > 0.5 && abs(rest.x) < glove_from) discard;
 	float off = shell ? 0.0 : clamp(dot(part, bare), 0.0, 1.0);
 	vec3 worn = texture(kit, UV).rgb;
 	vec3 colour = part.x * tint_chest + part.y * tint_legs + part.z * tint_feet + part.w * tint_hands + (1.0 - min(1.0, part.x + part.y + part.z + part.w)) * vec3(1.0);
@@ -69,4 +76,18 @@ void fragment() {
 	ROUGHNESS = mix(gloss.r, max(0.55, texture(skin_rough, UV).r), off);
 	METALLIC = mix(gloss.g * kit_metal, 0.0, off);
 	SPECULAR = specular;
+	float reach = abs(rest.x);
+	float glove = shell ? 0.0 : gloved * part.w * smoothstep(glove_from - 0.003, glove_from + 0.003, reach);
+	if (glove > 0.0) {
+		// Fine soft leather, the hand's own creases showing through (the
+		// skin's normals), a shade darker in them; the cuff a turned-back band.
+		float crease = dot(texture(skin, UV).rgb, vec3(0.3, 0.5, 0.2));
+		vec3 leather = tint_hands * (0.78 + crease * 0.45);
+		float cuff = 1.0 - smoothstep(glove_from + 0.022, glove_from + 0.026, reach);
+		leather = mix(leather, tint_hands * 0.82, cuff);
+		ALBEDO = mix(ALBEDO, leather, glove);
+		NORMAL_MAP = mix(NORMAL_MAP, texture(skin_normal, UV).rgb, glove);
+		ROUGHNESS = mix(ROUGHNESS, 0.5, glove);
+		METALLIC = mix(METALLIC, 0.0, glove);
+	}
 }
