@@ -24,6 +24,7 @@ func capture():
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.environment.ambient_light_color = Color.WHITE
 	env.environment.ambient_light_energy = .7
+	preload("res://scripts/reflections.gd").apply(env.environment,"studio")
 	scene.add_child(env)
 	var sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-40,150,0)

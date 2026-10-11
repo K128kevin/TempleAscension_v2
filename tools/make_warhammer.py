@@ -114,6 +114,11 @@ spike(bm, (0, 0, HEAD_HIGH), (0, 0, 1), TOP_SPIKE-HEAD_HIGH, .022)
 for z in (HEAD_LOW-.02, HEAD_HIGH):
     box(bm, (-.07, -HALF_Y-.006, z), (FACE_OUT-.02, HALF_Y+.006, z+.02))
 bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+# Every sharp edge of the iron rounded off (a smith's work has no knife
+# edges but the spikes'): a narrow bevel catches the light along it.
+sharp = [e for e in bm.edges if len(e.link_faces) == 2 and e.calc_face_angle(0) > math.radians(35)]
+bmesh.ops.bevel(bm, geom=sharp, offset=.0035, offset_type='OFFSET', segments=2, profile=.5, affect='EDGES', clamp_overlap=True)
+bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
 # Into the unit box the game sizes its arms from.
 lo = Vector((min(v.co.x for v in bm.verts), min(v.co.y for v in bm.verts), 0))
 hi = Vector((max(v.co.x for v in bm.verts), max(v.co.y for v in bm.verts), LENGTH))
@@ -130,7 +135,7 @@ obj.select_set(True)
 bpy.ops.object.shade_smooth()
 try:
     bpy.ops.object.modifier_add(type='EDGE_SPLIT')
-    obj.modifiers[-1].split_angle = math.radians(40)
+    obj.modifiers[-1].split_angle = math.radians(62)
     bpy.ops.object.modifier_apply(modifier=obj.modifiers[-1].name)
 except Exception as e:
     print('no edge split', e)

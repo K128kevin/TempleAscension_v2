@@ -201,7 +201,7 @@ func execute(action: String, floor_index: int = 0) -> void:
 			game.run.completed = false
 			game.run.phase = "playing"
 			game.run.floor = 0
-			game.run.position = [-262,144] if action=="desert" else [-186,0]
+			game.run.position = [game.Overworld.START.x,game.Overworld.START.z] if action=="desert" else [-186,0]
 			game.load_floor()
 			game.toast("[Debug] %s" % ("Desert" if action=="desert" else "Town"))
 		"time":

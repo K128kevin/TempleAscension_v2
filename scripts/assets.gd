@@ -42,12 +42,14 @@ static func dagger_material() -> ShaderMaterial:
 	return m
 
 # Arms hung in the smithy: steel from `metal_from` of their length up, wood below.
-static func arms_material(metal_from: float, steel = null, wood = null) -> ShaderMaterial:
-	var key = "arms%.2f%s%s" % [metal_from,steel.to_html() if steel != null else "",wood.to_html() if wood != null else ""]
+static func arms_material(metal_from: float, steel = null, wood = null, pommel: float = 0.0) -> ShaderMaterial:
+	var key = "arms%.2f%s%s%.3f" % [metal_from,steel.to_html() if steel != null else "",wood.to_html() if wood != null else "",pommel]
 	if materials.has(key): return materials[key]
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/arms.gdshader")
 	m.set_shader_parameter("metal_from",metal_from)
+	# (A sword's steel pommel below its grip: assets/shaders/arms.gdshader.)
+	m.set_shader_parameter("pommel",pommel)
 	# (An item's own colours of steel and haft: the Lightning Hammer's blued
 	# head on a dark haft.)
 	if steel != null: m.set_shader_parameter("steel",steel)
@@ -233,33 +235,14 @@ static func cloth(tint: Color) -> StandardMaterial3D:
 	materials[key] = m
 	return m
 
-# The hero's painted body kit (tools/paint_hero.py); the ranger's has a
-# wool tunic in place of the scales.
-static func hero_kit(hero_class: String) -> StandardMaterial3D:
+# The hero's painted body kit (tools/paint_kits.py), whole, for his body and
+# the raised pieces painted with it: the body's shader
+# (assets/shaders/hero_body.gdshader) with nothing bare and nothing
+# recoloured, shared. Its meshes carry their rest pose (rest_pose_mesh).
+static func hero_kit(hero_class: String) -> ShaderMaterial:
 	var key = "hero_kit_" + hero_class
-	if not ResourceLoader.exists("res://assets/textures/%s.png" % key): key = "hero_kit"
 	if materials.has(key): return materials[key]
-	var m = StandardMaterial3D.new()
-	m.albedo_texture = load("res://assets/textures/%s.png" % key)
-	m.roughness = .65
-	# Each hero's kit is painted in full (tools/paint_kits.py): with its relief
-	# in a normal map, and leather, cloth and steel each their own sheen.
-	if key != "hero_kit":
-		m.normal_enabled = true
-		m.normal_texture = load("res://assets/textures/%s_normal.png" % key)
-		m.normal_scale = 1.0
-		m.roughness = 1.0
-		m.roughness_texture = load("res://assets/textures/%s_rough.png" % key)
-		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
-		# Steel shines as metal (the painter marks it in the roughness map's
-		# green channel).
-		# Half metal: the scenes have no reflections for full metal to show,
-		# which leaves it near black.
-		m.metallic = .45
-		m.metallic_texture = load("res://assets/textures/%s_rough.png" % key)
-		m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
-		# The ranger's and the wizard's worn cloth and leather catch little light.
-		if hero_class in ["ranger","wizard"]: m.metallic_specular = .25
+	var m = hero_body(hero_class)
 	materials[key] = m
 	return m
 
@@ -335,13 +318,19 @@ static func two_sided(source: StandardMaterial3D, tint: Color = Color.WHITE) -> 
 	materials[key] = m
 	return m
 
-# Hair and beards: a dark matte colour with a soft sheen.
+# Hair and beards: the character pack's sheet of strands (as the
+# townspeople's: scripts/townsperson.gd), its relief and a soft sheen, in the
+# colour asked for (the sheet is a mid brown; the tint takes it darker).
 static func hair(tint: Color) -> StandardMaterial3D:
 	var key = "hair" + tint.to_html()
 	if materials.has(key): return materials[key]
 	var m = StandardMaterial3D.new()
-	m.albedo_color = tint
-	m.roughness = .7
+	m.albedo_texture = load("res://assets/textures/hair_1.jpg")
+	m.albedo_color = tint*2.2
+	m.normal_enabled = true
+	m.normal_texture = load("res://assets/models/character/warrior_T_Hair_1_Normal.png")
+	m.roughness = .55
+	m.metallic_specular = .35
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	materials[key] = m
 	return m
@@ -490,9 +479,10 @@ static func hero_body(hero_class: String, shell: bool = false) -> ShaderMaterial
 	m.set_shader_parameter("kit_rough",load("res://assets/textures/%s_rough.png" % key))
 	m.set_shader_parameter("skin",load("res://assets/models/character/warrior_T_Superhero_Male_Dark.png"))
 	m.set_shader_parameter("skin_normal",load("res://assets/models/character/warrior_T_Superhero_Male_Normal.png"))
-	m.set_shader_parameter("skin_rough",load("res://assets/models/character/warrior_T_Superhero_Male_Roughness.png"))
+	m.set_shader_parameter("kit_mat",load("res://assets/textures/%s_mat.png" % key))
 	m.set_shader_parameter("shell",shell)
-	m.set_shader_parameter("rest_pose",not shell)
+	# (Every mesh it is laid on carries its rest pose: rest_pose_mesh.)
+	m.set_shader_parameter("rest_pose",true)
 	if hero_class in ["ranger","wizard"]: m.set_shader_parameter("specular",.25)
 	for key_name in BODY_PARTS[hero_class]: m.set_shader_parameter(key_name,BODY_PARTS[hero_class][key_name])
 	return m
@@ -528,7 +518,7 @@ static func finish(look: Dictionary) -> Material:
 		"bow": made = bow_wood()
 		"lion": made = gladiator_shield()
 		"tower": made = tower_shield(look.size,look.get("face"))
-		"arms": made = arms_material(look.get("metal_from",.5),look.get("steel"),look.get("wood"))
+		"arms": made = arms_material(look.get("metal_from",.5),look.get("steel"),look.get("wood"),look.get("pommel",0.0))
 		"staff":
 			made = wizard_staff()
 			if look.has("tint") or look.has("crystal"):
@@ -549,8 +539,8 @@ static func worn_model(look: Dictionary) -> Node3D:
 	var node: Node3D = model(look.mesh,Vector3.ONE)
 	for mesh in node.find_children("*","MeshInstance3D",true,false):
 		var part: String = String(mesh.name)
-		if part.begins_with("Band"): mesh.material_override = leather()
-		elif part.begins_with("Buckle"): mesh.material_override = bronze()
+		if part.begins_with("Band"): mesh.material_override = worn_part("leather",leather().albedo_color)
+		elif part.begins_with("Buckle"): mesh.material_override = worn_part("bronze",bronze().albedo_color)
 		# (The warrior's helmets, tools/make_helms.py: hammered steel, dark
 		# gunmetal or polished bright, their rivets brighter still.)
 		elif part.begins_with("Steel"): mesh.material_override = hammered()
@@ -558,10 +548,28 @@ static func worn_model(look: Dictionary) -> Node3D:
 		elif part.begins_with("Bright"): mesh.material_override = hammered(Color(.62,.64,.68))
 		elif part.begins_with("Rivet"): mesh.material_override = hammered(Color(.66,.67,.7))
 		# (The Marathon Boots, tools/make_shoes.py: gold, with white wings.)
-		elif part.begins_with("Gold"): mesh.material_override = gold()
+		elif part.begins_with("Gold"): mesh.material_override = worn_part("gold",gold().albedo_color)
 		elif part.begins_with("Wing"): mesh.material_override = feather()
-		else: mesh.material_override = felt(look.get("tint",Color(.12,.13,.2)))
+		else: mesh.material_override = worn_part("felt",look.get("tint",Color(.12,.13,.2)))
 	return node
+
+# One material of a worn piece (assets/shaders/worn.gdshader): felt, leather,
+# bronze or gold in its colour, with photographed detail over it.
+const WORN = {"felt":[8.0,.06,0.0,Vector2(.8,.98),1.4],"leather":[6.0,.12,0.0,Vector2(.45,.8),1.2],"bronze":[3.0,.1,1.0,Vector2(.3,.6),.8],"gold":[4.0,.12,1.0,Vector2(.25,.5),.6]}
+static func worn_part(kind: String, tint: Color) -> ShaderMaterial:
+	var key = "worn%s%s" % [kind,tint.to_html()]
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/worn.gdshader")
+	var made: Array = WORN[kind]
+	m.set_shader_parameter("colour",tint)
+	m.set_shader_parameter("layer",made[0])
+	m.set_shader_parameter("tile",made[1])
+	m.set_shader_parameter("metallic",made[2])
+	m.set_shader_parameter("roughness",made[3])
+	m.set_shader_parameter("relief",made[4])
+	materials[key] = m
+	return m
 
 # White feathers (the Marathon Boots' wings): soft and matte.
 static func feather() -> StandardMaterial3D:

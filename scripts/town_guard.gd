@@ -42,7 +42,9 @@ func setup(variant: float) -> void:
 	armor.set_shader_parameter("seed",variant)
 	for mesh in skeleton.find_children("*","MeshInstance3D",true,false):
 		var part: String = mesh.name
-		if part == "Body": mesh.material_override = Art.hero_kit("warrior")
+		if part == "Body":
+			if mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
+			mesh.material_override = Art.hero_kit("warrior")
 		elif part == "Eyes": mesh.material_override = shared("eyes")
 		elif part == "Eyebrows": mesh.material_override = shared("brows")
 		elif part.begins_with("Armor"):

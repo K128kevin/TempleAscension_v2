@@ -25,3 +25,18 @@ limits/opengl/max_lights_per_object=24
 common/physics_ticks_per_second=60
 common/max_physics_steps_per_frame=3
 3d/solver/solver_iterations=8
+
+[shader_globals]
+
+detail_col={
+"type": "sampler2DArray",
+"value": "res://assets/textures/materials/detail_col.jpg"
+}
+detail_nrm={
+"type": "sampler2DArray",
+"value": "res://assets/textures/materials/detail_nrm.jpg"
+}
+detail_dat={
+"type": "sampler2DArray",
+"value": "res://assets/textures/materials/detail_dat.jpg"
+}

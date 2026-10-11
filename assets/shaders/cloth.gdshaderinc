@@ -3,6 +3,11 @@
 // metres over the cloth; its second UV set carries how near the hem or cuff a
 // point is (x) and how far down the garment's length (y).
 #include "gaunt.gdshaderinc"
+// The weave's photographed relief, its shade in the hollows between the
+// threads and its roughness (assets/shaders/detail.gdshaderinc), the same
+// photograph as `weave`, laid the same.
+#include "detail.gdshaderinc"
+uniform float weave_layer = 12.0;
 uniform sampler2D weave : source_color, filter_linear_mipmap, repeat_enable;
 uniform sampler2D grit : source_color, filter_linear_mipmap, repeat_enable;
 uniform vec3 dye = vec3(0.7, 0.65, 0.55);
@@ -17,6 +22,18 @@ uniform float seed = 0.0;
 uniform vec3 band_dye = vec3(0.45, 0.08, 0.07);
 uniform float bands = 0.0;
 uniform float lattice = 0.0;
+
+// The drape: folds hanging from the shoulders and the belt, wandering a
+// little, deeper toward the hem (`drape`: their depth there, in metres).
+uniform float drape = 0.014;
+
+// The cloth's surface as hung, in metres out from the plain garment, at a
+// place (u round it, v down it, metres) `down` of the way to its hem.
+float fold_height(vec2 uv, float down) {
+	float wander = texture(grit, vec2(uv.x * 0.9, uv.y * 0.35) + seed).r * 6.0;
+	float hang = sin(uv.x * 52.0 + wander) * 0.6 + sin(uv.x * 97.0 + wander * 1.7 + 1.3) * 0.3 + sin(uv.x * 23.0 - wander * 0.6) * 0.5;
+	return hang * drape * (0.15 + 0.85 * down * down);
+}
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7)) + seed * 17.0) * 43758.5453);
@@ -81,9 +98,22 @@ void fragment() {
 	// The cloth's inside, seen through a tear or up a sleeve: in its own shade.
 	ALBEDO = colour * 0.3;
 #else
-	ALBEDO = colour;
-	ROUGHNESS = 0.95;
-	SPECULAR = 0.1;
+	vec4 threads = mat_data_uv(UV * weave_scale, weave_layer);
+	// The folds' slope (a step either way round and down the cloth), and
+	// their hollows a little darker.
+	float step_size = 0.01;
+	float h0 = fold_height(UV, length_down);
+	float hu = (fold_height(UV + vec2(step_size, 0.0), length_down) - fold_height(UV - vec2(step_size, 0.0), length_down)) / (2.0 * step_size);
+	float hv = (fold_height(UV + vec2(0.0, step_size), length_down) - fold_height(UV - vec2(0.0, step_size), length_down)) / (2.0 * step_size);
+	vec3 drape_normal = normalize(vec3(-hu, hv, 1.0));
+	float hollow = clamp(-h0 / max(drape, 1e-4), 0.0, 1.0);
+	ALBEDO = colour * (0.82 + 0.18 * threads.g) * (1.0 - 0.22 * hollow * (0.15 + 0.85 * length_down * length_down));
+	NORMAL_MAP = normal_map_over(drape_normal, mat_normal_uv(UV * weave_scale, weave_layer, 1.4));
+	ROUGHNESS = clamp(0.84 + threads.r * 0.14, 0.0, 1.0);
+	SPECULAR = 0.15;
+	// Loose fibres catch the light at a glancing angle.
+	RIM = 0.15;
+	RIM_TINT = 0.75;
 #endif
 }
 

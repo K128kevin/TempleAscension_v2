@@ -226,6 +226,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		elif mesh.name.begins_with("HeroBracers") or mesh.name.begins_with("HeroBelt"):
 			# The warrior's raised shells, painted with him (tools/paint_kits.py).
 			mesh.visible = hero_class == "warrior"
+			if mesh.skin != null and mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 			mesh.material_override = Art.hero_kit("warrior")
 		elif mesh.name.begins_with("HeroKilt"):
 			# Hanging pteruges that swing and fold over his legs.
@@ -256,10 +257,12 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			mesh.material_override = Art.sash_material()
 		elif mesh.name.begins_with("WizardBoots") or mesh.name.begins_with("WizardBracers") or mesh.name.begins_with("WizardSash"):
 			mesh.visible = hero_class == "wizard"
+			if mesh.skin != null and mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 			mesh.material_override = Art.hero_kit("wizard")
 		elif "RangerBoots" in mesh.name or "RangerBracers" in mesh.name or "RangerBelt" in mesh.name:
 			# Raised shells of the body, painted with it (tools/paint_kits.py).
 			mesh.visible = hero_class == "ranger"
+			if mesh.skin != null and mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 			mesh.material_override = Art.hero_kit("ranger")
 		elif mesh.name.begins_with("RangerBeard"):
 			mesh.visible = hero_class == "ranger"
@@ -1892,10 +1895,10 @@ const SLAM_POINT_DOWN = .3
 # life size) and out by SLAM_LIGHT_LOW.
 const SLAM_LIGHT_HIGH = 1.5
 const SLAM_LIGHT_LOW = .5
-const SLAM_RAISED = .36
-const SLAM_GROUND = .40
-const SLAM_BLOW = .52
-const SLAM_FADED = .9
+const SLAM_RAISED = .5
+const SLAM_GROUND = .56
+const SLAM_BLOW = .66
+const SLAM_FADED = .92
 
 # Judged from the blade as it is shown (the skeleton just posed: the blade
 # drops a metre in a frame as it is driven down, and judged a frame behind,

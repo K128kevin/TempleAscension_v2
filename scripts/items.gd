@@ -144,7 +144,7 @@ const BASES = {
 	"bandit_blade":{"name":"Bandit Blade","rarity":"common","slot":"weapon","kind":"dagger","hands":1,"damage":[16.0,24.0],"speed":1.7,
 		"look":{"model":"sica","size":Vector3(.15,.62,.07),"grip":.105,"finish":"sica"}},
 	"greatsword":{"name":"Greatsword","rarity":"common","slot":"weapon","kind":"sword","hands":2,"damage":[30.0,42.0],"speed":1.2,
-		"look":{"model":"sword_long","size":Vector3(.44,1.5,.13),"grip":.27,"finish":"arms","metal_from":.27,"edge":[.3,1.0]}},
+		"look":{"model":"sword_long","size":Vector3(.44,1.5,.13),"grip":.27,"finish":"arms","metal_from":.27,"pommel":.042,"wood":Color(.13,.08,.05),"edge":[.3,1.0]}},
 	"war_hammer":{"name":"War Hammer","rarity":"common","slot":"weapon","kind":"mace","hands":2,"damage":[35.0,45.0],"speed":.9,
 		"look":{"model":"war_hammer","size":Vector3(.34,1.35,.14),"grip":.40,"finish":"arms","metal_from":.78,"edge":[.8,1.0],"haft":.088}},
 	# (Its model's haft stands to one side of its bit: Art.held_model. The turn

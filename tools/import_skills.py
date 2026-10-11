@@ -55,8 +55,8 @@ from mathutils import Vector, Matrix, Quaternion
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT/'assets/models/character'
 # name: seconds
-CLIPS = {'SkillCleave': 1.0, 'SkillStrike': 1.0, 'SkillStab': .9, 'SkillBash': .9, 'SkillExecute': 1.3, 'SkillSlam': 1.1,
-    'SkillShockwave': 1.2, 'SkillCry': 1.0, 'SkillCharge': 1.0, 'SkillLeap': 1.0, 'DualSkillSlam': 1.1}
+CLIPS = {'SkillCleave': 1.0, 'SkillStrike': 1.0, 'SkillStab': .9, 'SkillBash': .9, 'SkillExecute': 1.3, 'SkillSlam': 1.6,
+    'SkillShockwave': 1.2, 'SkillCry': 1.0, 'SkillCharge': 1.0, 'SkillLeap': 1.0, 'DualSkillSlam': 1.6}
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.context.scene.render.fps = 30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
@@ -69,10 +69,14 @@ SWINGS = ['SwordOpen']+[name+foot for name in ('SwordCut1', 'SwordCut2', 'SwordT
 OLD_SWINGS = ['SwordCut1', 'SwordCut2', 'SwordThrust']
 SWING_SECONDS = 3.2
 TAIL_SECONDS = 1.6
+# (SKILLS_ONLY=SkillSlam,...: only those skills are authored again; the
+# rest keep their clips.)
+ONLY = [n for n in os.environ.get('SKILLS_ONLY', '').split(',') if n]
+REMADE = [n for n in CLIPS if not ONLY or n in ONLY or n == 'DualSkillSlam']
 for track in list(rig.animation_data.nla_tracks):
-    if track.name in CLIPS or track.name in SWINGS+OLD_SWINGS: rig.animation_data.nla_tracks.remove(track)
+    if track.name in REMADE or track.name in SWINGS+OLD_SWINGS: rig.animation_data.nla_tracks.remove(track)
 for a in list(bpy.data.actions):
-    if a.name in CLIPS or a.name in SWINGS+OLD_SWINGS: bpy.data.actions.remove(a)
+    if a.name in REMADE or a.name in SWINGS+OLD_SWINGS: bpy.data.actions.remove(a)
 for track in rig.animation_data.nla_tracks: track.mute = True
 
 def V(x, y, z):
@@ -415,33 +419,37 @@ LEAP_BLADE = V(0, -1, -.25)
 # long stride of the lead foot, the hips dropped, the back folded, the blade
 # struck down flat along the ground ahead (its length meets the floor, not
 # its point); held there, and a slow rise.
+# (The wind-up is slow and wide, the weapon's point drawing one great
+# circle: down past the hip, far back behind the shoulder, up and over the
+# head, and only then the fast blow, two thirds of the way through the clip.)
 def slam_body(t):
-    drop = sample([(0, 0), (.14, 1), (.3, 0), (1, 0)], t)
-    up = sample([(0, 0), (.14, 0), (.3, 1), (.42, 1), (.52, 0), (1, 0)], t)
-    down = sample([(0, 0), (.42, 0), (.52, 1), (.72, 1), (1, 0)], t)
-    hips(down=.06*drop-.07*up+.5*down, forward=-.06*drop-.14*up+.28*down)
-    rotate('pelvis', (1, 0, 0), .08*drop-.22*up+.35*down)
-    rotate('spine_01', (1, 0, 0), .05*drop-.4*up+.55*down)
-    rotate('spine_02', (1, 0, 0), .04*drop-.3*up+.4*down)
-    rotate('spine_03', (1, 0, 0), -.15*up+.25*down)
-    rotate('pelvis', (0, 0, 1), -.25*drop-.25*up+.15*down)
-    rotate('neck_01', (1, 0, 0), -.2*up+.1*down)
-    rotate('Head', (1, 0, 0), .35*up-.2*down)
-    plant(lead='l', forward=.65*down, lift=.16*math.sin(math.pi*sample([(0, 0), (.4, 0), (.56, 1), (1, 1)], t)))
-    return drop, up, down
+    drop = sample([(0, 0), (.18, 1), (.4, 0), (1, 0)], t)
+    back = sample([(0, 0), (.18, 0), (.4, 1), (.56, 0), (1, 0)], t)
+    up = sample([(0, 0), (.4, 0), (.56, 1), (.66, 0), (1, 0)], t)
+    down = sample([(0, 0), (.56, 0), (.66, 1), (.84, 1), (1, 0)], t)
+    hips(down=.08*drop+.02*back-.08*up+.5*down, forward=-.06*drop-.14*back-.1*up+.28*down)
+    rotate('pelvis', (1, 0, 0), .1*drop-.1*back-.25*up+.35*down)
+    rotate('spine_01', (1, 0, 0), .06*drop-.2*back-.42*up+.55*down)
+    rotate('spine_02', (1, 0, 0), .05*drop-.15*back-.3*up+.4*down)
+    rotate('spine_03', (1, 0, 0), -.05*back-.15*up+.25*down)
+    rotate('pelvis', (0, 0, 1), -.25*drop-.35*back-.15*up+.15*down)
+    rotate('neck_01', (1, 0, 0), -.05*back-.2*up+.1*down)
+    rotate('Head', (1, 0, 0), .1*back+.35*up-.2*down)
+    plant(lead='l', forward=.65*down, lift=.16*math.sin(math.pi*sample([(0, 0), (.54, 0), (.68, 1), (1, 1)], t)))
+    return drop, back, up, down
 
-SLAM_HAND_PATH = [(0, SWORD_HOME), (.14, V(-.32, .55, .82)), (.3, V(-.34, .62, 1.95)), (.42, V(-.26, .42, 2.22)), (.52, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.72, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)]
-SLAM_BLADE_PATH = [(0, V(-.2, -1, .3)), (.14, V(-.1, .6, -.8)), (.3, V(0, .9, .4)), (.42, V(0, .35, .95)), (.52, FLAT_BLADE), (.72, FLAT_BLADE), (1, V(-.2, -1, .3))]
+SLAM_HAND_PATH = [(0, SWORD_HOME), (.18, V(-.32, .5, .75)), (.4, V(-.34, .74, 1.5)), (.56, V(-.24, .2, 2.25)), (.66, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.84, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)]
+SLAM_BLADE_PATH = [(0, V(-.2, -1, .3)), (.18, V(0, .7, -.7)), (.4, V(0, .65, .75)), (.56, V(0, -.45, .9)), (.66, FLAT_BLADE), (.84, FLAT_BLADE), (1, V(-.2, -1, .3))]
 
 def slam_pole(t):
-    return V(-.9, .3, 1.2) if t < .2 else (V(-.9, .2, 1.8) if t < .47 else V(-.9, -.4, .9))
+    return V(-.9, .3, 1.1) if t < .3 else (V(-.9, .3, 1.8) if t < .6 else V(-.9, -.4, .9))
 
 def slam(t):
-    drop, up, down = slam_body(t)
+    drop, back, up, down = slam_body(t)
     sword(vsample(SLAM_HAND_PATH, t), slam_pole(t), vsample(SLAM_BLADE_PATH, t))
-    # The free arm thrown up and forward with the wind-up, then down and out
-    # as the blow lands.
-    guard(forward=.1*drop+.35*up+.25*down, out=.1*up-.1*down, up=-.1*drop+.5*up-.2*down)
+    # The free arm swung back with the wind-up, thrown up and forward as the
+    # weapon comes over, then down and out as the blow lands.
+    guard(forward=.1*drop+.2*back+.35*up+.25*down, out=.1*back+.1*up-.1*down, up=-.1*drop+.2*back+.5*up-.2*down)
 
 def mirror_x(v):
     return V(-v.x, v.y, v.z)
@@ -832,7 +840,7 @@ if os.environ.get('SWINGS_ONLY'):
 
 for name, pose in [('SkillCleave', cleave), ('SkillStrike', strike), ('SkillStab', stab), ('SkillBash', bash), ('SkillExecute', execute),
         ('SkillSlam', slam), ('SkillShockwave', shockwave), ('SkillCry', cry), ('SkillCharge', charge), ('SkillLeap', leap)]:
-    if os.environ.get('SKILLS_ONLY') and name not in os.environ['SKILLS_ONLY'].split(','): continue
+    if ONLY and name not in ONLY: continue
     author(name, pose)
 author('DualSkillSlam', dual_slam, keep=('clavicle_l', 'upperarm_l', 'lowerarm_l', 'hand_l'))
 

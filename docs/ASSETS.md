@@ -619,10 +619,17 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   steel etched with scrollwork on the cheek and a bright brushed bevel to the edge.
 - The flanged mace (`assets/models/props/mace.glb`) is built by `tools/make_mace.py`:
   a haft, pommel, grip and collars turned on a lathe, and seven flanges cut as flat
-  blades; nothing imported. The other items' models are ones the game already had
-  (the adventurers pack's two-handed sword and one-handed axe, the battle axe, the
-  guards' hasta and the bandits' sica), each with
-  one of the game's own finishes (`Art.finish`).
+  blades; nothing imported. The greatsword (`assets/models/props/sword_long.glb`)
+  is built by `tools/make_greatsword.py`: a pear pommel, a long grip bound in a
+  spiralled cord between two ferrules, a crossguard whose arms curve toward the
+  blade and swell to rounded ends, a blunt ricasso, and a blade ground from a
+  thick spine to thin edges with a fuller down each face, narrowing to a point
+  (about 8,000 faces; its `pommel` look keeps the pommel steel and draws the grip
+  as leather cord, `assets/shaders/arms.gdshader`). The war hammer's edges are
+  bevelled (`tools/make_warhammer.py`). The other items' models are ones the game
+  already had (the adventurers pack's one-handed axe, the battle axe, the guards'
+  hasta and the bandits' sica), each with one of the game's own finishes
+  (`Art.finish`).
 - Items are pictured for the inventory by `tools/render_item_icons.gd`
   (`assets/ui/items/<id>.png`), each from the same model that lies on the ground
   when it drops (`Art.item_model`): a weapon's or shield's own, or for armor the
@@ -694,8 +701,11 @@ belt and fringe (trimmed below the chest) and the knight's plated right arm, wit
 bare legs, and the knight helm reshaped from its own vertices, sized to the statue's
 head, with the ridge spikes raised into a crest and the rim flared into a brim. Its
 visor shows the statue's face. Its body keeps the statue's own shape. It carries a
-sword the size of the hero's, in statue stone, and a tall curved scutum (KayKit Adventurers
-`shield_square`, normalized as `assets/models/props/scutum.glb`), held upright in
+sword the size of the hero's, in statue stone, and a tall curved scutum
+(`assets/models/props/scutum.glb`, built by `tools/make_scutum.py`: a board bent
+round the bearer with rounded corners, a rolled rim, two bars, a rib down its
+length and a domed iron boss on a flange over a hand grip, where the guards'
+shield shader paints them; it replaced the KayKit Adventurers `shield_square`), held upright in
 front of the left forearm. ScutumSwordIdle holds the sword low beside the shield, and
 ScutumRun (shared with the centurion) keeps the sprint's legs while reaching the
 shield arm to its stance position, so the shield stays upright; it attacks with the
@@ -722,6 +732,9 @@ shield arm pull back. The right foot stays planted by leg IK. Rebuild with:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_guard.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_spear.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_staffs.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_scutum.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_greatsword.py
+python3 -I tools/prepare_materials.py   # the photographed material arrays
 ```
 
 Bodies, armor, robes, weapons, shields, arrows and the boss's crown share
@@ -836,9 +849,84 @@ character's original `T_Superhero_Male_Dark.png` elsewhere. The scale armor also
 bulk: `tools/outfit_hero.py` copies the armored part of the body and thickens it outward
 (2.5cm, 3.5cm at the shoulders, as a 2cm solid shell) with the same UVs, texture and
 skin weights.
-Cloth and leather are procedural. Statue materials use generated marble; architecture uses generated
+Cloth and leather are procedural, with photographed detail over them (below).
+Statue materials use generated marble; architecture uses generated
 limestone and marble. Original source-pack materials remain on selected small
 props and vegetation. The bronze tile is also available as a reusable material.
+
+## Detail pass: photographed materials and reflections
+
+On 2026-10-11 the figures, their kit and their weapons were given real
+material detail and something to reflect (the user asked for them to be
+"significantly more detailed and realistic looking", Diablo 4 the reference).
+
+- **The material library.** `tools/prepare_materials.py` (plain python3 with
+  numpy and Pillow) cuts CC0 photo scans into tiling 1024 px maps: brushed and
+  scratched steel, rusting iron, old bronze, gold (ambientCG Metal009, Metal038,
+  Metal056C, Metal017, Metal048C), three leathers (Leather037, Leather014,
+  Leather033A), woven wool and coarse cloth (Fabric031, Fabric030), velvet, satin,
+  ash and walnut (Poly Haven velour_velvet, crepe_satin, ash_veneer,
+  american_walnut_veneer), the linen and hessian the townspeople already wore,
+  and skin, which has no scan: its pores and its net of fine creases are drawn
+  by the script. Each is a colour map (its mean brightness middle grey), a
+  normal map and a data map (roughness, cavity, height), and the three kinds
+  are packed into texture arrays, one material a layer
+  (`assets/textures/materials/detail_col.jpg`, `detail_nrm.jpg`, `detail_dat.jpg`,
+  4 by 5 layers, S3TC: this Mac's OpenGL has no BPTC). They are global shader
+  uniforms (`project.godot` `[shader_globals]`), so a shader reads every
+  material through three texture units. Downloads are in `source_art/materials/`.
+- **Laying it on.** `assets/shaders/detail.gdshaderinc` lays a material on a
+  piece from three sides at once in the piece's own space (a skinned figure's
+  rest pose, `Art.rest_pose_mesh`; a weapon's model space in metres), so its
+  grain keeps one size, runs on across UV seams and stays on the piece as it
+  moves; `_up` variants turn the pictures so wood grain and brushing run along
+  a haft or blade. The relief is carried onto the posed piece through the
+  surface's frame found from the same step across the screen in both spaces
+  (`detail_normal`; an earlier form with a matrix inverse hung this Intel GPU).
+  Garments unwrapped in metres read it through their UVs instead (`mat_*_uv`).
+  `edge_wear` brightens metal and chips stone where the surface turns sharply.
+- **Skin** is lit as skin (`lit()` in the include, used as `light()` by
+  `hero_body.gdshader` and `townsfolk_skin.gdshader`): the shadow's edge wrapped
+  softer in red than in blue (light scattered under the skin), a broad second
+  sheen, a faint glow through thin parts against the light; the townspeople's
+  and bandits' bodies now carry their own normal maps (the male body's, and the
+  female one from the base pack: `assets/textures/skin_woman_normal.png`).
+- **The heroes.** `tools/paint_kits.py` also writes `hero_kit_<class>_mat.png`,
+  what each texel of the kit is made of (red leather, green cloth, blue metal;
+  told by the finish it is painted with), so the body shader lays leather,
+  wool or steel over it; its steel is painted brighter and its scales no longer
+  carry their light in their colour. `Art.hero_kit` is now that shader too (it
+  was a StandardMaterial3D), on every hero mesh with its rest pose. The kit maps
+  have mipmaps. `tools/outfit_hero.py` subdivides the hanging cloth once
+  (`RangerCloak`, `WizardRobe`, `WizardRobeSkirt`, `WizardHood`, `HeroKilt`), so
+  hoods, cloak and robe curve instead of breaking into facets, and now re-seats
+  the clips' strips as `import_pike.py` does, so a run no longer exports every
+  clip a frame late.
+- **Cloth.** The cloak and robe wear photographed wool, their folds shaded
+  deeper and their inside darker (burley light: the wrap lighting they had
+  flattened them). The townspeople's and bandits' garments hang in folds
+  (`cloth.gdshaderinc` `drape`, deeper toward the hem) and carry the weave's relief.
+- **Metal and wood.** Plate, helmets, guards' armour, shields, swords, axes,
+  hammers, spears, staffs, quivers and sheaths are full metal now (they were
+  held at half metal because there was nothing to reflect), with scanned
+  scratches, grime in their hollows and bright worn edges; wood, leather grips
+  and bows wear the scanned grain.
+- **Reflections.** `scripts/reflections.gd` gives every scene's environment a
+  sky to reflect (`assets/shaders/reflection_sky.gdshader`) while it keeps its
+  own background and ambient light: Poly Haven's Goegap HDRI (Namaqualand, as
+  the rocks) for the desert, tinted, dimmed and desaturated through the day and
+  giving way to the painted night sky (`Reflections.daylight`, called from
+  `Overworld.set_time`, redrawn only when it changes enough to see); the
+  sandstone Historic Cloister Passage HDRI, dim and warm, in the halls; the
+  desert, softly, for previews, icons and the inventory's figure.
+- **Statues** keep their stone, with chipped, paler edges and sand-coloured dust
+  on whatever faces up.
+- `tools/preview_cast.gd` renders the cast side by side (heroes, bandits,
+  statues, a guard, townspeople) by day or by torchlight, straight on or from
+  the game's angle; `tools/preview_world.gd` photographs the game itself (the
+  street by day and night, close and at the game's zoom, the basement) and
+  prints the frame rate. On this workstation (Intel Iris Plus) the pass cost
+  about 3% of the frame rate.
 
 ## Audio
 

@@ -18,6 +18,7 @@ const Wilds = preload("res://scripts/world_wilds.gd")
 const Townsfolk = preload("res://scripts/townsfolk.gd")
 const Watch = preload("res://scripts/town_watch.gd")
 const Daylight = preload("res://scripts/daylight.gd")
+const Reflections = preload("res://scripts/reflections.gd")
 const GLOW_COLOUR = Front.GLOW
 # `level` of the outdoor world, where a temple floor has its index.
 const OUTDOORS = -2
@@ -110,6 +111,8 @@ var sun: DirectionalLight3D
 # turned only every SUN_STEP seconds, in steps too small to see.
 const SUN_STEP = .1
 var environment: Environment
+# What metal and polish reflect (scripts/reflections.gd), through the day.
+var reflection_sky: ShaderMaterial
 # The time of day shown (Daylight's clock), how far it is night, and the
 # fires: each {"light", "flame", "glow", "reach", "energy"}.
 var time = 0.0
@@ -261,12 +264,11 @@ func setup_sky() -> void:
 	e.fog_sky_affect = 0.0
 	# By night the sky is a painted panorama, stars, the Milky Way and a low
 	# moon (tools/make_night_sky.py), shown whenever the camera looks toward
-	# the horizon; by day, a plain colour (set_time).
-	var panorama = PanoramaSkyMaterial.new()
-	panorama.panorama = load("res://assets/textures/night_sky.png")
-	panorama.filter = true
-	e.sky = Sky.new()
-	e.sky.sky_material = panorama
+	# the horizon; by day, a plain colour (set_time). What metal and polish
+	# reflect is a photographed desert sky by day, the painted one by night
+	# (scripts/reflections.gd).
+	reflection_sky = Reflections.apply(e,"desert")
+	reflection_sky.set_shader_parameter("night_panorama",load("res://assets/textures/night_sky.png"))
 	e.background_energy_multiplier = 1.0
 	env.environment = e
 	environment = e
@@ -306,6 +308,7 @@ func set_time(clock: float) -> void:
 	if ground_material != null: ground_material.set_shader_parameter("sky_colour",sky.sky.lerp(sky.ambient,.65)*clampf(sky.ambient_energy*2.2,.15,1.0))
 	environment.ambient_light_color = sky.ambient
 	environment.ambient_light_energy = sky.ambient_energy
+	Reflections.daylight(reflection_sky,sky)
 	environment.fog_enabled = sky.fog > .0002
 	environment.fog_density = sky.fog
 	environment.fog_light_color = sky.fog_colour

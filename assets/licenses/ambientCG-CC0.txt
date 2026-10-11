@@ -1,0 +1,11 @@
+Photographed and procedural PBR materials from ambientCG (https://ambientcg.com),
+used in the figures' and weapons' material library (tools/prepare_materials.py,
+assets/textures/materials/detail_*.jpg):
+
+Metal009 (brushed steel), Metal038 (scratched steel), Metal056C (damaged,
+rusting iron), Metal017 (old bronze), Metal048C (impure gold), Leather037,
+Leather014, Leather033A, Fabric031 (woven wool), Fabric030 (coarse cloth).
+
+All ambientCG assets are licensed CC0 1.0 Universal (public domain dedication):
+https://docs.ambientcg.com/license/
+https://creativecommons.org/publicdomain/zero/1.0/

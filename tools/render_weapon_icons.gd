@@ -13,6 +13,7 @@ func render_icons():
 	environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.environment.ambient_light_color = Color.WHITE
 	environment.environment.ambient_light_energy = .8
+	preload("res://scripts/reflections.gd").apply(environment.environment,"studio")
 	viewport.add_child(environment)
 	var light = DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-30,-25,0)

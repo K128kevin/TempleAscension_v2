@@ -153,11 +153,18 @@ def paint(maps, skin, recipe):
     rough = np.full(n,.8,np.float32)
     # Texels the kit covers (all others are bare skin).
     dressed = np.zeros(n,bool)
+    # What each texel is made of, for the photographed detail the game lays
+    # over it (hero_body.gdshader): 0 skin, 1 leather, 2 cloth, 3 metal. Told
+    # by the finish each is painted with: steel is glossy (.4 and under),
+    # wool and linen matte (.88 and over), leather between.
+    kind = np.zeros(n,np.int32)
     def put(mask, color, h=None, r=None):
         dressed[mask] = True
         albedo[mask] = color[mask] if isinstance(color,np.ndarray) and color.ndim==2 else color
         if h is not None: height[mask] = h[mask] if isinstance(h,np.ndarray) else h
-        if r is not None: rough[mask] = r
+        if r is not None:
+            rough[mask] = r
+            kind[mask] = 3 if r <= .4 else (2 if r >= .88 else 1)
 
     grain = fbm(P,180.0,3)
     mottle = fbm(P,9.0,4)
@@ -188,6 +195,7 @@ def paint(maps, skin, recipe):
     sk = (grey+(sk-grey)*.72)*.94
     put(np.ones(n,bool), sk, 0.0, .6)
     dressed[:] = False
+    kind[:] = 0
     face = (C==HEAD)&(z<1.64)&(z>1.52)&(y<.0)
     stubble = np.clip((vnoise(P,900.0)-.35)*2.5,0,1)*face
     albedo[:] = albedo*(1-.22*stubble[:,None])
@@ -329,7 +337,9 @@ def paint(maps, skin, recipe):
 
     def steel(dark=1.0):
         # Worn steel: mottled, grimed in the recesses, a little rust.
-        c = np.array([.54,.55,.57],np.float32)[None,:]*(.78+mottle[:,None]*.34)*dark
+        # (A metal's colour is how much it reflects: steel, over half the
+        # light. Its form shows in its normals and the light it catches.)
+        c = np.array([.66,.67,.69],np.float32)[None,:]*(.84+mottle[:,None]*.22)*dark
         c = c*(1-.32*np.clip((wear-.55)*3,0,1))[:,None]
         rust = np.clip((fbm(P,38.0,3)-.68)*5,0,1)[:,None]
         return c*(1-rust)+np.array([.36,.21,.12],np.float32)[None,:]*rust*dark
@@ -354,7 +364,7 @@ def paint(maps, skin, recipe):
         h = np.where(rim,.0032,h)
         eyes = (np.abs(np.abs(cu)-radius*.17)<radius*.07)&(np.abs(cv-radius*.12)<radius*.05)&(r<.48)
         h = np.where(eyes,h-.0012,h)
-        c = steel(1.2)*(.8+.35*(h/.004))[:,None]
+        c = steel(1.1)*(.9+.15*(h/.004))[:,None]
         put(m_, c, None, .32)
         height[m_] = h[m_]
 
@@ -380,11 +390,11 @@ def paint(maps, skin, recipe):
         inside = t<.6
         dome = np.where(inside,np.clip(1-t/.6,0,1),0)
         plate_seed = hash3(np.stack([np.floor(u/sw+off),row,row*0],-1).astype(np.int64))
-        sc = steel()*(.55+.6*dome**.6)[:,None]*(.9+.2*plate_seed)[:,None]
+        sc = steel()*(.82+.22*dome**.6)[:,None]*(.9+.2*plate_seed)[:,None]
         rim = inside&(t>.5)
-        sc[rim] *= .6
+        sc[rim] *= .78
         under = ~inside
-        sc[under] *= .32
+        sc[under] *= .42
         rivet = inside&(np.hypot(fu-.5,(fv-.88)*sh/sw)<.07)
         sc[rivet] = steel(1.3)[rivet]
         put(cuirass, sc, dome*.0026-under*.0012+rivet*.0012, .3)
@@ -507,7 +517,7 @@ def paint(maps, skin, recipe):
 
     RECIPES = {'ranger':ranger,'warrior':warrior,'wizard':wizard}
     RECIPES[recipe]()
-    return albedo, height, rough, baked, dressed
+    return albedo, height, rough, baked, dressed, kind
 
 
 def normal_map(height, baked, pos):
@@ -563,7 +573,7 @@ def main():
     RIGHT_SIGN = 1.0 if (rig.matrix_world @ rig.data.bones['upperarm_r'].head_local).x>0 else -1.0
     pos = maps['position'][...,:3]
     for recipe in ONLY or ['ranger','warrior','wizard']:
-        albedo,height,rough,baked,dressed = paint(maps,skin,recipe)
+        albedo,height,rough,baked,dressed,kind = paint(maps,skin,recipe)
         colour = np.zeros((SIZE,SIZE,3),np.float32)
         colour[baked] = np.clip(albedo,0,1)
         save('hero_kit_'+recipe,colour)
@@ -593,6 +603,13 @@ def main():
         # for the statues, which carve it into stone (statue_stone.gdshader).
         hm = np.full((SIZE,SIZE),.5,np.float32); hm[baked] = np.clip(.5+height*100.0,0,1)
         save('hero_kit_'+recipe+'_height',np.repeat(hm[...,None],3,2))
+        # What each texel is made of: red leather, green cloth, blue metal
+        # (none of them: skin).
+        made = np.zeros((SIZE,SIZE,3),np.float32)
+        for channel,k in enumerate((1,2,3)):
+            m = np.zeros((SIZE,SIZE),np.float32); m[baked] = (kind==k)
+            made[...,channel] = m
+        save('hero_kit_'+recipe+'_mat',made)
         print('KIT_READY',recipe)
 
 main()

@@ -33,6 +33,20 @@ BOOT_TOP = .22
 outfits.ARMOR_THICKNESS.update({'_LegLeft':.015,'_LegRight':.015})
 outfits.ARMOR_RELIEF = .2
 
+# Which clips begin at once (at 0) in the model as it is read, from its own
+# glTF: they come into Blender with their strips from frame 1, and would go
+# out a frame later and longer than they came in unless set back (below, as
+# tools/import_pike.py does).
+def clip_starts(path):
+    import json, struct
+    with open(path, 'rb') as f:
+        f.read(12)
+        size, = struct.unpack('<I', f.read(4))
+        f.read(4)
+        document = json.loads(f.read(size))
+    return {a.get('name', ''): min(document['accessors'][s['input']]['min'][0] for s in a['samplers']) for a in document.get('animations', [])}
+BEGAN = clip_starts(OUTPUT/'warrior.glb')
+
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
 # The clips are baked at 30 fps (tools/import_combat.py); exporting at
@@ -733,7 +747,40 @@ outfits.remove_faces(robed,lambda f: all(v.index in covered for v in f.verts))
 print('HERO_ROBE_READY',len(robe_object.data.vertices),len(robed.data.vertices))
 wizard_kit()
 
+# The hanging cloth is drawn round: the KayKit pieces are a toy's few hundred
+# faces, which broke the hoods, the cloak and the robe into flat facets.
+# Each is subdivided once (Catmull-Clark, its hems and corners kept), its
+# skin weights carried over to the new points, and shaded smooth; the cloth
+# shader's folding (cloth_fold.gdshaderinc) also has four times the points
+# to move.
+ROUNDED = ('RangerCloak','WizardRobe','WizardRobeSkirt','WizardHood','HeroKilt')
+def round_cloth(obj):
+    if obj.data.shape_keys: return
+    before = len(obj.data.vertices)
+    sub = obj.modifiers.new('Round','SUBSURF')
+    sub.levels = sub.render_levels = 1
+    sub.subdivision_type = 'CATMULL_CLARK'
+    sub.boundary_smooth = 'PRESERVE_CORNERS'
+    sub.uv_smooth = 'PRESERVE_BOUNDARIES'
+    with bpy.context.temp_override(object=obj, active_object=obj, selected_objects=[obj]):
+        bpy.ops.object.modifier_move_to_index(modifier=sub.name, index=0)
+        bpy.ops.object.modifier_apply(modifier=sub.name)
+    for poly in obj.data.polygons: poly.use_smooth = True
+    print('ROUNDED', obj.name, before, len(obj.data.vertices))
+for obj in list(bpy.data.objects):
+    if obj.type == 'MESH' and obj.name.startswith(ROUNDED): round_cloth(obj)
+
 rig.animation_data.action = None
+# Every clip goes out with the timing it came in with (clip_starts above).
+for track in rig.animation_data.nla_tracks:
+    if BEGAN.get(track.name, 1.0) > 1/60: continue
+    for strip in list(track.strips):
+        if strip.frame_start != 1: continue
+        action, first, last, name = strip.action, strip.action_frame_start, strip.action_frame_end, strip.name
+        track.strips.remove(strip)
+        strip = track.strips.new(name, 0, action)
+        strip.action_frame_start = first
+        strip.action_frame_end = last
 for track in rig.animation_data.nla_tracks: track.mute = False
 bpy.context.scene.frame_set(0)
 bpy.ops.export_scene.gltf(filepath=str(OUTPUT/'warrior.glb'),export_format='GLB',export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True)

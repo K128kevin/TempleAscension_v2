@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/detail.gdshaderinc"
 
 // Gloves worn over the hands (the Ice Queen's Gloves: scripts/visual.gd
 // glove_shells): the hero's own body mesh, skinned with it, drawn again a
@@ -19,6 +20,7 @@ uniform float keep_side = 0.0;
 uniform float shadowed = 0.0;
 
 varying vec3 rest;
+varying vec3 rest_normal;
 // The skin's outward normal, in view space (the one fragment() is given is
 // turned by the body's mirrored winding on the hero, and not elsewhere).
 varying vec3 outward;
@@ -41,6 +43,7 @@ float noise3(vec3 p) {
 
 void vertex() {
 	rest = rest_pose ? CUSTOM0.xyz : VERTEX;
+	rest_normal = rest_pose ? CUSTOM1.xyz : NORMAL;
 	float reach = abs(rest.x);
 	// The cuff stands out further at the opening, easing in toward the hand.
 	float cuff = 1.0 - smoothstep(glove_from + 0.012, glove_from + 0.03, reach);
@@ -79,6 +82,11 @@ void fragment() {
 	bool lining = dot(out_normal, VIEW) < -0.1;
 	NORMAL = lining ? -out_normal : out_normal;
 	if (lining) colour = tint * 0.3;
+	// Photographed fine leather over it (assets/shaders/detail.gdshaderinc).
+	vec3 gn = normalize(rest_normal);
+	vec3 gw = tri_weights(gn);
+	vec4 scan = mat_data(rest / 0.1, gn, gw, MAT_LEATHER_SMOOTH);
+	colour *= mix(1.0, mat_shade(rest / 0.1, gn, gw, MAT_LEATHER_SMOOTH), 0.35) * (0.8 + 0.2 * scan.g);
 	ALBEDO = mix(colour, vec3(0.02, 0.02, 0.04), shadowed * 0.92);
 	vec3 sx = dFdx(VERTEX);
 	vec3 sy = dFdy(VERTEX);
@@ -87,7 +95,8 @@ void fragment() {
 	float det = dot(sx, r1);
 	vec3 gradient = (dFdx(h) * r1 + dFdy(h) * r2) * sign(det) / max(abs(det), 0.000001);
 	NORMAL = normalize(NORMAL - gradient);
+	if (!lining) NORMAL = detail_normal(mat_normal(rest / 0.1, gn, gw, MAT_LEATHER_SMOOTH, 1.2), gn, rest, VERTEX, NORMAL);
 	// Supple leather with a soft sheen.
-	ROUGHNESS = 0.48 - band * 0.05;
+	ROUGHNESS = clamp(0.4 - band * 0.05 + scan.r * 0.2, 0.3, 0.8);
 	SPECULAR = 0.4;
 }

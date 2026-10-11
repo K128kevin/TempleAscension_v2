@@ -3,6 +3,7 @@ const Art = preload("res://scripts/assets.gd")
 const Layout = preload("res://scripts/layout.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const Kit = preload("res://scripts/world_art.gd")
+const Reflections = preload("res://scripts/reflections.gd")
 var layout = Layout.new()
 var boss_point = Vector3.ZERO
 var summon_points: Array[Vector3] = []
@@ -113,6 +114,8 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 		e.ambient_light_energy = .42
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.fog_enabled = false
+	# Metal and polish reflect a dim, warm hall (scripts/reflections.gd).
+	Reflections.apply(e,"studio" if floor_index==Layout.PLAYGROUND else "interior")
 	env.environment = e
 	add_child(env)
 	camera = Camera3D.new()

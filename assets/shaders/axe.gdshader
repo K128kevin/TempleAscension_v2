@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/detail.gdshaderinc"
 
 // The head of the warrior's bearded axe (tools/make_axe.py): forged, dark
 // steel, hammer-marked and oxidised, its cheek etched with curling
@@ -16,6 +17,8 @@ uniform float recolor = 0.0;
 
 varying vec3 local;
 varying vec2 blade_uv;
+varying vec3 metric_position;
+varying vec3 metric_normal;
 
 float hash2(vec2 p) {
 	vec3 q = fract(vec3(p.xyx) * 0.1031);
@@ -44,6 +47,9 @@ float fbm2(vec2 p) {
 void vertex() {
 	local = VERTEX;
 	blade_uv = UV;
+	vec3 metric_size = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
+	metric_position = VERTEX * metric_size;
+	metric_normal = normalize(NORMAL / metric_size);
 }
 
 void fragment() {
@@ -70,9 +76,16 @@ void fragment() {
 	vec3 polished = bright * brush * (0.97 + 0.03 * grain);
 	float hairline = smoothstep(0.975, 1.0, blade_uv.x);
 	polished = mix(polished, vec3(1.0), hairline * 0.6);
+	// Photographed steel over the forged cheek (assets/shaders/detail.gdshaderinc):
+	// its pits and scratches, grime in the etching and the hollows.
+	vec3 mn = normalize(metric_normal);
+	vec3 mw = tri_weights(mn);
+	vec4 scan = mat_data(metric_position / 0.2, mn, mw, MAT_STEEL_WORN);
+	dark *= 1.75 * mix(1.0, mat_shade(metric_position / 0.2, mn, mw, MAT_STEEL_WORN), 0.5) * (0.75 + 0.25 * scan.g);
 	vec3 color = mix(dark, polished, bevel);
 	ALBEDO = mix(color, dot(color, vec3(0.299, 0.587, 0.114)) * tint * 1.8, recolor);
-	METALLIC = mix(0.55, 0.92, bevel);
-	ROUGHNESS = mix(clamp(rough, 0.3, 0.85), 0.16 + 0.06 * brush, bevel);
+	METALLIC = 1.0;
+	ROUGHNESS = mix(clamp(rough * 0.8 + scan.r * 0.25, 0.3, 0.85), 0.16 + 0.06 * brush, bevel);
+	NORMAL = detail_normal(mat_normal(metric_position / 0.2, mn, mw, MAT_STEEL_WORN, mix(0.9, 0.3, bevel)), mn, metric_position, VERTEX, NORMAL);
 	SPECULAR = 0.5;
 }

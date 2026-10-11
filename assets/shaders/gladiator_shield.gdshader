@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/detail.gdshaderinc"
 
 // The warrior's round shield, after his concept art, worked in steel: a
 // riveted rim, a Greek-key (meander) band, a sunburst of long petals, and a
@@ -9,6 +10,8 @@ render_mode diffuse_burley, specular_schlick_ggx;
 uniform vec3 steel : source_color = vec3(0.5, 0.51, 0.53);
 
 varying vec3 local;
+varying vec3 metric_position;
+varying vec3 metric_normal;
 
 float hash2(vec2 p) {
 	vec3 q = fract(vec3(p.xyx) * 0.1031);
@@ -76,6 +79,9 @@ vec2 relief(vec2 q) {
 
 void vertex() {
 	local = VERTEX;
+	vec3 metric_size = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
+	metric_position = VERTEX * metric_size;
+	metric_normal = normalize(NORMAL / metric_size);
 }
 
 // An item of another make (scripts/items.gd `tint`): its colours redrawn in
@@ -95,12 +101,20 @@ void fragment() {
 	// Rust and grime gather low and in the recesses.
 	float rust = smoothstep(0.62, 0.8, fbm2(q * 9.0 + 3.0)) * (1.0 - rc.x);
 	color = mix(color, vec3(0.34, 0.2, 0.12), rust * 0.6);
+	// Photographed steel over it (assets/shaders/detail.gdshaderinc): its
+	// scratches and pits, grime in its hollows. Full metal: it reflects the
+	// scene's sky (scripts/reflections.gd).
+	vec3 mn = normalize(metric_normal);
+	vec3 mw = tri_weights(mn);
+	vec4 scan = mat_data(metric_position / 0.3, mn, mw, MAT_STEEL_WORN);
+	color *= 1.15 * mix(1.0, mat_shade(metric_position / 0.3, mn, mw, MAT_STEEL_WORN), 0.5) * (0.72 + 0.28 * scan.g);
 	ALBEDO = color;
-	METALLIC = 0.75;
-	ROUGHNESS = mix(0.38, 0.7, rust + rc.y * 0.4);
+	METALLIC = 1.0 - rust * 0.8;
+	ROUGHNESS = clamp(mix(0.38, 0.72, rust + rc.y * 0.4) + (scan.r - 0.4) * 0.3, 0.3, 0.9);
 	// The relief bends the light; the shield's faces look along local Z.
 	vec3 n = normalize(vec3(-(hx - rc.x) / e * 0.02, -(hy - rc.x) / e * 0.02, 1.0));
 	vec3 world_n = normalize((MODEL_MATRIX * vec4(n.x, n.y, sign(local.z + 1e-4) * n.z, 0.0)).xyz);
 	NORMAL = normalize(mix(NORMAL, normalize((VIEW_MATRIX * vec4(world_n, 0.0)).xyz), 0.8));
+	NORMAL = detail_normal(mat_normal(metric_position / 0.3, mn, mw, MAT_STEEL_WORN, 0.8), mn, metric_position, VERTEX, NORMAL);
 	ALBEDO = mix(ALBEDO, dot(ALBEDO, vec3(0.299, 0.587, 0.114)) * tint * 1.8, recolor);
 }

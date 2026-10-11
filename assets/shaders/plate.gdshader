@@ -10,6 +10,11 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 // greaves), or a brighter crease down the front of the thigh (the cuisses).
 // Laid on the piece's rest pose (CUSTOM0 position, CUSTOM1 normal: from
 // Art.rest_pose_mesh), the figure's front along +Z, heights in metres.
+// Over it lies photographed steel (assets/shaders/detail.gdshaderinc):
+// scratches and pitting, grime dark in its seams and hollows, its edges and
+// high places rubbed bright. It is full metal: it reflects the scene's sky
+// (scripts/reflections.gd).
+#include "res://assets/shaders/detail.gdshaderinc"
 uniform bool rest_pose = false;
 // Where the plates run, up the leg: the rims sit at `rim_low` and
 // `rim_high`, the lames between them every `lame` metres (0: one plate).
@@ -74,7 +79,7 @@ void fragment() {
 	float dents = noise3(p * 55.0);
 	float grain = noise2(vec2(p.x + p.z, p.y) * 900.0);
 	float patina = smoothstep(0.45, 0.75, noise3(p * 14.0 + 3.0));
-	vec3 color = vec3(0.6, 0.61, 0.63) * (0.82 + dents * 0.22) * (0.95 + grain * 0.08);
+	vec3 color = vec3(0.66, 0.67, 0.69) * (0.82 + dents * 0.22) * (0.95 + grain * 0.08);
 	color = mix(color, vec3(0.32, 0.31, 0.3), patina * 0.55);
 	float rust = smoothstep(0.82, 0.93, noise3(p * 60.0 + 11.0)) * smoothstep(0.55, 0.85, noise3(p * 9.0));
 	color = mix(color, vec3(0.34, 0.19, 0.1), rust * 0.8);
@@ -136,9 +141,18 @@ void fragment() {
 		float ring = abs(boss - 0.82);
 		if (ring < 0.06) color *= 1.0 - 0.4 * front * (1.0 - ring / 0.06);
 	}
+	// The photographed steel: its scratches, mottling and pits, grime in its
+	// hollows.
+	vec3 dn = normalize(rest_normal);
+	vec3 dw = tri_weights(dn);
+	vec3 dp = p / 0.3;
+	vec4 scan = mat_data(dp, dn, dw, MAT_STEEL_WORN);
+	float shade = mat_shade(dp, dn, dw, MAT_STEEL_WORN);
+	color *= mix(1.0, shade, 0.55) * (0.72 + 0.28 * scan.g);
+	rough = rough * 0.75 + scan.r * 0.3 + (1.0 - scan.g) * 0.2 + 0.1;
 	ALBEDO = color;
-	METALLIC = 0.45;
-	ROUGHNESS = clamp(rough, 0.2, 0.9);
+	METALLIC = 1.0 - rust * 0.85;
+	ROUGHNESS = clamp(rough, 0.32, 0.9);
 	vec3 sx = dFdx(VERTEX);
 	vec3 sy = dFdy(VERTEX);
 	vec3 r1 = cross(sy, NORMAL);
@@ -146,5 +160,10 @@ void fragment() {
 	float det = dot(sx, r1);
 	vec3 gradient = (dFdx(h) * r1 + dFdy(h) * r2) * sign(det) / max(abs(det), 0.000001);
 	NORMAL = normalize(NORMAL - gradient);
+	// Its edges (the rims, the brim, the crest) rubbed bright.
+	float edge = edge_wear(NORMAL, VERTEX, 0.003) * (1.0 - rust);
+	ALBEDO = mix(ALBEDO, vec3(0.78, 0.79, 0.8), edge * 0.5);
+	ROUGHNESS = mix(ROUGHNESS, 0.26, edge * 0.7);
+	NORMAL = detail_normal(mat_normal(dp, dn, dw, MAT_STEEL_WORN, 0.8), dn, p, VERTEX, NORMAL);
 	ALBEDO = mix(ALBEDO, dot(ALBEDO, vec3(0.299, 0.587, 0.114)) * tint * 1.8, recolor);
 }

@@ -190,7 +190,14 @@ void fragment() {
 	}
 	shade *= 1.0 - shatter_crack * 0.8;
 	height -= shatter_crack * 0.004;
+	// Weathering: sharp edges chipped and rubbed paler, the hollows darker,
+	// and sand-coloured dust settled on whatever faces up.
+	float edge = clamp(length(fwidth(NORMAL)) / max(length(fwidth(VERTEX)), 1e-6) * 0.01, 0.0, 1.0);
+	shade *= 1.0 + edge * 0.35 * (0.6 + wear);
+	float up = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).y;
+	float dust = smoothstep(0.35, 0.85, up) * smoothstep(0.3, 0.7, wear + grain * 0.4) * (1.0 - pale);
 	ALBEDO = mix(vec3(clamp(shade, 0.06, 0.42)), clamp(vec3(0.47, 0.46, 0.44) + (shade - 0.25) * 1.5, 0.16, 0.7), pale);
+	ALBEDO = mix(ALBEDO, vec3(0.42, 0.36, 0.28) * (0.8 + grain * 0.3), dust * 0.45);
 	vec3 surface_x = dFdx(VERTEX);
 	vec3 surface_y = dFdy(VERTEX);
 	vec3 r1 = cross(surface_y, NORMAL);

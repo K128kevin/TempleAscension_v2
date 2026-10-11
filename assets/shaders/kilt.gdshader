@@ -9,6 +9,7 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 // between them, frayed at the hem. Laid on the kilt's rest pose (CUSTOM0), so the
 // pattern stays on the cloth as it moves.
 #include "res://assets/shaders/cloth_fold.gdshaderinc"
+#include "res://assets/shaders/detail.gdshaderinc"
 uniform float shadowed = 0.0;
 uniform bool rest_pose = false;
 uniform float top = 0.995;
@@ -18,6 +19,7 @@ uniform vec2 centre = vec2(0.0, -0.025);
 const float STRIPS = 18.0;
 
 varying vec3 cloth_position;
+varying vec3 cloth_normal;
 
 float hash2(vec2 p) {
 	vec3 q = fract(vec3(p.xyx) * 0.1031);
@@ -41,6 +43,7 @@ float fbm2(vec2 p) {
 
 void vertex() {
 	cloth_position = rest_pose ? CUSTOM0.xyz : VERTEX;
+	cloth_normal = rest_pose ? CUSTOM1.xyz : NORMAL;
 	VERTEX = fold_cloth(VERTEX);
 }
 
@@ -115,9 +118,16 @@ void fragment() {
 	// The hem frays.
 	if (t > 0.93 && noise2(vec2(around * 300.0, p.y * 60.0)) * 0.08 > 1.0 - t) discard;
 	// (Hidden in the shadows: scripts/visual.gd set_shadowed.)
+	// Photographed leather and steel over it (assets/shaders/detail.gdshaderinc).
+	vec3 kn = normalize(cloth_normal);
+	vec3 kw = tri_weights(kn);
+	float layer = metal > 0.5 ? MAT_STEEL_WORN : MAT_LEATHER_WORN;
+	float tile = metal > 0.5 ? 0.25 : 0.18;
+	vec4 scan = mat_data(p / tile, kn, kw, layer);
+	color *= mix(1.0, mat_shade(p / tile, kn, kw, layer), 0.45) * (0.72 + 0.28 * scan.g);
 	ALBEDO = mix(color, vec3(0.02, 0.02, 0.04), shadowed * 0.92);
-	METALLIC = metal * 0.45;
-	ROUGHNESS = mix(0.82, 0.38, metal);
+	METALLIC = metal;
+	ROUGHNESS = clamp(mix(0.62, 0.3, metal) + scan.r * 0.3, 0.2, 0.95);
 	vec3 sx = dFdx(VERTEX);
 	vec3 sy = dFdy(VERTEX);
 	vec3 r1 = cross(sy, NORMAL);
@@ -125,5 +135,6 @@ void fragment() {
 	float det = dot(sx, r1);
 	vec3 gradient = (dFdx(h) * r1 + dFdy(h) * r2) * sign(det) / max(abs(det), 0.000001);
 	NORMAL = normalize(NORMAL - gradient);
+	NORMAL = detail_normal(mat_normal(p / tile, kn, kw, layer, metal > 0.5 ? 0.8 : 1.3), kn, p, VERTEX, NORMAL);
 	ALBEDO = mix(ALBEDO, dot(ALBEDO, vec3(0.299, 0.587, 0.114)) * tint * 1.8, recolor);
 }

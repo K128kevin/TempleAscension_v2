@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/detail.gdshaderinc"
 
 // The ranger's longbow, worked in detail over the model's own palette: the
 // limbs of yew, dark heartwood and pale sapwood streaked together in grain
@@ -10,6 +11,8 @@ render_mode diffuse_burley, specular_schlick_ggx;
 uniform sampler2D palette : source_color, filter_linear;
 
 varying vec3 bow_position;
+varying vec3 metric_position;
+varying vec3 metric_normal;
 
 float hash2(vec2 p) {
 	vec3 q = fract(vec3(p.xyx) * 0.1031);
@@ -26,6 +29,9 @@ float noise2(vec2 p) {
 
 void vertex() {
 	bow_position = VERTEX;
+	vec3 metric_size = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
+	metric_position = VERTEX * metric_size;
+	metric_normal = normalize(NORMAL / metric_size);
 }
 
 // An item of another make (scripts/items.gd `tint`): its colours redrawn in
@@ -77,8 +83,17 @@ void fragment() {
 		h = 0.0012 * ridge;
 		rough = 0.75;
 	}
+	// Photographed grain over the wood and the leather
+	// (assets/shaders/detail.gdshaderinc), running along the limbs.
+	vec3 mn = normalize(metric_normal);
+	vec3 mw = tri_weights(mn);
+	bool wooden = saturation > 0.1 && out_along <= 0.94 && abs(out_along - 0.27) >= 0.03;
+	float layer = wooden ? MAT_WOOD_WALNUT : MAT_LEATHER_WORN;
+	vec3 mp = metric_position / (wooden ? 0.3 : 0.08);
+	vec4 scan = wooden ? mat_data_up(mp, mn, mw, layer) : mat_data(mp, mn, mw, layer);
+	color *= mix(1.0, wooden ? mat_shade_up(mp, mn, mw, layer) : mat_shade(mp, mn, mw, layer), 0.5) * (0.8 + 0.2 * scan.g);
 	ALBEDO = color;
-	ROUGHNESS = rough;
+	ROUGHNESS = clamp(rough * 0.8 + scan.r * 0.2, 0.2, 0.95);
 	vec3 sx = dFdx(VERTEX);
 	vec3 sy = dFdy(VERTEX);
 	vec3 r1 = cross(sy, NORMAL);
@@ -86,5 +101,6 @@ void fragment() {
 	float det = dot(sx, r1);
 	vec3 gradient = (dFdx(h) * r1 + dFdy(h) * r2) * sign(det) / max(abs(det), 0.000001);
 	NORMAL = normalize(NORMAL - gradient);
+	NORMAL = detail_normal(wooden ? mat_normal_up(mp, mn, mw, layer, 0.8) : mat_normal(mp, mn, mw, layer, 1.2), mn, metric_position, VERTEX, NORMAL);
 	ALBEDO = mix(ALBEDO, dot(ALBEDO, vec3(0.299, 0.587, 0.114)) * tint * 1.8, recolor);
 }

@@ -8,6 +8,8 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 // its reds are a soldier's red wool; the rest is oiled leather. All of it
 // carries the road's dust, worst low down. Laid on the armor's rest pose
 // (CUSTOM0, from Art.rest_pose_mesh), so the wear stays put as he moves.
+// Each material also wears photographed detail (assets/shaders/detail.gdshaderinc).
+#include "res://assets/shaders/detail.gdshaderinc"
 uniform sampler2D palette : source_color, filter_nearest;
 uniform sampler2D grit : source_color, filter_linear_mipmap, repeat_enable;
 uniform bool rest_pose = false;
@@ -60,6 +62,11 @@ void fragment() {
 	vec3 colour;
 	float rough;
 	float metal = 0.0;
+	// Which photograph lies over it, at what size, how strongly its colour
+	// shows and how deep its relief.
+	float layer = MAT_LEATHER_WORN;
+	float tile = 0.2;
+	float relief = 1.2;
 	if (gauntlet) {
 		bool palm = rest_normal.y < -0.35;
 		// The lames: overlapping bands across the hand, a dark seam at each.
@@ -82,20 +89,30 @@ void fragment() {
 		float scratch = max(smoothstep(0.92, 0.97, noise2(vec2(p.x * 700.0 + p.y * 120.0, p.y * 25.0 + p.z * 40.0))), smoothstep(0.93, 0.97, noise2(vec2(p.y * 650.0 - p.z * 200.0, p.x * 30.0))));
 		colour = mix(colour, vec3(0.8, 0.81, 0.82), scratch * 0.6);
 		rough = 0.32 + dents * 0.12 + patina * 0.25 + rust * 0.4 - scratch * 0.1;
-		metal = 0.45;
+		colour *= 1.1;
+		metal = 1.0 - rust * 0.85;
+		layer = MAT_STEEL_WORN;
+		tile = 0.3;
+		relief = 0.8;
 	} else if (base.r > 0.75 && base.g > 0.55 && base.b < 0.5) {
 		// Bronze trim, dulled brown and green where it is not rubbed.
 		float rub = noise3(p * 40.0);
 		colour = mix(vec3(0.42, 0.28, 0.12), vec3(0.68, 0.5, 0.25), smoothstep(0.35, 0.8, rub));
 		colour = mix(colour, vec3(0.25, 0.32, 0.24), smoothstep(0.7, 0.9, noise3(p * 22.0 + 5.0)) * 0.6);
 		rough = 0.45 + 0.25 * (1.0 - rub);
-		metal = 0.5;
+		metal = 1.0 - smoothstep(0.7, 0.9, noise3(p * 22.0 + 5.0)) * 0.6;
+		layer = MAT_BRONZE;
+		tile = 0.15;
+		relief = 0.8;
 	} else if (base.g < 0.3 && base.r > 0.35 && base.r > base.g * 1.8) {
 		// A soldier's red wool, faded by the sun and frayed.
 		float weave = noise2(vec2(p.x + p.z, p.y) * 520.0) * 0.5 + noise2(vec2(p.y, p.x - p.z) * 520.0) * 0.5;
 		colour = vec3(0.4, 0.07, 0.07) * (0.75 + weave * 0.45) * mix(0.8, 1.15, lit);
 		colour = mix(colour, vec3(0.45, 0.25, 0.22), smoothstep(0.4, 0.8, noise3(p * 7.0)) * 0.35);
 		rough = 0.95;
+		layer = MAT_WOOL;
+		tile = 0.08;
+		relief = 1.5;
 	} else {
 		// Oiled leather: straps, belts and linings, creased and scuffed.
 		float crease = noise3(p * vec3(30.0, 120.0, 30.0));
@@ -108,8 +125,13 @@ void fragment() {
 	float low = 1.0 - smoothstep(0.1, 0.9, rest.y);
 	float grime = smoothstep(0.42, 0.75, dust + low * 0.25) * (0.35 + 0.45 * low);
 	colour = mix(colour, colour * vec3(0.55, 0.47, 0.38) + vec3(0.05, 0.04, 0.03), grime);
+	vec3 dn = normalize(rest_normal);
+	vec3 dw = tri_weights(dn);
+	vec4 scan = mat_data(rest / tile, dn, dw, layer);
+	colour *= mix(1.0, mat_shade(rest / tile, dn, dw, layer), 0.45) * (0.72 + 0.28 * scan.g);
 	ALBEDO = colour;
-	ROUGHNESS = clamp(rough + grime * 0.3, 0.0, 1.0);
+	ROUGHNESS = clamp(rough * 0.8 + scan.r * 0.25 + grime * 0.3, 0.0, 1.0);
 	METALLIC = metal * (1.0 - grime * 0.6);
 	SPECULAR = 0.35;
+	NORMAL = detail_normal(mat_normal(rest / tile, dn, dw, layer, relief), dn, rest, VERTEX, NORMAL);
 }

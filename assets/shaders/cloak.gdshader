@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_lambert_wrap, specular_schlick_ggx;
+render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 
 // A cloak that folds over the legs instead of letting them through
 // (assets/shaders/cloth_fold.gdshaderinc), in felted wool: mottled, with a
@@ -8,6 +8,12 @@ render_mode cull_disabled, diffuse_lambert_wrap, specular_schlick_ggx;
 // the cloth is grimed toward the hem. Patterns are laid on the cloak's rest pose (CUSTOM0, from
 // Art.rest_pose_mesh), so they stay fixed to the cloth as it swings.
 #include "res://assets/shaders/cloth_fold.gdshaderinc"
+// The weave itself is photographed wool (assets/shaders/detail.gdshaderinc),
+// laid on the rest pose as the patterns are.
+#include "res://assets/shaders/detail.gdshaderinc"
+// Which photographed cloth (detail.gdshaderinc MAT_*), and its tile's size.
+uniform float weave_layer = 8.0;
+uniform float weave_tile = 0.08;
 uniform float shadowed = 0.0;
 uniform vec3 cloth_color : source_color = vec3(0.1, 0.19, 0.1);
 uniform bool rest_pose = false;
@@ -32,6 +38,7 @@ uniform float gilded = 0.0;
 uniform vec3 gold_color : source_color = vec3(0.86, 0.63, 0.25);
 
 varying vec3 cloth_position;
+varying vec3 cloth_normal;
 
 float hash3(vec3 p) {
 	p = fract(p * 0.1031);
@@ -146,6 +153,7 @@ vec2 dragon(vec2 q) {
 
 void vertex() {
 	cloth_position = rest_pose ? CUSTOM0.xyz : VERTEX;
+	cloth_normal = rest_pose ? CUSTOM1.xyz : NORMAL;
 	VERTEX = fold_cloth(VERTEX);
 }
 
@@ -199,7 +207,7 @@ void fragment() {
 	float wander = fbm3(vec3(p.x, p.y * 0.35, p.z) * 3.0) * 4.0;
 	float fold = sin(around * 7.0 + wander) * 0.65 + sin(around * 13.0 + wander * 1.7) * 0.35;
 	h += fold * fold_depth * hang;
-	color *= 1.0 - (0.5 - 0.5 * fold) * 0.12 * hang;
+	color *= 1.0 - (0.5 - 0.5 * fold) * 0.24 * hang;
 	// Worn: the dye faded and dusty on the raised folds and toward the hem.
 	float dust = (1.0 - smoothstep(hem_height, hem_height + 0.7, p.y)) * 0.5 + max(fold, 0.0) * 0.25 * hang;
 	float grey = dot(color, vec3(0.3, 0.5, 0.2));
@@ -253,6 +261,19 @@ void fragment() {
 	float satin = 0.85 + 0.25 * step(0.5, fract((p.x + p.y + p.z) * 260.0));
 	color = mix(color, gold_color * 0.85 * satin * gold_shade * (0.9 + grain * 0.2), gold);
 	h += gold * 0.0008;
+	// The weave: photographed wool, its threads' relief and the shade
+	// down in between them; the gold thread lies over it.
+	vec3 rn = normalize(cloth_normal);
+	vec3 tw = tri_weights(rn);
+	vec3 wp = p / weave_tile;
+	vec4 wd = mat_data(wp, rn, tw, weave_layer);
+	float ws = mat_shade(wp, rn, tw, weave_layer);
+	color *= mix(1.0, mix(1.0, ws, 0.3) * (0.82 + 0.18 * wd.g), 1.0 - gold);
+	// (Lit without the wrap it once had, which flattened it, the wool is
+	// drawn a little lighter to keep its colour.)
+	color *= 1.5;
+	// The inside of the cloth, out of the light.
+	if (!FRONT_FACING) color *= 0.55;
 	// (Hidden in the shadows: scripts/visual.gd set_shadowed.)
 	ALBEDO = mix(color, vec3(0.02, 0.02, 0.04), shadowed * 0.92);
 	vec3 sx = dFdx(VERTEX);
@@ -262,9 +283,15 @@ void fragment() {
 	float det = dot(sx, r1);
 	vec3 gradient = (dFdx(h) * r1 + dFdy(h) * r2) * sign(det) / max(abs(det), 0.000001);
 	NORMAL = normalize(NORMAL - gradient);
+	vec3 bent = mat_normal(wp, rn, tw, weave_layer, mix(1.5, 0.4, gold));
+	NORMAL = detail_normal(bent, rn, p, VERTEX, NORMAL);
+	// Wool's fibres catch the light at a glancing angle: a soft sheen at the
+	// edges of the folds.
+	RIM = 0.18 * (1.0 - gold);
+	RIM_TINT = 0.7;
 	// A dull, matte wool; the gold thread has a satin sheen, no mirror's
 	// gloss (that threw a broad pale highlight over the embroidery).
-	ROUGHNESS = mix(1.0, 0.62, gold);
+	ROUGHNESS = mix(0.86 + wd.r * 0.12, 0.62, gold);
 	SPECULAR = mix(0.03, 0.35, gold);
-	METALLIC = gold * 0.35;
+	METALLIC = gold * 0.8;
 }

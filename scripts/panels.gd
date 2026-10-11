@@ -428,6 +428,7 @@ func make_figure() -> Control:
 	surroundings.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	surroundings.environment.ambient_light_color = Color(.9,.88,.84)
 	surroundings.environment.ambient_light_energy = .55
+	preload("res://scripts/reflections.gd").apply(surroundings.environment,"studio")
 	scene.add_child(surroundings)
 	var key = DirectionalLight3D.new()
 	key.rotation_degrees = Vector3(-35,150,0)

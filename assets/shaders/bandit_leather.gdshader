@@ -6,6 +6,9 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 // point is (x). `studs` sets rows of bronze studs along the hem and down the
 // front; `wound` makes it strips wound diagonally round a limb, over linen
 // that shows between them (bracers and shin bindings).
+// Over it, photographed hide (assets/shaders/detail.gdshaderinc), through
+// its UVs: its grain, creases and scuffs.
+#include "res://assets/shaders/detail.gdshaderinc"
 uniform vec3 leather : source_color = vec3(0.28, 0.16, 0.08);
 uniform sampler2D grit : source_color, filter_linear_mipmap, repeat_enable;
 uniform float studs = 0.0;
@@ -19,10 +22,12 @@ void fragment() {
 	float grain = texture(grit, at * 6.0).r;
 	float scuff = smoothstep(0.55, 0.85, texture(grit, at * 1.7).r) * wear;
 	float stain = smoothstep(0.4, 0.75, texture(grit, at * 0.8 + 0.37).r);
-	vec3 colour = leather * (0.72 + 0.5 * grain);
+	vec2 hide_uv = at * 4.5;
+	vec4 hide = mat_data_uv(hide_uv, MAT_LEATHER_WORN);
+	vec3 colour = leather * (0.72 + 0.5 * grain) * mix(1.0, mat_shade_uv(hide_uv, MAT_LEATHER_WORN), 0.5) * (0.8 + 0.2 * hide.g);
 	colour = mix(colour, colour * vec3(1.55, 1.4, 1.25), scuff * 0.6);
 	colour = mix(colour, colour * 0.6, stain * 0.5);
-	float rough = 0.72 - 0.15 * grain;
+	float rough = clamp(0.5 - 0.15 * grain + hide.r * 0.35, 0.3, 0.9);
 	float metal = 0.0;
 	if (wound > 0.0) {
 		// Strips a hand wide wound round and up the limb, each laid half
@@ -48,7 +53,7 @@ void fragment() {
 		stud = max(stud, column);
 		if (stud > 0.5) {
 			colour = vec3(0.55, 0.38, 0.18) * (0.6 + 0.6 * grain);
-			metal = 0.85;
+			metal = 1.0;
 			rough = 0.4;
 		}
 	}
@@ -59,5 +64,6 @@ void fragment() {
 	ALBEDO = colour;
 	ROUGHNESS = rough;
 	METALLIC = metal;
+	if (FRONT_FACING) NORMAL_MAP = mat_normal_uv(hide_uv, MAT_LEATHER_WORN, metal > 0.5 ? 0.3 : 1.3) * 0.5 + 0.5;
 	SPECULAR = 0.3;
 }

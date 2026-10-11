@@ -316,8 +316,8 @@ func test():
 		for owner in kits:
 			check(kits[owner].all(func(n): return worn.get(n,false) == (hero.uid == owner)),"%s's kit is worn only by %s" % [owner,owner] + " (%s)" % hero.uid)
 	for cls in ["ranger","warrior","wizard"]:
-		var kit_material: StandardMaterial3D = Art.hero_kit(cls)
-		check(kit_material.normal_enabled and kit_material.normal_texture != null and kit_material.roughness_texture != null,"The %s's kit has painted relief and sheen" % cls)
+		var kit_material: ShaderMaterial = Art.hero_kit(cls)
+		check(kit_material.get_shader_parameter("kit_normal") != null and kit_material.get_shader_parameter("kit_rough") != null and kit_material.get_shader_parameter("kit_mat") != null,"The %s's kit has painted relief, sheen and what it is made of" % cls)
 	var helm = pg.heroes[0].visual.skin_meshes.filter(func(m): return m.name == "HeroHelmet")[0]
 	check(not helm.visible and is_instance_valid(pg.heroes[0].visual.hat_item) and pg.heroes[0].visual.hat_item.bone_name == "Head","The warrior wears his Gladiator's Helmet, a mesh of its own on his head, the kit's helm put away")
 	# Statue stone is laid out from the rest pose, so it stays fixed to the body

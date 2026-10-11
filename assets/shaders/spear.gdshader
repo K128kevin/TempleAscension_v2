@@ -11,6 +11,9 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // honing running out along the point. Ash: pale wood darkened by oil and
 // years of handling, long grain and pores. Leather: a dark thong in tight
 // turns, each turn's edges worn darker.
+// Over each lies photographed detail (assets/shaders/detail.gdshaderinc):
+// scratched iron, rust, the ash's grain running up the shaft, the hide.
+#include "res://assets/shaders/detail.gdshaderinc"
 uniform int part = 0;
 uniform bool blade = false;
 uniform vec3 iron : source_color = vec3(.30, .29, .28);
@@ -22,6 +25,15 @@ uniform vec3 hide : source_color = vec3(.24, .145, .085);
 uniform float turns = 47.6;
 // Each guard's spear a little different.
 uniform float seed = 0.0;
+
+varying vec3 metric_position;
+varying vec3 metric_normal;
+
+void vertex() {
+	vec3 size = vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), length(MODEL_MATRIX[2].xyz));
+	metric_position = VERTEX * size;
+	metric_normal = normalize(NORMAL / size);
+}
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -46,6 +58,10 @@ void fragment() {
 	// (glTF stores V flipped.)
 	float along = 1.0 - UV.y;
 	vec2 at = vec2(round_ * 6.0 + seed * 13.0, along * 40.0);
+	vec3 mp = metric_position + seed * 3.7;
+	vec3 mn = normalize(metric_normal);
+	vec3 mw = tri_weights(mn);
+	vec3 bent = mn;
 	if (part == 0) {
 		// Hammered: soft facets of the smith's blows, and the dark of the forge
 		// left in the dents.
@@ -68,9 +84,12 @@ void fragment() {
 			rough = mix(rough, .22, hone);
 			metallic = mix(metallic, .9, hone);
 		}
-		ALBEDO = metal;
-		METALLIC = metallic;
-		ROUGHNESS = rough;
+		vec4 d = mat_data(mp / 0.18, mn, mw, MAT_IRON_RUSTED);
+		float scan = mat_shade(mp / 0.18, mn, mw, MAT_STEEL_WORN);
+		ALBEDO = metal * mix(1.0, scan, 0.5) * (0.75 + 0.25 * d.g);
+		METALLIC = metallic > 0.5 ? 1.0 : metallic;
+		ROUGHNESS = clamp(rough * 0.7 + d.r * 0.35, 0.15, 0.95);
+		bent = mat_normal(mp / 0.18, mn, mw, MAT_STEEL_WORN, 0.9);
 	} else if (part == 1) {
 		// Long grain, the growth lines wandering a little, and fine pores.
 		float lines = fbm(vec2(round_ * 9.0 + seed * 5.0, along * 1.4));
@@ -80,15 +99,20 @@ void fragment() {
 		// Oiled and handled darker toward the grip and the foot.
 		float handled = exp(-pow((along - 1.0) / .35, 2.0)) * .3 + smoothstep(.45, .12, along) * .25;
 		wood *= 1.0 - handled - .12 * fbm(at * .3);
-		ALBEDO = wood;
-		ROUGHNESS = .62 - handled * .2;
+		vec4 d = mat_data_up(mp / 0.35, mn, mw, MAT_WOOD_ASH);
+		ALBEDO = wood * mix(1.0, mat_shade_up(mp / 0.35, mn, mw, MAT_WOOD_ASH), 0.6) * (0.85 + 0.15 * d.g);
+		ROUGHNESS = clamp(.5 - handled * .2 + d.r * .25, .3, .9);
+		bent = mat_normal_up(mp / 0.35, mn, mw, MAT_WOOD_ASH, 1.0);
 	} else {
 		// The thong's turns: each a strip with darker, worn edges between.
 		float turn = fract(along * turns + round_);
 		float strip = smoothstep(0.0, .18, turn) * smoothstep(1.0, .82, turn);
 		float worn = fbm(at * vec2(2.0, .7) + 21.0);
 		vec3 leather = hide * (.55 + .45 * strip) * (.85 + .3 * worn);
-		ALBEDO = leather;
-		ROUGHNESS = .7 - .15 * strip * worn;
+		vec4 d = mat_data(mp / 0.08, mn, mw, MAT_LEATHER_WORN);
+		ALBEDO = leather * (0.8 + 0.2 * d.g);
+		ROUGHNESS = clamp(.6 - .15 * strip * worn + d.r * .2, .35, .9);
+		bent = mat_normal(mp / 0.08, mn, mw, MAT_LEATHER_WORN, 1.2);
 	}
+	NORMAL = detail_normal(bent, mn, mp, VERTEX, NORMAL);
 }

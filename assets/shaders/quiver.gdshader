@@ -144,7 +144,7 @@ void fragment() {
 		rough = 0.35;
 	}
 	ALBEDO = color;
-	METALLIC = metal * 0.45;
+	METALLIC = metal;
 	ROUGHNESS = rough;
 	SPECULAR = mix(0.2, 0.5, metal);
 	vec3 sx = dFdx(VERTEX);

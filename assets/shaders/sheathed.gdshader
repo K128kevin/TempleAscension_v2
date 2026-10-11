@@ -74,7 +74,7 @@ void fragment() {
 		rough = 0.35;
 	}
 	ALBEDO = c;
-	METALLIC = metal * 0.45;
+	METALLIC = metal;
 	ROUGHNESS = rough;
 	vec3 sx = dFdx(VERTEX);
 	vec3 sy = dFdy(VERTEX);

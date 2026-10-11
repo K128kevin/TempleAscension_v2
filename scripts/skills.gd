@@ -240,7 +240,7 @@ const SWINGS = ["cleave","slam","strike","bash","vampiric","shadow","execute","c
 # Each of the warrior's skills has a swing of its own (tools/import_skills.py):
 # its clip, how long it plays, and how far through it the blow lands.
 const WARRIOR_CLIPS = {"cleave":["SkillCleave",1.0,.52],"strike":["SkillStrike",1.0,.55],
-	"bash":["SkillBash",.9,.5],"execute":["SkillExecute",1.3,.58],"slam":["SkillSlam",1.1,.52],"shockwave":["SkillShockwave",1.2,.56],
+	"bash":["SkillBash",.9,.5],"execute":["SkillExecute",1.3,.58],"slam":["SkillSlam",1.6,.66],"shockwave":["SkillShockwave",1.2,.56],
 	"cry":["SkillCry",1.0,.3],"charge":["SkillCharge",1.0,.82],"leap":["SkillLeap",1.0,.56]}
 # Vampiric and Shadow Strike are struck with the normal attack's swings, run
 # on from (and into) them as they are (Game.swing_sword), the blade glowing
