@@ -663,7 +663,8 @@ inventory.
   the Ancients...); the **uniques** (purple) are one of a kind, each with an
   effect of its own: the Robe of the Lost Emperor and the Ice Queen's Gloves
   (wizard), the Ancient Gladiator's Helmet and the Lightning Hammer
-  (warrior), the Bow of Odysseus (ranger) and the Marathon Boots (everyone).
+  (warrior), the Bow of Odysseus, Cerberus's Fang and the Night Vest (ranger)
+  and the Marathon Boots (everyone).
 - **Armor** is a number: all the hero wears adds up (A), with his shield's,
   and takes A/(A+150) off every blow, to 75% at most. The starting sets add
   to 108 (heavy, with the buckler), 58 (medium) and 31 (light).

@@ -145,7 +145,7 @@ func test():
 		var pool: Array = Items.loot(class_id)
 		check(pool.size() >= 6 and pool.all(func(id): return Items.usable(class_id,id) and Items.BASES[id].rarity == "common"),"Every class has its own drops, all of them usable: %s (%d)" % [class_id,pool.size()])
 		var own: Array = Items.loot(class_id,true)
-		check(own.size() == (2 if class_id == "ranger" else 3) and own.all(func(id): return Items.BASES[id]["for"] in [class_id,""] and Items.usable(class_id,id)),"Each class has its own uniques, and the boots made for everyone: %s %s" % [class_id,own])
+		check(own.size() == (4 if class_id == "ranger" else 3) and own.all(func(id): return Items.BASES[id]["for"] in [class_id,""] and Items.usable(class_id,id)),"Each class has its own uniques, and the boots made for everyone: %s %s" % [class_id,own])
 	check(Items.usable("warrior","marathon_boots") and Items.usable("ranger","marathon_boots") and Items.usable("wizard","marathon_boots") and not Items.usable("warrior","sandals"),"The Marathon Boots are light armor every class can wear; other light armor is the wizard's")
 
 	# --- Prefixes and suffixes: what goes on what.
@@ -447,6 +447,40 @@ func test():
 	check("Ice Queen" in game.skills.reason("ice_bolt") and game.skills.reason("fireball") == "","and no frost spell may be cast, fire still may")
 	game.move_item("hands","bag:%d" % Items.free_bag_slot(game.run))
 	check(game.skills.reason("ice_bolt") == "","Gloves off, frost again")
+	hero("ranger",{"main":"cerberuss_fang","off":""})
+	game.run.skills["poisons"] = 1
+	check(Items.effect(game.run,"cerberus") and Data.span(game.run,"melee") == [26.0,34.0] and Data.stat(game.run,0) == 13 and Data.stat(game.run,1) == 13 and game.player.visual.weapon_kind == "dagger","Cerberus's Fang: 26 to 34, its Strength and Dexterity, held as a dagger")
+	victim = foe(1.5)
+	var pack: Array = []
+	for ahead in [2.5,3.5,8.0]:
+		var e = game.spawn_enemy("gladiator","fang:%d" % pack.size(),game.world.move(origin,Vector3(0,0,-ahead)))
+		e.puppet = true; e.awake = true; e.max_hp = 100000.0; e.hp = e.max_hp; e.dots.clear()
+		pack.append(e)
+	victim.dots.clear()
+	game.skills.strike(victim,10.0)
+	var venom = func(e) -> float: return e.dots.filter(func(d): return d.kind == "poison").map(func(d): return d.rate*d.seconds).reduce(func(a,b): return a+b,0.0)
+	check(is_equal_approx(venom.call(victim),10.0*.1*1.5),"Its poison deals half again as much (%.2f)" % venom.call(victim))
+	check(is_equal_approx(venom.call(pack[0]),10.0*.1*1.5) and is_equal_approx(venom.call(pack[1]),10.0*.1*1.5) and venom.call(pack[2]) == 0.0,"and spreads to those within 3 metres, not beyond (%s)" % [pack.map(venom)])
+	for e in pack:
+		game.enemies.erase(e); e.queue_free()
+	hero("ranger",{"chest":"night_vest"})
+	game.run.skills["hide_in_shadows"] = 1
+	check(Items.effect(game.run,"night_vest") and Data.stat(game.run,1) == 20 and Data.stat(game.run,3) == 13 and Data.stat(game.run,4) == 13,"The Night Vest: its Dexterity, Vitality and Willpower")
+	var open_pace: float = game.player_pace()
+	game.skills.enter_shadows()
+	check(game.skills.hidden and is_equal_approx(game.player_pace(),open_pace*(1.0-game.skills.hide_slow*.01)*1.2),"Hidden, he moves a fifth faster than the shadows allow")
+	victim = foe(1.5)
+	game.skills.leave_shadows()
+	check(not game.skills.hidden and game.skills.night_time > 0 and game.skills.effects().any(func(e): return e.id == "night_strike"),"Out of them, Night Strike is ready, on the buff bar")
+	hp = victim.hp
+	game.skills.strike(victim,10.0)
+	check(is_equal_approx(hp-victim.hp,20.0) and game.skills.night_time == 0.0,"The first blow lands double (%.1f)" % (hp-victim.hp))
+	hp = victim.hp
+	game.skills.strike(victim,10.0)
+	check(is_equal_approx(hp-victim.hp,10.0),"the next as it is")
+	game.skills.enter_shadows(); game.skills.leave_shadows()
+	game.skills.tick(5.1)
+	check(game.skills.night_time == 0.0,"Five seconds out of the shadows, the chance is gone")
 
 	# --- Every class's attacks with every kind of weapon it can hold.
 	var seen = {}

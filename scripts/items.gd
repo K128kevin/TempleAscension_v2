@@ -171,6 +171,11 @@ const BASES = {
 		"look":{"model":"war_hammer","size":Vector3(.36,1.4,.15),"grip":.42,"finish":"arms","metal_from":.78,"edge":[.8,1.0],"haft":.088,"steel":Color(.58,.7,1.0),"wood":Color(.1,.08,.1)}},
 	"ice_queens_gloves":{"name":"Ice Queen's Gloves","rarity":"unique","for":"wizard","slot":"hands","weight":"light","armor":8.0,"bonus":{"intelligence":15,"vitality":15,"willpower":15,"spell_damage":25.0},
 		"effect":"ice_queen","effect_text":"You cannot use any frost abilities","look":{"tint":Color(.8,.92,1.0)}},
+	"cerberuss_fang":{"name":"Cerberus's Fang","rarity":"unique","for":"ranger","slot":"weapon","kind":"dagger","hands":1,"damage":[26.0,34.0],"speed":2.0,"bonus":{"strength":8,"dexterity":8},
+		"effect":"cerberus","effect_text":"Your poison deals 50% more, and every time you poison a target it poisons up to 3 more within 3 metres",
+		"look":{"model":"dagger","size":Vector3(.1,.56,.05),"grip":.11,"finish":"dagger","tint":Color(.34,.46,.32)}},
+	"night_vest":{"name":"Night Vest","rarity":"unique","for":"ranger","slot":"chest","weight":"medium","armor":24.0,"bonus":{"dexterity":15,"willpower":8,"vitality":8},
+		"effect":"night_vest","effect_text":"20% faster while hidden in shadows, and your first attack within 5 seconds of leaving them deals double damage","look":{"tint":Color(.1,.1,.17)}},
 
 	# --- Carried, not worn or held: the key to the arena basement's gate,
 	# which one of its bandits keeps (scripts/game.gd). Never random loot.

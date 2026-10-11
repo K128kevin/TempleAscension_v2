@@ -570,7 +570,8 @@ func toggle_walk() -> void:
 func player_pace() -> float:
 	# (Swift Footed quickens the ranger; hidden in the shadows he creeps.)
 	var pace = (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)*(1.0+Data.passive(run,"swift_footed")*.01)*(1.0+Items.bonus(run,"speed")*.01)*(1.0+(skills.BLAZING_RUN if skills.blazing_time>0 else 0.0)*.01)
-	return pace*(1.0-skills.hide_slow*.01) if skills.hidden else pace
+	# (The Night Vest quickens him while hidden.)
+	return pace*(1.0-skills.hide_slow*.01)*(1.0+skills.NIGHT_SPEED*.01 if Items.effect(run,"night_vest") else 1.0) if skills.hidden else pace
 
 # Everyone an attack can land on. Normally the statues; in the playground every
 # unit, heroes included, except the one attacking.

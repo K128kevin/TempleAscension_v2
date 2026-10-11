@@ -68,6 +68,16 @@ const HAMMER_DAMAGE = [200.0,300.0]
 const HAMMER_LEAPS = 4
 # While its lightning is being dealt (no second bolt from the bolt's hits).
 var hammer_striking = false
+# Cerberus's Fang: how much more its poison deals, how many more it poisons
+# with each target, and how near they must stand.
+const FANG_POISON = 50.0
+const FANG_SPREAD = 3
+const FANG_RADIUS = 3.0
+# The Night Vest: how much faster he moves hidden, and for how long after
+# leaving the shadows his next blow deals double.
+const NIGHT_SPEED = 20.0
+const NIGHT_SECONDS = 5.0
+var night_time = 0.0
 var charge_glow: Node3D
 # Power Shot being aimed: how long the aim is, and how much of it is left (the
 # HUD shows it as a bar over his head).
@@ -540,6 +550,7 @@ func effects() -> Array:
 	if frenzy_time>0: out.append(effect("frenzy","Frenzy",0,frenzy_time,"Attacking %d%% faster." % roundi(frenzy_bonus)))
 	if rally_time>0: out.append(effect("rallying_cry","Rallying Cry",0,rally_time,"Attacking %d%% faster and dealing %d%% more damage." % [roundi(RALLY_BONUS),roundi(RALLY_BONUS)],false,RALLY_SECONDS))
 	if surprise_time>0: out.append(effect("element_of_surprise","Element of Surprise",0,surprise_time,"Dealing %d%% more damage." % roundi(surprise_bonus)))
+	if night_time>0: out.append(effect("night_strike","Night Strike",0,night_time,"Your next attack deals double damage."))
 	if offense_stacks>0: out.append(effect("offensive_rhythm","Offensive Rhythm",offense_stacks,offense_time,"Dealing %d%% more damage." % roundi(offense_stacks*Data.passive(game.run,"offensive_rhythm"))))
 	if defense_stacks>0:
 		var cut: float = Book.values("defensive_rhythm",rank("defensive_rhythm")).x
@@ -813,6 +824,9 @@ func leave_shadows() -> void:
 	if not hidden: return
 	hidden = false
 	game.player.visual.set_shadowed(false)
+	if Data.Items.effect(game.run,"night_vest"):
+		night_time = NIGHT_SECONDS
+		lasting.night_strike = NIGHT_SECONDS
 	var surprise: Dictionary = Book.values("element_of_surprise",rank("element_of_surprise"))
 	if surprise.x>0:
 		surprise_bonus = surprise.x
@@ -1014,6 +1028,11 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 	amount *= rhythm_boost()
 	if surprise_time>0: amount *= 1.0+surprise_bonus*.01
 	if rally_time>0: amount *= 1.0+RALLY_BONUS*.01
+	# The Night Vest: the first blow out of the shadows lands double.
+	if night_time>0 and not spell_striking and not hammer_striking:
+		amount *= 2.0
+		night_time = 0.0
+		game.float_text(enemy.position+Vector3.UP*2.1,"Night Strike",Color(.7,.68,.95))
 	if not spell_striking: rally_chance()
 	var hammer: bool = not spell_striking and not hammer_striking and Data.Items.effect(game.run,"lightning_hammer") and randf()*100.0<HAMMER_CHANCE
 	var mastery: Dictionary = Data.specialization(game.run,weapon)
@@ -1027,7 +1046,18 @@ func strike(enemy, amount: float, type: String = "physical", bonus: float = 0.0,
 		lasting.offensive_rhythm = rhythm.z
 	var curse: Dictionary = Book.values("cursed_blade",rank("cursed_blade"))
 	if curse.y>0 and not enemy.dead: enemy.add_dot("curse",amount*curse.x*.01,CURSE_SECONDS,int(curse.y))
-	if poison.y>0 and weapon in [2,5] and not enemy.dead: enemy.add_dot("poison",amount*poison.x*.01,POISON_SECONDS,int(poison.y))
+	if poison.y>0 and weapon in [2,5] and not enemy.dead:
+		# Cerberus's Fang: a stronger poison, and others near the one poisoned
+		# take it too.
+		var fanged: bool = Data.Items.effect(game.run,"cerberus")
+		var venom: float = amount*poison.x*.01*(1.0+FANG_POISON*.01 if fanged else 1.0)
+		enemy.add_dot("poison",venom,POISON_SECONDS,int(poison.y))
+		if fanged:
+			var near: Array = targets(enemy.position,FANG_RADIUS).filter(func(e): return e != enemy)
+			near.sort_custom(func(a,b): return a.position.distance_squared_to(enemy.position)<b.position.distance_squared_to(enemy.position))
+			for other in near.slice(0,FANG_SPREAD):
+				other.add_dot("poison",venom,POISON_SECONDS,int(poison.y))
+				passing.append([RangerFx.burst(game.world,other.position+Vector3.UP*1.0,Color(.35,.7,.25,.7),.8,10),.8])
 	# What his equipment restores with each hit landed.
 	var leech: float = Data.Items.bonus(game.run,"leech")
 	if leech>0 and not game.player.dead: game.player.hp = minf(Data.max_health(game.run),game.player.hp+leech)
@@ -1397,6 +1427,7 @@ func tick(dt: float) -> void:
 	defense_time = maxf(0,defense_time-dt)
 	if defense_time<=0: defense_stacks = 0
 	surprise_time = maxf(0,surprise_time-dt)
+	night_time = maxf(0,night_time-dt)
 	aim_left = maxf(0,aim_left-dt)
 	if aim_left<=0 or game.player.dead: aim_total = 0.0
 	if aim_total <= 0.0 and game.player.busy <= 0.0: powering = false

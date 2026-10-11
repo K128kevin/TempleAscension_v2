@@ -95,6 +95,11 @@ Dexterity on top of its own. Its picture is its base's.
 - **Ice Queen's Gloves** (wizard): +15 Intelligence, Vitality and Willpower
   and 25% more spell damage, but no frost spell can be cast while they are
   worn (Freeze Floor and Frost Blast end at once).
+- **Cerberus's Fang** (ranger): a dagger; the Poisons passive's poison deals
+  50% more, and every target it poisons poisons up to 3 more within 3 m.
+- **Night Vest** (ranger): +15 Dexterity, +8 Willpower and Vitality; he moves
+  20% faster while hidden in shadows, and his first attack within 5 seconds
+  of leaving them deals double damage (**Night Strike**, on the buff bar).
 
 ## Drops
 
@@ -253,6 +258,8 @@ An uncommon item is a common item with one of these; a rare item has a prefix an
 | The Bow of Odysseus | Bow · Two-handed | Ranger | 43–55 damage; 1.5 attacks per second; +15 Dexterity; +8 Vitality. Your arrows have a 25% chance to stun the target for 2 seconds |
 | Lightning Hammer | Mace · Two-handed | Warrior | 60–76 damage; 0.8 attacks per second; +15 Strength; +12 Vitality. 10% chance on hit to call down lightning on the target for 200–300 damage, leaping to up to 4 more targets, 25% weaker with each leap |
 | Ice Queen's Gloves | Light armor · Hands | Wizard | 8 armor; +15 Intelligence; +15 Vitality; +15 Willpower; +25% spell damage. You cannot use any frost abilities |
+| Cerberus's Fang | Dagger · One-handed | Ranger | 26–34 damage; 2 attacks per second; +8 Strength; +8 Dexterity. Your poison deals 50% more, and every time you poison a target it poisons up to 3 more within 3 metres |
+| Night Vest | Medium armor · Chest | Ranger | 24 armor; +15 Dexterity; +8 Vitality; +8 Willpower. 20% faster while hidden in shadows, and your first attack within 5 seconds of leaving them deals double damage |
 
 ### Drop chances
 
