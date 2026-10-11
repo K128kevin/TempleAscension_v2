@@ -14,8 +14,10 @@ extends SkeletonModifier3D
 # How firmly the hand is held there (0: as animated).
 var weight = 0.0
 var along = 0.0
-# Where the haft passes through a fist, in the hand's own space.
-const PALM = Vector3(0,.075,0)
+# Where the haft passes through a fist, in the hand's own space: through
+# the hollow of the curled fingers, a little toward the palm from the
+# knuckles' plane (scripts/visual.gd PALM_SEAT, mirrored for the left).
+const PALM = Vector3(.028,.085,0)
 
 var upper = -1
 var lower = -1
@@ -34,7 +36,7 @@ func _process_modification_with_delta(_delta: float) -> void:
 	var arm: Transform3D = skeleton.get_bone_global_pose(upper)
 	var fore: Transform3D = skeleton.get_bone_global_pose(lower)
 	var fist: Transform3D = skeleton.get_bone_global_pose(hand)
-	var wanted: Vector3 = skeleton.get_bone_global_pose(lead)*(PALM+Vector3(0,0,along))-fist.basis*PALM
+	var wanted: Vector3 = skeleton.get_bone_global_pose(lead)*(Vector3(-PALM.x,PALM.y,along))-fist.basis*PALM
 	var shoulder: Vector3 = arm.origin
 	var elbow: Vector3 = fore.origin
 	var wrist: Vector3 = fist.origin

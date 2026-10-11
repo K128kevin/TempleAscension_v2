@@ -316,10 +316,19 @@ FOREARM_ROLL = math.radians(50)
 
 # ---- The weapon in both hands ----
 
-# The grip: the haft passes through each hand's PALM, along its own Z; the
-# left hand holds it HANDS apart from the right, toward the butt.
-PALM = .075
+# The grip: the haft passes through each hand's PALM along the fingers from
+# the wrist and PALM_IN toward the palm from the knuckles' plane (through
+# the hollow of the curled fingers: scripts/visual.gd PALM_SEAT), along its
+# own Z; the left hand holds it HANDS apart from the right, toward the butt.
+PALM = .085
+PALM_IN = .028
 HANDS = .20
+# A fist turned about the haft further than this from the way its forearm
+# carries it would wring the wrist: it is turned back to the limit. And a
+# haft more than WRIST_DEVIATION from square to the forearm would bend the
+# wrist sideways past what it can: the haft is tipped back toward square.
+WRIST_MAX = math.radians(62)
+WRIST_DEVIATION = math.radians(35)
 # The weapon's ends from the right fist, for the checks: the battle axe's butt
 # and head (its bits ACROSS either way from the haft), and the greatsword's point.
 BUTT = .40
@@ -353,22 +362,51 @@ def hold(grip, haft, fingers, elbow_r, elbow_l):
     shoulder_l = B['upperarm_l'].matrix.translation.copy()
     ly = (grip-z*HANDS)-shoulder_l
     ly = (ly-z*ly.dot(z)).normalized()
-    shrug('r', grip-y*PALM)
-    shrug('l', grip-z*HANDS-ly*PALM)
+    # (The right wrist sits PALM back along the fingers and PALM_IN out from
+    # the palm; the left, mirrored, the other way out.)
+    def wrist_r(y): return grip-y*PALM+y.cross(z)*PALM_IN
+    def wrist_l(ly): return grip-z*HANDS-ly*PALM-ly.cross(z)*PALM_IN
+    shrug('r', wrist_r(y))
+    shrug('l', wrist_l(ly))
     shoulders = {s: B['upperarm_'+s].matrix.translation.copy() for s in 'lr'}
     # Neither arm is asked for more than its length: the weapon is drawn in.
     asked = grip.copy()
     for i in range(4):
-        for s, wrist in (('r', grip-y*PALM), ('l', grip-z*HANDS-ly*PALM)):
+        for s, wrist in (('r', wrist_r(y)), ('l', wrist_l(ly))):
             d = wrist-shoulders[s]
             if d.length > ARM-.006: grip -= d.normalized()*(d.length-ARM+.006)
     short['arms'] = (grip-asked).length
-    arm('r', grip-y*PALM, shoulders['r']+Vector(elbow_r))
+    arm('r', wrist_r(y), shoulders['r']+Vector(elbow_r))
+    # The haft kept near enough to square across the forearm (a wrist bends
+    # only so far sideways): where the forearm runs too nearly along it, the
+    # haft is tipped about the grip back toward square, and the fingers'
+    # way is laid across it again.
+    fore = (B['hand_r'].matrix.translation-B['lowerarm_r'].matrix.translation).normalized()
+    lean = fore.angle(z)-math.pi/2
+    if abs(lean) > WRIST_DEVIATION:
+        axis = fore.cross(z)
+        if axis.length > 1e-4:
+            z = (Quaternion(axis.normalized(), -(lean-math.copysign(WRIST_DEVIATION, lean))) @ z).normalized()
+            y = (y-z*y.dot(z)).normalized()
+            x = y.cross(z)
+            arm('r', wrist_r(y), shoulders['r']+Vector(elbow_r))
+            fore = (B['hand_r'].matrix.translation-B['lowerarm_r'].matrix.translation).normalized()
+    # The fist turned about the haft no further from the forearm's line than
+    # a wrist allows (the knuckles kept near enough to facing along the
+    # forearm): the fingers' way is swung about the haft back to the limit.
+    across = (fore-z*fore.dot(z))
+    if across.length > .2:
+        across = across.normalized()
+        off = math.atan2(y.cross(across).dot(z), y.dot(across))
+        if abs(off) > WRIST_MAX:
+            y = (Quaternion(z, off-math.copysign(WRIST_MAX, off)) @ y).normalized()
+            x = y.cross(z)
+            arm('r', wrist_r(y), shoulders['r']+Vector(elbow_r))
     turn_hand('r', x, y, z)
     for i in range(3):
-        arm('l', grip-z*HANDS-ly*PALM, shoulders['l']+Vector(elbow_l))
+        arm('l', wrist_l(ly), shoulders['l']+Vector(elbow_l))
         ly = left_fingers()
-    arm('l', grip-z*HANDS-ly*PALM, shoulders['l']+Vector(elbow_l))
+    arm('l', wrist_l(ly), shoulders['l']+Vector(elbow_l))
     turn_hand('l', ly.cross(z), ly, z)
     measured['twist r'], measured['twist l'] = untwist('r'), untwist('l')
 
@@ -553,10 +591,15 @@ FORWARD = (0, -1, 0)
 # is on the ground while he is carried past it.
 CUT = (.62, .1, .78)
 SWING1_ADVANCE = [(0, 0), (.3, 0), (.5, .44), (.64, .5), (.9, .62), (1, .62)]
-SWING1_CLOCK = [(0, 0, 0), (.27, .92, 1.5), (.37, 1, .6), (.50, 2, 12, 8), (.65, 3, 1.0), (1, 4, 0)]
+SWING1_CLOCK = [(0, 0, 0), (.14, .5, 2.6), (.27, .92, 1.5), (.37, 1, .6), (.50, 2, 12, 8), (.65, 3, 1.0), (1, 4, 0)]
 SWING1 = [K(0),
-    K(1, down=.09, fwd=-.14, side=-.04, turn=-.42, tilt=-.04, twist=-.8, lean=-.16, bend=-.08, g=(-.36, .3, 1.66), z=plane(CUT, FORWARD, 158), n=CUT,
-        er=(-.7, .4, -.1), el=(.3, -.5, -.4), lh=.3),
+    # (Wound up as a batter loads: the hands drawn back past the right
+    # shoulder, the right elbow pulled behind him and the arms stretched
+    # back, the weapon's head hanging behind.)
+    K(.5, down=.06, fwd=-.08, side=-.02, turn=-.3, twist=-.55, lean=-.08, bend=-.05, g=(-.42, .36, 1.52), z=plane(CUT, FORWARD, 150), n=CUT,
+        er=(-.6, .6, -.15), el=(.35, -.3, -.45), lh=.2),
+    K(1, down=.09, fwd=-.14, side=-.04, turn=-.42, tilt=-.04, twist=-.8, lean=-.16, bend=-.08, g=(-.46, .56, 1.48), z=plane(CUT, FORWARD, 158), n=CUT,
+        er=(-.45, .85, -.2), el=(.4, -.05, -.5), lh=.3),
     K(1.5, down=.12, fwd=.1, side=-.02, turn=-.12, twist=-.25, lean=.14, bend=-.02, g=(-.22, -.36, 1.56), z=plane(CUT, FORWARD, 96), n=CUT,
         er=(-.7, .1, -.3), el=(.4, -.4, -.6), lh=.1, rf=(.3, .14, 0)),
     K(2, down=.17, fwd=.38, side=.04, turn=.3, tilt=.05, twist=.5, lean=.38, bend=.06, g=(.1, -.6, .94), z=plane(CUT, FORWARD, -12), n=CUT,

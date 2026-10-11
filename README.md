@@ -475,7 +475,13 @@ changes nothing about the blow). He walks into his target as he swings, stepping
 each foot in turn. If
 he breaks off (moves, casts, or simply stops), the next attack starts from the first.
 
-With a second one-handed weapon in the left hand, the sword's swings and skills are
+Each cut is wound up as a throw is: the hand drawn back past the shoulder with the
+elbow pulled behind him and the arm stretching back before it is whipped through,
+and a two-handed weapon is loaded as a batter loads, the hands drawn back past the
+right shoulder and the weapon's head hanging behind. A held weapon sits through the
+hollow of the fist, the fingers wrapped round it, and a two-handed haft is kept near
+square across each forearm, the fists never turned about it further than a wrist
+allows. With a second one-handed weapon in the left hand, the sword's swings and skills are
 played with the left arm hanging at his side as in the dual idle, so the second
 weapon never crosses into his body. With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):
 a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for

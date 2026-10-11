@@ -644,6 +644,13 @@ func bare_headed() -> bool:
 # bone: where it sits on the crown, in the bone's own space.
 var hat_item: BoneAttachment3D
 const HAT_ON_HEAD = Transform3D(Basis(Vector3.UP,PI),Vector3(0,.13,0))
+# Where a held weapon's haft passes through the right fist, in the hand's
+# own space: along the fingers from the wrist, and in from the knuckles'
+# plane toward the palm, through the hollow of the curled fingers (the
+# fingers curl toward the hand's -X; the left hand is its mirror: left_of).
+# The clips are keyed with the same seat (tools/import_heavy.py PALM,
+# PALM_IN) and the second hand is held to it (scripts/two_hand_grip.gd).
+const PALM_SEAT = Vector3(-.028,.085,0)
 # Shoes worn in the kit's boots' place (the Marathon Boots), one attachment
 # a foot.
 var shoe_items: Array = []
@@ -919,7 +926,7 @@ func arm(weapon: String, swung: String = "") -> void:
 		# Model +Y runs along the weapon; align to the hand's local +Z grip axis.
 		item.rotation.x = PI / 2
 		# The grip sits a fixed share up each hilt; the larger sword's hilt is longer.
-		item.position = Vector3(0,.075,{"bow":-.55,"sword":-.22,"dagger":-.10,"heavy":-.40,"pike":-.70}.get(weapon,-.17)*(SICA_SIZE.y/sizes.sword.y if sica else 1.0))
+		item.position = Vector3(PALM_SEAT.x,PALM_SEAT.y,{"bow":-.55,"sword":-.22,"dagger":-.10,"heavy":-.40,"pike":-.70}.get(weapon,-.17)*(SICA_SIZE.y/sizes.sword.y if sica else 1.0))
 		if not held.is_empty(): item.position.z = -held.grip
 		weapon_rest = item.transform
 		if oracle or silver_staff:
@@ -981,7 +988,7 @@ func arm(weapon: String, swung: String = "") -> void:
 		skeleton.add_child(off_attachment)
 		off_item = Art.held_model(off_held.look)
 		off_attachment.add_child(off_item)
-		off_item.transform = left_of(Transform3D(Basis(Vector3.RIGHT,PI/2),Vector3(0,.075,-off_held.look.grip)))*Transform3D(Basis.from_scale(off_held.look.size),Vector3.ZERO)
+		off_item.transform = left_of(Transform3D(Basis(Vector3.RIGHT,PI/2),Vector3(PALM_SEAT.x,PALM_SEAT.y,-off_held.look.grip)))*Transform3D(Basis.from_scale(off_held.look.size),Vector3.ZERO)
 	# Both hands on a two-handed weapon's haft.
 	if weapon in ["heavy","pike"] and not is_stone:
 		# (The left hand a fixed way along the haft from the right: below it

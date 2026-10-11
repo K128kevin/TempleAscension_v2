@@ -124,10 +124,13 @@ def half_width(z):
 
 def section(z):
     w = half_width(z)
-    spine = .0048 if z < TIP_START else .0048*(1-.7*(z-TIP_START)/(LENGTH-TIP_START))
+    # (Toward the point the spine thins with the width, and the fuller's
+    # lines stay inside the narrowing blade, so it comes to one true point
+    # rather than flaring or forking at the tip.)
+    spine = .0048 if z < TIP_START else max(.0048*(1-.93*(z-TIP_START)/(LENGTH-TIP_START)), .0004)
     edge = .0012 if z < RICASSO_TOP else .0004
     fuller = 1.0 if RICASSO_TOP+.02 < z < FULLER_TOP else (0.0 if z < RICASSO_TOP or z > FULLER_TOP+.06 else (max(0.0, 1-(z-FULLER_TOP)/.06) if z > FULLER_TOP else (z-RICASSO_TOP)/.02))
-    fw = .0095
+    fw = min(.0095, w*.5)
     across = [-w, -w*.6, -fw-.002, -fw, -fw*.5, 0, fw*.5, fw, fw+.002, w*.6, w]
     front = []
     for x in across:
