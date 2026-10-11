@@ -43,7 +43,7 @@ const SOUTH_GAP = Vector3(-226,0,70)
 const SOUTH_REACH = Vector2(56,196)
 const DUNE = Vector3(-262,0,146)
 const DUNE_RADII = Vector2(46,31)
-const DUNE_HEIGHT = 9.0
+const DUNE_HEIGHT = 15.0
 # Where a new character wakes: on top of the dune, by his campfire
 # (Data.new_character).
 const START = Vector3(-262,0,144)

@@ -5,6 +5,7 @@ const CombatAnimation = preload("res://scripts/combat_animation.gd")
 const Art = preload("res://scripts/assets.gd")
 const Temple = preload("res://scripts/temple.gd")
 const Overworld = preload("res://scripts/overworld.gd")
+const Town = preload("res://scripts/world_town.gd")
 const Actor = preload("res://scripts/actor.gd")
 const Hud = preload("res://scripts/hud.gd")
 const ProgressionUI = preload("res://scripts/progression_ui.gd")
@@ -38,13 +39,15 @@ var walking = false
 var route = PackedVector3Array()
 var left_held = false
 var right_held = false
-# The opening of a new character's story: the camera starts a little above
-# his head, looking out over the dune toward the town, holds there, then
-# draws back and up into the game's own view; until it arrives he cannot be
-# moved (Escape skips it). `intro_left`: the seconds of it left (0: none).
+# The opening of a new character's story: the camera starts high over his
+# head on the dune, looking out over the town below, its arena and its
+# streets, holds there, then slowly draws back and up into the game's own
+# view; until it arrives he cannot be moved (Escape skips it). `intro_left`:
+# the seconds of it left (0: none).
 const INTRO_HOLD = 4.0
-const INTRO_MOVE = 4.0
+const INTRO_MOVE = 8.0
 const INTRO_BACK = 120.0
+const INTRO_HEIGHT = 24.0
 var intro_left = 0.0
 var intro_enabled = true
 # A left hold that began on open ground is a move order: dragging it over a
@@ -525,19 +528,19 @@ func start_intro() -> void:
 	world.camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	tick_intro(0.0)
 
-# Its camera, each frame: through the hold, a little above and behind his
-# head looking down toward the town; then, eased, drawn back along the game's
-# own line of sight, far enough out that its perspective is all but the flat
-# view's, which it becomes as it arrives.
+# Its camera, each frame: through the hold, high over his head and a little
+# behind him, looking down over the town to its arena; then, eased, drawn
+# back along the game's own line of sight, far enough out that its
+# perspective is all but the flat view's, which it becomes as it arrives.
 func tick_intro(dt: float) -> void:
 	intro_left = maxf(0.0,intro_left-dt)
 	var cam: Camera3D = world.camera
 	var feet: Vector3 = player.position+Vector3.UP*world.lift(player.position)
-	var toward: Vector3 = Overworld.TOWN_GATE-player.position
+	var toward: Vector3 = Town.ARENA-player.position
 	toward.y = 0
 	toward = toward.normalized()
-	var head: Vector3 = feet+Vector3.UP*2.2-toward*1.3
-	var head_dir: Vector3 = (toward*6.0-Vector3.UP).normalized()
+	var head: Vector3 = feet+Vector3.UP*INTRO_HEIGHT-toward*6.0
+	var head_dir: Vector3 = (Town.ARENA+Vector3.UP*6.0-head).normalized()
 	var line: Vector3 = Overworld.VIEW.normalized()
 	var back: Vector3 = feet+line*INTRO_BACK
 	var t: float = 0.0 if intro_left>INTRO_MOVE else clampf(1.0-intro_left/INTRO_MOVE,0.0,1.0)
@@ -545,7 +548,7 @@ func tick_intro(dt: float) -> void:
 	cam.position = head.lerp(back,s)
 	var dir: Vector3 = head_dir.slerp(-line,s)
 	cam.look_at(cam.position+dir)
-	cam.fov = lerpf(68.0,2.0*rad_to_deg(atan(world.zoom*.5/INTRO_BACK)),s)
+	cam.fov = lerpf(52.0,2.0*rad_to_deg(atan(world.zoom*.5/INTRO_BACK)),s)
 	if intro_left<=0: end_intro()
 
 # The opening over (or skipped): the game's own flat view, and him to command.
