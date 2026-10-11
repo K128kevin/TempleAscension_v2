@@ -107,8 +107,8 @@ var quadruped = false
 var enemy_kind = ""
 # Remaining time of a hit reaction; locomotion waits for it to finish.
 var reaction_time = 0.0
-# The warrior's round grey metal shield, strapped flat to the outside of the
-# left forearm so it follows every pose.
+# The warrior's shield, strapped flat to the outside of the left forearm so
+# it follows every pose, the forearm across its back.
 const SHIELD_SIZE = Vector3(.66,.66,.12)
 const SHIELD_CENTER = Vector3(0,.14,-.135)
 # The gladiator's tall curved scutum, strapped over the same forearm.
@@ -901,7 +901,13 @@ func arm(weapon: String, swung: String = "") -> void:
 		# The imported shield pivots at its bottom edge. Center its back against
 		# the outer forearm, keeping the wrist inside its face rather than at a rim.
 		if scutum: shield.basis = Basis(SCUTUM_ROTATION.normalized())*Basis.from_scale(board)
-		else: shield.rotation.y = PI
+		else:
+			# A hero's board is strapped across the forearm as a shield is
+			# worn, the forearm running across its back: it stands upright
+			# when the arm is raised before him, and lies along his side,
+			# top forward, when the arm hangs (laid along the forearm, a tall
+			# board stood on end beside a hanging arm).
+			shield.basis = Basis(Vector3.UP,PI)*Basis(Vector3.BACK,-PI/2)*Basis.from_scale(board)
 		# (A tall board of the hero's hangs lower on the arm, as its look says.)
 		var drop: float = TOWER_DROP if tower else (0.0 if scutum else float(off_held.get("look",{}).get("drop",0.0)))
 		shield.position = (SCUTUM_CENTER if scutum else SHIELD_CENTER)-shield.basis*Vector3(0,.5+drop,0)

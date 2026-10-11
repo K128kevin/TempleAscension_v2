@@ -77,7 +77,7 @@ const ATTRIBUTES = ["strength","dexterity","intelligence","vitality","willpower"
 # the fist holds it (`grip`), its `finish` and colours; armor shows as its
 # class's own piece, in a `tint` of its own, as other `pieces` of the kit
 # in its piece's place (the warrior's plated legs), or as a `mesh` of its own
-# (the wizard's hat); `gloved` hands are covered to the fingertips; a `gilded` robe is clean, stitched in gold swirls, with
+# (the wizard's hat, the warrior's helmets: tools/make_hat.py, tools/make_helms.py); `gloved` hands are covered to the fingertips; a `gilded` robe is clean, a dragon embroidered on it in gold (assets/shaders/cloak.gdshader), with
 # a gold sash.
 const BASES = {
 	# --- What the wizard starts with: wool, sandals and his twisted staff.
@@ -97,7 +97,7 @@ const BASES = {
 	"rangers_bow":{"name":"Ranger's Bow","rarity":"starting","slot":"weapon","kind":"bow","hands":2,"damage":[16.0,24.0],"speed":1.2,
 		"look":{"model":"bow","size":Vector3(.25,1.3,.10),"grip":.55,"finish":"bow"}},
 	# --- The warrior: his gladiator's kit, a shortsword and a buckler.
-	"gladiators_helmet":{"name":"Gladiator's Helmet","rarity":"starting","slot":"head","weight":"heavy","armor":15.0},
+	"gladiators_helmet":{"name":"Gladiator's Helmet","rarity":"starting","slot":"head","weight":"heavy","armor":15.0,"look":{"mesh":"gladiators_helmet"}},
 	"steel_plated_gauntlets":{"name":"Steel Plated Gauntlets","rarity":"starting","slot":"hands","weight":"heavy","armor":15.0},
 	"steel_plated_boots":{"name":"Steel Plated Boots","rarity":"starting","slot":"feet","weight":"heavy","armor":15.0},
 	"studded_war_kilt":{"name":"Studded War Kilt","rarity":"starting","slot":"legs","weight":"heavy","armor":23.0},
@@ -111,6 +111,7 @@ const BASES = {
 	"silk_gloves":{"name":"Silk Gloves","rarity":"common","slot":"hands","weight":"light","armor":5.0,"bonus":{"intelligence":2},"look":{"tint":Color(.9,.8,1.0)}},
 	"silk_robe":{"name":"Silk Robe","rarity":"common","slot":"chest","weight":"light","armor":8.0,"bonus":{"intelligence":3},"look":{"tint":Color(.5,.38,.68)}},
 	"silk_pants":{"name":"Silk Pants","rarity":"common","slot":"legs","weight":"light","armor":8.0,"bonus":{"intelligence":2},"look":{"tint":Color(.46,.36,.62)}},
+	"silk_hood":{"name":"Silk Hood","rarity":"common","slot":"head","weight":"light","armor":5.0,"bonus":{"willpower":2},"look":{"tint":Color(.56,.44,.74)}},
 	"wizard_hat":{"name":"Wizard Hat","rarity":"common","slot":"head","weight":"light","armor":4.0,"bonus":{"intelligence":2},"look":{"mesh":"wizard_hat","tint":Color(.12,.13,.2)}},
 	"sandals":{"name":"Sandals","rarity":"common","slot":"feet","weight":"light","armor":5.0},
 	# Medium armor.
@@ -124,7 +125,7 @@ const BASES = {
 	"steel_breastplate":{"name":"Steel Breastplate","rarity":"common","slot":"chest","weight":"heavy","armor":21.0,"bonus":{"strength":2},"look":{"tint":Color(.72,.74,.78)}},
 	"scale_cuirass":{"name":"Scale Cuirass","rarity":"common","slot":"chest","weight":"heavy","armor":23.0},
 	"plated_leg_armor":{"name":"Plated Leg Armor","rarity":"common","slot":"legs","weight":"heavy","armor":26.0,"look":{"pieces":["HeroCuisses","HeroBelt"]}},
-	"steel_full_helm":{"name":"Steel Full Helm","rarity":"common","slot":"head","weight":"heavy","armor":20.0,"look":{"tint":Color(.74,.76,.8)}},
+	"steel_full_helm":{"name":"Steel Full Helm","rarity":"common","slot":"head","weight":"heavy","armor":20.0,"look":{"mesh":"steel_full_helm"}},
 	# Weapons and shields.
 	"steel_longsword":{"name":"Steel Longsword","rarity":"common","slot":"weapon","kind":"sword","hands":1,"damage":[20.0,28.0],"speed":1.1,
 		"look":{"model":"sword","size":Vector3(.19,1.25,.09),"grip":.22,"finish":"sword","blade":Color(.84,.86,.9),"fittings":Color(.6,.62,.66),"wrap":Color(.3,.1,.08)}},
@@ -159,7 +160,7 @@ const BASES = {
 	"robe_of_the_lost_emperor":{"name":"Robe of the Lost Emperor","rarity":"unique","for":"wizard","slot":"chest","weight":"light","armor":10.0,"bonus":{"intelligence":12,"willpower":10,"vitality":8},
 		"effect":"emperor","effect_text":"Every time your spells damage a target there is a 10% chance you recover 20 energy","look":{"tint":Color(.055,.05,.055),"gilded":true}},
 	"ancient_gladiators_helmet":{"name":"Ancient Gladiator's Helmet","rarity":"unique","for":"warrior","slot":"head","weight":"heavy","armor":22.0,"bonus":{"dexterity":12,"strength":15},
-		"effect":"rallying_cry","effect_text":"Every attack has a 10% chance to grant Rallying Cry: 25% more attack speed and damage for 10 seconds, at most once every 30 seconds","look":{"tint":Color(.88,.68,.32)}},
+		"effect":"rallying_cry","effect_text":"Every attack has a 10% chance to grant Rallying Cry: 25% more attack speed and damage for 10 seconds, at most once every 30 seconds","look":{"mesh":"ancient_gladiators_helmet"}},
 	# (Light armor, but made for anyone: it drops for every class, and every
 	# class may wear it.)
 	"marathon_boots":{"name":"Marathon Boots","rarity":"unique","for":"","any_class":true,"slot":"feet","weight":"light","armor":8.0,"bonus":{"strength":6,"dexterity":6,"intelligence":6,"vitality":6,"willpower":6,"speed":20.0},
@@ -170,7 +171,7 @@ const BASES = {
 	"lightning_hammer":{"name":"Lightning Hammer","rarity":"unique","for":"warrior","slot":"weapon","kind":"mace","hands":2,"damage":[60.0,76.0],"speed":.8,"bonus":{"strength":15,"vitality":12},
 		"effect":"lightning_hammer","effect_text":"10% chance on hit to call down lightning on the target for 200–300 damage, leaping to up to 4 more targets, 25% weaker with each leap",
 		"look":{"model":"war_hammer","size":Vector3(.36,1.4,.15),"grip":.42,"finish":"arms","metal_from":.78,"edge":[.8,1.0],"haft":.088,"steel":Color(.58,.7,1.0),"wood":Color(.1,.08,.1)}},
-	"ice_queens_gloves":{"name":"Ice Queen's Gloves","rarity":"unique","for":"wizard","slot":"hands","weight":"light","armor":8.0,"bonus":{"intelligence":15,"vitality":15,"willpower":15,"spell_damage":25.0},
+	"ice_queens_gloves":{"name":"Ice Queen's Gloves","rarity":"unique","for":"wizard","slot":"hands","weight":"light","armor":8.0,"bonus":{"intelligence":15,"vitality":15,"willpower":15,"spell_damage":25.0,"cast_speed":20.0},
 		"effect":"ice_queen","effect_text":"You cannot use any frost abilities","look":{"tint":Color(.56,.78,1.0),"gloved":true}},
 	"cerberuss_fang":{"name":"Cerberus's Fang","rarity":"unique","for":"ranger","slot":"weapon","kind":"dagger","hands":1,"damage":[26.0,34.0],"speed":2.0,"bonus":{"strength":8,"dexterity":8},
 		"effect":"cerberus","effect_text":"Your poison deals 50% more, and every time you poison a target it poisons up to 3 more within 3 metres",
@@ -179,7 +180,7 @@ const BASES = {
 		"effect":"night_vest","effect_text":"20% faster while hidden in shadows, and your first attack within 5 seconds of leaving them deals double damage","look":{"tint":Color(.1,.1,.17)}},
 	# (A staff to go with the Robe: black metal, gold fittings, a golden
 	# crystal.)
-	"staff_of_the_lost_emperor":{"name":"Staff of the Lost Emperor","rarity":"unique","for":"wizard","slot":"weapon","kind":"staff","hands":2,"bonus":{"intelligence":22,"cast_speed":20.0},
+	"staff_of_the_lost_emperor":{"name":"Staff of the Lost Emperor","rarity":"unique","for":"wizard","slot":"weapon","kind":"staff","hands":2,"bonus":{"intelligence":22,"cast_speed":35.0},
 		"effect":"emperors_staff","effect_text":"All your attacks deal bonus damage equal to the percentage of your energy that is missing",
 		"look":{"model":"silver_staff","size":Vector3.ONE,"length":1.85,"grip":1.254,"finish":"parts","tint":Color(.09,.085,.09),"crystal":Color(1.0,.74,.3)}},
 	"immovable_object":{"name":"Immovable Object","rarity":"unique","for":"warrior","slot":"shield","kind":"shield","armor":35.0,"block":40.0,"mitigation":40.0,"bonus":{"vitality":20,"willpower":8},
@@ -200,8 +201,9 @@ const ON_HARD = ["heavy","medium","shield"]
 const ON_SOFT = ["light","dagger","staff"]
 const ON_MELEE = ["heavy","medium","shield","sword","spear","dagger","axe","mace"]
 # Each affix: its `name`, what it is put `on`, and what it does: `bonus`
-# (attributes), `armor` or `damage` (percent more), `speed` (attacks a second
-# more) or `spiked` (percent of a blocked attack's damage dealt back).
+# (attributes, or `cast_speed`, percent faster casting), `armor` or `damage`
+# (percent more), `speed` (attacks a second more) or `spiked` (percent of a
+# blocked attack's damage dealt back).
 const PREFIXES = {
 	"swift":{"name":"Swift","on":ON_HARD,"bonus":{"dexterity":5}},
 	"brutal":{"name":"Brutal","on":ON_HARD,"bonus":{"strength":5}},
@@ -223,7 +225,8 @@ const SUFFIXES = {
 	"hera":{"name":"of Hera","on":ON_SOFT,"bonus":{"intelligence":3,"vitality":2}},
 	"hephaestus":{"name":"of Hephaestus","on":ON_MELEE,"bonus":{"strength":3,"vitality":2}},
 	"dionysus":{"name":"of Dionysus","on":ON_ALL,"bonus":{"vitality":3,"willpower":2}},
-	"hermes":{"name":"of Hermes","on":ON_MELEE,"bonus":{"dexterity":3,"vitality":2}}}
+	"hermes":{"name":"of Hermes","on":ON_MELEE,"bonus":{"dexterity":3,"vitality":2}},
+	"cronus":{"name":"of Cronus","on":ON_SOFT,"bonus":{"cast_speed":10.0}}}
 # The rare affixes: an item has one of these alone, or a prefix and a suffix
 # from above.
 const RARE_PREFIXES = {
@@ -235,7 +238,8 @@ const RARE_PREFIXES = {
 const RARE_SUFFIXES = {
 	"hades":{"name":"of Hades","on":ON_MELEE,"bonus":{"strength":6,"dexterity":6,"vitality":6}},
 	"ancients":{"name":"of the Ancients","on":ON_ALL,"bonus":{"vitality":10,"willpower":10}},
-	"champion":{"name":"of the Champion","on":ON_MELEE,"bonus":{"strength":10,"vitality":8}}}
+	"champion":{"name":"of the Champion","on":ON_MELEE,"bonus":{"strength":10,"vitality":8}},
+	"olympia":{"name":"of Olympia","on":ON_SOFT,"bonus":{"intelligence":8,"willpower":4,"cast_speed":15.0}}}
 
 # A prefix or suffix by its id, uncommon or rare; {} for none.
 static func prefix(id: String) -> Dictionary:
@@ -689,6 +693,36 @@ static func length(look: Dictionary) -> float:
 # A number as few figures as it needs.
 static func figure(amount: float) -> String:
 	return String.num(snappedf(amount,.01)).trim_suffix(".0")
+
+static func signed(amount: float) -> String:
+	return ("+" if amount > 0.0 else "-")+figure(absf(amount))
+
+# How `thing` stands against `other`, the item it would take the place of,
+# number by number for its tip: [[text, better]] for every number that
+# differs, `better` where `thing` has the more of it. Only what both have is
+# weighed (a staff has no damage to set against a sword's).
+static func compare(thing, other) -> Array:
+	var a: Dictionary = get_item(thing)
+	var b: Dictionary = get_item(other)
+	if a.is_empty() or b.is_empty(): return []
+	var lines: Array = []
+	var armor_gap: float = float(a.get("armor",0.0))-float(b.get("armor",0.0))
+	if armor_gap != 0.0: lines.append([signed(armor_gap)+" armor",armor_gap > 0.0])
+	if a.has("damage") and b.has("damage"):
+		var low: float = a.damage[0]-b.damage[0]
+		var high: float = a.damage[1]-b.damage[1]
+		if low != 0.0 or high != 0.0: lines.append(["%s to %s damage" % [signed(low),signed(high)],low+high > 0.0])
+		var pace: float = a.speed-b.speed
+		if pace != 0.0: lines.append([signed(pace)+" attacks per second",pace > 0.0])
+	if a.slot == "shield" and b.slot == "shield":
+		var block_gap: float = a.block-b.block
+		if block_gap != 0.0: lines.append([signed(block_gap)+"% chance to block",block_gap > 0.0])
+		var less: float = a.mitigation-b.mitigation
+		if less != 0.0: lines.append([signed(less)+"% less from blocked attacks",less > 0.0])
+	for key in BONUS_TEXT:
+		var gap: float = float(a.bonus.get(key,0))-float(b.bonus.get(key,0))
+		if gap != 0.0: lines.append([BONUS_TEXT[key].replace("+%s","%s") % signed(gap),gap > 0.0])
+	return lines
 
 # What an item is, line by line, for its tip: {"title","kind","stats"
 # (lines),"effect","note","rarity"}.

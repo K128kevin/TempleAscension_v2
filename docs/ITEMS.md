@@ -39,7 +39,14 @@ two-handed. (No spear is made yet; the spear's own motions are kept for one.)
 
 An item in play is its base with its affixes, so "Swift Steel Full Helm of
 Zeus" is a Steel Full Helm with Swift's Dexterity and Zeus's Strength and
-Dexterity on top of its own. Its picture is its base's.
+Dexterity on top of its own. Its picture is its base's. In the inventory,
+hovering an item in the bag with Shift held sets it beside what is worn in its
+slot, each tip telling what its item has more of (green) and less of (red).
+
+Most affixes add attributes; a few work on the item itself (Durable's armor,
+Sharpened's and Heavy's damage, Lightweight's attack speed, Spiked's reprisal)
+and of Cronus and of Olympia make spells cast 10% and 15% faster, as the
+Staff of the Lost Emperor does.
 
 ## What the numbers do
 
@@ -81,8 +88,11 @@ Dexterity on top of its own. Its picture is its base's.
 ## The uniques' effects
 
 - **Robe of the Lost Emperor** (wizard): every time a spell damages a target,
-  a 10% chance to recover 20 mana.
-- **Ancient Gladiator's Helmet** (warrior): every attack has a 10% chance to
+  a 10% chance to recover 20 mana. Black, with a dragon embroidered on it in
+  gold thread: its head, mouth open upward, and winding body down the back,
+  its wings wrapped round both sides to the chest as if it held the wearer.
+- **Ancient Gladiator's Helmet** (warrior): dark steel, spiked over the crown,
+  a heavy brow and a mask of nose bar and cheek plates; every attack has a 10% chance to
   grant **Rallying Cry**, 25% more attack speed and damage for 10 seconds,
   at most once every 30 seconds. It shows on the buff bar.
 - **The Bow of Odysseus** (ranger): each arrow has a 25% chance to stun its
@@ -92,16 +102,17 @@ Dexterity on top of its own. Its picture is its base's.
 - **Lightning Hammer** (warrior): a two-handed hammer; each hit has a 10%
   chance to call lightning down on its target for 200–300 damage, which
   leaps to up to 4 more targets within 10 m, a quarter weaker with each leap.
-- **Ice Queen's Gloves** (wizard): light blue, covering the whole hand; +15 Intelligence, Vitality and Willpower
-  and 25% more spell damage, but no frost spell can be cast while they are
-  worn (Freeze Floor and Frost Blast end at once).
+- **Ice Queen's Gloves** (wizard): light blue, covering the whole hand; +15 Intelligence, Vitality and Willpower,
+  25% more spell damage and 20% faster casting, but no frost spell can be
+  cast while they are worn (Freeze Floor and Frost Blast end at once).
 - **Cerberus's Fang** (ranger): a dagger; the Poisons passive's poison deals
   50% more, and every target it poisons poisons up to 3 more within 3 m.
 - **Night Vest** (ranger): +15 Dexterity, +8 Willpower and Vitality; he moves
   20% faster while hidden in shadows, and his first attack within 5 seconds
   of leaving them deals double damage (**Night Strike**, on the buff bar).
-- **Staff of the Lost Emperor** (wizard): +22 Intelligence and 20% faster
-  casting (with Blazing Speed's 50%, faster still); every spell deals as much
+- **Staff of the Lost Emperor** (wizard): +22 Intelligence and 35% faster
+  casting (cast speed bonuses multiply: with the Ice Queen's Gloves' 20% and
+  Blazing Speed's 50%, faster still); every spell deals as much
   more as the share of his mana that is spent: 40% spent, 40% more; all of
   it, double.
 - **Immovable Object** (warrior): a tower shield, 35 armor, 40% to block and
@@ -131,7 +142,6 @@ Dexterity on top of its own. Its picture is its base's.
 
 ## The items
 
-Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 ### Starting equipment
 
@@ -179,6 +189,7 @@ What drops, and what the prefixes and suffixes are put on.
 | Silk Gloves | Light armor · Hands | Wizard | 5 armor; +2 Intelligence |
 | Silk Robe | Light armor · Chest | Wizard | 8 armor; +3 Intelligence |
 | Silk Pants | Light armor · Legs | Wizard | 8 armor; +2 Intelligence |
+| Silk Hood | Light armor · Head | Wizard | 5 armor; +2 Willpower |
 | Wizard Hat | Light armor · Head | Wizard | 4 armor; +2 Intelligence |
 | Sandals | Light armor · Feet | Wizard | 5 armor |
 | Leather Gloves | Medium armor · Hands | Ranger | 10 armor |
@@ -237,6 +248,7 @@ An uncommon item is a common item with one of these; a rare item has a prefix an
 | of Hephaestus | +3 Strength, +2 Vitality | heavy armor, medium armor, shields, swords, spears, daggers, axes, maces |
 | of Dionysus | +3 Vitality, +2 Willpower | all items |
 | of Hermes | +3 Dexterity, +2 Vitality | heavy armor, medium armor, shields, swords, spears, daggers, axes, maces |
+| of Cronus | +10% cast speed | light armor, daggers, staves |
 
 **Rare prefixes**
 
@@ -255,6 +267,7 @@ An uncommon item is a common item with one of these; a rare item has a prefix an
 | of Hades | +6 Strength, +6 Dexterity, +6 Vitality | heavy armor, medium armor, shields, swords, spears, daggers, axes, maces |
 | of the Ancients | +10 Vitality, +10 Willpower | all items |
 | of the Champion | +10 Strength, +8 Vitality | heavy armor, medium armor, shields, swords, spears, daggers, axes, maces |
+| of Olympia | +8 Intelligence, +4 Willpower, +15% cast speed | light armor, daggers, staves |
 
 ### Unique items
 
@@ -265,10 +278,10 @@ An uncommon item is a common item with one of these; a rare item has a prefix an
 | Marathon Boots | Light armor · Feet | Everyone | 8 armor; +6 Strength; +6 Dexterity; +6 Intelligence; +6 Vitality; +6 Willpower; +20% movement speed |
 | The Bow of Odysseus | Bow · Two-handed | Ranger | 43–55 damage; 1.5 attacks per second; +15 Dexterity; +8 Vitality. Your arrows have a 25% chance to stun the target for 2 seconds |
 | Lightning Hammer | Mace · Two-handed | Warrior | 60–76 damage; 0.8 attacks per second; +15 Strength; +12 Vitality. 10% chance on hit to call down lightning on the target for 200–300 damage, leaping to up to 4 more targets, 25% weaker with each leap |
-| Ice Queen's Gloves | Light armor · Hands | Wizard | 8 armor; +15 Intelligence; +15 Vitality; +15 Willpower; +25% spell damage. You cannot use any frost abilities |
+| Ice Queen's Gloves | Light armor · Hands | Wizard | 8 armor; +15 Intelligence; +15 Vitality; +15 Willpower; +25% spell damage; +20% cast speed. You cannot use any frost abilities |
 | Cerberus's Fang | Dagger · One-handed | Ranger | 26–34 damage; 2 attacks per second; +8 Strength; +8 Dexterity. Your poison deals 50% more, and every time you poison a target it poisons up to 3 more within 3 metres |
 | Night Vest | Medium armor · Chest | Ranger | 24 armor; +15 Dexterity; +8 Vitality; +8 Willpower. 20% faster while hidden in shadows, and your first attack within 5 seconds of leaving them deals double damage |
-| Staff of the Lost Emperor | Staff · Two-handed | Wizard | Spells take their damage from Intelligence; +22 Intelligence; +20% cast speed. All your attacks deal bonus damage equal to the percentage of your energy that is missing |
+| Staff of the Lost Emperor | Staff · Two-handed | Wizard | Spells take their damage from Intelligence; +22 Intelligence; +35% cast speed. All your attacks deal bonus damage equal to the percentage of your energy that is missing |
 | Immovable Object | Shield · Off hand | Warrior | 35 armor; 40% chance to block; Blocked attacks deal 40% less; +20 Vitality; +8 Willpower. Blocked attacks have a 20% chance to set off a shockwave, blasting every enemy around you for 100% damage |
 
 ### Drop chances

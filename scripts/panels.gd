@@ -48,10 +48,18 @@ var bag_summary: Label
 # Behind the window while the inventory shows: an item dragged out onto it is
 # dropped on the ground.
 var drop_zone: Control
-# The item the cursor is on (its place), and its tip.
+# The item the cursor is on (its place), and its tip. With Shift held, a
+# second tip beside it shows what is worn in that item's slot, each telling
+# how its numbers stand against the other's.
 var hovered_item = ""
 var item_tip: PanelContainer
 var item_tip_lines: Dictionary = {}
+var compare_tip: PanelContainer
+var compare_tip_lines: Dictionary = {}
+# The place of the worn item the hovered one is set against ("" for none),
+# and whether to compare without Shift (the tests, which have no keyboard).
+var compared_place = ""
+var compare_always = false
 var stat_title: Label
 var stat_xp: Label
 var stat_xp_bar: ProgressBar
@@ -507,38 +515,96 @@ func quick_move(place: String) -> void:
 
 func unhover_item() -> void:
 	hovered_item = ""
+	compared_place = ""
 	if is_instance_valid(item_tip): item_tip.visible = false
+	if is_instance_valid(compare_tip): compare_tip.visible = false
 
-# The hovered item's details, beside the window.
+# An item tip's frame and its lines, {"title","kind","stats","against",
+# "gains","losses","effect","note","hint"}; "against" names the item it is
+# weighed against, "gains" and "losses" the numbers it has more and less of.
+func make_item_tip() -> Dictionary:
+	var panel: PanelContainer = frame(250)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var body = VBoxContainer.new()
+	body.add_theme_constant_override("separation",3)
+	panel.add_child(body)
+	var lines: Dictionary = {"panel":panel}
+	for line in [["title",15,hud.gold],["kind",11,dim],["stats",12,hud.cream],["against",11,dim],["gains",12,green],["losses",12,Color(1,.5,.4)],["effect",12,Items.RARITY_COLORS.unique],["note",12,Color(1,.5,.4)],["hint",11,green]]:
+		var l = text("",line[1],line[2],body)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 230
+		# (Given its width at once: a wrapping label laid out from no width
+		# at all measures itself a letter to a line until the next frame.)
+		l.size.x = 230
+		lines[line[0]] = l
+	return lines
+
+# Fills a tip with `inst`, weighed against `other` (nothing: no weighing);
+# `worn` for the tip of what is worn, `hint` its last line.
+func fill_item_tip(lines: Dictionary, inst: Dictionary, other: Dictionary, worn: bool, hint: String) -> void:
+	var about: Dictionary = Items.describe(inst,game.run.class_id)
+	var gains: Array = []
+	var losses: Array = []
+	for gap in Items.compare(inst,other):
+		if gap[1]: gains.append(gap[0])
+		else: losses.append(gap[0])
+	var against = ""
+	if not other.is_empty():
+		against = "Against the %s%s" % [Items.name_of(other)," you wear" if not worn else " in your bag"]
+		if gains.is_empty() and losses.is_empty(): against += ": the same in every number"
+	var values = {"title":about.title,"kind":("Worn · " if worn else "")+about.kind,"stats":"\n".join(about.stats),"against":against,"gains":"\n".join(gains),"losses":"\n".join(losses),"effect":about.effect,"note":about.note,"hint":hint}
+	for key in values:
+		lines[key].text = values[key]
+		lines[key].visible = not values[key].is_empty()
+		lines[key].size.x = 230
+	lines.title.add_theme_color_override("font_color",Items.RARITY_COLORS[about.rarity])
+	lines.panel.visible = true
+	lines.panel.move_to_front()
+	lines.panel.reset_size()
+
+# The place of what the item at `place` would take the place of, if it is in
+# the bag and something is worn there ("" otherwise): a one-handed weapon
+# that would go to the off hand is still set against the main hand's.
+func compared_with(place: String) -> String:
+	var inst: Dictionary = Items.at(game.run,place)
+	if inst.is_empty() or not Items.in_bag(place): return ""
+	var to: String = Items.slot_for(game.run,inst)
+	if to.is_empty(): return ""
+	if Items.at(game.run,to).is_empty() and Items.is_weapon(inst): to = "main"
+	return to if not Items.at(game.run,to).is_empty() else ""
+
+# The hovered item's details, beside the window; with Shift held, what is
+# worn in its slot beside that, the two weighed against each other.
 func show_item_tip(place: String) -> void:
 	var inst: Dictionary = Items.at(game.run,place)
 	if inst.is_empty() or not slots.has(place):
 		if is_instance_valid(item_tip): item_tip.visible = false
+		if is_instance_valid(compare_tip): compare_tip.visible = false
+		compared_place = ""
 		return
 	if not is_instance_valid(item_tip):
-		item_tip = frame(250)
-		item_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var body = VBoxContainer.new()
-		body.add_theme_constant_override("separation",3)
-		item_tip.add_child(body)
-		for line in [["title",15,hud.gold],["kind",11,dim],["stats",12,hud.cream],["effect",12,Items.RARITY_COLORS.unique],["note",12,Color(1,.5,.4)],["hint",11,green]]:
-			var l = text("",line[1],line[2],body)
-			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			l.custom_minimum_size.x = 230
-			item_tip_lines[line[0]] = l
+		item_tip_lines = make_item_tip()
+		item_tip = item_tip_lines.panel
+	var against: String = compared_with(place)
+	var comparing: bool = not against.is_empty() and (compare_always or Input.is_physical_key_pressed(KEY_SHIFT))
+	compared_place = against if comparing else ""
+	var worn: Dictionary = Items.at(game.run,against) if comparing else {}
 	var about: Dictionary = Items.describe(inst,game.run.class_id)
-	var lines = {"title":about.title,"kind":about.kind,"stats":"\n".join(about.stats),"effect":about.effect,"note":about.note}
-	lines.hint = "Right-click: %s" % ("put on" if Items.in_bag(place) else "take off") if about.note.is_empty() else ""
-	for key in item_tip_lines:
-		item_tip_lines[key].text = lines[key]
-		item_tip_lines[key].visible = not lines[key].is_empty()
-	item_tip_lines.title.add_theme_color_override("font_color",Items.RARITY_COLORS[about.rarity])
-	item_tip.visible = true
-	item_tip.move_to_front()
-	item_tip.reset_size()
+	var hint = ""
+	if about.note.is_empty(): hint = "Right-click: %s" % ("put on" if Items.in_bag(place) else "take off")
+	if not against.is_empty() and not comparing: hint += ("\n" if not hint.is_empty() else "")+"Hold Shift to compare with what is worn"
+	fill_item_tip(item_tip_lines,inst,worn,false,hint)
 	var height: float = item_tip.get_combined_minimum_size().y
 	var at: Rect2 = slots[place].frame.get_global_rect()
 	item_tip.position = Vector2(window.position.x-258,clampf(at.position.y,8,hud.root.size.y-height-8))
+	if comparing:
+		if not is_instance_valid(compare_tip):
+			compare_tip_lines = make_item_tip()
+			compare_tip = compare_tip_lines.panel
+		fill_item_tip(compare_tip_lines,worn,inst,true,"")
+		var other_height: float = compare_tip.get_combined_minimum_size().y
+		compare_tip.position = Vector2(maxf(8,item_tip.position.x-258),clampf(at.position.y,8,hud.root.size.y-other_height-8))
+	elif is_instance_valid(compare_tip): compare_tip.visible = false
 
 func refresh_bag() -> void:
 	var r: Dictionary = game.run

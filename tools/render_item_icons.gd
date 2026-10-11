@@ -55,6 +55,8 @@ func render_icons():
 		elif item.slot == "shield": holder.rotation = Vector3(0,PI,0)
 		# (A key, stood up off the table and leaning across the picture.)
 		elif item.slot == "key": holder.rotation = Vector3(PI/2,0,PI/4)
+		# (A hat or helmet faces -Z as it hangs from the head: turned to face the camera.)
+		elif item.slot == "head" and item.get("look",{}).has("mesh"): holder.rotation = Vector3(0,PI+.5,0)
 		else: holder.rotation = Vector3(0,.5,0)
 		camera.size = span*1.12
 		camera.look_at_from_position(Vector3(0,span*.15 if item.slot not in ["weapon","shield"] else 0.0,4),Vector3.ZERO)

@@ -63,7 +63,7 @@ func row(place: String, id: String) -> String:
 	return "| %s | %s | %s: %s |" % [place,about.title,about.kind,"; ".join(about.stats)]
 func affix_text(affix: Dictionary) -> String:
 	var parts: Array = []
-	for key in Items.ATTRIBUTES:
+	for key in Items.BONUS_TEXT:
 		if affix.get("bonus",{}).has(key): parts.append(Items.BONUS_TEXT[key] % Items.figure(affix.bonus[key]))
 	if affix.has("armor"): parts.append("+%s%% armor" % Items.figure(affix.armor))
 	if affix.has("damage"): parts.append("+%s%% damage" % Items.figure(affix.damage))

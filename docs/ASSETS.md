@@ -58,14 +58,27 @@ dark brown leather grip, and a silver blade with a fuller down both flat faces) 
 a round grey steel shield, a bow,
 or a staff. The shield is the original round shield mesh at 0.66m, strapped flat to
 the outside of the left forearm through every hero clip, including runs, strikes,
-the roll and hit reactions; the SwordIdle stance (the library idle with the left
-forearm turned 60° outward) turns it out to the side. The hero also wears brown
+the roll and hit reactions, the forearm running across its back (so a tall board
+such as the Tower Shield stands upright when the arm is raised before him and
+lies along his side, top forward, when the arm hangs); the SwordIdle stance (the
+library idle with the left forearm turned 60° outward) turns it out to the side. The hero also wears brown
 leather boots (the KayKit Rogue's leg pieces trimmed to the boot, close-fitted over
 the lower legs) and a steel full helm matching the shield: the KayKit knight helm
 sized to the head and lowered over the jaw, its open face closed by mirroring its
 back half forward, whose eye-level seam becomes the visor slit. The
 helm hides the hair. `tools/outfit_hero.py` adds both after the enemy outfits are
-built; statues never inherit them. The warrior's leg plates are shells of his own
+built; statues never inherit them. The hero's own helmets, though, are meshes of
+their own hung from his head bone as the wizard's hat is (scripts/items.gd `mesh`,
+tools/make_helms.py, Blender): the Gladiator's Helmet (a round bowl under a tall
+narrow crest, a wide brim at the brow, and a visor closed round the head pierced
+with holes, riveted), the Ancient Gladiator's Helmet (dark steel: a keel over the
+crown set with spikes and a row down each side, a heavy rolled brow, a nose bar
+and two broad cheek plates leaving the eyes open across and the mouth down the
+middle) and the Steel Full Helm (a tall rounded skull down over the ears and neck
+with a riveted face plate, an eye slot across it and a field of holes below). Each
+part is named for its finish (Steel, Dark, Bright, Rivet) and coloured by
+Art.worn_model with the plate shader as plain hammered steel (Art.hammered); the
+kit's own helm is hidden while one is worn. The warrior's leg plates are shells of his own
 body made there too: `HeroGreaves` (shins, knee cops and the feet, his Steel
 Plated Boots) and `HeroCuisses` (thighs and hips, for Plated Leg Armor, shown in
 the kilt's place), both drawn as hammered steel by `assets/shaders/plate.gdshader`

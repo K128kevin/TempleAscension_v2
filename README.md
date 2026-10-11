@@ -75,7 +75,11 @@ slot to put it on, off a slot to take it off, between places to rearrange, or
 out of the window to drop it on the ground; a right click (or a double click)
 puts on an item in the bag or takes off one that is worn. A square lights only
 where the dragged item fits. Hovering an item shows what it is and does, and
-why the hero's class cannot use it if it cannot.
+why the hero's class cannot use it if it cannot. Holding Shift over an item in
+the bag opens a second tip beside the first showing what is worn in its slot,
+and each tip then lists what its item has more of (green) and less of (red)
+than the other: armor, damage, attack speed, a shield's blocking, and every
+attribute or percentage.
 
 The temple's dark interiors are illuminated mainly by torch stations, placed so every
 hallway and room stays readable, with
@@ -387,8 +391,10 @@ Each hero wears a painted, detailed kit after his concept art
 (tools/paint_kits.py paints it through the body's UVs, with relief and sheen
 maps; outfit_hero.py adds raised shells and props). Warrior starts with a
 large sword, a round steel shield worked with a lion boss, a sunburst and a
-Greek-key band, wearing a gladiator's steel helm with a face mask
-(large eye openings, a nose bar, a brim and a low spiked ridge), a cuirass of
+Greek-key band, wearing a gladiator's steel helmet (a round bowl under a
+tall narrow crest, a wide brim, and a visor pierced with holes closed round
+the whole head; the Steel Full Helm and the Ancient Gladiator's Helmet are
+helmets of their own too, after the references given for them), a cuirass of
 large overlapping steel scales
 with lion medallions and a baldric, a broad studded belt with a lion boss,
 leather strips at the shoulders, a steel manica on the sword arm, a kilt of
@@ -662,7 +668,7 @@ inventory.
   a common item with a prefix or a suffix (Swift, Sharpened, of Zeus...); a
   **rare** (blue) one has both, or one of the rare affixes alone (Hero's, of
   the Ancients...); the **uniques** (purple) are one of a kind, each with an
-  effect of its own: the Robe of the Lost Emperor (black, stitched in gold),
+  effect of its own: the Robe of the Lost Emperor (black, a dragon embroidered on it in gold),
   the Staff of the Lost Emperor and the Ice Queen's Gloves (wizard), the
   Ancient Gladiator's Helmet, the Lightning Hammer and the Immovable Object
   (warrior), the Bow of Odysseus, Cerberus's Fang and the Night Vest (ranger)

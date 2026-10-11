@@ -140,7 +140,7 @@ func test():
 		thing.free()
 		check(Items.WIELDS.keys().any(func(c): return Items.usable(c,id)),"Some class can use the item: "+id)
 		if item.get("rarity","") == "common": commons += 1
-	check(commons == 27,"Twenty-seven common items drop and take affixes (%d)" % commons)
+	check(commons == 28,"Twenty-eight common items drop and take affixes (%d)" % commons)
 	for class_id in Data.CLASSES:
 		var pool: Array = Items.loot(class_id)
 		check(pool.size() >= 6 and pool.all(func(id): return Items.usable(class_id,id) and Items.BASES[id].rarity == "common"),"Every class has its own drops, all of them usable: %s (%d)" % [class_id,pool.size()])
@@ -161,6 +161,8 @@ func test():
 	for id in Items.BASES:
 		if Items.BASES[id].get("rarity","") != "common": continue
 		check(not Items.prefixes_for(id).is_empty() and not Items.suffixes_for(id).is_empty() and not Items.suffixes_for(id,true).is_empty(),"Every common item can take a prefix, a suffix and a rare suffix: "+id)
+	check(Items.takes("silk_hood",Items.suffix("cronus")) and Items.takes("crystal_staff",Items.suffix("cronus")) and Items.takes("bandit_blade",Items.suffix("olympia")) and not Items.takes("steel_full_helm",Items.suffix("cronus")) and not Items.takes("leather_tunic",Items.suffix("olympia")) and not Items.takes("greatsword",Items.suffix("olympia")),"Of Cronus and of Olympia go on light armor, daggers and staves")
+	check(Items.get_item(it("silk_hood","","cronus")).bonus == {"willpower":2,"cast_speed":10.0} and Items.name_of(it("silk_hood","","cronus")) == "Silk Hood of Cronus" and Items.rarity(it("silk_hood","","cronus")) == "uncommon" and Items.get_item(it("silk_robe","","olympia")).bonus == {"intelligence":11,"willpower":4,"cast_speed":15.0} and Items.rarity(it("silk_robe","","olympia")) == "rare" and "+15% cast speed" in Items.describe(it("silk_robe","","olympia")).stats,"Of Cronus casts a tenth faster, of Olympia is rare: Intelligence, Willpower and 15% faster casting")
 
 	# --- Instances: what an item is with its affixes.
 	var sword: Dictionary = Items.get_item(it("steel_longsword","swift","zeus"))
@@ -438,7 +440,7 @@ func test():
 	for e in others:
 		game.enemies.erase(e); e.queue_free()
 	hero("wizard",{"hands":"ice_queens_gloves"})
-	check(Items.effect(game.run,"ice_queen") and Data.stat(game.run,2) == 5+4+15 and is_equal_approx(Items.bonus(game.run,"spell_damage"),25.0),"The Ice Queen's Gloves are worn: Intelligence and a quarter more spell damage")
+	check(Items.effect(game.run,"ice_queen") and Data.stat(game.run,2) == 5+4+15 and is_equal_approx(Items.bonus(game.run,"spell_damage"),25.0) and is_equal_approx(Items.bonus(game.run,"cast_speed"),20.0),"The Ice Queen's Gloves are worn: Intelligence, a quarter more spell damage and a fifth faster casting")
 	victim = foe(3.0)
 	hp = victim.hp
 	game.skills.spell_hit(victim,100.0,"fire")
@@ -456,11 +458,14 @@ func test():
 		var e = game.spawn_enemy("gladiator","fang:%d" % pack.size(),game.world.move(origin,Vector3(0,0,-ahead)))
 		e.puppet = true; e.awake = true; e.max_hp = 100000.0; e.hp = e.max_hp; e.dots.clear()
 		pack.append(e)
+	# (The walls may have put one nearer than asked: each is judged by where
+	# it stands.)
+	var near: Array = pack.map(func(e): return e.position.distance_to(victim.position) <= 3.0)
 	victim.dots.clear()
 	game.skills.strike(victim,10.0)
 	var venom = func(e) -> float: return e.dots.filter(func(d): return d.kind == "poison").map(func(d): return d.rate*d.seconds).reduce(func(a,b): return a+b,0.0)
 	check(is_equal_approx(venom.call(victim),10.0*.1*1.5),"Its poison deals half again as much (%.2f)" % venom.call(victim))
-	check(is_equal_approx(venom.call(pack[0]),10.0*.1*1.5) and is_equal_approx(venom.call(pack[1]),10.0*.1*1.5) and venom.call(pack[2]) == 0.0,"and spreads to those within 3 metres, not beyond (%s)" % [pack.map(venom)])
+	check(near[0] and near[1] and range(3).all(func(i): return is_equal_approx(venom.call(pack[i]),10.0*.1*1.5) if near[i] else venom.call(pack[i]) == 0.0),"and spreads to those within 3 metres, not beyond (%s, %s)" % [pack.map(venom),near])
 	for e in pack:
 		game.enemies.erase(e); e.queue_free()
 	hero("ranger",{"chest":"night_vest"})
@@ -482,10 +487,10 @@ func test():
 	game.skills.tick(5.1)
 	check(game.skills.night_time == 0.0,"Five seconds out of the shadows, the chance is gone")
 	hero("wizard",{"main":"staff_of_the_lost_emperor"})
-	check(Items.effect(game.run,"emperors_staff") and Data.stat(game.run,2) == 5+22 and is_equal_approx(Items.bonus(game.run,"cast_speed"),20.0) and game.player.visual.weapon_kind == "staff","The Staff of the Lost Emperor: its Intelligence and a fifth faster casting, held as a staff")
+	check(Items.effect(game.run,"emperors_staff") and Data.stat(game.run,2) == 5+22 and is_equal_approx(Items.bonus(game.run,"cast_speed"),35.0) and game.player.visual.weapon_kind == "staff","The Staff of the Lost Emperor: its Intelligence and 35% faster casting, held as a staff")
 	game.run.skills["fireball"] = 1
 	victim = foe(4.0)
-	check(game.skills.cast("fireball",victim.position) and is_equal_approx(game.player.busy,game.skills.CAST_CLIPS.fireball[1]/1.2),"Casting takes a fifth less time... (%.3f s)" % game.player.busy)
+	check(game.skills.cast("fireball",victim.position) and is_equal_approx(game.player.busy,game.skills.CAST_CLIPS.fireball[1]/1.35),"Casting takes 35%% less time... (%.3f s)" % game.player.busy)
 	game.run.energy = Data.max_energy(game.run)
 	var whole: float = Data.damage_tag(game.run,"spell",100.0)
 	game.run.energy = Data.max_energy(game.run)*.6
@@ -505,7 +510,10 @@ func test():
 	check(victim.hp == hps[0] and near_one.hp == hps[1],"A block without its chance sends nothing out")
 	game.skills.immovable_override = true
 	game.skills.defend(50.0,victim)
-	check(victim.hp < hps[0] and near_one.hp < hps[1] and far_one.hp == hps[2],"With it, a shockwave strikes all within 4 metres, not beyond (%.0f, %.0f, %.0f)" % [hps[0]-victim.hp,hps[1]-near_one.hp,hps[2]-far_one.hp])
+	# (The walls may have put the far one nearer than asked: it is judged by
+	# where it stands.)
+	var far_off: bool = far_one.position.distance_to(game.player.position) > 4.0
+	check(victim.hp < hps[0] and near_one.hp < hps[1] and (far_one.hp == hps[2]) == far_off,"With it, a shockwave strikes all within 4 metres, not beyond (%.0f, %.0f, %.0f; far one %.1f m off)" % [hps[0]-victim.hp,hps[1]-near_one.hp,hps[2]-far_one.hp,far_one.position.distance_to(game.player.position)])
 	game.skills.immovable_override = false
 	game.skills.block_override = 0
 	check(game.skills.IMMOVABLE_CHANCE == 20.0 and game.skills.IMMOVABLE_RADIUS == 4.0 and game.skills.IMMOVABLE_PERCENT == 100.0,"One block in five, 4 metres round, a normal attack's damage")
@@ -707,10 +715,18 @@ func test():
 	# --- Items show on the hero.
 	hero("warrior")
 	var look = game.player.visual
-	check(look.parts.HeroHelmet.visible and look.parts.HeroArmor.visible and look.parts.HeroKilt.visible and look.parts.HeroBracers.visible and look.parts.HeroGreaves.visible and not look.parts.HeroCuisses.visible and not look.parts.Hair_SimpleParted.visible,"The warrior's starting kit is drawn, his greaves with it")
+	check(not look.parts.HeroHelmet.visible and look.parts.HeroArmor.visible and look.parts.HeroKilt.visible and look.parts.HeroBracers.visible and look.parts.HeroGreaves.visible and not look.parts.HeroCuisses.visible and not look.parts.Hair_SimpleParted.visible,"The warrior's starting kit is drawn, his greaves with it, his helmet a mesh of its own in the kit helm's place")
+	var helm_parts = func(): return look.hat_item.find_children("*","MeshInstance3D",true,false).map(func(m): return String(m.name).rstrip("0123456789._"))
+	check(is_instance_valid(look.hat_item) and look.hat_item.bone_name == "Head" and helm_parts.call().has("Steel") and helm_parts.call().has("Rivet") and look.hat_item.find_children("*","MeshInstance3D",true,false)[0].material_override.shader.resource_path.ends_with("plate.gdshader"),"The Gladiator's Helmet hangs from his head: hammered steel, riveted (%s)" % [helm_parts.call()])
 	game.move_item("head","bag:0")
-	check(not look.parts.HeroHelmet.visible and look.parts.Hair_SimpleParted.visible,"Without his helm, his hair")
-	game.move_item("chest","bag:1")
+	check(not look.parts.HeroHelmet.visible and not is_instance_valid(look.hat_item) and look.parts.Hair_SimpleParted.visible,"Without his helm, his hair")
+	game.run.bag[5] = it("ancient_gladiators_helmet"); game.move_item("bag:5","head")
+	check(is_instance_valid(look.hat_item) and helm_parts.call().has("Dark") and not look.parts.Hair_SimpleParted.visible and look.hat_item.find_children("*","MeshInstance3D",true,false)[0].material_override.get_shader_parameter("recolor") == 1.0,"The Ancient Gladiator's Helmet is its own dark steel mesh (%s)" % [helm_parts.call()])
+	game.run.bag[5] = it("steel_full_helm","tough"); game.move_item("bag:5","head")
+	check(is_instance_valid(look.hat_item) and helm_parts.call().count("Bright") == 2 and helm_parts.call().has("Rivet"),"The Steel Full Helm is its own bright steel mesh, affix or no (%s)" % [helm_parts.call()])
+	game.move_item("head","bag:%d" % Items.free_bag_slot(game.run))
+	check(not is_instance_valid(look.hat_item) and look.parts.Hair_SimpleParted.visible,"and off again")
+	game.move_item("chest","bag:%d" % Items.free_bag_slot(game.run))
 	check(not look.parts.HeroArmor.visible and look.parts.SuperHero_Male.material_override is ShaderMaterial and look.parts.SuperHero_Male.material_override.get_shader_parameter("bare").x == 1.0 and look.parts.SuperHero_Male.material_override.get_shader_parameter("bare").y == 0.0,"Without his cuirass, his bare chest (and his kilt still)")
 	game.run.bag[2] = it("steel_breastplate","durable"); game.move_item("bag:2","chest")
 	check(look.parts.HeroArmor.visible and look.parts.HeroArmor.material_override != Art.hero_kit("warrior") and look.parts.SuperHero_Male.material_override.get_shader_parameter("recolor").x == 1.0 and look.parts.SuperHero_Male.material_override.get_shader_parameter("tint_chest") == Items.BASES.steel_breastplate.look.tint,"A steel breastplate is steel, affix or no")
@@ -753,6 +769,9 @@ func test():
 	game.move_item("head","bag:%d" % Items.free_bag_slot(game.run))
 	check(not is_instance_valid(look.hat_item) and look.parts.Hair_SimpleParted.visible and game.run.equipment.head.is_empty(),"Taken off, it is gone")
 	await snapshot("wizard-hat")
+	game.run.bag[1] = it("silk_hood","fine"); game.move_item("bag:1","head")
+	check(look.parts.WizardHood.visible and look.parts.WizardHood.material_override.get_shader_parameter("cloth_color") == Items.BASES.silk_hood.look.tint and not look.parts.Hair_SimpleParted.visible and Items.get_item(it("silk_hood","fine")).bonus == {"willpower":2,"intelligence":5} and Items.get_item(it("silk_hood")).armor == 5.0,"A Silk Hood is his hood in silk's violet, +2 Willpower, a Fine one +5 Intelligence besides, 5 armor like the wool (%s %s %s)" % [look.parts.WizardHood.visible,look.parts.WizardHood.material_override.get_shader_parameter("cloth_color"),Items.get_item(it("silk_hood","fine")).bonus])
+	game.move_item("head","bag:%d" % Items.free_bag_slot(game.run))
 
 	# --- Saves from before this item system.
 	var old = Data.new_run("warrior")
@@ -798,6 +817,31 @@ func test():
 	panels.hovered_item = "bag:%d" % game.run.bag.find(it("wool_hood"))
 	game.hud.tick(0)
 	check("warrior cannot wear" in panels.item_tip_lines.note.text,"and why he cannot use another class's")
+	# --- Shift compares the hovered item with what is worn in its slot.
+	panels.quick_move("bag:0")
+	check(game.run.equipment.head == it("gladiators_helmet") and game.run.bag[8] == it("steel_full_helm","tough"),"The gladiator's helmet is worn again, the Tough Steel Full Helm in the bag")
+	check(Items.compare(it("steel_full_helm","tough"),it("gladiators_helmet")) == [["+5 armor",true],["+5 Vitality",true]] and Items.compare(it("gladiators_helmet"),it("steel_full_helm","tough")) == [["-5 armor",false],["-5 Vitality",false]] and Items.compare(it("greatsword"),it("steel_longsword","swift")) == [["+10 to +14 damage",true],["+0.1 attacks per second",true],["-5 Dexterity",false]] and Items.compare(it("crystal_staff"),it("greatsword")) == [["+4 Intelligence",true],["+4 Willpower",true]],"Two items are weighed number by number, each told what it has more and less of; a staff's damage is not set against a sword's")
+	panels.hovered_item = "bag:8"
+	game.hud.tick(0)
+	check(panels.item_tip.visible and "Hold Shift to compare" in panels.item_tip_lines.hint.text and not panels.item_tip_lines.against.visible and (not is_instance_valid(panels.compare_tip) or not panels.compare_tip.visible) and panels.compared_place.is_empty(),"Hovering a bag item that could be worn offers to compare it with Shift")
+	panels.compare_always = true
+	game.hud.tick(0)
+	check(panels.compared_place == "head" and is_instance_valid(panels.compare_tip) and panels.compare_tip.visible and panels.compare_tip_lines.title.text == "Gladiator's Helmet" and panels.compare_tip_lines.kind.text.begins_with("Worn · ") and panels.compare_tip.position.x < panels.item_tip.position.x and panels.compare_tip.position.x+250 <= panels.item_tip.position.x,"With Shift held, a second tip to the left shows what is worn in that slot")
+	check(panels.item_tip_lines.against.visible and "Gladiator's Helmet you wear" in panels.item_tip_lines.against.text and panels.item_tip_lines.gains.text == "+5 armor\n+5 Vitality" and not panels.item_tip_lines.losses.visible and "Hold Shift" not in panels.item_tip_lines.hint.text,"The bag item's tip tells what it has more of, in green")
+	check("Tough Steel Full Helm in your bag" in panels.compare_tip_lines.against.text and panels.compare_tip_lines.losses.text == "-5 armor\n-5 Vitality" and not panels.compare_tip_lines.gains.visible and not panels.compare_tip_lines.hint.visible,"and the worn item's tip what it has less of, in red")
+	panels.hovered_item = "bag:%d" % game.run.bag.find(it("greatsword"))
+	game.hud.tick(0)
+	check(panels.compared_place.is_empty() and not panels.compare_tip.visible and "Hold Shift" not in panels.item_tip_lines.hint.text,"Nothing worn in its slot, there is nothing to compare")
+	panels.hovered_item = "head"
+	game.hud.tick(0)
+	check(panels.compared_place.is_empty() and not panels.compare_tip.visible and not panels.item_tip_lines.against.visible,"nor for an item already worn")
+	panels.hovered_item = "bag:8"
+	game.hud.tick(0)
+	await snapshot("inventory-compare")
+	panels.compare_always = false
+	panels.hovered_item = "bag:%d" % game.run.bag.find(it("wool_hood"))
+	game.hud.tick(0)
+	check(not panels.compare_tip.visible and "warrior cannot wear" in panels.item_tip_lines.note.text,"Shift let go, the second tip is gone")
 	await snapshot("inventory")
 	check(is_instance_valid(panels.drop_zone),"Behind the window, the ground takes what is dragged out")
 	game._input(key(KEY_C))

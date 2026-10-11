@@ -5,6 +5,7 @@ extends SceneTree
 ##         the class's starting equipment (slot=base item id, or
 ##         prefix:base:suffix for a magic one; nothing after = empty)
 ##     [--clip=SwordIdle --phase=.5] [--yaw=0.5] [--size=2.5] [--height=1.0] [--out=name]
+##     [--spread=1.7]  how far apart the two figures stand (closer, to look close up)
 ## The picture goes to test-results/gear-<out>.png.
 const Visual = preload("res://scripts/visual.gd")
 const Items = preload("res://scripts/items.gd")
@@ -49,7 +50,7 @@ func capture():
 	for i in 2:
 		var stand = Node3D.new()
 		scene.add_child(stand)
-		stand.position = Vector3((i-.5)*1.7,0,0)
+		stand.position = Vector3((i-.5)*float(arg("spread","1.7")),0,0)
 		stand.rotation.y = yaw+PI*i
 		var actor = Visual.new()
 		stand.add_child(actor)

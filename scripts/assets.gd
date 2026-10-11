@@ -551,8 +551,35 @@ static func worn_model(look: Dictionary) -> Node3D:
 		var part: String = String(mesh.name)
 		if part.begins_with("Band"): mesh.material_override = leather()
 		elif part.begins_with("Buckle"): mesh.material_override = bronze()
+		# (The warrior's helmets, tools/make_helms.py: hammered steel, dark
+		# gunmetal or polished bright, their rivets brighter still.)
+		elif part.begins_with("Steel"): mesh.material_override = hammered()
+		elif part.begins_with("Dark"): mesh.material_override = hammered(Color(.4,.42,.47))
+		elif part.begins_with("Bright"): mesh.material_override = hammered(Color(.62,.64,.68))
+		elif part.begins_with("Rivet"): mesh.material_override = hammered(Color(.66,.67,.7))
 		else: mesh.material_override = felt(look.get("tint",Color(.12,.13,.2)))
 	return node
+
+# Plain hammered, worn steel (the plate shader with no lames, rims or cops),
+# laid on the model's own space; `tint` recolours it, keeping its light and
+# dark (a tint below steel's own grey darkens it, above brightens it).
+static func hammered(tint = null) -> ShaderMaterial:
+	var key = "hammered%s" % [tint.to_html() if tint != null else ""]
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/plate.gdshader")
+	m.set_shader_parameter("rest_pose",false)
+	m.set_shader_parameter("rim_low",-9.0)
+	m.set_shader_parameter("rim_high",-9.0)
+	m.set_shader_parameter("lame",0.0)
+	m.set_shader_parameter("knee",-1.0)
+	m.set_shader_parameter("ankle",-1.0)
+	m.set_shader_parameter("ridge",0.0)
+	if tint != null:
+		m.set_shader_parameter("tint",tint)
+		m.set_shader_parameter("recolor",1.0)
+	materials[key] = m
+	return m
 
 # A weapon's or shield's model as an item has it, standing along +Y from its
 # butt, at its true size.

@@ -264,7 +264,8 @@ func test():
 		var shown = {}
 		for mesh in hero.visual.skin_meshes: shown[String(mesh.name)] = mesh.visible
 		# (The ranger's hood is his cloak, over a body cut to go under it.)
-		var kit = {"warrior":["HeroHelmet","HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardHood","WizardBody"]}[cls]
+		# (The warrior's helmet is a mesh of its own, not the kit's helm.)
+		var kit = {"warrior":["HeroArmor","SuperHero_Male"],"ranger":["RangerCloak","RangerBody"],"wizard":["WizardRobe","WizardHood","WizardBody"]}[cls]
 		var hidden = ["HeroHelmet","RangerCloak","RangerBody","WizardRobe","WizardHood","WizardBody","HeroArmor","SuperHero_Male"].filter(func(n): return not n in kit)
 		check(kit.all(func(n): return shown.get(n,false)) and hidden.all(func(n): return not shown.get(n,true)),"The %s wears its own kit" % cls)
 	# The ranger's dagger hangs blade-down in a sheath strapped to his left
@@ -308,7 +309,7 @@ func test():
 		var ranger = hero.uid == "hero:ranger"
 		check(kit.all(func(n): return worn.get(n,not ranger) == ranger) and not worn.get("HeroBoots",false),"Only the ranger wears the ranger's kit (%s)" % hero.uid)
 	# The warrior and wizard have their own detailed kits too.
-	var kits = {"hero:warrior":["HeroBracers","HeroBelt","HeroKilt","HeroGreaves","HeroArmor","HeroHelmet"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardRobeSkirt","WizardHood"]}
+	var kits = {"hero:warrior":["HeroBracers","HeroBelt","HeroKilt","HeroGreaves","HeroArmor"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardRobeSkirt","WizardHood"]}
 	for hero in pg.heroes:
 		var worn = {}
 		for mesh in hero.visual.skin_meshes: worn[String(mesh.name)] = mesh.visible
@@ -318,7 +319,7 @@ func test():
 		var kit_material: StandardMaterial3D = Art.hero_kit(cls)
 		check(kit_material.normal_enabled and kit_material.normal_texture != null and kit_material.roughness_texture != null,"The %s's kit has painted relief and sheen" % cls)
 	var helm = pg.heroes[0].visual.skin_meshes.filter(func(m): return m.name == "HeroHelmet")[0]
-	check(helm.material_override is ShaderMaterial and helm.material_override.shader.resource_path.ends_with("gladiator_helm.gdshader"),"The warrior wears a steel gladiator helm, as in his concept art")
+	check(not helm.visible and is_instance_valid(pg.heroes[0].visual.hat_item) and pg.heroes[0].visual.hat_item.bone_name == "Head","The warrior wears his Gladiator's Helmet, a mesh of its own on his head, the kit's helm put away")
 	# Statue stone is laid out from the rest pose, so it stays fixed to the body
 	# as it animates; only the gladiator's scale armor is marked for scales.
 	for enemy in game.enemies:
