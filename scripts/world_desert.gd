@@ -34,6 +34,8 @@ static func rim(world) -> void:
 			x += step
 			var depth = -world.margin_at(at)
 			if depth<-.3 or depth>world.RIM: continue
+			# (The town is walled, not rimmed with rock.)
+			if world.walled(at): continue
 			var reserved = false
 			for area in world.keep_clear:
 				if area.grow(5.0).has_point(Vector2(at.x,at.z)): reserved = true

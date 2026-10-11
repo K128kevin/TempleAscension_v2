@@ -6,9 +6,10 @@ const CYCLE = 1800.0
 const SUNRISE = 180.0
 const SUNSET = 1020.0
 const NIGHT = 1200.0
-# A new character wakes with six minutes of the night left; a character from
-# before the clock was kept finds a clear morning.
-const START = 1440.0
+# A new character wakes at the end of the night, the dawn three quarters of
+# a minute off; a character from before the clock was kept finds a clear
+# morning.
+const START = 1755.0
 const MORNING = 420.0
 # The one light in the sky is the moon until this long into the sunrise, and
 # again from this long before the night; its light passes through nothing as
@@ -22,7 +23,7 @@ const RED = Color(1.0,.38,.20)
 # (At its height the day is held below full strength, so the town's white
 # marble keeps its carving rather than burning out to a flat white.)
 const KEYS = [
-	[0.0,MOON,.21,Color(.30,.38,.66),.29,Color(.035,.05,.10),1.0],
+	[0.0,MOON,.15,Color(.30,.38,.66),.19,Color(.02,.028,.06),1.0],
 	[40.0,MOON,0.0,Color(.50,.44,.56),.42,Color(.30,.21,.24),.7],
 	[40.01,RED,0.0,Color(.50,.44,.56),.42,Color(.30,.21,.24),.7],
 	[110.0,GOLD,.72,Color(.80,.62,.55),.38,Color(.86,.52,.32),.1],
@@ -33,8 +34,8 @@ const KEYS = [
 	[1100.0,GOLD,.75,Color(.80,.62,.55),.38,Color(.86,.50,.30),.1],
 	[1159.99,RED,0.0,Color(.52,.42,.54),.42,Color(.34,.21,.25),.7],
 	[1160.0,MOON,0.0,Color(.52,.42,.54),.42,Color(.34,.21,.25),.7],
-	[1200.0,MOON,.21,Color(.30,.38,.66),.29,Color(.035,.05,.10),1.0],
-	[1800.0,MOON,.21,Color(.30,.38,.66),.29,Color(.035,.05,.10),1.0]]
+	[1200.0,MOON,.15,Color(.30,.38,.66),.19,Color(.02,.028,.06),1.0],
+	[1800.0,MOON,.15,Color(.30,.38,.66),.19,Color(.02,.028,.06),1.0]]
 
 static func of_day(clock: float) -> float:
 	return fposmod(clock,CYCLE)

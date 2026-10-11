@@ -192,7 +192,9 @@ bushes; they were replaced.)
   size in the world (`assets/textures/rock_detail.jpg`, from Poly Haven's
   [Rock Face 03](https://polyhaven.com/a/rock_face_03)), level beds of slightly
   different stone, and sand lying on ledges and piled at the foot. About 1,400 of them
-  make the rim, drawn in batches: cliff faces along the far walls, boulders rising
+  make the rim (not round the town, which is closed by its own wall of the gate
+  wall's modules, towered at the corners: Town.town_wall; the world's `walled`
+  says where no rock stands), drawn in batches: cliff faces along the far walls, boulders rising
   away from the camera on the near ones.
 - **Buildings, arena, town wall and temple front.** KayKit Dungeon Remastered wall
   modules: `wall`, `wall_arched`, `wall_window` (closed shutters), `wall_archwindow`,
@@ -529,7 +531,9 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   `dagger.gltf` (`assets/models/props/dagger.glb`), finished by the sword's shader
   cut to its own pommel, grip and guard.
 - The warrior's skill swings (SkillCleave, SkillStrike, SkillStab, SkillBash,
-  SkillExecute, SkillSlam, SkillShockwave, SkillCry, SkillCharge, SkillLeap) are
+  SkillExecute, SkillSlam, SkillShockwave, SkillCry, SkillCharge, SkillLeap, and
+  DualSkillSlam, Thunder Slam with a weapon in each hand, both swung over the
+  head and slammed down) are
   authored by `tools/import_skills.py` from the sword-and-shield stance, frame by
   frame: the hips, spine and head turned and bent along smooth curves, the sword arm
   carried by two-bone IK with the fist turned outright so the blade runs where the
@@ -547,7 +551,11 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   the soft-dot billboards (`scripts/vfx.gd`) for the dust thrown up; the floor's
   own meshes are untouched.
   `scripts/skills.gd` picks each skill's
-  clip, duration and contact point (`WARRIOR_CLIPS`).
+  clip, duration and contact point (`WARRIOR_CLIPS`). With a second weapon in the
+  left hand the game plays a `Dual` variant of each sword swing and skill, derived
+  at load (scripts/visual.gd derive_dual_swings): the clip with the left arm's
+  tracks replaced by the dual idle's hanging arm, so the second weapon never
+  crosses into the body; Thunder Slam alone has its own authored dual clip.
 - A two-handed sword, axe or maul has its own clips (HeavyIdle, HeavySwing1,
   the one normal attack: a full-bodied cut that steps the rear foot through,
   HeavyCleave, HeavyStrike, HeavyExecute, HeavySlam, HeavyShockwave,

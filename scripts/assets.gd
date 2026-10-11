@@ -557,8 +557,22 @@ static func worn_model(look: Dictionary) -> Node3D:
 		elif part.begins_with("Dark"): mesh.material_override = hammered(Color(.4,.42,.47))
 		elif part.begins_with("Bright"): mesh.material_override = hammered(Color(.62,.64,.68))
 		elif part.begins_with("Rivet"): mesh.material_override = hammered(Color(.66,.67,.7))
+		# (The Marathon Boots, tools/make_shoes.py: gold, with white wings.)
+		elif part.begins_with("Gold"): mesh.material_override = gold()
+		elif part.begins_with("Wing"): mesh.material_override = feather()
 		else: mesh.material_override = felt(look.get("tint",Color(.12,.13,.2)))
 	return node
+
+# White feathers (the Marathon Boots' wings): soft and matte.
+static func feather() -> StandardMaterial3D:
+	if materials.has("feather"): return materials.feather
+	var m = StandardMaterial3D.new()
+	m.albedo_color = Color(.96,.96,.94)
+	m.roughness = .85
+	m.metallic_specular = .2
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	materials.feather = m
+	return m
 
 # Plain hammered, worn steel (the plate shader with no lames, rims or cops),
 # laid on the model's own space; `tint` recolours it, keeping its light and
@@ -712,6 +726,16 @@ static func item_model(thing) -> Node3D:
 	# A piece that is a mesh of its own (the wizard's hat), as it is worn.
 	if look.has("mesh"):
 		var own: Node3D = worn_model(look)
+		# (A shoe is made for the left foot: a pair is shown, the right its mirror.)
+		if item.slot == "feet":
+			var pair = Node3D.new()
+			own.position.x = -.06
+			pair.add_child(own)
+			var right: Node3D = worn_model(look)
+			right.scale.x = -1.0
+			right.position.x = .06
+			pair.add_child(right)
+			own = pair
 		var box = AABB()
 		var first = true
 		for mesh in own.find_children("*","MeshInstance3D",true,false):

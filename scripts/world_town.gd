@@ -6,8 +6,11 @@ extends RefCounted
 ## most of them are in a poor way: stained, cracked, some fallen in. A market
 ## square with the well fills the south-east corner, the greengrocers' stalls
 ## below it, and a wall with one gate
-## closes the town off from the desert; a second gate shuts the gap in the
-## rocks at the end of the southern alley. Two guards stand at each. From the
+## closes the town off from the desert. A wall rings the whole town besides,
+## its corners towered (town_wall): along its north and south sides, its west
+## end, and out round the palace hill's ground; a second gate in its south
+## side opens on the alley to the southern desert. Two guards stand at each
+## gate. From the
 ## arena's north gate a road
 ## climbs to the elders' palace (scripts/world_palace.gd). The town's people
 ## have yet to arrive.
@@ -74,6 +77,7 @@ const MODULES = {"w":"wall","d":"wall_door","s":"wall_window","a":"wall_arched",
 static func build(world) -> void:
 	streets(world)
 	gate_wall(world)
+	town_wall(world)
 	south_gate(world)
 	arena(world)
 	royal_box(world)
@@ -193,10 +197,51 @@ static func gate_wall(world) -> void:
 	world.screen(towers)
 	world.add_place("town gate","gate",Vector3(x,0,0),7.0)
 
-# The gate across the gap in the rocks at the end of the southern alley, built
-# as the town gate is: a wall from rock to rock, two towers flanking the way
+# The wall round the town, where the rim's rocks would stand (the world's
+# `walled`): built of the gate wall's modules, a tower at every corner. It
+# runs along the north and south sides from the gate wall to the west end,
+# and from the north side out round the palace hill's ground; the south
+# gate (south_gate) fills a gap left in the south side.
+static func town_wall(world) -> void:
+	var material = Kit.masonry(CREAM,BROWN,.4,.65)
+	var south: float = world.WALL_SOUTH
+	var west: float = world.WALL_WEST
+	var east: float = world.TOWN_GATE.x
+	var hill_west: float = world.HILL.x-world.HILL_REACH.x
+	var hill_east: float = world.HILL.x+world.HILL_REACH.x
+	var hill_north: float = world.HILL_REACH.y
+	var corners: Array = [Vector3(east,0,-south),Vector3(hill_east,0,-south),Vector3(hill_east,0,hill_north),Vector3(hill_west,0,hill_north),Vector3(hill_west,0,-south),Vector3(west,0,-south),Vector3(west,0,south),Vector3(east,0,south)]
+	# The south gate's own wall and towers take its stretch of the south side.
+	var openings: Array = [Rect2(SOUTH_GATE.x-20.0,south-2.0,40.0,4.0)]
+	for i in corners.size()-1:
+		var a: Vector3 = corners[i]
+		var b: Vector3 = corners[i+1]
+		var along: Vector3 = (b-a).normalized()
+		var length: float = a.distance_to(b)
+		var yaw: float = 0.0 if absf(along.x) > .5 else -PI/2
+		var run = 0.0
+		while run < length-.1:
+			var bay: float = minf(BAY,length-run)
+			var middle: Vector3 = a+along*(run+bay*.5)
+			run += bay
+			var skipped = false
+			for opening in openings:
+				if opening.has_point(Vector2(middle.x,middle.z)): skipped = true
+			if skipped: continue
+			var piece = world.place("wall",middle,Vector3(bay,5.6,1.4),material,yaw)
+			world.block_rect(Rect2(middle.x-(bay*.5 if yaw == 0.0 else .7),middle.z-(.7 if yaw == 0.0 else bay*.5),bay if yaw == 0.0 else 1.4,1.4 if yaw == 0.0 else bay))
+			world.screen([piece])
+	# A tower at every corner but the gate wall's own ends.
+	for i in range(1,corners.size()-1):
+		var at: Vector3 = corners[i]
+		var tower = world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material)
+		world.block_rect(Rect2(at.x-1.8,at.z-1.7,3.6,3.4))
+		world.screen([tower])
+
+# The gate in the town's south wall at the end of the southern alley, built
+# as the town gate is: a stretch of wall, two towers flanking the way
 # through, joined by a lintel. Its guards stand outside, facing the desert.
-const SOUTH_GATE = Vector3(-226,0,82)
+const SOUTH_GATE = Vector3(-226,0,78)
 static func south_gate(world) -> void:
 	var material = Kit.masonry(CREAM,BROWN,.4,.65)
 	var g: Vector3 = SOUTH_GATE

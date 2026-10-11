@@ -226,15 +226,19 @@ The temple stands in a larger world, one continuous outdoor map
   both ends of the day; at night the moon lights the world, much darker and
   blue but easy to see by, and every fire lights what stands round it and
   glows on the ground. Mist lies from the end of the night through the early
-  morning. A new character wakes at night, six minutes before the dawn, by
-  his campfire. The clock is kept in the save and runs indoors too (the
+  morning. A new character wakes at the end of the night, three quarters of a
+  minute before the dawn, by his campfire. The clock is kept in the save and runs indoors too (the
   light beyond a door to the outside follows it). Debug: F7 advances the day
   three minutes.
-- **The southern desert**, apart from the one the track crosses: a gap in the
-  rocks at the end of the town's south-eastern alley opens on it. A great dune
-  nine metres high looks down on the town from the south; on its crown is the
-  camp a new character wakes at, seated on a log by his fire, with a sleeping
-  pad and his supplies beside it. He gets up the moment he moves.
+- **The southern desert**, apart from the one the track crosses: the south
+  gate in the town's wall, at the end of its south-eastern alley, opens on
+  it through a short passage in the rocks. A great dune, long and gently
+  sloped and twenty-two metres high, looks down on the town from the south;
+  on its crown is the camp a new character wakes at, seated on a log by his
+  fire, with a sleeping pad and his supplies beside it. He gets up the moment
+  he moves. By night the sky above the horizon is a painted panorama of stars,
+  the Milky Way and a low moon (tools/make_night_sky.py), seen in the opening
+  shot; the night itself is dark, lit by the fires.
 - **The dungeons' entrances**: under the arena's stands runs a paved, shadowed
   undercroft (a doorway in each side of the east, south and west gateways lets
   into it; the seats overhead are lifted away while the hero is inside), with
@@ -286,9 +290,11 @@ The temple stands in a larger world, one continuous outdoor map
   through it returns to the forecourt. The floor is not reset by leaving:
   statues already slain stay slain.
 
-Rock rims the whole basin: sheer crags on the north and east, a rising slope
-of boulders on the south and west, where the camera looks from. Nothing
-walkable reaches past it. Outdoors it is late afternoon, the low sun in the
+Rock rims the basin: sheer crags on the north and east, a rising slope of
+boulders on the south, where the camera looks from. The town at the west end
+is closed by its own wall instead, towered at the corners, running along its
+north and south sides, its west end and out round the palace hill's ground,
+with open sand beyond. Nothing walkable reaches past rock or wall. Outdoors it is late afternoon, the low sun in the
 west lighting the temple's front; the camera looks from the south-west (inside
 the temple it still looks from the south-east), so west and south faces are
 the ones seen. Trees, buildings, the arena's wall and anything else tall turn
@@ -469,11 +475,18 @@ changes nothing about the blow). He walks into his target as he swings, stepping
 each foot in turn. If
 he breaks off (moves, casts, or simply stops), the next attack starts from the first.
 
-With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):
+With a second one-handed weapon in the left hand, the sword's swings and skills are
+played with the left arm hanging at his side as in the dual idle, so the second
+weapon never crosses into his body. With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):
 a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for
 Vampiric and Shadow Strike, the shield shoved out behind a step for Shield Bash, the
-blade wound far back and brought down with the whole body for Execute, driven
-point-first into the ground for Thunder Slam, the pommel hammered down from a deep
+blade wound far back and brought down with the whole body for Execute, wound up
+like a serve for Thunder Slam (the blade dropped behind the hip, swung up far over
+the head as he arches back, then the whole body hurled forward and down and the
+blade slammed flat into the ground ahead; with a weapon in each hand both are
+swung back and over the head together and both slammed down, and a two-handed
+weapon is swung back behind the hip and hoisted far over the shoulders as a man
+splits a log), the pommel hammered down from a deep
 crouch for Shockwave, the blade thrust at the sky for War Cry, a braced run behind
 the shield for Shield Charge (the sprint, the shield held straight out before him),
 and for Leap a deep crouch, the spring, the body stretched in the air with the blade

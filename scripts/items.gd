@@ -98,7 +98,9 @@ const BASES = {
 		"look":{"model":"bow","size":Vector3(.25,1.3,.10),"grip":.55,"finish":"bow"}},
 	# --- The warrior: his gladiator's kit, a shortsword and a buckler.
 	"gladiators_helmet":{"name":"Gladiator's Helmet","rarity":"starting","slot":"head","weight":"heavy","armor":15.0,"look":{"mesh":"gladiators_helmet"}},
-	"steel_plated_gauntlets":{"name":"Steel Plated Gauntlets","rarity":"starting","slot":"hands","weight":"heavy","armor":15.0},
+	# (The warrior's starting gauntlets are a common item too: they drop,
+	# and take affixes, as the doc lists them among the heavy armor.)
+	"steel_plated_gauntlets":{"name":"Steel Plated Gauntlets","rarity":"common","slot":"hands","weight":"heavy","armor":15.0},
 	"steel_plated_boots":{"name":"Steel Plated Boots","rarity":"starting","slot":"feet","weight":"heavy","armor":15.0},
 	"studded_war_kilt":{"name":"Studded War Kilt","rarity":"starting","slot":"legs","weight":"heavy","armor":23.0},
 	"simple_shortsword":{"name":"Simple Shortsword","rarity":"starting","slot":"weapon","kind":"sword","hands":1,"damage":[17.0,25.0],"speed":1.3,
@@ -164,7 +166,7 @@ const BASES = {
 	# (Light armor, but made for anyone: it drops for every class, and every
 	# class may wear it.)
 	"marathon_boots":{"name":"Marathon Boots","rarity":"unique","for":"","any_class":true,"slot":"feet","weight":"light","armor":8.0,"bonus":{"strength":6,"dexterity":6,"intelligence":6,"vitality":6,"willpower":6,"speed":20.0},
-		"look":{"tint":Color(.86,.7,.32)}},
+		"look":{"mesh":"marathon_boots"}},
 	"bow_of_odysseus":{"name":"The Bow of Odysseus","rarity":"unique","for":"ranger","slot":"weapon","kind":"bow","hands":2,"damage":[43.0,55.0],"speed":1.5,"bonus":{"dexterity":15,"vitality":8},
 		"effect":"stunning_arrows","effect_text":"Your arrows have a 25% chance to stun the target for 2 seconds",
 		"look":{"model":"bow","size":Vector3(.27,1.5,.11),"grip":.62,"finish":"bow","tint":Color(.74,.56,.24)}},

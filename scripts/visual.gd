@@ -350,7 +350,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			elif "HeroArmor" in mesh.name: mesh.visible = hero_class == "warrior"
 			mesh.material_override = Art.hero_kit(hero_class)
 	for clip in animator.get_animation_list():
-		for expected in ["CastBolt","CastPoint","CastGround","CastSelf","CastChannel","HeavyIdle","HeavySwing1","HeavyCleave","HeavyStrike","HeavyExecute","HeavySlam","HeavyShockwave","HeavyCry","HeavyLeap","PikeIdle","PikeThrust1","PikeThrust2","PikeCleave","PikeStrike","PikeExecute","PikeSlam","PikeShockwave","PikeCry","PikeLeap","DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SkillVolley","SneakIdle","SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
+		for expected in ["CastBolt","CastPoint","CastGround","CastSelf","CastChannel","HeavyIdle","HeavySwing1","HeavyCleave","HeavyStrike","HeavyExecute","HeavySlam","HeavyShockwave","HeavyCry","HeavyLeap","DualSkillSlam","PikeIdle","PikeThrust1","PikeThrust2","PikeCleave","PikeStrike","PikeExecute","PikeSlam","PikeShockwave","PikeCry","PikeLeap","DaggerStab","DaggerSlash","SkillFlurry2","SkillFlurry3","SkillFlurry4","SkillTripleSlash","SkillAmbush","SkillSandR","SkillSandL","SkillHide","SkillVolley","SneakIdle","SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillSlam","SkillShockwave","SkillCry","SkillCharge","SkillLeap","Walk","Sit","ScutumSwordSwing","ScutumHit","ScutumHitHead","ScutumHitStagger","ScutumHitKnockdown","Idle","Run","Attack","Cleave","Evade","Death","Cast","Thrust","Crouch","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","SpearLunge","ShieldStab","ArcherShot","OracleCast","ShieldHit","ShieldHitHead","ShieldHitStagger","ShieldHitKnockdown","Hit","HitHead","HitStagger","HitKnockdown","SwordSwing","SwordSlash","AxeChop","AxeWhirl","SpearStab","SpearJab","BowShot","BowRapid","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"]:
 			if clip == expected or clip.ends_with("/" + expected):
 				clips[expected] = clip
 				animator.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if expected in ["CastChannel","HeavyIdle","PikeIdle","SneakIdle","Walk","Sit","Idle","SwordIdle","SwordRun","ScutumRun","ScutumSwordIdle","SpearShieldIdle","Run","Crouch","BowIdle","BowRun","BowCrouch","SpearIdle","RangerIdle","RangerRun","RangerCrouch","WizardIdle","WizardRun","WizardCrouch"] else Animation.LOOP_NONE
@@ -513,6 +513,9 @@ func wear(equipment: Dictionary) -> void:
 	var dressed = true
 	if is_instance_valid(hat_item): hat_item.queue_free()
 	hat_item = null
+	for shoe in shoe_items:
+		if is_instance_valid(shoe): shoe.queue_free()
+	shoe_items = []
 	for slot in Items.ARMOR_SLOTS:
 		var item: Dictionary = Items.get_item(equipment.get(slot,{}))
 		var on: bool = Items.wears(hero_class,item)
@@ -538,6 +541,20 @@ func wear(equipment: Dictionary) -> void:
 			var hat: Node3D = Art.worn_model(item.look)
 			hat_item.add_child(hat)
 			hat.transform = HAT_ON_HEAD
+		# Shoes of their own (the Marathon Boots) hang from each foot bone:
+		# made for the left foot about its ankle in the rest pose's axes, the
+		# right its mirror, each turned into its bone's own frame.
+		if own and slot == "feet":
+			for side in ["l","r"]:
+				var bone: int = skeleton.find_bone("foot_"+side)
+				if bone < 0: continue
+				var attachment = BoneAttachment3D.new()
+				attachment.bone_name = "foot_"+side
+				skeleton.add_child(attachment)
+				var shoe: Node3D = Art.worn_model(item.look)
+				attachment.add_child(shoe)
+				shoe.transform = Transform3D(skeleton.get_bone_global_rest(bone).basis.inverse()*Basis.from_scale(Vector3(1.0 if side == "l" else -1.0,1.0,1.0)),Vector3.ZERO)
+				shoe_items.append(attachment)
 		for mesh_name in Art.slot_pieces(hero_class,slot):
 			var mesh: MeshInstance3D = parts.get(mesh_name)
 			if mesh == null: continue
@@ -624,6 +641,9 @@ func bare_headed() -> bool:
 # bone: where it sits on the crown, in the bone's own space.
 var hat_item: BoneAttachment3D
 const HAT_ON_HEAD = Transform3D(Basis(Vector3.UP,PI),Vector3(0,.13,0))
+# Shoes worn in the kit's boots' place (the Marathon Boots), one attachment
+# a foot.
+var shoe_items: Array = []
 
 # The plain weapon of a kind in hand (a statue's, a bandit's; a hero's sword
 # with his round shield).
@@ -677,6 +697,13 @@ func derive_mirrors() -> void:
 # sword's stance, run and walk hold it in a shield's guard): each is that
 # clip with the left arm's part taken from its mirror.
 const DUALS = {"DualIdle":"SwordIdle","DualRun":"SwordRun","DualWalk":"SwordWalk"}
+# With a second weapon in the left hand, the sword's swings and skills are
+# played with the left arm hanging at his side as it does in the dual idle
+# (not held across the chest in the shield's guard, which drove the second
+# weapon into his body): each is the clip with the left arm's tracks
+# replaced by the dual idle's. Thunder Slam has a dual swing of its own.
+const DUAL_SWINGS = ["SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillShockwave","SkillCry","SkillCharge","SkillLeap"]
+const LEFT_ARM = ["clavicle_l","upperarm_l","lowerarm_l","hand_l"]
 func derive_duals() -> void:
 	if hero_class.is_empty(): return
 	for made_name in DUALS:
@@ -698,6 +725,29 @@ func derive_duals() -> void:
 					if made.track_get_type(track) == Animation.TYPE_ROTATION_3D: made.rotation_track_insert_key(track,other.track_get_key_time(from,key),other.track_get_key_value(from,key))
 					else: made.position_track_insert_key(track,other.track_get_key_time(from,key),other.track_get_key_value(from,key))
 			made.loop_mode = Animation.LOOP_LINEAR
+			library.add_animation(made_name,made)
+		clips[made_name] = (library_name+"/" if library_name != "" else "")+made_name
+	derive_dual_swings()
+
+func derive_dual_swings() -> void:
+	if not clips.has("DualIdle"): return
+	var rest: Animation = animator.get_animation(clips.DualIdle)
+	for source_name in DUAL_SWINGS:
+		if not clips.has(source_name): continue
+		var made_name = "Dual"+source_name
+		var library_name: String = clips[source_name].get_slice("/",0) if "/" in clips[source_name] else ""
+		var library: AnimationLibrary = animator.get_animation_library(library_name)
+		if not library.has_animation(made_name):
+			var made: Animation = animator.get_animation(clips[source_name]).duplicate(true)
+			for track in made.get_track_count():
+				var bone: String = String(made.track_get_path(track)).get_slice(":",1)
+				if not (bone in LEFT_ARM or (bone.ends_with("_l") and (bone.begins_with("thumb") or bone.begins_with("index") or bone.begins_with("middle") or bone.begins_with("ring") or bone.begins_with("pinky")))): continue
+				var from = rest.find_track(made.track_get_path(track),made.track_get_type(track))
+				if from < 0 or rest.track_get_key_count(from) == 0 or not made.track_get_type(track) in [Animation.TYPE_ROTATION_3D,Animation.TYPE_POSITION_3D]: continue
+				var held = rest.track_get_key_value(from,0)
+				for key in range(made.track_get_key_count(track)-1,-1,-1): made.track_remove_key(track,key)
+				if made.track_get_type(track) == Animation.TYPE_ROTATION_3D: made.rotation_track_insert_key(track,0.0,held)
+				else: made.position_track_insert_key(track,0.0,held)
 			library.add_animation(made_name,made)
 		clips[made_name] = (library_name+"/" if library_name != "" else "")+made_name
 
@@ -1737,7 +1787,10 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	animation_delay = 0
 	hold_time = 0.0
 	pending_animation_time = 0
-	var speed = animator.get_animation(clips[action]).length / duration if duration > 0 else speed_scale
+	# (A second weapon in the left hand: the swing with that arm at his side.)
+	var played: String = action
+	if is_instance_valid(off_item) and not action.begins_with("Dual") and clips.has("Dual"+action): played = "Dual"+action
+	var speed = animator.get_animation(clips[played]).length / duration if duration > 0 else speed_scale
 	if action in LOCOMOTION: locomotion_rate = speed_scale
 	# Long enough that no part leaps into the new clip, short enough to stay
 	# responsive; the feet stay planted through it (scripts/foot_planter.gd).
@@ -1754,9 +1807,9 @@ func play(action: String, duration: float = 0.0, speed_scale: float = 1.0) -> vo
 	if ranger_carry() and previous in BOW_READY_STATES and not action in BOW_READY_STATES:
 		blend = BOW_LOWER_TIME
 		bow_lowering = BOW_LOWER_TIME
-	var replay = animator.assigned_animation == clips[action]
+	var replay = animator.assigned_animation == clips[played]
 	travelled = 0.0
-	animator.play(clips[action], blend, speed)
+	animator.play(clips[played], blend, speed)
 	# play() resumes an already assigned clip. Repeated attacks must each
 	# start a fresh wind-up, even when the last recovery is still playing. A
 	# new clip starts from its beginning anyway, and seeking it would cut the

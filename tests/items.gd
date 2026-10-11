@@ -140,7 +140,7 @@ func test():
 		thing.free()
 		check(Items.WIELDS.keys().any(func(c): return Items.usable(c,id)),"Some class can use the item: "+id)
 		if item.get("rarity","") == "common": commons += 1
-	check(commons == 28,"Twenty-eight common items drop and take affixes (%d)" % commons)
+	check(commons == 29,"Twenty-nine common items drop and take affixes, the warrior's starting gauntlets among them (%d)" % commons)
 	for class_id in Data.CLASSES:
 		var pool: Array = Items.loot(class_id)
 		check(pool.size() >= 6 and pool.all(func(id): return Items.usable(class_id,id) and Items.BASES[id].rarity == "common"),"Every class has its own drops, all of them usable: %s (%d)" % [class_id,pool.size()])
@@ -600,6 +600,20 @@ func test():
 	# A weapon in each hand strikes with each by turns.
 	hero("warrior",{"main":"simple_shortsword","off":"steel_shortsword"})
 	check(is_instance_valid(game.player.visual.off_item) and not is_instance_valid(game.player.visual.shield_item) and game.player.visual.idle_action() == "DualIdle","A second sword is held in the left hand")
+	# His swings and skills then play with the left arm hanging as in the
+	# dual idle (the second weapon never crossing into his body), and Thunder
+	# Slam with both weapons.
+	var look2 = game.player.visual
+	check(look2.clips.has("DualSkillCleave") and look2.clips.has("DualSwordCut1R") and look2.clips.has("DualSkillSlam") and not look2.clips.has("DualDualSkillSlam"),"Dual variants of the sword's swings and skills are derived, the slam's authored")
+	look2.play("SkillCleave",1.0)
+	check(look2.state == "SkillCleave" and look2.animator.current_animation.ends_with("DualSkillCleave"),"A skill swung with two weapons plays its dual clip (%s)" % look2.animator.current_animation)
+	var cleave_dual: Animation = look2.animator.get_animation(look2.clips.DualSkillCleave)
+	var cleave_one: Animation = look2.animator.get_animation(look2.clips.SkillCleave)
+	var left_track = cleave_dual.find_track(cleave_dual.track_get_path(0).get_concatenated_names().get_slice(":",0)+":lowerarm_l",Animation.TYPE_ROTATION_3D)
+	check(left_track >= 0 and cleave_dual.track_get_key_count(left_track) == 1 and cleave_one.track_get_key_count(cleave_one.find_track(cleave_dual.track_get_path(left_track),Animation.TYPE_ROTATION_3D)) > 1,"with the left arm held still at his side")
+	look2.play("SkillSlam",1.1)
+	check(look2.animator.current_animation.ends_with("DualSkillSlam"),"Thunder Slam with two weapons swings both (%s)" % look2.animator.current_animation)
+	look2.play("DualIdle")
 	victim = foe(1.5)
 	var hands: Array = []
 	for i in 4:

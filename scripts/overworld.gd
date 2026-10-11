@@ -25,7 +25,7 @@ const OUTDOORS = -2
 const WEST = -396
 const EAST = 148
 const NORTH = -204
-const SOUTH = 208
+const SOUTH = 300
 const WIDTH = EAST-WEST
 const DEPTH = SOUTH-NORTH
 # The town's gate in its east wall, and the temple's door in its west front:
@@ -34,19 +34,20 @@ const TOWN_GATE = Vector3(-180,0,0)
 const TEMPLE_DOOR = Vector3(76,0,0)
 # The lost caravan, on the track in the middle of the desert.
 const CARAVAN = Vector3(-52,0,-15)
-# South of the town, through a gap in the rocks at the end of an alley, lies
-# a second desert, apart from the one the track crosses: `SOUTH_REACH` is how
-# far it runs east and west of the dune's middle, and how far south. A great
-# dune stands in it and looks down on the town: its middle, its half-size
-# (east-west, north-south) and its height.
+# South of the town's wall, through the south gate at the end of an alley,
+# lies a second desert, apart from the one the track crosses: `SOUTH_REACH`
+# is how far it runs east and west of the dune's middle, and how far south.
+# A great dune stands in it and looks down on the town: its middle, its
+# half-size (east-west, north-south) and its height. (`SOUTH_GAP`: the
+# alley's end, inside the gate.)
 const SOUTH_GAP = Vector3(-226,0,70)
-const SOUTH_REACH = Vector2(56,196)
-const DUNE = Vector3(-262,0,146)
-const DUNE_RADII = Vector2(46,31)
-const DUNE_HEIGHT = 15.0
+const SOUTH_REACH = Vector2(120,262)
+const DUNE = Vector3(-262,0,175)
+const DUNE_RADII = Vector2(110,75)
+const DUNE_HEIGHT = 22.0
 # Where a new character wakes: on top of the dune, by his campfire
 # (Data.new_character).
-const START = Vector3(-262,0,144)
+const START = Vector3(-262,0,173)
 # The mouth of the bandits' cave, at the head of a defile in the desert's
 # northern rocks, before the temple.
 const CAVE = Vector3(20,0,-80)
@@ -67,6 +68,16 @@ const HILL_HEIGHT = 5.5
 # The open ground round the hill reaches this far east and west of its
 # middle, and this far north.
 const HILL_REACH = Vector2(58,-158)
+# The town is closed by a wall, not the rim's rocks (scripts/world_town.gd
+# town_wall): along its north and south edges, `WALL_SOUTH` either side of
+# the middle, its west end, and round the palace hill's ground. Within
+# `walled` no rim rock is raised: what lies beyond the wall is open sand,
+# and south of it the southern desert.
+const WALL_SOUTH = 78.0
+const WALL_WEST = -346.0
+func walled(at: Vector3) -> bool:
+	return at.x < TOWN_GATE.x-2.0 and at.z < WALL_SOUTH+12.0
+
 # How far the rocks reach beyond the edge of the open ground: past anything
 # the camera can see from inside.
 const RIM = 44.0
@@ -223,10 +234,11 @@ func height_at(x: float, z: float) -> float:
 		if deck.area.has_point(Vector2(x,z)): return height+lerpf(deck.low,deck.high,clampf((Vector2(x,z)-deck.start).dot(deck.along),0.0,1.0))
 	return height
 
-# The dune's own height: a long smooth mound with a broad crown.
+# The dune's own height: a great, long, gently sloping mound (its sides
+# never steeper than about one in two), with a small flat crown.
 func dune_height(x: float, z: float) -> float:
-	var t = clampf((1.0-Vector2((x-DUNE.x)/DUNE_RADII.x,(z-DUNE.z)/DUNE_RADII.y).length())/.8,0.0,1.0)
-	return DUNE_HEIGHT*t*t*t*(t*(t*6.0-15.0)+10.0)
+	var t = clampf((1.0-Vector2((x-DUNE.x)/DUNE_RADII.x,(z-DUNE.z)/DUNE_RADII.y).length())/.92,0.0,1.0)
+	return DUNE_HEIGHT*t*t*(3.0-2.0*t)
 
 func lift(at: Vector3) -> float:
 	return height_at(at.x,at.z)
@@ -247,6 +259,15 @@ func setup_sky() -> void:
 	e.tonemap_white = 1.3
 	e.fog_enabled = false
 	e.fog_sky_affect = 0.0
+	# By night the sky is a painted panorama, stars, the Milky Way and a low
+	# moon (tools/make_night_sky.py), shown whenever the camera looks toward
+	# the horizon; by day, a plain colour (set_time).
+	var panorama = PanoramaSkyMaterial.new()
+	panorama.panorama = load("res://assets/textures/night_sky.png")
+	panorama.filter = true
+	e.sky = Sky.new()
+	e.sky.sky_material = panorama
+	e.background_energy_multiplier = 1.0
 	env.environment = e
 	environment = e
 	add_child(env)
@@ -279,6 +300,7 @@ func set_time(clock: float) -> void:
 	var toward: Vector3 = Daylight.sky(floorf(clock/SUN_STEP)*SUN_STEP).toward
 	if not sun.global_transform.basis.z.is_equal_approx(toward): sun.look_at_from_position(toward*100.0,Vector3.ZERO)
 	environment.background_color = sky.sky
+	environment.background_mode = Environment.BG_SKY if sky.night >= .999 else Environment.BG_COLOR
 	# The water reflects the sky overhead: bluer than the dust at the horizon,
 	# and as bright as the light it sheds.
 	if ground_material != null: ground_material.set_shader_parameter("sky_colour",sky.sky.lerp(sky.ambient,.65)*clampf(sky.ambient_energy*2.2,.15,1.0))
@@ -358,23 +380,29 @@ func to_cell(p: Vector3) -> Vector2i:
 # closes in on the temple's front.
 func half_width(x: float) -> float:
 	var half = 60.0+9.0*noise.get_noise_1d(x*1.3)+4.0*noise.get_noise_1d(x*5.0+4000.0)
-	# It opens out round the town, whose streets ring the arena.
-	half = lerpf(78.0+3.0*noise.get_noise_1d(x*5.0+4000.0),half,smoothstep(TOWN_GATE.x-22.0,TOWN_GATE.x+6.0,x))
+	# It opens out round the town, whose streets ring the arena, straight
+	# there (the town's wall stands on its edge).
+	half = lerpf(WALL_SOUTH,half,smoothstep(TOWN_GATE.x-22.0,TOWN_GATE.x+6.0,x))
 	return lerpf(half,46.0,smoothstep(TEMPLE_DOOR.x-46.0,TEMPLE_DOOR.x,x))
 
 # How far inside the open ground a point is; negative among the rim's rocks.
 func margin(x: float, z: float) -> float:
-	var west = -346.0+5.0*noise.get_noise_1d(z*3.0+9000.0)
+	# (The town's own bounds run straight, for its wall to stand on.)
+	var town: bool = x < TOWN_GATE.x-2.0 and z < WALL_SOUTH+12.0
+	var west = -346.0+(0.0 if town else 5.0*noise.get_noise_1d(z*3.0+9000.0))
 	var east = TEMPLE_DOOR.x+5.0+2.5*noise.get_noise_1d(z*4.0+13000.0)
 	var basin = minf(half_width(x)-absf(z),minf(x-west,east-x))
 	# North of the town the ground runs on, round the palace hill.
-	var round_hill = minf(HILL_REACH.x+3.0*noise.get_noise_1d(z*4.0+17000.0)-absf(x-HILL.x),minf(z-HILL_REACH.y-3.0*noise.get_noise_1d(x*4.0+21000.0),-60.0-z))
-	# South of it, a gap at an alley's end opens on the southern desert.
-	var gap = minf(9.0+2.0*noise.get_noise_1d(z*5.0+25000.0)-absf(x-SOUTH_GAP.x),minf(z-SOUTH_GAP.z,106.0-z))
-	var south = minf(SOUTH_REACH.x+4.0*noise.get_noise_1d(z*4.0+29000.0)-absf(x-DUNE.x),minf(z-94.0,SOUTH_REACH.y+4.0*noise.get_noise_1d(x*4.0+33000.0)-z))
+	var round_hill = minf(HILL_REACH.x-absf(x-HILL.x),minf(z-HILL_REACH.y,-60.0-z))
+	# South of the town's wall the southern desert runs right up to it (the
+	# south gate opens straight onto the sand).
+	var south = minf(SOUTH_REACH.x+4.0*noise.get_noise_1d(z*4.0+29000.0)-absf(x-DUNE.x),minf(z-WALL_SOUTH-2.0,SOUTH_REACH.y+4.0*noise.get_noise_1d(x*4.0+33000.0)-z))
+	# (The way through the south gate joins the two.)
+	var gateway = minf(9.0-absf(x-SOUTH_GAP.x),minf(z-SOUTH_GAP.z,WALL_SOUTH+8.0-z))
+	south = maxf(south,gateway)
 	# And a defile in the northern rocks leads to the cave's mouth.
 	var defile = minf(7.5+1.5*noise.get_noise_1d(z*6.0+37000.0)-absf(x-CAVE.x),minf(z-CAVE.z,-40.0-z))
-	return maxf(maxf(basin,round_hill),maxf(maxf(gap,south),defile))
+	return maxf(maxf(basin,round_hill),maxf(south,defile))
 
 func margin_at(p: Vector3) -> float:
 	var c = to_cell(p)

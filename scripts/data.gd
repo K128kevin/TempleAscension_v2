@@ -139,10 +139,10 @@ static func new_character(class_id: String = "warrior") -> Dictionary:
 	var run = new_run(class_id)
 	run.place = "world"
 	# Overworld.START, by the camp on the dune; he sits there until he moves.
-	run.position = [-262,144]
+	run.position = [-262,173]
 	run["resting"] = true
-	# It is night (scripts/daylight.gd), some minutes before the dawn.
-	run["clock"] = 1440.0
+	# It is the end of the night (scripts/daylight.gd), the dawn near.
+	run["clock"] = preload("res://scripts/daylight.gd").START
 	return run
 
 static func passive(run: Dictionary, id: String) -> float:

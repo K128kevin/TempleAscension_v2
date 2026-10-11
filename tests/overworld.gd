@@ -379,6 +379,8 @@ func test():
 		for x in range(Overworld.WEST+4,Overworld.EAST-4,3):
 			var m: float = world.margins[world.index(x,z)]
 			if m>1.0 or m<-1.0 or world.keep_clear[0].grow(8.0).has_point(Vector2(x,z)): continue
+			# (The town's edge is walled, not rimmed with rock.)
+			if world.walled(Vector3(x,0,z)): continue
 			edges += 1
 			var covered = false
 			var square = Vector2i(floori(x/10.0),floori(z/10.0))
@@ -388,6 +390,19 @@ func test():
 						if stone.distance_to(Vector2(x,z))<9.0: covered = true
 			if not covered: bare += 1
 	check(edges>200 and bare==0,"Rock stands along the whole edge of the open ground (%d of %d stretches bare)" % [bare,edges])
+	# The town is walled instead: no rim rock stands round it, wall runs
+	# along its straight edges and round the palace hill's ground, towered at
+	# the corners, and the hero is stopped at the wall on every side.
+	var town_rocks: int = 0
+	for at in world.rim_rocks: if world.walled(at): town_rocks += 1
+	var walls: Array = world.find_children("*","Node3D",true,false).filter(func(n): return n.has_meta("model") and n.get_meta("model") == "wall") if world.get_child_count() > 0 else []
+	check(town_rocks==0 and world.walled(Vector3(-300,0,-Overworld.WALL_SOUTH)) and world.walled(Vector3(Overworld.WALL_WEST,0,0)) and not world.walled(Vector3(-100,0,-60)) and not world.walled(Overworld.START),"No rim rock stands round the town, which is walled (%d rocks in its ring)" % town_rocks)
+	var stopped = true
+	for probe in [Vector3(Overworld.WALL_WEST-30.0,0,0),Vector3(Town.ARENA.x,0,-Overworld.WALL_SOUTH-30.0),Vector3(Town.ARENA.x-60.0,0,Overworld.WALL_SOUTH+30.0),Vector3(Overworld.HILL.x,0,Overworld.HILL_REACH.y-30.0)]:
+		var reached: Vector3 = world.move(Town.ARENA+Vector3(0,0,Town.ARENA_RADII.y+Town.RING*.5),probe-Town.ARENA)
+		stopped = stopped and reached.distance_to(probe)>25.0 and world.margin_at(reached)>=-.5
+	check(stopped,"The hero is stopped at the town's wall on every side")
+	check(world.margin_at(Vector3(-330,0,-Overworld.WALL_SOUTH+2.0))>0.0 and world.margin_at(Vector3(-330,0,-Overworld.WALL_SOUTH-2.0))<0.0 and world.margin_at(Vector3(Overworld.WALL_WEST+2.0,0,0))>0.0 and world.margin_at(Vector3(Overworld.WALL_WEST-2.0,0,0))<0.0,"The town's edges run straight along its wall")
 
 	# The town: an inn, two shops, houses and the arena, west of the gate.
 	var kinds = {}

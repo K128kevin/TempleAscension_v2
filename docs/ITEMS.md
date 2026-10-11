@@ -30,7 +30,8 @@ two-handed. (No spear is made yet; the spear's own motions are kept for one.)
 ## Rarity
 
 - **Starting gear and common items** are white. The starting gear never
-  drops. The common items drop, and are what every magic item is made of.
+  drops (but for the warrior's Steel Plated Gauntlets, a common item too). The
+  common items drop, and are what every magic item is made of.
 - **Uncommon** (green): a common item with one **prefix** or one **suffix**.
 - **Rare** (blue): a common item with both a prefix and a suffix, or with
   one of the **rare** prefixes or suffixes alone.
@@ -186,6 +187,7 @@ What drops, and what the prefixes and suffixes are put on.
 
 | Item | Kind | Used by | What it gives |
 |---|---|---|---|
+| Steel Plated Gauntlets | Heavy armor · Hands | Warrior | 15 armor |
 | Silk Gloves | Light armor · Hands | Wizard | 5 armor; +2 Intelligence |
 | Silk Robe | Light armor · Chest | Wizard | 8 armor; +3 Intelligence |
 | Silk Pants | Light armor · Legs | Wizard | 8 armor; +2 Intelligence |

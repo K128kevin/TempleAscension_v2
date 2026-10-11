@@ -30,7 +30,8 @@ hand's X; the left palm, hand_l's (0, .075, 0), sits at hand_r's
                   straight down before him
   HeavyExecute    the weapon hauled far back over the head, the body arched,
                   then brought down with everything, down to the knee
-  HeavySlam       Thunder Slam: swung up high and driven into the ground a
+  HeavySlam       Thunder Slam: swung back behind the hip and hoisted far
+                  over the shoulders as a man splits a log, then driven into the ground a
                   stride ahead; held; a slow rise
   HeavyShockwave  Shockwave: the weapon turned head down and hoisted as he
                   draws himself up, then rammed straight down into the ground
@@ -647,22 +648,24 @@ EXECUTE = [K(0),
 def execute(t):
     play(t, EXECUTE_CLOCK, EXECUTE)
 
-# Thunder Slam: the weapon swung up high over the head, up on the toes; then
-# the lead foot driven forward and the whole body hurled down behind it, the
-# weapon's head smashed into the ground a stride ahead; held; a slow rise.
-SLAM_CLOCK = [(0, 0, 0), (.22, .9, 1.8), (.35, 1, 2.5), (.52, 2, 7.5, 1.5), (.74, 3, 0), (1, 4, 0)]
+# Thunder Slam, as a man splits a log: the weapon swung down and back
+# behind the hip as the body coils, then hoisted far back over the shoulders,
+# the back arched, up on the toes; then the lead foot driven a long stride
+# forward and the whole body hurled down behind the weapon, its head smashed
+# into the ground ahead; held; a slow rise.
+SLAM_CLOCK = [(0, 0, 0), (.14, .5, 2.2), (.3, 1, 1.4), (.39, 1.3, 2.8), (.52, 2, 8, 1.5), (.74, 3, 0), (1, 4, 0)]
 DOWN = dict(er=(-.9, -.3, -.1), el=(.9, .1, -.1))
 LUNGE = dict(rh=.8, rk=(0, .1, -.4))
-STRIDE = dict(lf=(.46, 0, 0), rh=.65, rp=.2)
+STRIDE = dict(lf=(.6, 0, 0), rh=.7, rp=.2)
 SLAM = [K(0),
-    K(.5, down=.08, twist=-.2, lean=.12, g=(-.16, -.26, 1.4), z=plane(OVER, FORWARD, 82), n=OVER, er=(-.8, .0, -.5), el=(.8, -.1, -.5)),
-    K(1, down=-.04, fwd=-.08, turn=.0, twist=.1, lean=-.24, g=(-.17, .02, 1.88), z=plane(OVER, FORWARD, 128), n=OVER, lh=.4, rh=.4, hp=-.1, **HIGH),
-    K(1.4, down=.03, fwd=.06, turn=.06, twist=.3, lean=.0, hp=-.2, g=(-.1, -.36, 1.78), z=plane(OVER, FORWARD, 75), n=OVER, lf=(.16, .12, 0), rh=.5, **HIGH),
-    K(1.75, down=.2, fwd=.22, side=-.03, turn=.14, twist=.48, lean=.22, tilt=.06, hp=-.3, g=(.05, -.72, 1.3), z=plane(OVER, FORWARD, 20), n=OVER, lf=(.42, .04, 0), rh=.6,
+    K(.5, down=.12, fwd=-.04, turn=-.18, twist=-.4, lean=.14, hp=.1, g=(-.3, .36, .88), z=plane(OVER, FORWARD, 205), n=OVER, er=(-.8, .3, -.4), el=(.8, .0, -.5), rh=.1),
+    K(1, down=-.06, fwd=-.12, turn=-.06, twist=.0, lean=-.32, tilt=-.08, hp=-.3, g=(-.22, .3, 1.8), z=plane(OVER, FORWARD, 150), n=OVER, lh=.5, rh=.5, **HIGH),
+    K(1.3, down=.0, fwd=.0, turn=.04, twist=.24, lean=-.06, hp=-.25, g=(-.12, -.12, 2.06), z=plane(OVER, FORWARD, 96), n=OVER, lf=(.22, .16, 0), rh=.5, **HIGH),
+    K(1.7, down=.2, fwd=.24, side=-.03, turn=.14, twist=.48, lean=.28, tilt=.08, hp=-.3, g=(.06, -.66, 1.34), z=plane(OVER, FORWARD, 24), n=OVER, lf=(.54, .05, 0), rh=.65,
         er=(-.9, -.2, -.1), el=(.9, .0, -.1)),
-    K(2, 'hit', down=.34, fwd=.3, side=-.05, turn=.18, twist=.58, lean=.6, tilt=.18, hp=-.2, g=(.12, -.8, .64), z=plane(OVER, FORWARD, -37), n=OVER, **STRIDE, **DOWN),
-    K(3, down=.37, fwd=.3, side=-.05, turn=.18, twist=.58, lean=.64, tilt=.18, hp=-.1, g=(.12, -.8, .64), z=plane(OVER, FORWARD, -37), n=OVER, **STRIDE, **DOWN),
-    K(3.5, down=.26, fwd=.2, twist=.25, lean=.45, g=(.04, -.58, .95), z=plane(OVER, FORWARD, 25), n=(.8, -.5, .2), lf=(.34, .02, 0), rh=.5),
+    K(2, 'hit', down=.42, fwd=.36, side=-.05, turn=.18, twist=.58, lean=.7, tilt=.2, hp=-.2, g=(.14, -.88, .56), z=plane(OVER, FORWARD, -40), n=OVER, **STRIDE, **DOWN),
+    K(3, down=.45, fwd=.36, side=-.05, turn=.18, twist=.58, lean=.74, tilt=.2, hp=-.1, g=(.14, -.88, .56), z=plane(OVER, FORWARD, -40), n=OVER, **STRIDE, **DOWN),
+    K(3.5, down=.28, fwd=.24, twist=.25, lean=.48, g=(.04, -.6, .95), z=plane(OVER, FORWARD, 25), n=(.8, -.5, .2), lf=(.4, .02, 0), rh=.5),
     K(4)]
 
 def slam(t):

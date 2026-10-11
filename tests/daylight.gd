@@ -19,7 +19,7 @@ func test():
 	var seconds = {"sunrise":0,"day":0,"sunset":0,"night":0}
 	for t in int(Daylight.CYCLE): seconds[Daylight.phase(t)] += 1
 	check(Daylight.CYCLE==1800.0 and seconds.night==600 and seconds.sunrise==180 and seconds.sunset==180 and seconds.day==840,"Thirty minutes: ten of night, three each of sunrise and sunset, the rest day")
-	check(Daylight.phase(Daylight.START)=="night" and Data.new_character().clock==Daylight.START and Daylight.phase(Daylight.START+420.0)=="sunrise","A new character wakes in the night, some minutes before the dawn")
+	check(Daylight.phase(Daylight.START)=="night" and Data.new_character().clock==Daylight.START and Daylight.CYCLE-Daylight.START>40.0 and Daylight.CYCLE-Daylight.START<50.0 and Daylight.phase(Daylight.START+50.0)=="sunrise","A new character wakes at the end of the night, the dawn three quarters of a minute off")
 	# The sun crosses from east (+X) to west, highest at noon.
 	var morning: Dictionary = Daylight.sky(200.0)
 	var noon: Dictionary = Daylight.sky(600.0)
@@ -69,7 +69,9 @@ func test():
 	var camp = world.fires.filter(func(f): return f.flame.name=="CampFire")
 	check(camp.size()==1 and camp[0].light.light_cull_mask!=0 and camp[0].light.omni_range>=10.0 and camp[0].flame.base_energy>2.0 and camp[0].glow.material_override.albedo_color.a>.5 and camp[0].light.global_position.distance_to(Overworld.START+Vector3.UP*world.lift(Overworld.START))<4.0,"The campfire lights the camp on the dune")
 	check(world.fires.size()>10 and world.fires.all(func(f): return f.light.light_cull_mask==world.FIRE_LAYERS and f.glow.material_override.albedo_color.a>0.0),"Every fire in the world gives light by night")
-	check(not world.environment.fog_enabled,"There is no mist at night")
+	# (Through the night there is none; it only begins to gather at its end,
+	# where a new character wakes, thin.)
+	check(Daylight.fog(1500.0)==0.0 and (not world.environment.fog_enabled or world.environment.fog_density<.0025),"There is no mist through the night, only a thin one gathering at its end")
 	var clock: float = game.run.clock
 	game._process(.5)
 	check(is_equal_approx(game.run.clock,clock+.5) and is_equal_approx(world.time,game.run.clock),"The clock runs as the game is played")

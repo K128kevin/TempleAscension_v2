@@ -26,7 +26,7 @@ static func south_desert(world) -> void:
 	world.add_place("southern desert","desert",world.DUNE,world.DUNE_RADII.x)
 	var leaves = Kit.shared("Leaves")
 	for i in 900:
-		var at = Vector3(world.DUNE.x+rng.randf_range(-62.0,62.0),0,rng.randf_range(gap.z+6.0,world.SOUTH_REACH.y+4.0))
+		var at = Vector3(world.DUNE.x+rng.randf_range(-62.0,62.0),0,rng.randf_range(world.WALL_SOUTH+14.0,world.SOUTH_REACH.y+4.0))
 		var c = world.to_cell(at)
 		if not world.on_map(c.x,c.y): continue
 		var cell = world.index(c.x,c.y)
