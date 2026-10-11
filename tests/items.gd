@@ -743,9 +743,11 @@ func test():
 	game.run.bag[1] = it("ice_queens_gloves"); game.move_item("bag:1","hands")
 	var body: ShaderMaterial = look.parts.WizardBody.material_override if look.parts.WizardBody.visible else look.parts.SuperHero_Male.material_override
 	check(body.get_shader_parameter("gloved") == 1.0 and body.get_shader_parameter("tint_hands") == Items.BASES.ice_queens_gloves.look.tint and Items.BASES.ice_queens_gloves.look.tint.b > Items.BASES.ice_queens_gloves.look.tint.r+.3,"The Ice Queen's Gloves are light blue, and cover his hands to the fingertips")
+	var shells: Array = look.glove_shells.values().filter(func(g): return g.visible)
+	check(shells.size() == 1 and shells[0].skin != null and shells[0].get_node_or_null(shells[0].skeleton) == look.skeleton and shells[0].material_override.shader.resource_path.ends_with("glove_shell.gdshader"),"They stand on his hands, skinned with them, not painted on")
 	game.move_item("hands","bag:%d" % Items.free_bag_slot(game.run))
 	body = look.parts.WizardBody.material_override if look.parts.WizardBody.visible else look.parts.SuperHero_Male.material_override
-	check(body.get_shader_parameter("gloved") != 1.0,"Off, his hands are bare again")
+	check(body.get_shader_parameter("gloved") != 1.0 and not look.glove_shells.values().any(func(g): return g.visible),"Off, his hands are bare again")
 	game.run.bag[1] = it("wizard_hat"); game.move_item("bag:1","head")
 	check(not look.parts.WizardHood.visible and is_instance_valid(look.hat_item) and look.hat_item.bone_name == "Head" and not look.hat_item.find_children("*","MeshInstance3D",true,false).is_empty() and not look.parts.Hair_SimpleParted.visible,"A Wizard Hat is a hat of its own on his head, his hood put away")
 	game.move_item("head","bag:%d" % Items.free_bag_slot(game.run))

@@ -466,6 +466,18 @@ static func plate(mesh_name: String, rest_pose: bool = false) -> ShaderMaterial:
 	materials[key] = m
 	return m
 
+# Gloves standing on the hands (assets/shaders/glove_shell.gdshader), in
+# their colour; `keep_side` for one of the pair pictured alone.
+static func glove_shell(tint: Color, keep_side: float = 0.0) -> ShaderMaterial:
+	var key = "glove_shell%s%s" % [tint.to_html(),keep_side]
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/glove_shell.gdshader")
+	m.set_shader_parameter("tint",tint)
+	m.set_shader_parameter("keep_side",keep_side)
+	materials[key] = m
+	return m
+
 # A hero's body drawn part by part, kit or skin (a new material each time:
 # the caller sets which parts are bare and how each is coloured). `shell`:
 # for a raised piece painted with the body.
@@ -708,6 +720,10 @@ static func item_model(thing) -> Node3D:
 		glove.set_shader_parameter("tint_hands",tint if tint != null else Color.WHITE)
 		hand.material_override = glove
 		root.add_child(hand)
+		var shell = MeshInstance3D.new()
+		shell.mesh = hand.mesh
+		shell.material_override = glove_shell(tint if tint != null else Color.WHITE,1.0)
+		root.add_child(shell)
 	if item.slot in BODY_SLOTS and (first or item.slot in ["chest","legs"]):
 		# Painted on the body: that part of the body's own surface.
 		var body = MeshInstance3D.new()

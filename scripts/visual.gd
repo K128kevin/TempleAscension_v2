@@ -571,10 +571,10 @@ func wear(equipment: Dictionary) -> void:
 		body_material.set_shader_parameter("recolor",redone)
 		for slot in Art.BODY_SLOTS: body_material.set_shader_parameter("tint_"+slot,tints.get(slot,Color.WHITE))
 		# (Gloves to the fingertips: assets/shaders/hero_body.gdshader `gloved`.)
-		var hands: Dictionary = Items.get_item(equipment.get("hands",{}))
-		body_material.set_shader_parameter("gloved",1.0 if Items.wears(hero_class,hands) and hands.get("look",{}).get("gloved",false) else 0.0)
+		body_material.set_shader_parameter("gloved",1.0 if gloves_on() else 0.0)
 	for body in [cut,whole]:
 		if body != null and not is_stone: body.material_override = Art.hero_kit(hero_class) if plain else body_material
+	glove_shells_fit([cut,whole])
 	held = Items.get_item(equipment.get("main",{})).get("look",{})
 	off_held = Items.get_item(equipment.get("off",{}))
 	var swung: String = Items.family(Items.get_item(equipment.get("main",{})))
@@ -584,6 +584,38 @@ func wear(equipment: Dictionary) -> void:
 	if resting:
 		for item in [weapon_item,shield_item,off_item]:
 			if is_instance_valid(item): item.visible = false
+
+# Whether the hands wear gloves to the fingertips (scripts/items.gd `gloved`).
+func gloves_on() -> bool:
+	var hands: Dictionary = Items.get_item(worn.get("hands",{}))
+	return Items.wears(hero_class,hands) and hands.get("look",{}).get("gloved",false)
+
+# Such gloves stand on the hands, over the skin painted their colour beneath:
+# the body mesh he wears, skinned with it, drawn again a little way out over
+# the hands alone (assets/shaders/glove_shell.gdshader). One for each body
+# mesh, shown with it.
+var glove_shells: Dictionary = {}
+func glove_shells_fit(bodies: Array) -> void:
+	var on: bool = gloves_on() and not is_stone
+	var tint = Items.get_item(worn.get("hands",{})).get("look",{}).get("tint",Color.WHITE)
+	for body in bodies:
+		if body == null: continue
+		var shell: MeshInstance3D = glove_shells.get(body)
+		if shell == null:
+			if not on: continue
+			shell = MeshInstance3D.new()
+			shell.name = String(body.name)+"Gloves"
+			shell.mesh = body.mesh
+			shell.skin = body.skin
+			shell.transform = body.transform
+			shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			# (It darkens itself in the shadows: set_shadowed.)
+			shell.set_meta("shades_itself",true)
+			body.get_parent().add_child(shell)
+			shell.skeleton = shell.get_path_to(body.get_node(body.skeleton))
+			glove_shells[body] = shell
+		shell.visible = on and body.visible
+		if shell.visible: shell.material_override = Art.glove_shell(tint)
 
 func bare_headed() -> bool:
 	return not hero_class.is_empty() and not worn.is_empty() and not Items.wears(hero_class,Items.get_item(worn.get("head",{})))
@@ -1757,6 +1789,10 @@ func set_shadowed(on: bool) -> void:
 		if mesh == sword_trail: continue
 		# (His cloak's cloth is moved by its own shader, which darkens itself.)
 		if (mesh == cloak_mesh or mesh in cloth_followers) and mesh.material_override is ShaderMaterial: mesh.material_override.set_shader_parameter("shadowed",1.0 if on else 0.0)
+		elif mesh.has_meta("shades_itself"):
+			if mesh.material_override is ShaderMaterial:
+				mesh.material_override = mesh.material_override.duplicate()
+				mesh.material_override.set_shader_parameter("shadowed",1.0 if on else 0.0)
 		else: mesh.material_overlay = shadow_overlay if on else null
 
 # The wake behind the hero's blade as he cuts (scripts/sword_trail.gd).
