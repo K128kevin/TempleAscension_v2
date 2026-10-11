@@ -149,7 +149,7 @@ const BASES = {
 	# brings the bit round to lead the forehand cuts, and a little past, toward
 	# where the backhand leads.)
 	"hatchet":{"name":"Hatchet","rarity":"common","slot":"weapon","kind":"axe","hands":1,"damage":[16.0,24.0],"speed":1.6,
-		"look":{"model":"hand_axe","size":Vector3(.4,.72,.1),"grip":.13,"finish":"arms","metal_from":.55,"edge":[.6,1.0],"haft":.325,"turn":-PI*.64}},
+		"look":{"model":"bearded_axe","size":Vector3(.246,.72,.034),"grip":.13,"finish":"axe","edge":[.69,1.0],"haft":-.183,"turn":PI/2}},
 	# Staves: a wizard's, for his Intelligence; no damage of their own.
 	"gnarled_staff":{"name":"Gnarled Staff","rarity":"common","slot":"weapon","kind":"staff","hands":2,"bonus":{"intelligence":3,"vitality":2,"willpower":2},
 		"look":{"model":"ashwood_staff","size":Vector3.ONE,"length":1.75,"grip":1.254,"finish":"parts","crystal":Color(.74,.62,.4)}},

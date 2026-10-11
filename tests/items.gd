@@ -561,7 +561,7 @@ func test():
 				if p.y < .25: haft_low = haft_low.min(p); haft_high = haft_high.max(p)
 				elif p.y > .58 and Vector2(p.x,p.z).length() > Vector2(bit.x,bit.z).length(): bit = p
 	check(absf(haft_low.x+haft_high.x) < .02 and absf(haft_low.z+haft_high.z) < .02 and haft_high.x-haft_low.x < .1 and haft_high.z-haft_low.z < .1,"The hatchet's haft runs through his fist (%s to %s)" % [haft_low,haft_high])
-	check(bit.z < -.2 and absf(bit.x) < absf(bit.z),"Its bit is turned to lead the cut (%s)" % bit)
+	check(bit.z < -.12 and absf(bit.x) < absf(bit.z)*.3,"Its bit is turned to lead the cut (%s)" % bit)
 	# The war hammer's haft too, its head's face out along its edge.
 	hero("warrior",{"main":"war_hammer","off":""})
 	var hammer: Node3D = game.player.visual.weapon_item
@@ -823,15 +823,15 @@ func test():
 	check(Items.compare(it("steel_full_helm","tough"),it("gladiators_helmet")) == [["+5 armor",true],["+5 Vitality",true]] and Items.compare(it("gladiators_helmet"),it("steel_full_helm","tough")) == [["-5 armor",false],["-5 Vitality",false]] and Items.compare(it("greatsword"),it("steel_longsword","swift")) == [["+10 to +14 damage",true],["+0.1 attacks per second",true],["-5 Dexterity",false]] and Items.compare(it("crystal_staff"),it("greatsword")) == [["+4 Intelligence",true],["+4 Willpower",true]],"Two items are weighed number by number, each told what it has more and less of; a staff's damage is not set against a sword's")
 	panels.hovered_item = "bag:8"
 	game.hud.tick(0)
-	check(panels.item_tip.visible and "Hold Shift to compare" in panels.item_tip_lines.hint.text and not panels.item_tip_lines.against.visible and (not is_instance_valid(panels.compare_tip) or not panels.compare_tip.visible) and panels.compared_place.is_empty(),"Hovering a bag item that could be worn offers to compare it with Shift")
+	check(panels.item_tip.visible and "Shift: compare with equipped item" in panels.item_tip_lines.hint.text and not panels.item_tip_lines.against.visible and (not is_instance_valid(panels.compare_tip) or not panels.compare_tip.visible) and panels.compared_place.is_empty(),"Hovering a bag item that could be worn offers to compare it with Shift")
 	panels.compare_always = true
 	game.hud.tick(0)
 	check(panels.compared_place == "head" and is_instance_valid(panels.compare_tip) and panels.compare_tip.visible and panels.compare_tip_lines.title.text == "Gladiator's Helmet" and panels.compare_tip_lines.kind.text.begins_with("Worn · ") and panels.compare_tip.position.x < panels.item_tip.position.x and panels.compare_tip.position.x+250 <= panels.item_tip.position.x,"With Shift held, a second tip to the left shows what is worn in that slot")
-	check(panels.item_tip_lines.against.visible and "Gladiator's Helmet you wear" in panels.item_tip_lines.against.text and panels.item_tip_lines.gains.text == "+5 armor\n+5 Vitality" and not panels.item_tip_lines.losses.visible and "Hold Shift" not in panels.item_tip_lines.hint.text,"The bag item's tip tells what it has more of, in green")
+	check(panels.item_tip_lines.against.visible and "Gladiator's Helmet you wear" in panels.item_tip_lines.against.text and panels.item_tip_lines.gains.text == "+5 armor\n+5 Vitality" and not panels.item_tip_lines.losses.visible and "Shift: compare" not in panels.item_tip_lines.hint.text,"The bag item's tip tells what it has more of, in green")
 	check("Tough Steel Full Helm in your bag" in panels.compare_tip_lines.against.text and panels.compare_tip_lines.losses.text == "-5 armor\n-5 Vitality" and not panels.compare_tip_lines.gains.visible and not panels.compare_tip_lines.hint.visible,"and the worn item's tip what it has less of, in red")
 	panels.hovered_item = "bag:%d" % game.run.bag.find(it("greatsword"))
 	game.hud.tick(0)
-	check(panels.compared_place.is_empty() and not panels.compare_tip.visible and "Hold Shift" not in panels.item_tip_lines.hint.text,"Nothing worn in its slot, there is nothing to compare")
+	check(panels.compared_place.is_empty() and not panels.compare_tip.visible and "Shift: compare" not in panels.item_tip_lines.hint.text,"Nothing worn in its slot, there is nothing to compare")
 	panels.hovered_item = "head"
 	game.hud.tick(0)
 	check(panels.compared_place.is_empty() and not panels.compare_tip.visible and not panels.item_tip_lines.against.visible,"nor for an item already worn")

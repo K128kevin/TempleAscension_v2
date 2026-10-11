@@ -601,6 +601,14 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   knotted, bowed ash shaft splitting into three branches round a rough stone,
   bronze bands and ferrule and a cord-wound grip. Each grip is wrapped where the
   game holds it (1.254 m up).
+- The hatchet is a bearded axe (`assets/models/props/bearded_axe.glb`), built by
+  `tools/make_axe.py`: a long sweeping edge drawn out into a horn above and a
+  beard below, hollowed under toward the haft, the cheek thick at the eye and
+  ground thin to the edge; a square poll behind the eye, steel langets down the
+  haft, a dark hardwood haft swelled at its capped foot, with two steel bands.
+  Its parts are named for their finish (Head, Haft, Fittings: Art.axe_part); the
+  head's shader (`assets/shaders/axe.gdshader`) reads the blade's UVs, dark forged
+  steel etched with scrollwork on the cheek and a bright brushed bevel to the edge.
 - The flanged mace (`assets/models/props/mace.glb`) is built by `tools/make_mace.py`:
   a haft, pommel, grip and collars turned on a lathe, and seven flanges cut as flat
   blades; nothing imported. The other items' models are ones the game already had

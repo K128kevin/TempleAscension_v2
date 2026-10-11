@@ -37,4 +37,5 @@ static func creation(game, difficulty: int) -> void:
 			game.creating_character = false
 			game.run = Data.new_character(Data.CLASSES[i]); game.run.difficulty = difficulty
 			game.load_floor(); game.save_run()
+			game.start_intro()
 			game.toast("%s wakes in the desert. The temple lies east; the town lies west." % Data.CLASSES[i].capitalize()))

@@ -32,7 +32,7 @@ The Windows build is unsigned; it needs a Windows hardware playtest.
 | Mouse wheel, trackpad scroll or pinch | Zoom (in close enough to look at the models) |
 | E | Ascend, claim the crown, or rest at a safe entrance |
 | Walk through the temple's door | Enter the temple's first floor from the desert, or leave it again |
-| Escape | Pause, continue saved game, choose new run/difficulty, sound, quit |
+| Escape | Pause, continue saved game, choose new run/difficulty, sound, quit; skips a new character's opening shot |
 | Ctrl + Z | Hide the whole interface (every bar, icon, panel and word, damage numbers included), and show it again |
 | F11, Alt+Enter, or Ctrl+Cmd+F on a Mac | Fullscreen on or off (also in the Escape menu; remembered between launches) |
 
@@ -55,6 +55,11 @@ names it. Class and level, with a thin XP bar, appear at top left.
 Floor, remaining statues and difficulty
 appear at top right. Unassigned, incompatible, and recharging skills are disabled
 with an explanation.
+
+A new character's story opens on the dune: the camera starts just above his
+head, looking out toward the town, holds for four seconds, then over four more
+draws back and up into the game's own view, when he can be commanded. Escape
+skips straight to it.
 
 Attributes, skills and inventory are three tabs of one character window on the
 right side of the screen. C, K and I open it at each (or turn it to that tab,

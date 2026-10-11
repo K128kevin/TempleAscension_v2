@@ -116,6 +116,30 @@ func test():
 	game.hud.modal_body.get_child(4).pressed.emit()
 	check(game.run.class_id=="wizard" and Data.weapon(game.run)==4 and game.run.skills.is_empty() and game.run.skill_points==1 and not game.creating_character,"Wizard creation grants the staff and one skill point")
 	check(not Save.load_run().is_empty(),"New class creation writes a valid character save")
+	# His story opens on a view from just above his head, out toward the
+	# town, that holds and then draws back and up into the game's own view;
+	# until then he cannot be commanded. Escape skips it.
+	var cam: Camera3D = game.world.camera
+	# (He stands on the dune: his figure is lifted to its height.)
+	var stand: Vector3 = game.player.position+Vector3.UP*game.world.lift(game.player.position)
+	check(is_equal_approx(game.intro_left,game.INTRO_HOLD+game.INTRO_MOVE) and cam.projection == Camera3D.PROJECTION_PERSPECTIVE and cam.position.distance_to(stand) < 4.0 and cam.position.y > stand.y+1.5,"A new character's story opens from just above his head (%s from him)" % [cam.position-stand])
+	var town_way: Vector3 = (game.world.TOWN_GATE-game.player.position).normalized()
+	check(-cam.global_basis.z.dot(town_way) > .8,"looking out toward the town")
+	await capture("opening-shot")
+	var held: Vector3 = cam.position
+	for i in 20: game._process(.1)
+	check(cam.position.distance_to(held) < .001 and game.intro_left > game.INTRO_MOVE,"The view holds through its first four seconds")
+	var press = InputEventMouseButton.new(); press.button_index = MOUSE_BUTTON_LEFT; press.pressed = true; press.position = Vector2(600,400)
+	game._unhandled_input(press)
+	check(not game.left_held and game.route.is_empty(),"and he cannot be moved meanwhile")
+	for i in 40: game._process(.1)
+	check(game.intro_left > 0 and cam.projection == Camera3D.PROJECTION_PERSPECTIVE and cam.position.distance_to(stand) > 30.0 and cam.position.y > held.y+10.0,"Then it draws back and up (%.0f m off)" % cam.position.distance_to(stand))
+	await capture("opening-drawing-back")
+	var esc = InputEventKey.new(); esc.physical_keycode = KEY_ESCAPE; esc.keycode = KEY_ESCAPE; esc.pressed = true
+	game._input(esc)
+	check(game.intro_left == 0 and cam.projection == Camera3D.PROJECTION_ORTHOGONAL and is_equal_approx(cam.size,game.world.zoom) and game.mode == "playing","Escape skips the opening into the game's own view, the game not paused")
+	game._process(.1)
+	check(game.intro_left == 0 and cam.projection == Camera3D.PROJECTION_ORTHOGONAL,"and it stays there")
 	# A new character wakes in the desert: the corner tells the way, not a floor.
 	game.run.difficulty=1; hud.tick(0)
 	check(hud.objective.text=="" and "Hard" in hud.difficulty.text and "Temple" in hud.direction.text,"Outdoors the corner shows the difficulty and the way to the temple")

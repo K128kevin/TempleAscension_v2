@@ -38,6 +38,15 @@ var walking = false
 var route = PackedVector3Array()
 var left_held = false
 var right_held = false
+# The opening of a new character's story: the camera starts a little above
+# his head, looking out over the dune toward the town, holds there, then
+# draws back and up into the game's own view; until it arrives he cannot be
+# moved (Escape skips it). `intro_left`: the seconds of it left (0: none).
+const INTRO_HOLD = 4.0
+const INTRO_MOVE = 4.0
+const INTRO_BACK = 120.0
+var intro_left = 0.0
+var intro_enabled = true
 # A left hold that began on open ground is a move order: dragging it over a
 # statue keeps walking rather than turning into an attack.
 var move_hold = false
@@ -433,6 +442,7 @@ func _process(dt: float) -> void:
 		if enemy.dead or not enemy.awake or not enemy.visible or enemy.position.distance_squared_to(player.position)>900: continue
 		world.occlusion_targets.append({"position":enemy.position,"height":1.8*enemy.config.size})
 	world.follow(playground.focus() if playground != null else player.position,dt)
+	if intro_left>0 and mode=="playing": tick_intro(dt)
 	if shake_left>0:
 		# A jolt that rings down: the camera thrown about its place.
 		shake_left = maxf(0,shake_left-dt)
@@ -465,12 +475,14 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if event.physical_keycode==KEY_ESCAPE:
-			# Escape gives up an aimed Power Shot before it pauses the game.
-			if mode=="playing" and skills.abandon_aim(): pass
+			# Escape skips the opening, gives up an aimed Power Shot, and
+			# otherwise pauses the game.
+			if mode=="playing" and intro_left>0: end_intro()
+			elif mode=="playing" and skills.abandon_aim(): pass
 			elif mode=="playing": pause_game()
 			elif mode in ["paused","character"] and not creating_character: resume_game()
 			get_viewport().set_input_as_handled()
-		if event.physical_keycode in [KEY_C,KEY_K,KEY_I] and mode in ["playing","character"] and not creating_character:
+		if event.physical_keycode in [KEY_C,KEY_K,KEY_I] and mode in ["playing","character"] and not creating_character and intro_left<=0:
 			toggle_screen(event.physical_keycode)
 			get_viewport().set_input_as_handled()
 		# Pointing at a learned skill in the skill panel, 1 to 4 assign it.
@@ -504,6 +516,46 @@ func toggle_screen(key: int) -> void:
 	else: ProgressionUI.equipment(self)
 	if mode=="character" and not hud.panels.any_open() and not is_instance_valid(hud.modal): resume_game()
 
+# The opening (see `intro_left`): begun as a new character wakes outdoors.
+func start_intro() -> void:
+	if not intro_enabled or not outdoors() or not is_instance_valid(player): return
+	intro_left = INTRO_HOLD+INTRO_MOVE
+	left_held = false
+	right_held = false
+	world.camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	tick_intro(0.0)
+
+# Its camera, each frame: through the hold, a little above and behind his
+# head looking down toward the town; then, eased, drawn back along the game's
+# own line of sight, far enough out that its perspective is all but the flat
+# view's, which it becomes as it arrives.
+func tick_intro(dt: float) -> void:
+	intro_left = maxf(0.0,intro_left-dt)
+	var cam: Camera3D = world.camera
+	var feet: Vector3 = player.position+Vector3.UP*world.lift(player.position)
+	var toward: Vector3 = Overworld.TOWN_GATE-player.position
+	toward.y = 0
+	toward = toward.normalized()
+	var head: Vector3 = feet+Vector3.UP*2.2-toward*1.3
+	var head_dir: Vector3 = (toward*6.0-Vector3.UP).normalized()
+	var line: Vector3 = Overworld.VIEW.normalized()
+	var back: Vector3 = feet+line*INTRO_BACK
+	var t: float = 0.0 if intro_left>INTRO_MOVE else clampf(1.0-intro_left/INTRO_MOVE,0.0,1.0)
+	var s: float = t*t*(3.0-2.0*t)
+	cam.position = head.lerp(back,s)
+	var dir: Vector3 = head_dir.slerp(-line,s)
+	cam.look_at(cam.position+dir)
+	cam.fov = lerpf(68.0,2.0*rad_to_deg(atan(world.zoom*.5/INTRO_BACK)),s)
+	if intro_left<=0: end_intro()
+
+# The opening over (or skipped): the game's own flat view, and him to command.
+func end_intro() -> void:
+	intro_left = 0.0
+	var cam: Camera3D = world.camera
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = world.zoom
+	cam.look_at(cam.position-Overworld.VIEW)
+
 # Moves the camera in (negative) or out, within its limits; close in, the
 # wheel takes finer steps.
 const MIN_ZOOM = 3.0
@@ -512,7 +564,7 @@ func zoom_camera(amount: float) -> void:
 	world.zoom = clampf(world.zoom+amount,MIN_ZOOM,MAX_ZOOM)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if mode!="playing": return
+	if mode!="playing" or intro_left>0: return
 	if playground != null and playground.unhandled(event):
 		get_viewport().set_input_as_handled()
 		return
@@ -756,6 +808,7 @@ func order_attack(clicked, special: bool, slot: int = 0) -> void:
 	else: route = world.path(player.position,target.position)
 
 func player_control(dt: float) -> void:
+	if intro_left>0: return
 	if player.dead: return
 	lean_into_dash(dt)
 	if leap_left>0:

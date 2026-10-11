@@ -592,7 +592,7 @@ func show_item_tip(place: String) -> void:
 	var about: Dictionary = Items.describe(inst,game.run.class_id)
 	var hint = ""
 	if about.note.is_empty(): hint = "Right-click: %s" % ("put on" if Items.in_bag(place) else "take off")
-	if not against.is_empty() and not comparing: hint += ("\n" if not hint.is_empty() else "")+"Hold Shift to compare with what is worn"
+	if not against.is_empty() and not comparing: hint += ("\n" if not hint.is_empty() else "")+"Shift: compare with equipped item"
 	fill_item_tip(item_tip_lines,inst,worn,false,hint)
 	var height: float = item_tip.get_combined_minimum_size().y
 	var at: Rect2 = slots[place].frame.get_global_rect()

@@ -589,6 +589,10 @@ static func weapon_model(look: Dictionary) -> Node3D:
 		# A wizard's staff: metal, crystal, leather, wood and bronze by its
 		# parts (tools/make_staffs.py).
 		for mesh in node.find_children("*","MeshInstance3D",true,false): mesh.material_override = staff_part(String(mesh.name),look)
+	if look.get("finish","") == "axe":
+		# The warrior's bearded axe: its head, haft and fittings by its parts
+		# (tools/make_axe.py).
+		for mesh in node.find_children("*","MeshInstance3D",true,false): mesh.material_override = axe_part(String(mesh.name),look)
 	if look.get("finish","") == "hasta":
 		# The legionary's spear: iron, ash and hide by its parts (scripts/town_guard.gd).
 		for mesh in node.find_children("*","MeshInstance3D",true,false):
@@ -598,6 +602,23 @@ static func weapon_model(look: Dictionary) -> Node3D:
 			part.set_shader_parameter("blade",mesh.name == "Head")
 			mesh.material_override = part
 	return node
+
+# A part of the bearded axe (assets/shaders/axe.gdshader for the head, dark
+# hardwood for the haft, dark forged steel for the fittings); a look's `tint`
+# recolours the head's steel.
+static func axe_part(part_name: String, look: Dictionary) -> Material:
+	var part: String = part_name.get_slice(".",0).get_slice("_",0)
+	if part == "Haft": return arms_material(9.0,null,look.get("wood",Color(.17,.09,.055)))
+	if part == "Fittings": return hammered(Color(.36,.38,.43))
+	var key = "axehead%s" % [look.get("tint",Color.WHITE).to_html()]
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/axe.gdshader")
+	if look.has("tint"):
+		m.set_shader_parameter("tint",look.tint)
+		m.set_shader_parameter("recolor",1.0)
+	materials[key] = m
+	return m
 
 # A weapon as it is held: its haft in the fist and its edge leading the cut.
 # A model's haft is taken to run up its middle, its edge to either side (its
