@@ -104,6 +104,23 @@ func capture():
 				await shoot("take2")
 				await step(.5)
 				await shoot("take3")
+			"meet":
+				# Anya and Selene near each other: one giving way.
+				var met = await step(600.0,func(): return folk.anya.body.visible and folk.inside(folk.anya) and folk.inside(folk.selene) and Vector2(folk.anya.at.x-folk.selene.at.x,folk.anya.at.z-folk.selene.at.z).length() < .85)
+				var mid: Vector3 = folk.anya.at.lerp(folk.selene.at,.5)
+				look(mid+Vector3(1.2,3.2,2.6),mid+Vector3.UP*.6,40.0)
+				await shoot("meet")
+				await step(.7)
+				await shoot("meet2")
+				await step(.7)
+				await shoot("meet3")
+			"barclear":
+				# Selene reaching across the bar for what is left on it.
+				await step(600.0,func(): return folk.selene.state == "take" and folk.chore.get("picks",[]).any(func(p): return is_instance_valid(p.node) and p.node.global_position.y > 1.0) and folk.selene.phase_time > .4)
+				frame(folk.selene.at+Vector3.UP*1.0,folk.selene.body,2.0,1.4,.3,40.0)
+				await shoot("barclear")
+				frame(folk.selene.at+Vector3.UP*1.0,folk.selene.body,2.2,.4,1.0,40.0)
+				await shoot("barclear2")
 			"place":
 				await step(90.0,func(): return folk.anya.state == "place" and folk.anya.phase_time > .45)
 				var mug: Vector3 = folk.round[0].seat.mug if not folk.round.is_empty() else folk.anya.at
@@ -125,8 +142,16 @@ func capture():
 					var palm_at: Vector3 = folk.tray.global_position
 					frame(palm_at,folk.selene.body,.6,1.4,-.02,30.0)
 					await shoot("plates_side")
+					frame(palm_at,folk.selene.body,.5,1.5,-.06,26.0)
+					await shoot("plates_low")
 					frame(palm_at,folk.selene.body,.6,1.2,-.25,30.0)
 					await shoot("plates_under")
+					for plate in folk.tray.get_children(): plate.visible = false
+					frame(palm_at,folk.selene.body,.45,1.5,.02,30.0)
+					await shoot("plates_hand")
+					frame(palm_at,folk.selene.body,.45,.4,.25,30.0)
+					await shoot("plates_hand2")
+					for plate in folk.tray.get_children(): plate.visible = true
 				frame(hand,folk.selene.body,1.0,-.6,.15)
 				await shoot(shot+"2")
 			"foam","sipped","drunk","dregs":

@@ -186,6 +186,8 @@ class Walker:
 	var last_heading = Vector3.ZERO
 	var last_step = 0.0
 	var stuck = 0.0
+	# Giving way to another (give_way): standing where it is this moment.
+	var hold = false
 	var at: Vector3:
 		get: return body.position
 		set(value): body.position = value
@@ -623,6 +625,14 @@ func lay_floor() -> void:
 			var wall: float = minf(minf(at.x-floor_area.position.x,floor_area.end.x-at.x),at.z-floor_area.position.y)
 			if floor_area.end.y-at.z < CLEARANCE and absf(at.x-door.x) > .9: wall = 0.0
 			if wall < CLEARANCE: floor_grid.set_point_solid(Vector2i(x,z))
+	# Anya's end behind the bar (ANYA_END: her post, the tap, her way round
+	# the bar's end), where Selene does not go.
+	anya_end.clear()
+	var end: Rect2 = Rect2(c.x+ANYA_END.position.x,c.z+ANYA_END.position.y,ANYA_END.size.x,ANYA_END.size.y)
+	for z in floor_cells.y:
+		for x in floor_cells.x:
+			var at: Vector3 = floor_point(Vector2i(x,z))
+			if end.has_point(Vector2(at.x,at.z)): anya_end.append(Vector2i(x,z))
 
 func floor_cell(at: Vector3) -> Vector2i:
 	return Vector2i(floori((at.x-floor_area.position.x)/FLOOR_CELL),floori((at.z-floor_area.position.y)/FLOOR_CELL))
@@ -697,6 +707,178 @@ func floor_way(from: Vector3, to: Vector3) -> PackedVector3Array:
 func stand_by(point: Vector3) -> Vector3:
 	return floor_nearest(Vector3(point.x,0,point.z),2.0)
 
+# Where Selene stands to reach something: as stand_by, but never in Anya's
+# end behind the bar (from the counter's other side, or its end, instead).
+func selene_stand(point: Vector3) -> Vector3:
+	var none: Array[Vector2i] = []
+	return round_about(Vector3.ZERO,0.0,anya_end,func(): return floor_nearest(Vector3(point.x,0,point.z),2.0)) if not anya_end.is_empty() else stand_by(point)
+
+# ---- Anya and Selene give way ----
+
+# The two women never run into each other. Anya, at work for her customers,
+# has the right of way: Selene keeps out of Anya's end behind the bar
+# (ANYA_END) altogether, plans her ways round Anya where Anya stands, and
+# does not choose to work where Anya is or is going (near_anya); Anya does
+# not choose to serve where Selene is working. On the way (give_way), when
+# Selene's next stretch would bring her within GIVE_WAY of Anya she waits
+# where she is; when Anya's would bring her within it of Selene, Anya goes
+# round her by the floor (Selene's place closed to her, AROUND) if there is
+# a way, and otherwise waits, while Selene steps aside off Anya's way to the
+# nearest free place clear of it (make_way), waits there till Anya is by,
+# and then goes on. Anya never waits on Selene for a step of hers, so the
+# two can never both be waiting on each other.
+const GIVE_WAY = .6
+const AROUND = .65
+const AHEAD = .5
+const ASIDE_CLEAR = .75
+# (From the inn's corner: behind the bar from just east of its middle, to
+# the end of the barrels.)
+const ANYA_END = Rect2(6.6,6.6,6.2,1.45)
+var anya_end: Array[Vector2i] = []
+# Selene stepping aside for Anya: the place she has gone aside to, and the
+# way she was going.
+var aside = {}
+var reroute_rest = 0.0
+
+# The floor's cells within `radius` of `at`, closed for the length of `call`
+# (a way worked out round them), then opened again as they were; and those
+# of `more`.
+func round_about(at: Vector3, radius: float, more: Array[Vector2i], call: Callable):
+	var closed: Array[Vector2i] = []
+	var cells: Array[Vector2i] = more.duplicate()
+	if radius > 0.0:
+		var centre: Vector2i = floor_cell(at)
+		var reach: int = ceili(radius/FLOOR_CELL)
+		for dz in range(-reach,reach+1):
+			for dx in range(-reach,reach+1):
+				var cell: Vector2i = centre+Vector2i(dx,dz)
+				if floor_point(cell).distance_to(Vector3(at.x,0,at.z)) < radius: cells.append(cell)
+	for cell in cells:
+		if floor_grid.region.has_point(cell) and not floor_grid.is_point_solid(cell):
+			floor_grid.set_point_solid(cell)
+			closed.append(cell)
+	var result = call.call()
+	for cell in closed: floor_grid.set_point_solid(cell,false)
+	return result
+
+# Where a walker will be `ahead` metres on along its way.
+func on_ahead(walker: Walker, ahead: float) -> Vector3:
+	var at: Vector3 = Vector3(walker.at.x,0,walker.at.z)
+	for point in walker.route:
+		var to = Vector3(point.x,0,point.z)
+		var step: float = at.distance_to(to)
+		if step >= ahead: return at.lerp(to,ahead/step) if step > 0.0 else at
+		ahead -= step
+		at = to
+	return at
+
+# Where Anya is, and where she is going.
+func anya_places() -> Array:
+	var places = [Vector3(anya.at.x,0,anya.at.z)]
+	if not anya.route.is_empty(): places.append(anya.route[-1])
+	if not round.is_empty() and not round[0].seat.is_empty(): places.append(round[0].seat.serve)
+	return places
+
+func near_anya(spot: Vector3, reach: float = GIVE_WAY+.2) -> bool:
+	return anya_places().any(func(p): return Vector2(p.x-spot.x,p.z-spot.z).length() < reach)
+
+# Where Selene is, and where she is going (for Anya, choosing whom to serve).
+func near_selene(spot: Vector3, reach: float = GIVE_WAY+.2) -> bool:
+	if not selene.body.visible: return false
+	var places = [Vector3(selene.at.x,0,selene.at.z)]
+	if not selene.route.is_empty(): places.append(selene.route[-1])
+	return places.any(func(p): return Vector2(p.x-spot.x,p.z-spot.z).length() < reach)
+
+# Selene's way to `to`: by the floor, out of Anya's end, round Anya where she
+# stands (and to `to` itself, if it is free then).
+func selene_route(to: Vector3) -> void:
+	var standing: bool = anya.route.is_empty() and anya.body.visible and inside(anya)
+	var route: PackedVector3Array = round_about(anya.at,AROUND if standing else 0.0,anya_end,func(): return way(selene.at,to))
+	var last: Vector3 = route[-1] if not route.is_empty() else selene.at
+	if Vector2(last.x-to.x,last.z-to.z).length() > .01 and (not standing or Vector2(to.x-anya.at.x,to.z-anya.at.z).length() >= AROUND): route.append(to)
+	selene.route = route
+
+func give_way(delta: float) -> void:
+	anya.hold = false
+	selene.hold = false
+	reroute_rest = maxf(0.0,reroute_rest-delta)
+	if not anya.body.visible or not selene.body.visible or not inside(anya) or not inside(selene): return
+	var anya_goes: bool = not anya.route.is_empty() and not anya.state in ABED
+	var selene_goes: bool = not selene.route.is_empty() and not selene.state in ABED
+	var anya_next: Vector3 = on_ahead(anya,AHEAD) if anya_goes else Vector3(anya.at.x,0,anya.at.z)
+	var selene_next: Vector3 = on_ahead(selene,AHEAD) if selene_goes else Vector3(selene.at.x,0,selene.at.z)
+	var apart = func(a: Vector3, b: Vector3) -> float: return Vector2(a.x-b.x,a.z-b.z).length()
+	# Selene waits rather than come near her (unless stepping aside for her,
+	# by a way that keeps clear of her).
+	if selene_goes and aside.get("going",false) == false:
+		if apart.call(selene_next,anya.at) < GIVE_WAY or apart.call(selene_next,anya_next) < GIVE_WAY or apart.call(selene.at,anya_next) < GIVE_WAY*.9:
+			selene.hold = true
+	# Anya goes round her, or waits while she makes way.
+	if anya_goes and (apart.call(anya_next,selene.at) < GIVE_WAY or apart.call(anya_next,selene_next) < GIVE_WAY and not selene.hold):
+		var goal: Vector3 = anya.route[-1]
+		var around: PackedVector3Array = PackedVector3Array()
+		if reroute_rest <= 0.0 and apart.call(goal,selene.at) >= AROUND:
+			reroute_rest = .4
+			var none: Array[Vector2i] = []
+			around = round_about(selene.at,AROUND,none,func(): return floor_way(anya.at,goal))
+		if not around.is_empty() and apart.call(around[-1],goal) < .05:
+			anya.route = around
+			anya.route.append(goal)
+			anya_next = on_ahead(anya,AHEAD)
+		if apart.call(anya_next,selene.at) < GIVE_WAY:
+			anya.hold = true
+			selene.hold = false
+			make_way()
+	if not aside.is_empty(): stand_aside()
+
+# Selene off Anya's way: to the nearest free place clear of it and of Anya,
+# that she can reach without coming near her.
+func make_way() -> void:
+	if aside.get("going",false) or aside.get("waiting",false): return
+	if not selene.state in ["idle","to_post","to_things","carry","to_table","to_bar"]: return
+	var line: Array = [Vector3(anya.at.x,0,anya.at.z)]
+	for point in anya.route: line.append(Vector3(point.x,0,point.z))
+	var clear_of = func(spot: Vector3) -> bool:
+		for k in range(line.size()-1):
+			var on: Vector3 = Geometry3D.get_closest_point_to_segment(spot,line[k],line[k+1])
+			if on.distance_to(spot) < ASIDE_CLEAR: return false
+		return line.size() > 1 or line[0].distance_to(spot) >= ASIDE_CLEAR
+	var centre: Vector2i = floor_cell(selene.at)
+	var best = null
+	var least = INF
+	var reach = 25
+	for dz in range(-reach,reach+1):
+		for dx in range(-reach,reach+1):
+			var cell: Vector2i = centre+Vector2i(dx,dz)
+			if not floor_grid.region.has_point(cell) or floor_grid.is_point_solid(cell) or cell in anya_end: continue
+			var spot: Vector3 = floor_point(cell)
+			var d: float = spot.distance_to(Vector3(selene.at.x,0,selene.at.z))
+			if d < least and clear_of.call(spot):
+				least = d
+				best = spot
+	if best == null: return
+	var going: PackedVector3Array = round_about(anya.at,GIVE_WAY,anya_end,func(): return floor_way(selene.at,best))
+	if going.is_empty() and selene.at.distance_to(best) > .05: return
+	aside = {"going":true,"to":selene.route[-1] if not selene.route.is_empty() else Vector3.INF,"route":going}
+
+# Stepping aside, then waiting there till Anya's way no longer comes near.
+func stand_aside() -> void:
+	if aside.get("going",false):
+		if aside.route.is_empty():
+			aside.going = false
+			aside.waiting = true
+		return
+	var line: Array = [Vector3(anya.at.x,0,anya.at.z)]
+	for point in anya.route: line.append(Vector3(point.x,0,point.z))
+	var near = false
+	for k in range(maxi(line.size()-1,1)):
+		var on: Vector3 = line[0] if line.size() == 1 else Geometry3D.get_closest_point_to_segment(selene.at,line[k],line[k+1])
+		if Vector2(on.x-selene.at.x,on.z-selene.at.z).length() < GIVE_WAY+.05: near = true
+	if near: return
+	var to: Vector3 = aside.to
+	aside = {}
+	if to != Vector3.INF: selene_route(to)
+
 func free_seat() -> Dictionary:
 	var open = seats.filter(func(seat): return seat.taken == null)
 	return {} if open.is_empty() else open[rng.randi_range(0,open.size()-1)]
@@ -759,6 +941,7 @@ func tick(delta: float, hero: Vector3) -> void:
 	for walker in people: tend(walker,delta)
 	for keeper in keepers: keep(keeper,delta)
 	bedding()
+	give_way(delta)
 	serve(delta)
 	chores(delta)
 	zeno_tick(delta,hero)
@@ -796,6 +979,12 @@ func advance(walker: Walker, delta: float) -> bool:
 	if walker.route.is_empty():
 		walker.last_step = 0.0
 		return true
+	if walker.hold:
+		walker.last_step = 0.0
+		walker.stuck = 0.0
+		walker.last_at = walker.at
+		if not walker.body.state in ["Idle","Arms"]: walker.body.play("Idle",.2)
+		return false
 	var to: Vector3 = walker.route[0]-walker.at
 	to.y = 0
 	var step = walker.speed*delta
@@ -1096,7 +1285,8 @@ func serve(delta: float) -> void:
 		"post":
 			body.turn_to(Vector3(0,0,1),delta,6.0)
 			if body.state != "Idle" and body.state != "Arms": body.play("Idle")
-			var waiting = people.filter(func(w): return w.state == "wait")
+			# (Not one where Selene is at work, or going: another, or a moment.)
+			var waiting = people.filter(func(w): return w.state == "wait" and not near_selene(w.seat.serve))
 			# Once the last has gone, she goes to bed.
 			if abed(anya) and people.all(func(w): return not w.state in ["to_inn","sit_down","wait","drink"]): go_to_bed(anya)
 			elif not waiting.is_empty() and anya.timer <= 0.0:
@@ -2004,29 +2194,44 @@ const WIPE_ROUND = .09
 const WIPE_BEAT = 1.1
 const WIPE_ABOVE = .012
 const WIPE_LEAN = .12
+const WIPE_REACH = .5
 const CHORE_LOOK = .5
 # A thing within USE_REACH of where a drinker's mug stands is his. Of what
 # is left about she takes, in one going, what lies within TAKE_REACH of the
 # first thing (as much as her hands hold: PLATES on her palm); each taken up
-# in TAKE seconds and put away in PUT. She leans to what is further than
-# ARM_REACH from her, as far as LEAN_MOST.
+# in TAKE seconds and put away in PUT. She bends from the waist to what is
+# further than ARM_REACH from her, as far as LEAN_MOST (lean_for).
 const USE_REACH = .55
 const TAKE_REACH = .7
 const PLATES = 4
 const TAKE = 1.1
 const PUT = 1.0
 const ARM_REACH = .3
-const LEAN_MOST = .35
+const LEAN_MOST = .8
+const LEAN_HIGH = .3
+const LEAN_LADEN = .1
 # How far forward the upper arm hangs as a thing is carried by its handle
 # in the fist (fist_ahead: hers, and Anya's), and as Anya holds a mug under
 # the tap; where her palm carries plates, in her own frame, and how far up
 # each plate lies on the one below.
 const CARRY_SWING = .25
 const TAP_SWING = .75
-const TRAY_CARRY = Vector3(.1,.95,.36)
 const PLATE_STEP = .014
-# (The lowest plate on her palm's pads and fingers, not in them.)
-const ON_PALM = .022
+# Plates ride on her left palm as a waiter's do (lay_tray, and
+# scripts/flat_hand.gd carry_level): her wrist ahead of her shoulder and
+# below it, her elbow low beneath, her forearm rising to her hand, which is
+# turned up and level, the wrist bent back, so all her forearm falls away
+# below the plates; their middle PLATE_AHEAD out along her fingers from her
+# palm's, the lowest ON_PALM off it (on the pads of her palm: tests/
+# inn_shift.gd measures that nothing of her hand or arm comes up into it).
+# (Where her palm is as she takes a plate up onto it, tray_hold: her upper
+# arm TRAY_SWING forward, her forearm TRAY_RISE up from the elbow.)
+const TRAY_SWING = .15
+const TRAY_RISE = .45
+const PLATE_AHEAD = .12
+const ON_PALM = -.006
+# (Seated on her hand as it is drawn: seat_plates.)
+const SEATED = .001
 # Her hand turned palm up, fingers forward (in her frame: the hand bone's X
 # is out of the palm, its Y along the fingers, its Z toward the thumb).
 const PALM_UP = Basis(Vector3(0,1,0),Vector3(0,0,1),Vector3(1,0,0))
@@ -2043,6 +2248,7 @@ var rag_hung: Node3D
 var palm: Node3D
 var tray: Node3D
 var flat_hand: SkeletonModifier3D
+var selene_bend: SkeletonModifier3D
 var chore_rng = RandomNumberGenerator.new()
 var chore_clock = 0.0
 # What she is about: "clear" (the things she is taking up, where she stands
@@ -2080,6 +2286,14 @@ func hire_selene() -> void:
 	# (Its up out of the back of her hand, or out of her palm.)
 	selene.body.pin_to_hand(palm,"hand_l",Basis(Vector3(0,1,0),Vector3(-1,0,0),Vector3(0,0,1)),hand.at)
 	selene.body.pin_to_hand(tray,"hand_l",Basis(Vector3(0,0,1),Vector3(1,0,0),Vector3(0,1,0)),hand.at)
+	# (She leans from the waist, her legs upright under her: so she leans
+	# over a counter or a table, never into it.)
+	selene_bend = preload("res://scripts/body_lean.gd").new()
+	selene_bend.name = "BodyLean"
+	selene.body.skeleton.add_child(selene_bend)
+	selene.body.skeleton.move_child(selene_bend,selene.body.arm.get_index())
+	gather_hand(selene.body)
+	selene.body.skeleton.skeleton_updated.connect(seat_plates)
 	flat_hand = preload("res://scripts/flat_hand.gd").new()
 	flat_hand.name = "FlatHand"
 	selene.body.skeleton.add_child(flat_hand)
@@ -2248,6 +2462,84 @@ func lay_palm(body: Node3D, point: Vector3, turn: Basis, weight: float) -> void:
 	body.reach(point-turn*at,weight,0.0)
 	body.arm.grip = turn
 
+# The plates on her palm rest on it: each moment, as she is posed, the
+# lowest is set down onto the top of her hand as it is drawn (the highest
+# under the plate's round of hand_points: her skin's and her sleeve's
+# points that hang from her left forearm, hand and fingers), the rest on it
+# in turn.
+var hand_points: Array = []
+var hand_meshes: Array = []
+
+func gather_hand(body: Node3D) -> void:
+	var skeleton: Skeleton3D = body.skeleton
+	for mesh in skeleton.find_children("*","MeshInstance3D",true,false):
+		# (Her hand and fingers, and her forearm and its sleeve.)
+		if mesh.skin == null or not mesh.name in ["Body",body.look.get("under",""),body.look.garment]: continue
+		hand_meshes.append(mesh)
+		var arrays = mesh.mesh.surface_get_arrays(0)
+		var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		var per: int = bones.size()/points.size()
+		var names: Array = []
+		for b in mesh.skin.get_bind_count():
+			var i = mesh.skin.get_bind_bone(b)
+			if i < 0: i = skeleton.find_bone(mesh.skin.get_bind_name(b))
+			names.append(skeleton.get_bone_name(i))
+		for v in points.size():
+			var most = 0.0
+			var top = ""
+			var bind = []
+			for k in per:
+				var w: float = weights[v*per+k]
+				if w <= 0.0: continue
+				bind.append([bones[v*per+k],w])
+				if w > most:
+					most = w
+					top = names[bones[v*per+k]]
+			if top.ends_with("_l") and ["lowerarm","hand","thumb","index","middle","ring","pinky"].any(func(part): return top.begins_with(part)): hand_points.append({"mesh":mesh,"at":points[v],"bind":bind})
+
+func seat_plates() -> void:
+	if hand_meshes.is_empty(): return
+	var plates: Array = tray.get_children().filter(func(n): return not n.is_queued_for_deletion())
+	if plates.is_empty(): return
+	var skeleton: Skeleton3D = selene.body.skeleton
+	var binds = {}
+	for mesh in hand_meshes:
+		var list: Array[Transform3D] = []
+		for b in mesh.skin.get_bind_count():
+			var i = mesh.skin.get_bind_bone(b)
+			if i < 0: i = skeleton.find_bone(mesh.skin.get_bind_name(b))
+			list.append(skeleton.global_transform*skeleton.get_bone_global_pose(i)*mesh.skin.get_bind_pose(b))
+		binds[mesh] = list
+	var into: Transform3D = tray.global_transform.affine_inverse()
+	var round: float = plates[0].transform.basis.get_scale().x*.5
+	var top = -INF
+	for p in hand_points:
+		var placed = Vector3.ZERO
+		for bw in p.bind: placed += (binds[p.mesh][bw[0]]*p.at)*bw[1]
+		var local: Vector3 = into*placed
+		if Vector2(local.x,local.z-PLATE_AHEAD).length() <= round: top = maxf(top,local.y)
+	if top == -INF: top = ON_PALM
+	for k in plates.size():
+		var at: Vector3 = plates[k].position
+		plates[k].position = Vector3(at.x,top+SEATED+PLATE_STEP*k,at.z)
+
+# Her left palm turned up and level with its middle at `point`, as far as
+# `weight` says, as plates are carried: her arm brought there with its
+# elbow held low and a little out beneath it, so the forearm comes up to
+# the hand from below, and her hand turned up level at the wrist
+# (scripts/flat_hand.gd carry_level).
+func lay_tray(body: Node3D, weight: float, reach: Vector3 = Vector3.ZERO) -> void:
+	body.arm.weight = 0.0
+	body.arm.curl = 0.0
+	body.arm.tool = false
+	body.arm.upright = false
+	flat_hand.figure = body
+	flat_hand.turned_up = PALM_UP
+	flat_hand.reach = reach
+	flat_hand.level_weight = weight
+
 func idle(walker: Walker) -> void:
 	walker.state = "idle"
 	walker.timer = CHORE_LOOK
@@ -2255,14 +2547,12 @@ func idle(walker: Walker) -> void:
 
 # In the morning, from her door to her place in the inn.
 func to_work() -> void:
-	selene.route = way(selene.at,selene_spot)
-	selene.route.append(selene_spot)
+	selene_route(selene_spot)
 	selene.state = "to_post"
 
 func back_to_post() -> void:
 	selene.body.let_go()
-	selene.route = way(selene.at,selene_spot)
-	selene.route.append(selene_spot)
+	selene_route(selene_spot)
 	selene.state = "to_post"
 
 # Whether anyone sits at a place (or is on his way to, or Anya is bringing
@@ -2291,6 +2581,22 @@ func fist_ahead(body: Node3D, side: String, swing: float) -> Vector3:
 	var hand: Transform3D = into*skeleton.get_bone_global_rest(skeleton.find_bone("hand_"+side))
 	var fore: float = rest.call("lowerarm").distance_to(rest.call("hand"))+(hand.basis*reaching.palm).length()*.9
 	var at: Vector3 = shoulder+Vector3(0,-upper*cos(swing),upper*sin(swing))+Vector3(0,0,fore)
+	fists[key] = at
+	return at
+
+# Where her palm is as she carries plates on it (in her own frame): the
+# upper arm a little forward, the forearm rising from the elbow.
+func tray_hold(body: Node3D) -> Vector3:
+	var key = "tray%s%.3f" % [body.look.who,body.size]
+	if fists.has(key): return fists[key]
+	var skeleton: Skeleton3D = body.skeleton
+	var into: Transform3D = body.global_transform.affine_inverse()*skeleton.global_transform
+	var rest = func(bone: String) -> Vector3: return into*skeleton.get_bone_global_rest(skeleton.find_bone(bone+"_l")).origin
+	var shoulder: Vector3 = rest.call("upperarm")
+	var upper: float = shoulder.distance_to(rest.call("lowerarm"))
+	var fore: float = rest.call("lowerarm").distance_to(rest.call("hand"))+palm_place(body).at.length()*.95
+	var elbow: Vector3 = shoulder+Vector3(0,-upper*cos(TRAY_SWING),upper*sin(TRAY_SWING))
+	var at: Vector3 = elbow+Vector3(0,sin(TRAY_RISE),cos(TRAY_RISE))*fore
 	fists[key] = at
 	return at
 
@@ -2370,7 +2676,10 @@ func clearable() -> Array:
 func clear_next() -> bool:
 	var things: Array = clearable()
 	if things.is_empty(): return false
-	for thing in things: thing.stand = stand_by(thing.node.global_position)
+	for thing in things: thing.stand = selene_stand(thing.node.global_position)
+	# (Not where Anya is, or is going.)
+	things = things.filter(func(thing): return not near_anya(thing.stand))
+	if things.is_empty(): return false
 	things.sort_custom(func(a, b): return a.stand.distance_to(selene.at) < b.stand.distance_to(selene.at))
 	var first: Dictionary = things[0]
 	var to: String = "crate" if first.kind == "bottle" else "tub"
@@ -2399,8 +2708,7 @@ func clear_next() -> bool:
 		for i in range(litter.size()-1,-1,-1):
 			if litter[i].node == pick.node: litter.remove_at(i)
 	chore = {"kind":"clear","picks":picks,"stand":first.stand,"to":to,"in":{"l":[],"r":[]},"i":0}
-	selene.route = way(selene.at,first.stand)
-	selene.route.append(first.stand)
+	selene_route(first.stand)
 	selene.state = "to_things"
 	return true
 
@@ -2421,12 +2729,15 @@ func carry_pose(busy: String = "") -> void:
 				body.arms.r.curl = 0.0
 			elif side == "l" and busy != "l": body.reach(Vector3.ZERO,0.0,0.0)
 		elif not is_instance_valid(held[side][0]): continue
-		elif held[side][0].get_meta("kind","") == "plate": lay_palm(body,body.global_transform*TRAY_CARRY,body.global_transform.basis*PALM_UP,1.0)
+		elif held[side][0].get_meta("kind","") == "plate": lay_tray(body,1.0)
 		else: body.drink_reach(side,body.global_transform*carried_at(body,side),Vector3.UP,1.0,1.0)
 
 # How far she leans to reach `point` (more, the further it is from her).
+# (She bends from the waist: over a table, a good way; over the bar, which
+# comes up to her waist, no further than over its top, LEAN_HIGH.)
 func lean_for(point: Vector3) -> float:
-	return clampf((Vector2(point.x-selene.at.x,point.z-selene.at.z).length()-ARM_REACH)*1.1,0.0,LEAN_MOST)
+	var lean: float = clampf((Vector2(point.x-selene.at.x,point.z-selene.at.z).length()-ARM_REACH)*2.0,0.0,LEAN_MOST)
+	return minf(lean,LEAN_HIGH) if point.y > 1.0 else lean
 
 # Taking up what she came for, one thing after another: the hand goes to
 # it, takes it, and brings it in (a plate onto those on her left palm).
@@ -2434,10 +2745,10 @@ func take_things(delta: float) -> void:
 	var body = selene.body
 	var picks: Array = chore.picks
 	if chore.i >= picks.size():
+		carry_pose()
 		chore.i = 0
 		selene.phase_time = 0.0
-		selene.route = way(selene.at,put_place())
-		selene.route.append(put_place())
+		selene_route(put_place())
 		selene.state = "carry"
 		lean_to = 0.0
 		return
@@ -2459,7 +2770,7 @@ func take_things(delta: float) -> void:
 	if pick.kind == "plate":
 		# By its near rim; then onto her palm, on top of the others.
 		var rim: Vector3 = from.origin+Vector3(selene.at.x-from.origin.x,0,selene.at.z-from.origin.z).normalized()*.2+Vector3.UP*.02
-		var on: Transform3D = tray.global_transform*Transform3D(Basis.from_scale(from.basis.get_scale()),Vector3.UP*(ON_PALM+PLATE_STEP*chore.in.l.size()))
+		var on: Transform3D = tray.global_transform*Transform3D(Basis.from_scale(from.basis.get_scale()),Vector3(0,ON_PALM+PLATE_STEP*chore.in.l.size(),PLATE_AHEAD))
 		if t < TAKE*.5:
 			body.drink_reach(side,rim,Vector3.UP,reach_t,reach_t*.6) if side == "r" else lay_palm(body,rim,body.global_transform.basis*Person.GRIP_HAND,reach_t)
 		else:
@@ -2468,12 +2779,16 @@ func take_things(delta: float) -> void:
 			node.global_transform = path
 			var under: Vector3 = path.origin+(rim-from.origin)
 			if side == "r": body.drink_reach("r",under,Vector3.UP,1.0-smoothstep(.7,1.0,bring_t),.6)
-			else: lay_palm(body,under.lerp(body.global_transform*TRAY_CARRY,bring_t),(body.global_transform.basis*Person.GRIP_HAND).slerp(body.global_transform.basis*PALM_UP,bring_t),1.0)
+			else:
+				if bring_t < .5: lay_palm(body,under.lerp(body.global_transform*tray_hold(body),bring_t),(body.global_transform.basis*Person.GRIP_HAND).slerp(body.global_transform.basis*PALM_UP,bring_t),1.0)
+				else: lay_tray(body,1.0,(under-body.global_transform*tray_hold(body))*(1.0-bring_t)*2.0)
+				# (Her hand opening flat as it turns up under the plate.)
+				flat_hand.weight = maxf(flat_hand.weight,bring_t)
 		if t >= TAKE:
 			if node.get_parent() != tray:
 				if node.get_parent() != null: node.get_parent().remove_child(node)
 				tray.add_child(node)
-			node.transform = Transform3D(Basis.from_scale(from.basis.get_scale()),Vector3.UP*(ON_PALM+PLATE_STEP*chore.in.l.size()))
+			node.transform = Transform3D(Basis.from_scale(from.basis.get_scale()),Vector3(0,ON_PALM+PLATE_STEP*chore.in.l.size(),PLATE_AHEAD))
 			chore.in.l.append(node)
 			if side == "r":
 				body.arms.r.weight = 0.0
@@ -2515,16 +2830,34 @@ func put_things(delta: float) -> void:
 	var down_t: float = smoothstep(0.0,1.0,t/(PUT*.55))
 	var back_t: float = smoothstep(0.0,1.0,(t-PUT*.55)/(PUT*.45))
 	if chore.get("dunked",false) or (not chore.has("there") and chore.in[side][0].get_meta("kind","") == "plate"):
-		# The stack let down into the water, and her hand out again.
-		var water: Vector3 = tub_at+Vector3.UP*(TUB_WATER-.03)
-		var carried: Vector3 = body.global_transform*TRAY_CARRY
-		lay_palm(body,carried.lerp(water,down_t if t < PUT*.55 else 1.0-back_t),body.global_transform.basis*PALM_UP,1.0)
-		if t >= PUT*.55 and not chore.get("dunked",false):
+		# Her palm put out toward the tub, still level, and the stack slid
+		# off it into the water.
+		var carried: Vector3 = body.global_transform*tray_hold(body)
+		var toward: Vector3 = carried.lerp(Vector3(tub_at.x,carried.y,tub_at.z),.25)
+		lay_tray(body,1.0,(toward-carried)*(down_t if t < PUT*.55 else 1.0-back_t))
+		if not chore.get("dunked",false) and t >= PUT*.3:
 			chore.dunked = true
-			for plate in chore.in.l: plate.queue_free()
+			chore.slid = []
+			for plate in chore.in.l:
+				var was: Transform3D = plate.global_transform
+				put_down(plate)
+				chore.slid.append(was)
+		if chore.get("dunked",false):
+			var slide: float = smoothstep(PUT*.3,PUT*.85,t)
+			for k in chore.in.l.size():
+				var plate: Node3D = chore.in.l[k]
+				if not is_instance_valid(plate): continue
+				var was: Transform3D = chore.slid[k]
+				var water = Transform3D(was.basis,tub_at+Vector3.UP*(TUB_WATER-.02+.01*k))
+				var path = Transform3D(was.basis,was.origin.lerp(water.origin,slide)+Vector3.UP*.04*sin(slide*PI))
+				plate.global_transform = path
+				plate.visible = slide < .99
 		if t >= PUT:
+			for plate in chore.in.l:
+				if is_instance_valid(plate): plate.queue_free()
 			chore.in.l.clear()
 			chore.erase("dunked")
+			chore.erase("slid")
 			body.reach(Vector3.ZERO,0.0,0.0)
 			selene.phase_time = 0.0
 		return
@@ -2576,7 +2909,7 @@ func wants_wiping(i: int) -> bool:
 
 # The nearest place that wants wiping, and the others at its table that do.
 func wipe_next() -> bool:
-	var due: Array = range(seats.size()).filter(func(i): return wants_wiping(i))
+	var due: Array = range(seats.size()).filter(func(i): return wants_wiping(i) and not near_anya(seats[i].serve))
 	if due.is_empty(): return false
 	due.sort_custom(func(a, b): return seats[a].serve.distance_to(selene.at) < seats[b].serve.distance_to(selene.at))
 	var table: Vector3 = seats[due[0]].table
@@ -2585,14 +2918,13 @@ func wipe_next() -> bool:
 	return true
 
 func next_wipe() -> void:
-	while not wiping.is_empty() and not wants_wiping(wiping[0]): wiping.pop_front()
+	while not wiping.is_empty() and (not wants_wiping(wiping[0]) or near_anya(seats[wiping[0]].serve)): wiping.pop_front()
 	if wiping.is_empty():
 		done_wiping()
 		return
 	var i: int = wiping.pop_front()
 	chore = {"kind":"wipe","place":i}
-	selene.route = way(selene.at,seats[i].serve)
-	selene.route.append(seats[i].serve)
+	selene_route(seats[i].serve)
 	selene.state = "to_table"
 
 # The rag out from her apron's string into her hand, or back.
@@ -2619,8 +2951,13 @@ func done_wiping() -> void:
 # over the last (`time` gone, `left` to go).
 func wipe_at(spot: Vector3, time: float, left: float, delta: float) -> void:
 	var body = selene.body
-	body.turn_to(spot-selene.at,delta,8.0)
-	lean_to = lean_for(spot)
+	# (Turned a little to her right of it, so her left hand, which holds the
+	# rag, comes to it.)
+	var to: Vector3 = spot-selene.at
+	to.y = 0.0
+	body.turn_to(to.rotated(Vector3.UP,-.35),delta,8.0)
+	# (Bent far enough for the far side of her round.)
+	lean_to = lean_for(spot+to.normalized()*WIPE_ROUND*1.5)
 	var turn: float = time/WIPE_BEAT*TAU
 	var at: Vector3 = spot+Vector3(cos(turn),0,sin(turn))*WIPE_ROUND+Vector3.UP*WIPE_ABOVE
 	lay_palm(body,at,palm_down(body),smoothstep(0.0,.5,time)*smoothstep(0.0,.5,left))
@@ -2634,7 +2971,7 @@ func wipe_at(spot: Vector3, time: float, left: float, delta: float) -> void:
 # west end stand the wash tub (TUB, its water TUB_WATER up) and the crate of
 # empties (EMPTIES), the bottles standing in it in EMPTIES_SLOTS rows.
 const BAR_REST = 60.0
-const BAR_SPOTS = [3.7,4.9,6.1]
+const BAR_SPOTS = [3.6,4.6,5.6]
 const BAR_TOP = 1.12
 const BAR_ACROSS = 8.13
 const BEHIND_BAR = 7.72
@@ -2719,8 +3056,7 @@ func next_bar_wipe() -> void:
 	chore.spot = spot
 	# (Close behind the bar, where Anya stands to draw.)
 	var stand = floor_nearest(Vector3(spot.x,0,Interiors.INN.z+BEHIND_BAR))
-	selene.route = way(selene.at,stand)
-	selene.route.append(stand)
+	selene_route(stand)
 	selene.state = "to_bar"
 
 func done_bar() -> void:
@@ -2739,8 +3075,9 @@ func anya_near(spot: Vector3) -> bool:
 # in her hands goes in to be washed.
 func drop_chores() -> void:
 	selene.body.let_go()
-	selene.body.figure.rotation.x = 0.0
+	selene_bend.lean = 0.0
 	lean_to = 0.0
+	aside = {}
 	for side in chore.get("in",{}):
 		for node in chore.in[side]:
 			if is_instance_valid(node): node.queue_free()
@@ -2765,10 +3102,26 @@ func chores(delta: float) -> void:
 	# She leans to the table as she wipes it, or to what she reaches for,
 	# and straightens again.
 	var lean: float = maxf(WIPE_LEAN,lean_to) if selene.state in ["wipe","bar_wipe"] else (lean_to if selene.state in ["take","put"] else 0.0)
-	body.figure.rotation.x = move_toward(body.figure.rotation.x,lean,delta*.5)
+	# (Not far, with plates on her palm: they would tip toward her.)
+	if tray.get_children().any(func(n): return not n.is_queued_for_deletion()): lean = minf(lean,LEAN_LADEN)
+	selene_bend.lean = move_toward(selene_bend.lean,lean,delta*1.5)
 	# Her hand flat on the rag, or under plates.
 	var flat: bool = rag.get_parent() == palm or not tray.get_children().filter(func(n): return not n.is_queued_for_deletion()).is_empty()
 	flat_hand.weight = move_toward(flat_hand.weight,1.0 if flat else 0.0,delta*4.0)
+	# (Her palm kept level under plates only while it carries them: lay_tray.)
+	flat_hand.level_weight = 0.0
+	# Stepping aside for Anya, or waiting aside (give_way).
+	if not aside.is_empty():
+		if chore.get("kind","") == "clear": carry_pose()
+		if aside.get("going",false):
+			var going: PackedVector3Array = selene.route
+			selene.route = aside.route
+			selene.hold = false
+			advance(selene,delta)
+			aside.route = selene.route
+			selene.route = going
+		elif body.state != "Idle": body.play("Idle",.2)
+		return
 	match selene.state:
 		"to_post":
 			if advance(selene,delta): idle(selene)
@@ -2841,7 +3194,11 @@ func chores(delta: float) -> void:
 				next_wipe()
 				return
 			var seat: Dictionary = seats[i]
-			wipe_at(seat.mug+Vector3.UP*(world.lift(seat.at)-.02),selene.phase_time,selene.timer,delta)
+			# (Round where his mug stands, or as near it as she can reach.)
+			var spot: Vector3 = seat.mug+Vector3.UP*(world.lift(seat.at)-.02)
+			var off = Vector3(selene.at.x-spot.x,0,selene.at.z-spot.z)
+			spot += off.normalized()*clampf(off.length()-WIPE_REACH,0.0,.1)
+			wipe_at(spot,selene.phase_time,selene.timer,delta)
 			if selene.timer <= 0.0:
 				wiped[i] = chore_clock
 				body.let_go()
