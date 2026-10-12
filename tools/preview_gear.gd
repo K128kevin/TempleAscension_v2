@@ -5,7 +5,11 @@ extends SceneTree
 ##         the class's starting equipment (slot=base item id, or
 ##         prefix:base:suffix for a magic one; nothing after = empty)
 ##     [--clip=SwordIdle --phase=.5] [--yaw=0.5] [--size=2.5] [--height=1.0] [--out=name]
+##     [--play=2]  plays the clip that many seconds (and on to --phase) first,
+##         so what swings with him (the warrior's kilt) has swung
 ##     [--spread=1.7]  how far apart the two figures stand (closer, to look close up)
+##     [--tilt=0]  how many degrees the camera looks down from
+##     [--pan=0.0]  the camera moved this far to the right (to frame one figure)
 ## The picture goes to test-results/gear-<out>.png.
 const Visual = preload("res://scripts/visual.gd")
 const Items = preload("res://scripts/items.gd")
@@ -35,7 +39,10 @@ func capture():
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = float(arg("size","2.5"))
 	var height = float(arg("height","1.0"))
-	camera.look_at_from_position(Vector3(0,height,8),Vector3(0,height,0))
+	# (`--tilt`: degrees the camera looks down from, as the game's does.)
+	var tilt = deg_to_rad(float(arg("tilt","0")))
+	var pan = float(arg("pan","0.0"))
+	camera.look_at_from_position(Vector3(pan,height+8.0*sin(tilt),8.0*cos(tilt)),Vector3(pan,height,0))
 	var hero_class = arg("class","warrior")
 	var run = {"class_id":hero_class}
 	Items.outfit(run,hero_class)
@@ -59,7 +66,14 @@ func capture():
 		actor.wear(run.equipment)
 		var clip = arg("clip","")
 		for f in 30: actor.advance(.016)
-		if clip != "" and actor.clips.has(clip):
+		if clip != "" and actor.clips.has(clip) and float(arg("play","0")) > 0.0:
+			# Played through for that long (and on to the phase), on the
+			# unit's clock, so what swings (the kilt, a cloak) has swung.
+			actor.state = clip
+			actor.animator.play(actor.clips[clip],0)
+			var length: float = actor.animator.get_animation(actor.clips[clip]).length
+			for f in int((float(arg("play","0"))+length*float(arg("phase","0")))*60.0): actor.advance(1.0/60.0)
+		elif clip != "" and actor.clips.has(clip):
 			actor.state = clip
 			actor.animator.play(actor.clips[clip],0)
 			actor.animator.seek(actor.animator.get_animation(actor.clips[clip]).length*float(arg("phase","0")),true)

@@ -211,13 +211,12 @@ var orion: Walker
 var smith
 # Anya's round: who she is taking a drink to, and where she stands.
 var round: Array[Walker] = []
-# Where the mug rides in her fist as she carries it, relative to her.
-const CARRY = Vector3(.22,1.02,.3)
+# (She holds a mug's handle under the tap with her upper arm forward,
+# TAP_SWING, and carries it as Selene does: carried_at.)
 # The drained mug she takes away from where she has just served.
 var empty: Node3D
 var post = Vector3.ZERO
 var tap = Vector3.ZERO
-var bar_end: Array[Vector3] = []
 # The children's game: "tag", "follow" or "rest".
 var play = {"mode":"rest","timer":4.0,"it":0,"spot":Vector3.ZERO,"next":"tag","freeze":0.0}
 var check = 0.0
@@ -236,13 +235,13 @@ func setup(overworld) -> void:
 	pantry.visible = false
 	add_child(pantry)
 	lay_grid()
+	lay_floor()
 	mark_haunts()
 	furnish()
 	lay_service()
 	var c = Interiors.INN
-	post = Vector3(c.x+7.0,0,c.z+7.7)
-	tap = Vector3(c.x+9.2,0,c.z+7.7)
-	bar_end = [Vector3(c.x+11.9,0,c.z+7.7),Vector3(c.x+11.9,0,c.z+9.6)]
+	post = floor_nearest(Vector3(c.x+7.0,0,c.z+7.7))
+	tap = floor_nearest(Vector3(c.x+9.2,0,c.z+7.7))
 	anya = Walker.new()
 	anya.body = figure({"who":"woman","garment":"Dress","under":"Blouse","cloth":Color(.36,.24,.15),"under_cloth":Color(.92,.9,.85),"wear":.06,
 		"hair":"Hair_BuzzedFemale","braid":true,"hair_colour":Color(.06,.045,.035),"skin":"light","tone":Color(1.0,.95,.9),"size":.97,"seed":.11})
@@ -271,6 +270,7 @@ func setup(overworld) -> void:
 			"skin":look[7],"tone":Color(1.0,.93,.86) if look[7]=="light" else Color.WHITE,"dirt":clampf(wear*1.1-.1,0.0,1.0),"size":die.randf_range(.93,1.02),"seed":die.randf(),
 			"gaunt":1.0 if wear >= GAUNT_WEAR else 0.0})
 		walker.body.name = "Townsperson%d" % i
+		seat_hands(walker.body)
 		walker.speed = WALK*die.randf_range(.88,1.12)
 		people.append(walker)
 		# Five begin at the inn's tables; the rest about the streets.
@@ -305,6 +305,101 @@ func figure(look: Dictionary) -> Node3D:
 	person.setup(look)
 	return person
 
+# ---- A woman's hands in her lap ----
+
+# Sitting, the library's clip lays the hands on the bare body's thighs; a
+# woman's skirt stands up over hers, and her hands were lost in her lap. So
+# each woman who may sit at the inn is measured once (lap_lift: by the
+# shape of what she wears) and her hands are kept on top of her lap while
+# she sits (scripts/lap_hands.gd), LAP_CLEAR above it.
+const LapHands = preload("res://scripts/lap_hands.gd")
+const LAP_CLEAR = .012
+const LAP_THIN = .025
+# The bones whose flesh is the arm and hand themselves (not lap to lie on).
+const ARM_BONES = ["clavicle","upperarm","lowerarm","hand","thumb","index","middle","ring","pinky"]
+static var laps: Dictionary = {}
+
+func seat_hands(body: Node3D) -> void:
+	if body.look.who != "woman": return
+	var key = "%s|%s|%.2f" % [body.look.garment,body.look.get("under",""),body.look.get("gaunt",0.0)]
+	if not laps.has(key): laps[key] = lap_lift(body)
+	var lap = LapHands.new()
+	lap.name = "LapHands"
+	lap.lift = laps[key].lift.duplicate()
+	lap.rest = laps[key].rest.duplicate()
+	body.skeleton.add_child(lap)
+	body.skeleton.move_child(lap,body.arm.get_index())
+	body.set_meta("lap",lap)
+
+# How far each hand must rise, seated, to lie on her lap (in the skeleton's
+# space), and where it rests then: from her body and clothes as the sitting
+# clip poses them, the highest of their flesh or cloth over each part of
+# her hand (not of the arm and hand themselves).
+func lap_lift(body: Node3D) -> Dictionary:
+	var skeleton: Skeleton3D = body.skeleton
+	var animator: AnimationPlayer = body.animator
+	animator.play("Sit",0.0)
+	animator.seek(0.0,true)
+	skeleton.force_update_all_bone_transforms()
+	var samples = {"l":[],"r":[]}
+	for side in samples:
+		for bone in ["hand","index_02","middle_01","middle_02","middle_03","ring_02","pinky_02"]:
+			var i = skeleton.find_bone("%s_%s" % [bone,side])
+			if i >= 0: samples[side].append(skeleton.get_bone_global_pose(i).origin)
+	# (How far each part of each hand must rise.)
+	var needs = {"l":[],"r":[]}
+	for side in samples:
+		for at in samples[side]: needs[side].append(0.0)
+	for mesh in skeleton.find_children("*","MeshInstance3D",true,false):
+		if mesh.skin == null or mesh.name in ["Eyes","Eyebrows","Braid","Belt"] or mesh.name.begins_with("Hair_"): continue
+		var skin: Skin = mesh.skin
+		var binds: Array[Transform3D] = []
+		var bound: Array[bool] = []
+		for b in skin.get_bind_count():
+			var i = skin.get_bind_bone(b)
+			if i < 0: i = skeleton.find_bone(skin.get_bind_name(b))
+			binds.append(skeleton.get_bone_global_pose(i)*skin.get_bind_pose(b))
+			var name: String = skeleton.get_bone_name(i)
+			bound.append(ARM_BONES.any(func(part): return name.begins_with(part)))
+		for surface in mesh.mesh.get_surface_count():
+			var arrays = mesh.mesh.surface_get_arrays(surface)
+			var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+			var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+			if points.is_empty() or bones.is_empty(): continue
+			var per: int = bones.size()/points.size()
+			for v in range(0,points.size(),2):
+				var placed = Vector3.ZERO
+				var most = 0.0
+				var arm = false
+				for k in per:
+					var w = weights[v*per+k]
+					if w <= 0.0: continue
+					placed += (binds[bones[v*per+k]]*points[v])*w
+					if w > most:
+						most = w
+						arm = bound[bones[v*per+k]]
+				if arm: continue
+				for side in samples:
+					for n in samples[side].size():
+						var at: Vector3 = samples[side][n]
+						if absf(placed.x-at.x) > .025 or absf(placed.z-at.z) > .025 or placed.y < at.y-.04 or placed.y > at.y+.1: continue
+						needs[side][n] = maxf(needs[side][n],placed.y+LAP_CLEAR-at.y)
+	# Enough for most of the hand to lie on top (one finger may lie in a
+	# fold); less on a starving woman, whose clothes are drawn in with her
+	# (scripts/townsperson.gd starve).
+	var lift = {}
+	for side in needs:
+		var sorted: Array = needs[side].duplicate()
+		sorted.sort()
+		lift[side] = maxf(0.0,(sorted[int(sorted.size()*.7)] if not sorted.is_empty() else 0.0)-LAP_THIN*body.look.get("gaunt",0.0))
+	var rest = {}
+	for side in samples: rest[side] = samples[side][0] if not samples[side].is_empty() else Vector3.INF
+	animator.play("Idle",0.0)
+	body.state = "Idle"
+	print_verbose("lap lift %s %s: %s" % [body.look.garment,body.look.get("under",""),lift])
+	return {"lift":lift,"rest":rest}
+
 # ---- The streets ----
 
 func closed(x: int, z: int) -> bool:
@@ -332,6 +427,10 @@ func lay_grid() -> void:
 					break
 
 func open_at(at: Vector3) -> bool:
+	# (In the inn's common room, its own finer floor: lay_floor; its stair,
+	# which the lodgers climb, is open ground for all it stands in the way of
+	# any crossing the room.)
+	if floor_area.has_point(Vector2(at.x,at.z)): return floor_open(at) or world.decks.any(func(deck): return deck.low != deck.high and deck.area.has_point(Vector2(at.x,at.z)))
 	var cell = Vector2i(floori(at.x+.5),floori(at.z+.5))
 	return region.has_point(cell) and not grid.is_point_solid(cell)
 
@@ -359,8 +458,24 @@ func clear_way(a: Vector3, b: Vector3) -> bool:
 	return true
 
 # The way from one place to another by the streets, its corners cut where
-# the ground between is open.
+# the ground between is open. Within the inn's common room, by its own floor
+# (floor_way), in and out by its doorway.
 func way(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var from_in: bool = floor_area.has_point(Vector2(from.x,from.z))
+	var to_in: bool = floor_area.has_point(Vector2(to.x,to.z))
+	if from_in and to_in: return floor_way(from,to)
+	if to_in:
+		var out: PackedVector3Array = street_way(from,door_in)
+		out.append(door_in)
+		out.append_array(floor_way(door_in,to))
+		return out
+	if from_in:
+		var out: PackedVector3Array = floor_way(from,door_in)
+		out.append_array(street_way(door_in,to))
+		return out
+	return street_way(from,to)
+
+func street_way(from: Vector3, to: Vector3) -> PackedVector3Array:
 	var a = nearest_open(from)
 	var b = nearest_open(to)
 	var cells = grid.get_id_path(Vector2i(roundi(a.x),roundi(a.z)),Vector2i(roundi(b.x),roundi(b.z)))
@@ -414,8 +529,10 @@ func add_seat(at: Vector3, face: Vector3, height: float, table: Vector3) -> void
 	var step = nearest_open(at-face*1.1,3)
 	seats.append({"at":at,"face":face,"height":height,"step":step,"table":table,"taken":null,"left":null})
 
-# Each seat's open side, where Anya stands to serve it, and where the mug is
-# set down on the table: at the table's edge before the drinker, toward her.
+# Each seat's open side; where the mug is set down on the table (at the
+# table's edge before the drinker, toward that side); and where Anya stands
+# to serve it and Selene to clear and wipe it: the free floor nearest the
+# mug (stand_by), clear of the bench or stool and the table.
 func lay_service() -> void:
 	for seat in seats:
 		var side: Vector3 = seat.face.cross(Vector3.UP)
@@ -428,8 +545,157 @@ func lay_service() -> void:
 			if nearest > room:
 				room = nearest
 				seat.side = side*sign
-		seat.serve = seat.at+seat.side*.55+seat.face*.25
 		seat.mug = Vector3(seat.at.x,.87,seat.at.z)+seat.face*.55+seat.side*.22
+		seat.serve = stand_by(seat.mug)
+
+# ---- The inn's floor ----
+
+# The streets' grid is a metre to a cell: too coarse for the common room,
+# where a bench stands a hand's breadth from its table. Its floor is laid out
+# again, FLOOR_CELL to a cell, from where its furniture truly stands (every
+# kit model standing on the floor there, by its bounds), each piece kept
+# CLEARANCE clear of (a body's half-width and a little), and its walls too
+# but for the doorway. Whoever walks there goes by it (floor_way), and every
+# place Anya and Selene stand to serve, clear or wipe is on it (stand_by).
+const FLOOR_CELL = .1
+const CLEARANCE = .2
+# The wash tub and the crate of empties behind the bar's west end, from the
+# inn's corner (lay_tub).
+const TUB = Vector3(1.55,0,7.35)
+const TUB_RADIUS = .25
+const EMPTIES = Vector3(1.4,0,8.07)
+const EMPTIES_SIZE = Vector2(.51,.89)
+var floor_grid = AStarGrid2D.new()
+var floor_area = Rect2()
+var floor_cells = Vector2i.ZERO
+# Just inside the doorway, where the floor meets the streets' way in.
+var door_in = Vector3.ZERO
+# What stands on the floor, as rectangles of the ground; and of them the
+# benches and stools, the seats.
+var furniture: Array[Rect2] = []
+var seat_boxes: Array[Rect2] = []
+
+func lay_floor() -> void:
+	var c = Interiors.INN
+	floor_area = Rect2(c.x+1.0,c.z+6.6,Interiors.INN_BAYS.x*Interiors.BAY-2.0,c.z+Interiors.INN_BAYS.y*Interiors.BAY-1.0-(c.z+6.6))
+	floor_cells = Vector2i(ceili(floor_area.size.x/FLOOR_CELL),ceili(floor_area.size.y/FLOOR_CELL))
+	floor_grid.region = Rect2i(Vector2i.ZERO,floor_cells)
+	floor_grid.cell_size = Vector2.ONE
+	floor_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	floor_grid.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	floor_grid.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	floor_grid.update()
+	var door: Vector3 = world.rooms[0].door
+	door_in = Vector3(door.x,0,floor_area.end.y-.6)
+	furniture.clear()
+	seat_boxes.clear()
+	for node in world.get_children():
+		if not node is Node3D or not node.scene_file_path.begins_with("res://assets/models/props/"): continue
+		var box = AABB()
+		var first = true
+		for mesh in node.find_children("*","MeshInstance3D",true,false):
+			var part: AABB = mesh.global_transform*mesh.get_aabb()
+			box = part if first else box.merge(part)
+			first = false
+		if first: continue
+		var centre: Vector3 = box.get_center()
+		if not floor_area.has_point(Vector2(centre.x,centre.z)) or box.position.y > .5 or box.end.y < .15 or box.size.x > 6.0 or box.size.z > 6.0: continue
+		var ground = Rect2(box.position.x,box.position.z,box.size.x,box.size.z)
+		furniture.append(ground)
+		if node.scene_file_path.get_file().get_basename() in ["bench","stool"]: seat_boxes.append(ground)
+	var tub = c+TUB
+	var empties = c+EMPTIES
+	furniture.append(Rect2(tub.x-TUB_RADIUS,tub.z-TUB_RADIUS,TUB_RADIUS*2.0,TUB_RADIUS*2.0))
+	furniture.append(Rect2(empties.x-EMPTIES_SIZE.x*.5,empties.z-EMPTIES_SIZE.y*.5,EMPTIES_SIZE.x,EMPTIES_SIZE.y))
+	# Each piece, and the walls (but the doorway), kept clear of.
+	for box in furniture:
+		var reach: Rect2 = box.grow(CLEARANCE)
+		var low: Vector2i = floor_cell(Vector3(reach.position.x,0,reach.position.y))
+		var high: Vector2i = floor_cell(Vector3(reach.end.x,0,reach.end.y))
+		for z in range(maxi(low.y,0),mini(high.y+1,floor_cells.y)):
+			for x in range(maxi(low.x,0),mini(high.x+1,floor_cells.x)):
+				var at: Vector3 = floor_point(Vector2i(x,z))
+				var off = Vector2(maxf(maxf(box.position.x-at.x,at.x-box.end.x),0.0),maxf(maxf(box.position.y-at.z,at.z-box.end.y),0.0))
+				if off.length() < CLEARANCE: floor_grid.set_point_solid(Vector2i(x,z))
+	for z in floor_cells.y:
+		for x in floor_cells.x:
+			var at: Vector3 = floor_point(Vector2i(x,z))
+			var wall: float = minf(minf(at.x-floor_area.position.x,floor_area.end.x-at.x),at.z-floor_area.position.y)
+			if floor_area.end.y-at.z < CLEARANCE and absf(at.x-door.x) > .9: wall = 0.0
+			if wall < CLEARANCE: floor_grid.set_point_solid(Vector2i(x,z))
+
+func floor_cell(at: Vector3) -> Vector2i:
+	return Vector2i(floori((at.x-floor_area.position.x)/FLOOR_CELL),floori((at.z-floor_area.position.y)/FLOOR_CELL))
+
+func floor_point(cell: Vector2i) -> Vector3:
+	return Vector3(floor_area.position.x+(cell.x+.5)*FLOOR_CELL,0,floor_area.position.y+(cell.y+.5)*FLOOR_CELL)
+
+func floor_free(at: Vector3) -> bool:
+	var cell: Vector2i = floor_cell(at)
+	return floor_grid.region.has_point(cell) and not floor_grid.is_point_solid(cell)
+
+# Whether one may stand at `at` in the common room at all: clear of its
+# furniture by half CLEARANCE (the ways across it keep the whole of it).
+func floor_open(at: Vector3) -> bool:
+	for box in furniture:
+		var off = Vector2(maxf(maxf(box.position.x-at.x,at.x-box.end.x),0.0),maxf(maxf(box.position.y-at.z,at.z-box.end.y),0.0))
+		if off.length() < CLEARANCE*.5: return false
+	return true
+
+# The free place on the floor nearest `at` (itself, if it is free), as far
+# as `reach` off; `at` itself if there is none.
+func floor_nearest(at: Vector3, reach: float = 1.5) -> Vector3:
+	if floor_free(at): return Vector3(at.x,0,at.z)
+	var centre: Vector2i = floor_cell(at)
+	var cells: int = ceili(reach/FLOOR_CELL)
+	var best = Vector3(at.x,0,at.z)
+	var least = INF
+	for dz in range(-cells,cells+1):
+		for dx in range(-cells,cells+1):
+			var cell: Vector2i = centre+Vector2i(dx,dz)
+			if not floor_grid.region.has_point(cell) or floor_grid.is_point_solid(cell): continue
+			var point: Vector3 = floor_point(cell)
+			var d: float = Vector2(point.x-at.x,point.z-at.z).length()
+			if d < least:
+				least = d
+				best = point
+	return best
+
+# Whether the floor is free all along the straight way from `a` to `b`.
+func floor_clear(a: Vector3, b: Vector3) -> bool:
+	var steps: int = maxi(1,ceili(Vector2(b.x-a.x,b.z-a.z).length()/(FLOOR_CELL*.5)))
+	for i in range(steps+1):
+		if not floor_free(a.lerp(b,float(i)/steps)): return false
+	return true
+
+# The way across the common room from one place to another, round its
+# furniture, its corners cut where the floor between is free. (From or to a
+# place not on the free floor, by the free place nearest it.)
+func floor_way(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var out = PackedVector3Array()
+	var a: Vector3 = floor_nearest(from)
+	var b: Vector3 = floor_nearest(to)
+	var cells: Array[Vector2i] = floor_grid.get_id_path(floor_cell(a),floor_cell(b))
+	if cells.is_empty(): return out
+	var points: Array[Vector3] = []
+	for cell in cells: points.append(floor_point(cell))
+	points[0] = a
+	points[-1] = b
+	if not floor_free(from) or from.distance_to(a) > .001: out.append(a)
+	var here: Vector3 = a
+	var i = 1
+	while i < points.size():
+		var ahead = i
+		while ahead+1 < points.size() and floor_clear(here,points[ahead+1]): ahead += 1
+		out.append(points[ahead])
+		here = points[ahead]
+		i = ahead+1
+	return out
+
+# Where one stands to reach something at `point` (on a table, on the bar):
+# the free floor nearest it.
+func stand_by(point: Vector3) -> Vector3:
+	return floor_nearest(Vector3(point.x,0,point.z),2.0)
 
 func free_seat() -> Dictionary:
 	var open = seats.filter(func(seat): return seat.taken == null)
@@ -581,6 +847,9 @@ func wander(walker: Walker) -> void:
 	else: walker.state = "walk"
 
 func tend(walker: Walker, delta: float) -> void:
+	# (Seated, a woman's hands lie on her lap: seat_hands.)
+	var lap = walker.body.get_meta("lap") if walker.body.has_meta("lap") else null
+	if lap != null: lap.weight = move_toward(lap.weight,1.0 if walker.state in ["sit_down","wait","drink","stand_up"] else 0.0,delta*3.0)
 	if walker.state in ABED:
 		retire(walker,delta)
 		return
@@ -632,7 +901,6 @@ func tend(walker: Walker, delta: float) -> void:
 				walker.timer = walker.body.length("SitDown")
 				walker.from = walker.at
 				walker.body.play("SitDown",.15)
-				clear_mug(walker.seat)
 		"sit_down":
 			var seat: Dictionary = walker.seat
 			var t = clampf(1.0-walker.timer/walker.body.length("SitDown"),0.0,1.0)
@@ -674,6 +942,9 @@ func tend(walker: Walker, delta: float) -> void:
 			walker.at = walker.from.lerp(seat.step,smoothstep(.3,1.0,t))
 			if walker.timer <= 0.0:
 				seat.taken = null
+				# (Where he sat wants wiping: Selene.)
+				var place: int = seats.find(seat)
+				if wiped.has(place): wiped[place] = chore_clock-WIPE_REST
 				walker.seat = {}
 				walker.drinks = 0
 				var outside = haunts.filter(func(h): return h.kind == "ring")
@@ -787,10 +1058,13 @@ const ASIDE = Vector2(.15,.14)
 func set_down(mug: Node3D, seat: Dictionary, aside: bool = false) -> void:
 	if mug.get_parent() != null: mug.get_parent().remove_child(mug)
 	add_child(mug)
+	mug.transform = mug_pose(seat,aside)
+
+# (Turned, then sized in its own frame, so it is never stretched.)
+func mug_pose(seat: Dictionary, aside: bool = false) -> Transform3D:
 	var handle: Vector3 = (seat.get("side",-seat.face)*.85-seat.face*.5).normalized()
 	var at: Vector3 = seat.mug+(seat.face*ASIDE.x-seat.get("side",Vector3.ZERO)*ASIDE.y if aside else Vector3.ZERO)
-	# (Turned, then sized in its own frame, so it is never stretched.)
-	mug.transform = Transform3D(Basis(Vector3.UP,atan2(-handle.z,handle.x))*Basis.from_scale(Kit.sized("mug",.17)),at+Vector3.UP*world.lift(seat.at))
+	return Transform3D(Basis(Vector3.UP,atan2(-handle.z,handle.x))*Basis.from_scale(Kit.sized("mug",.17)),at+Vector3.UP*world.lift(seat.at))
 
 func leave(walker: Walker) -> void:
 	# The mug is left on the table for Anya to clear.
@@ -807,9 +1081,10 @@ func leave(walker: Walker) -> void:
 	walker.body.play("StandUp",.2)
 
 # Anya: at her post behind the bar until someone is waiting; then to the
-# barrels, where she fills a mug, carries it upright in her fist round the
-# end of the bar to his seat, sets it on the table before him, and goes back
-# for the next.
+# barrels, where she fills a mug, carries it upright by its handle, her fist
+# round it (take_up, in_fist: scripts/townsperson.gd's handle grip, as a
+# drinker holds his), round the end of the bar to his seat (by the floor),
+# sets it on the table before him, and goes back for the next.
 func serve(delta: float) -> void:
 	if anya.state in ABED:
 		retire(anya,delta)
@@ -827,7 +1102,8 @@ func serve(delta: float) -> void:
 			elif not waiting.is_empty() and anya.timer <= 0.0:
 				round.clear()
 				round.append(waiting[0])
-				anya.route = PackedVector3Array([tap])
+				anya.route = way(anya.at,tap)
+				anya.route.append(tap)
 				anya.state = "to_tap"
 		"to_tap":
 			if advance(anya,delta):
@@ -836,72 +1112,91 @@ func serve(delta: float) -> void:
 				body.play("Idle",.2)
 		"fill":
 			# Facing the barrels on their rack against the kitchen wall, she
-			# holds the mug under the tap a moment.
+			# holds the mug under the tap a moment, her fist round its handle.
 			body.turn_to(Vector3(0,0,-1),delta,8.0)
 			var t = anya.phase_time
-			var spout: Vector3 = body.hand_for(body.global_transform*Vector3(.12,.95,.55))
-			if t < .6: body.reach(spout,smoothstep(0.0,1.0,t/.6),smoothstep(0.0,1.0,t/.6))
-			elif t < .8 and anya.body.held == null:
-				body.hold(anya.mug)
-				Beer.of(anya.mug).fill = 0.0
+			var under: Vector3 = body.global_transform*fist_ahead(body,"l",TAP_SWING)
+			if t < .6: body.drink_reach("l",under,Vector3.UP,smoothstep(0.0,1.0,t/.6),smoothstep(0.0,1.0,t/.6))
+			else:
+				if body.held != anya.mug:
+					take_up(body,anya.mug,"l")
+					in_fist(anya.mug,Transform3D(),0.0)
+					Beer.of(anya.mug).fill = 0.0
+				body.drink_reach("l",under,Vector3.UP,1.0,1.0)
 			# The beer runs in from the tap, a head of foam on it.
 			if t >= .8: Beer.of(anya.mug).fill = smoothstep(0.0,1.0,(t-.8)/POUR)
 			if t >= 2.0:
 				next_table(true)
 		"carry":
-			body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
+			body.drink_reach("l",body.global_transform*carried_at(body,"l"),Vector3.UP,1.0,1.0)
 			if advance(anya,delta):
 				anya.state = "place"
 				anya.phase_time = 0.0
 				body.play("Idle",.2)
 		"place":
+			# Down onto the table before him, turned as it is to stand (its
+			# handle to his hand) as it comes down; her fingers open, and she
+			# takes up the empty he has done with, if there is one.
 			var patron: Walker = round[0]
 			var seat: Dictionary = patron.seat
 			body.turn_to(seat.mug-anya.at,delta,8.0)
-			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
-			var on_table: Vector3 = body.hand_for(seat.mug+Vector3.UP*world.lift(seat.at))
+			var carried: Vector3 = body.global_transform*carried_at(body,"l")
+			var pose: Transform3D = mug_pose(seat)
+			var on_table: Vector3 = pose*Person.MUG_HANDLE
 			var t = anya.phase_time
-			if t < .7: body.reach(carried.lerp(on_table,smoothstep(0.0,1.0,t/.7)),1.0,1.0)
+			if t < .7:
+				var down: float = smoothstep(0.0,1.0,t/.7)
+				body.drink_reach("l",carried.lerp(on_table,down)+Vector3.UP*.05*sin(down*PI),Vector3.UP,1.0,1.0)
+				if body.held == anya.mug: in_fist(anya.mug,pose,smoothstep(.45,1.0,down))
 			elif t < .9:
-				if body.held != null:
-					# The mug stands before him; what was left on the table goes.
-					body.hold(null)
-					for other in seats:
-						if other.table == seat.table and other.taken == null: clear_mug(other)
+				if body.held == anya.mug:
+					in_fist(anya.mug,pose,1.0)
+					body.held = null
+					var mug: Node3D = anya.mug
+					anya.mug = Kit.prop("mug",.17)
+					stow(anya.mug)
 					if patron.state == "wait":
 						if patron.mug != null: patron.mug.queue_free()
-						patron.mug = anya.mug
-						anya.mug = Kit.prop("mug",.17)
-						stow(anya.mug)
-						set_down(patron.mug,seat)
+						patron.mug = mug
+						set_down(mug,seat)
 						patron.state = "drink"
 						patron.timer = DRINK_TIME
 						patron.sip = rng.randf_range(2.0,5.0)
-					else: set_down(anya.mug,seat)
+					else:
+						# (He has gone: it is left standing, for Selene.)
+						set_down(mug,seat)
+						mug.set_meta("kind","mug")
+						litter.append({"node":mug,"kind":"mug"})
 					# His last, drained, she takes away with her.
 					if seat.left != null and is_instance_valid(seat.left):
 						empty = seat.left
 						seat.left = null
-				body.reach(on_table,1.0,0.0)
-			elif empty != null and is_instance_valid(empty) and t < 1.6:
-				var to_empty: Vector3 = body.hand_for(empty.global_position) if body.held != empty else on_table
-				if t < 1.2: body.reach(on_table.lerp(to_empty,smoothstep(0.0,1.0,(t-.9)/.3)),1.0,smoothstep(.9,1.2,t))
+				body.drink_reach("l",on_table+Vector3.UP*.03*smoothstep(.7,.9,t),Vector3.UP,1.0,1.0-smoothstep(.7,.9,t))
+			elif empty != null and is_instance_valid(empty) and t < 1.7:
+				var rest: Transform3D = empty.get_meta("rest") if body.held == empty else empty.global_transform
+				var handle: Vector3 = rest*Person.MUG_HANDLE
+				if t < 1.25:
+					var to: float = smoothstep(0.0,1.0,(t-.9)/.35)
+					body.drink_reach("l",on_table.lerp(handle,to)+Vector3.UP*.04*sin(to*PI),Vector3.UP,1.0,smoothstep(.6,1.0,to))
 				else:
-					if body.held != empty: body.hold(empty)
-					body.reach(to_empty.lerp(carried,smoothstep(0.0,1.0,(t-1.2)/.4)),1.0,1.0)
-			elif empty == null and t < 1.4: body.reach(on_table,1.0-smoothstep(0.0,1.0,(t-.9)/.5),0.0)
+					if body.held != empty: take_up(body,empty,"l")
+					var up: float = smoothstep(0.0,1.0,(t-1.25)/.45)
+					in_fist(empty,rest,1.0-up)
+					body.drink_reach("l",handle.lerp(carried,up),Vector3.UP,1.0,1.0)
+			elif empty == null and t < 1.4: body.drink_reach("l",on_table+Vector3.UP*.03,Vector3.UP,1.0-smoothstep(.9,1.4,t),0.0)
 			else:
-				if body.held == null: body.reach(on_table,0.0,0.0)
+				if body.held == null: body.let_go()
+				elif body.held == empty: in_fist(empty,Transform3D(),0.0)
 				round.remove_at(0)
 				next_table(false)
 		"return":
 			# (Carrying back an empty, if she took one up; it goes to be washed.)
-			if body.held != null: body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
+			if body.held != null: body.drink_reach("l",body.global_transform*carried_at(body,"l"),Vector3.UP,1.0,1.0)
 			else: body.reach(Vector3.ZERO,0.0,0.0)
 			if advance(anya,delta):
 				if body.held != null:
 					var washed: Node3D = body.held
-					body.hold(null)
+					body.held = null
 					washed.queue_free()
 					body.reach(Vector3.ZERO,0.0,0.0)
 				empty = null
@@ -916,21 +1211,21 @@ func next_table(from_bar: bool) -> void:
 	# (An empty taken up is carried back behind the bar, to be washed; with
 	# another to serve, it is put by at once.)
 	if anya.body.held != null and anya.body.held == empty and not round.is_empty():
-		anya.body.hold(null)
+		anya.body.held = null
 		empty.queue_free()
 		empty = null
 	if round.is_empty():
 		# Back behind the bar.
 		if anya.body.held != null and anya.body.held == anya.mug:
-			anya.body.hold(null)
+			anya.body.held = null
 			stow(anya.mug)
-		route.append_array(way(anya.at,bar_end[1]))
-		route.append_array(PackedVector3Array([bar_end[1],bar_end[0],post]))
+		# (Round the bar's end by the floor: way.)
+		route.append_array(way(anya.at,post))
+		route.append(post)
 		anya.state = "return"
 	else:
-		if from_bar: route.append_array(PackedVector3Array([bar_end[0],bar_end[1]]))
 		var patron: Walker = round[0]
-		route.append_array(way(bar_end[1] if from_bar else anya.at,patron.seat.serve))
+		route.append_array(way(anya.at,patron.seat.serve))
 		route.append(patron.seat.serve)
 		anya.state = "carry"
 	anya.route = route
@@ -1434,6 +1729,12 @@ func keep(keeper: Walker, delta: float) -> void:
 				keeper.body.play("Reach" if customer.timer < HAND_OVER else "Talk")
 			else:
 				keeper.body.turn_to(stall.front,delta,4.0)
+				# (One still on his way to buy when it is time to shut finds it
+				# shutting, and goes about his day.)
+				if abed(keeper) and customer != null and customer.state == "to_buy":
+					release(customer)
+					rest(customer,1.0,3.0)
+					customer = null
 				if abed(keeper) and customer == null:
 					keeper.state = "closing"
 					keeper.timer = reach*2.0
@@ -1677,67 +1978,115 @@ func named_at(point: Vector3) -> Dictionary:
 # ---- Selene ----
 
 # Selene, who works for Anya: from the morning until the inn is shut she
-# keeps its common room. A mug left on a table where no one sits she goes and
-# takes up (claimed, so no one clears it from under her hand), carries to the
-# west end of the bar and sets down there to be washed (gone a while after:
-# WASHED); a table no one sits at, clear of mugs and not wiped this while
-# (WIPE_REST), she wipes down with her rag, round and round where a
-# drinker's mug stands (WIPE_TIME at each of WIPE_SPOTS places), leaning to
-# it; between whiles she stands by the bar's west end, looking over the room.
+# keeps its common room. Whatever is left about that no one is using (litter:
+# last night's mugs, plates and bottles on the tables and the bar; a mug a
+# drinker has drained and set by) she goes and clears, standing where she can
+# reach it (stand_by, leaning to it): a mug in her fist by its handle, a
+# bottle by its neck, one in each hand, or plates stacked on her left palm;
+# mugs and plates go into the wash tub behind the bar's west end, bottles into
+# the crate of empties beside it. A place at a table that no one sits at and
+# nothing stands at, not wiped since its last drinker got up (or for
+# WIPE_REST), she wipes down with her rag, round and round under her palm
+# where a mug would stand (WIPE_TIME), going on to the table's other free
+# places; the rag hangs from her apron's string between whiles. With nothing
+# left about and every free place clean she wipes the bar down from behind
+# it, and between whiles stands by the bar's west end, looking over the room.
 # She lives in the house nearest the inn, comes to work a while after Anya is
 # up (SELENE_RISING), and goes home once the inn is shut.
 const SELENE_WALK = 1.45
 const SELENE_RISING = ANYA_RISING+25.0
 const WIPE_REST = 90.0
 const WIPE_TIME = 4.0
-const WIPE_SPOTS = 2
-# Her rag's round on the table (metres across, and seconds a turn), lying on
-# its top; and how far she leans to it.
+# Her rag's round on the table (metres across, and seconds a turn), her palm
+# on it this far above the top (the rag bunched under it); and how far she
+# leans to it.
 const WIPE_ROUND = .09
 const WIPE_BEAT = 1.1
-const WIPE_ABOVE = .016
+const WIPE_ABOVE = .012
 const WIPE_LEAN = .12
-# Mugs set on the bar's end wait there for her to carry them to the wash;
-# any she has not, after WASHED, are taken in by Anya (gone).
-const WASHED = 240.0
 const CHORE_LOOK = .5
-# Her apron: a linen sheet from her waist to her thighs, standing out this
-# far from her hips' middle; and her clothes.
-const APRON = Vector2(.36,.4)
-const APRON_OUT = .14
+# A thing within USE_REACH of where a drinker's mug stands is his. Of what
+# is left about she takes, in one going, what lies within TAKE_REACH of the
+# first thing (as much as her hands hold: PLATES on her palm); each taken up
+# in TAKE seconds and put away in PUT. She leans to what is further than
+# ARM_REACH from her, as far as LEAN_MOST.
+const USE_REACH = .55
+const TAKE_REACH = .7
+const PLATES = 4
+const TAKE = 1.1
+const PUT = 1.0
+const ARM_REACH = .3
+const LEAN_MOST = .35
+# How far forward the upper arm hangs as a thing is carried by its handle
+# in the fist (fist_ahead: hers, and Anya's), and as Anya holds a mug under
+# the tap; where her palm carries plates, in her own frame, and how far up
+# each plate lies on the one below.
+const CARRY_SWING = .25
+const TAP_SWING = .75
+const TRAY_CARRY = Vector3(.1,.95,.36)
+const PLATE_STEP = .014
+# (The lowest plate on her palm's pads and fingers, not in them.)
+const ON_PALM = .022
+# Her hand turned palm up, fingers forward (in her frame: the hand bone's X
+# is out of the palm, its Y along the fingers, its Z toward the thumb).
+const PALM_UP = Basis(Vector3(0,1,0),Vector3(0,0,1),Vector3(1,0,0))
+# Her clothes, and her apron of linen over her skirt (scripts/townsperson.gd).
 const SELENE_LOOK = {"who":"woman","garment":"Gown","under":"Blouse","cloth":Color(.30,.34,.30),"under_cloth":Color(.86,.83,.76),"wear":.12,
-	"hair":"Hair_Buns","hair_colour":Color(.24,.15,.08),"skin":"light","tone":Color(.98,.9,.82),"belt":Color(.35,.24,.15),"size":.95,"seed":.43}
+	"hair":"Hair_Buns","hair_colour":Color(.24,.15,.08),"skin":"light","tone":Color(.98,.9,.82),"belt":Color(.35,.24,.15),"size":.95,"seed":.43,
+	"apron":Color(.8,.76,.66)}
 var selene_spot = Vector3.ZERO
-var counter_stand = Vector3.ZERO
-var counter = Vector3.ZERO
 var rag: Node3D
+# The rag as it hangs from her apron's string, between whiles.
+var rag_hung: Node3D
+# Where her palm is, wiping (the rag under it), and plates lie on it; and
+# her left hand laid flat for either (scripts/flat_hand.gd).
+var palm: Node3D
+var tray: Node3D
+var flat_hand: SkeletonModifier3D
 var chore_rng = RandomNumberGenerator.new()
 var chore_clock = 0.0
-# What she is about: the mug she fetches (and the seat it stood at), the
-# places at a table she has still to wipe; when each table was last wiped;
-# and the mugs on the bar waiting to be washed.
+# What she is about: "clear" (the things she is taking up, where she stands
+# for them and where they go: "picks", "stand", "to"; what is in each hand:
+# "in"), "wipe" (the place she is at) or "bar"; the places she has still to
+# wipe; when each place was last wiped (by its seat's index); and what is
+# left about: [{node, kind}] (with "seat", a drained mug set by there).
 var chore = {}
 var wiping: Array = []
 var wiped: Dictionary = {}
-var washing: Array = []
+var litter: Array = []
+# How far she leans, to wipe or to reach.
+var lean_to = 0.0
 
 func hire_selene() -> void:
 	chore_rng.seed = 5150
 	var c = Interiors.INN
-	selene_spot = nearest_open(c+Vector3(2.4,0,10.6))
-	counter_stand = nearest_open(c+Vector3(2.4,0,8.7))
-	counter = Vector3(c.x+3.45,1.12,c.z+8.6)
+	selene_spot = floor_nearest(c+Vector3(2.4,0,10.6))
 	selene = Walker.new()
 	selene.body = figure(SELENE_LOOK)
 	selene.body.name = "Selene"
-	tie_apron(selene.body)
 	selene.speed = SELENE_WALK
 	selene.at = selene_spot
 	selene.body.rotation.y = atan2(1.0,.4)
 	idle(selene)
 	rag = make_rag()
 	stow(rag)
+	rag_hung = hang_rag(selene.body)
+	palm = Node3D.new()
+	palm.name = "Palm"
+	tray = Node3D.new()
+	tray.name = "Tray"
+	for holder in [palm,tray]: add_child(holder)
+	var hand: Dictionary = palm_place(selene.body)
+	# (Its up out of the back of her hand, or out of her palm.)
+	selene.body.pin_to_hand(palm,"hand_l",Basis(Vector3(0,1,0),Vector3(-1,0,0),Vector3(0,0,1)),hand.at)
+	selene.body.pin_to_hand(tray,"hand_l",Basis(Vector3(0,0,1),Vector3(1,0,0),Vector3(0,1,0)),hand.at)
+	flat_hand = preload("res://scripts/flat_hand.gd").new()
+	flat_hand.name = "FlatHand"
+	selene.body.skeleton.add_child(flat_hand)
 	lay_tub()
+	for thing in world.rooms[0].get("litter",[]):
+		thing.node.set_meta("kind",thing.kind)
+		litter.append({"node":thing.node,"kind":thing.kind})
 	# Her house: the free one nearest the inn.
 	var taken: Array = (people+children+[orion]+keepers).filter(func(w): return w.bed.get("kind") == "house").map(func(w): return w.bed.at)
 	var homes: Array = world.places.filter(func(p): return p.kind == "house" and p.name == "house")
@@ -1748,74 +2097,156 @@ func hire_selene() -> void:
 	selene.bed = house_bed(free[0])
 	selene.bedtime = ANYA_BEDTIME
 	selene.rising = SELENE_RISING
-	for seat in seats: wiped[seat.table] = -WIPE_REST
+	for i in seats.size(): wiped[i] = -WIPE_REST
 
-# Her apron, tied at her waist (on her pelvis, so it goes with her).
-func tie_apron(body: Node3D) -> void:
-	var skeleton: Skeleton3D = body.skeleton
-	var pelvis: int = skeleton.find_bone("pelvis")
-	var waist: Vector3 = skeleton.get_bone_global_rest(skeleton.find_bone("spine_01")).origin
-	var hang = BoneAttachment3D.new()
-	hang.bone_name = "pelvis"
-	skeleton.add_child(hang)
-	var tool = SurfaceTool.new()
-	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rows = 6
-	var columns = 6
-	for j in rows:
-		for i in columns:
-			var quad = [Vector2(i,j),Vector2(i+1,j),Vector2(i+1,j+1),Vector2(i,j),Vector2(i+1,j+1),Vector2(i,j+1)]
-			for corner in quad:
-				var u: float = corner.x/columns
-				var v: float = corner.y/rows
-				# Curved a little round her, and flaring as it falls.
-				var across: float = (u-.5)*APRON.x*(1.0+v*.25)
-				var point = Vector3(across,-v*APRON.y,-across*across*1.4+v*.03)
-				tool.set_uv(Vector2(u,v))
-				tool.set_normal(Vector3(0,0,1))
-				tool.add_vertex(point)
-	var sheet = MeshInstance3D.new()
-	sheet.name = "Apron"
-	sheet.mesh = tool.commit()
-	var linen = StandardMaterial3D.new()
-	linen.albedo_color = Color(.8,.76,.66)
-	linen.roughness = .95
-	linen.cull_mode = BaseMaterial3D.CULL_DISABLED
-	sheet.material_override = linen
-	hang.add_child(sheet)
-	# (Made where it hangs on her at rest, in the pelvis bone's own space:
-	# before her, the way her toes point.)
-	var toes: Vector3 = skeleton.get_bone_global_rest(skeleton.find_bone("ball_l")).origin-skeleton.get_bone_global_rest(skeleton.find_bone("foot_l")).origin
-	toes.y = 0.0
-	var front: Vector3 = toes.normalized() if toes.length() > .01 else Vector3.BACK
-	var hips: Vector3 = skeleton.get_bone_global_rest(pelvis).origin
-	var at_rest = Transform3D(Basis(Vector3.UP.cross(front),Vector3.UP,front),Vector3(hips.x,waist.y,hips.z)+front*APRON_OUT)
-	sheet.transform = skeleton.get_bone_global_rest(pelvis).affine_inverse()*at_rest
+# Her rag: a square of old linen, grey with washing and wiping, damp, worn
+# thin and frayed at its edges: bunched under her palm as she wipes (the
+# middle gathered up into her hand, the rest lying on the table in creases
+# that run in to it, a corner turned under), and hanging from her apron's
+# string between whiles (hang_rag). Its cloth is the townspeople's
+# (assets/shaders/cloth.gdshader), worn to holes.
+const RAG_SIZE = Vector2(.34,.3)
+const RAG_DYE = Color(.5,.47,.41)
+const RAG_WEAR = .8
+static var rag_material: ShaderMaterial
+static func rag_cloth() -> ShaderMaterial:
+	if rag_material != null: return rag_material
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/cloth.gdshader")
+	m.set_shader_parameter("weave",load("res://assets/textures/cloth_linen.jpg"))
+	m.set_shader_parameter("grit",load("res://assets/textures/rock_detail.jpg"))
+	m.set_shader_parameter("weave_scale",7.0)
+	m.set_shader_parameter("weave_layer",12.0)
+	m.set_shader_parameter("dye",Vector3(RAG_DYE.r,RAG_DYE.g,RAG_DYE.b))
+	m.set_shader_parameter("wear",RAG_WEAR)
+	m.set_shader_parameter("seed",3.7)
+	m.set_shader_parameter("drape",.004)
+	rag_material = m
+	return m
 
-# Her rag: a wad of grey linen, damp and worn.
+# A sheet of cloth `size` across, made of `cells` squares a side, each point
+# placed by `shape` (from its place on the sheet, -0.5…0.5 each way, to where
+# it lies); its UVs in metres over the cloth, and its second UVs how near its
+# edge a point is (1 at the edge, for the cloth's fraying) and how worn.
+static func sheet(size: Vector2, cells: Vector2i, shape: Callable) -> ArrayMesh:
+	var points: Array[Vector3] = []
+	for j in cells.y+1:
+		for i in cells.x+1: points.append(shape.call(Vector2(float(i)/cells.x-.5,float(j)/cells.y-.5)))
+	var mesh = ArrayMesh.new()
+	# Both its faces, each lit as the outside (this renderer lights a
+	# two-sided surface's back from the wrong side).
+	for back in [false,true]:
+		var tool = SurfaceTool.new()
+		tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for j in cells.y+1:
+			for i in cells.x+1:
+				var u = Vector2(float(i)/cells.x,float(j)/cells.y)
+				var edge: float = 1.0-minf(minf(u.x,1.0-u.x)*size.x,minf(u.y,1.0-u.y)*size.y)/.035
+				tool.set_uv(u*size)
+				tool.set_uv2(Vector2(clampf(edge,0.0,1.0),.45))
+				tool.add_vertex(points[j*(cells.x+1)+i])
+		for j in cells.y:
+			for i in cells.x:
+				var a: int = j*(cells.x+1)+i
+				var quad = [a,a+1,a+cells.x+2,a,a+cells.x+2,a+cells.x+1]
+				if back: quad.reverse()
+				for k in quad: tool.add_index(k)
+		tool.generate_normals()
+		tool.commit(mesh)
+	return mesh
+
 func make_rag() -> Node3D:
 	var holder = Node3D.new()
 	holder.name = "Rag"
-	var wad = MeshInstance3D.new()
-	var lump = SphereMesh.new()
-	lump.radius = .075; lump.height = .028
-	lump.radial_segments = 10; lump.rings = 5
-	wad.mesh = lump
-	var cloth = StandardMaterial3D.new()
-	cloth.albedo_texture = load("res://assets/textures/cloth_linen.jpg")
-	cloth.albedo_color = Color(.62,.6,.55)
-	cloth.roughness = .95
-	wad.material_override = cloth
-	# (Held where a mug's base is held, scripts/townsperson.gd GRIP_AT: its
-	# flat across the palm's face, which the grip's X stands out from.)
-	wad.rotation = Vector3(0,0,PI/2)
-	wad.scale = Vector3(1.0,1.3,1.05)
-	holder.add_child(wad)
+	var cloth = MeshInstance3D.new()
+	cloth.name = "Cloth"
+	var crumple = FastNoiseLite.new()
+	crumple.seed = 77
+	crumple.frequency = 2.4
+	var fine = FastNoiseLite.new()
+	fine.seed = 31
+	fine.frequency = 6.0
+	cloth.mesh = sheet(RAG_SIZE,Vector2i(30,26),func(p: Vector2) -> Vector3:
+		# A corner turned back over the rest, lying on top of it.
+		var over: float = (p.x+p.y-.5)/sqrt(2.0)
+		var flap: float = 0.0
+		if over > 0.0:
+			p -= Vector2(1,1).normalized()*over*2.0
+			flap = 1.0
+		# Gathered in toward her palm (a little off its middle), the more the
+		# nearer: the cloth bunched up into her hand.
+		var from: Vector2 = p-Vector2(-.06,.02)
+		var r: float = from.length()
+		var gather: float = .6*exp(-r*r*7.0)
+		var spot: Vector2 = p*RAG_SIZE*(1.0-gather)
+		# Its creases: ridges every way, crowded and high in the bunch, low
+		# and loose out at its edges, which lift and curl a little.
+		var ridge: float = pow(1.0-absf(crumple.get_noise_2d(p.x*3.0,p.y*3.0)),3.0)
+		var small: float = pow(1.0-absf(fine.get_noise_2d(p.x*3.0,p.y*3.0)),2.0)
+		var high: float = .016*exp(-r*r*22.0)+ridge*.011*(.35+.65*smoothstep(.55,.05,r))+small*.0035
+		high += smoothstep(.38,.5,maxf(absf(p.x),absf(p.y)))*.006*(.5+crumple.get_noise_2d(p.y*5.0,p.x*5.0))
+		spot += Vector2(fine.get_noise_2d(p.x*2.0+4.0,p.y*2.0),fine.get_noise_2d(p.x*2.0,p.y*2.0-3.0))*.012
+		# (The turned corner on top, its fold rounded.)
+		high += flap*(.007+.004*smoothstep(0.0,.03,over))
+		return Vector3(spot.x,-.013+high,spot.y))
+	cloth.material_override = rag_cloth()
+	cloth.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	holder.add_child(cloth)
 	return holder
+
+# Her rag hung over her apron's string at her left hip, folded over it, its
+# two ends hanging down, swaying with her (on her pelvis).
+func hang_rag(body: Node3D) -> Node3D:
+	var skeleton: Skeleton3D = body.skeleton
+	var pelvis: int = skeleton.find_bone("pelvis")
+	var hang = BoneAttachment3D.new()
+	hang.bone_name = "pelvis"
+	skeleton.add_child(hang)
+	var cloth = MeshInstance3D.new()
+	cloth.name = "HungRag"
+	var size = Vector2(.19,.46)
+	cloth.mesh = sheet(size,Vector2i(8,18),func(p: Vector2) -> Vector3:
+		# Down from the string and back up the other side: folded over at the
+		# top, the two ends apart a little, in folds down its length.
+		var down: float = (p.y+.5)*size.y
+		var over: bool = down > size.y*.42
+		var drop: float = down if not over else size.y*.84-down
+		var out: float = .006 if not over else .02
+		var fold: float = sin(p.x*17.0+drop*9.0+1.0)*.014*(.35+drop*2.5)+sin(p.x*37.0-drop*6.0)*.004
+		var gather: float = 1.0-.45*exp(-drop*drop*300.0)
+		return Vector3(p.x*size.x*gather*(1.0+drop*.5),-drop,out+fold+drop*.05))
+	cloth.material_override = rag_cloth()
+	hang.add_child(cloth)
+	# (In the pelvis bone's own space, made where it hangs at rest: at her
+	# left hip, before her, at her waist.)
+	var waist: Vector3 = skeleton.get_bone_global_rest(skeleton.find_bone("spine_01")).origin
+	var toes: Vector3 = skeleton.get_bone_global_rest(skeleton.find_bone("ball_l")).origin-skeleton.get_bone_global_rest(skeleton.find_bone("foot_l")).origin
+	toes.y = 0.0
+	var front: Vector3 = toes.normalized() if toes.length() > .01 else Vector3.BACK
+	var left: Vector3 = Vector3.UP.cross(front)
+	var hips: Vector3 = skeleton.get_bone_global_rest(pelvis).origin
+	var at_rest = Transform3D(Basis(left,Vector3.UP,front).rotated(Vector3.UP,1.0),Vector3(hips.x,waist.y-.02,hips.z)+left*.18+front*.04)
+	cloth.transform = skeleton.get_bone_global_rest(pelvis).affine_inverse()*at_rest
+	return cloth
+
+# Where her palm lies on what it holds flat (a rag under it, plates on it),
+# in her left hand bone's space: its middle, just off its face.
+func palm_place(body: Node3D) -> Dictionary:
+	var reaching = body.drinking_arm("l")
+	var face: Vector3 = reaching.along.cross(reaching.across)
+	if face.dot(reaching.palm-reaching.along*reaching.palm.dot(reaching.along)) < 0.0: face = -face
+	return {"at":reaching.along*reaching.palm.dot(reaching.along)*.8+face*.026,"face":face}
 
 # Her hand turned palm down, fingers forward, as she wipes (in the world).
 func palm_down(body: Node3D) -> Basis:
 	return body.global_transform.basis*Basis(Vector3(0,-1,0),Vector3(0,0,1),Vector3(-1,0,0))
+
+# Her left hand laid flat (palm down, or up: `turn`) with the middle of her
+# palm at `point`, as far as `weight` says.
+func lay_palm(body: Node3D, point: Vector3, turn: Basis, weight: float) -> void:
+	var at: Vector3 = palm_place(body).at
+	body.reach(point-turn*at,weight,0.0)
+	body.arm.grip = turn
 
 func idle(walker: Walker) -> void:
 	walker.state = "idle"
@@ -1829,89 +2260,379 @@ func to_work() -> void:
 	selene.state = "to_post"
 
 func back_to_post() -> void:
-	selene.body.reach(Vector3.ZERO,0.0,0.0)
+	selene.body.let_go()
 	selene.route = way(selene.at,selene_spot)
 	selene.route.append(selene_spot)
 	selene.state = "to_post"
 
-# Whether anyone sits at a table, or is on his way to sit there, or Anya is
-# bringing a drink to it.
-func table_in_use(table: Vector3) -> bool:
-	for seat in seats:
-		if seat.table == table and seat.taken != null: return true
-	for patron in round:
-		if not patron.seat.is_empty() and patron.seat.table == table: return true
-	return false
+# Whether anyone sits at a place (or is on his way to, or Anya is bringing
+# him a drink).
+func place_in_use(seat: Dictionary) -> bool:
+	if seat.taken != null: return true
+	return round.any(func(patron): return patron.seat == seat)
 
-# A mug set by on a table (drained, or left by one who has gone), if there
-# is one, wherever it stands: she goes to fetch it. (Not where Anya is
-# bringing a drink: she takes the empty there herself.)
-func fetch_mug() -> bool:
-	var best = {}
-	var nearest = INF
+# ---- Things in hand ----
+
+# Where the fist (the middle of it, where a handle is held) comes with the
+# upper arm hanging `swing` (radians) forward of straight down and the
+# forearm level, straight ahead: so a mug carried by its handle stands
+# upright in it (scripts/arm_reach.gd upright: the forearm square to the
+# handle). In the figure's own frame, from its arm's own lengths.
+static var fists: Dictionary = {}
+func fist_ahead(body: Node3D, side: String, swing: float) -> Vector3:
+	var key = "%s%.3f%.3f%s%.2f" % [body.look.who,body.size,body.look.get("bulk",0.0)+body.look.get("gaunt",0.0),side,swing]
+	if fists.has(key): return fists[key]
+	var skeleton: Skeleton3D = body.skeleton
+	var into: Transform3D = body.global_transform.affine_inverse()*skeleton.global_transform
+	var rest = func(bone: String) -> Vector3: return into*skeleton.get_bone_global_rest(skeleton.find_bone(bone+"_"+side)).origin
+	var shoulder: Vector3 = rest.call("upperarm")
+	var upper: float = shoulder.distance_to(rest.call("lowerarm"))
+	var reaching = body.drinking_arm(side)
+	var hand: Transform3D = into*skeleton.get_bone_global_rest(skeleton.find_bone("hand_"+side))
+	var fore: float = rest.call("lowerarm").distance_to(rest.call("hand"))+(hand.basis*reaching.palm).length()*.9
+	var at: Vector3 = shoulder+Vector3(0,-upper*cos(swing),upper*sin(swing))+Vector3(0,0,fore)
+	fists[key] = at
+	return at
+
+# Where a fist carries a thing by its handle, in the figure's own frame.
+func carried_at(body: Node3D, side: String) -> Vector3:
+	return fist_ahead(body,side,CARRY_SWING)
+
+# A thing is held by its handle (a mug), by its neck (a bottle), or lies
+# flat on the palm (a plate). Where it is held, in its own unit box.
+const BOTTLE_NECK = Vector3(0,.78,0)
+func grip_point(node: Node3D) -> Vector3:
+	return BOTTLE_NECK if node.get_meta("kind","mug") == "bottle" else Person.MUG_HANDLE
+
+func grip_at(node: Node3D) -> Vector3:
+	return node.global_transform*grip_point(node)
+
+# Into the `side` fist of `body`, as it stands now; it then lies as in_fist
+# has it.
+func take_up(body: Node3D, node: Node3D, side: String) -> void:
+	body.drinking_arm(side)
+	var handle: Node3D = body.handle_grips[side]
+	var was: Transform3D = node.global_transform
+	if node.get_parent() != null: node.get_parent().remove_child(node)
+	handle.add_child(node)
+	node.global_transform = was
+	node.set_meta("rest",was)
+	body.held = node
+
+# How a thing in a fist lies: as the fist holds it, upright through it
+# (`toward` 0), or as it stands at `pose` in the world (1), or between (as
+# it is taken up from there, or set down there).
+func in_fist(node: Node3D, pose: Transform3D, toward: float) -> void:
+	var handle: Node3D = node.get_parent()
+	if handle == null: return
+	var size: Vector3 = node.transform.basis.get_scale()
+	var fist = Transform3D(Basis.from_scale(size),-(Basis.from_scale(size)*grip_point(node)))
+	var there: Transform3D = handle.global_transform.affine_inverse()*pose
+	var turn: Quaternion = Quaternion.IDENTITY.slerp(there.basis.get_rotation_quaternion(),toward)
+	node.transform = Transform3D(Basis(turn)*Basis.from_scale(size),fist.origin.lerp(there.origin,toward))
+
+# Out of the hand, standing where it is.
+func put_down(node: Node3D) -> void:
+	var at: Transform3D = node.global_transform
+	if node.get_parent() != null: node.get_parent().remove_child(node)
+	add_child(node)
+	node.global_transform = at
+
+# Upright at `at`, turned `yaw`, at its own size.
+func stood(node: Node3D, at: Vector3, yaw: float) -> Transform3D:
+	return Transform3D(Basis(Vector3.UP,yaw)*Basis.from_scale(node.transform.basis.get_scale() if node.get_parent() == self else node.global_transform.basis.get_scale()),at)
+
+# ---- Clearing ----
+
+# Everything left about, as {node, kind} (and "seat", a drained mug set by
+# at a place), that she may clear: nothing a drinker is using (within
+# USE_REACH of where his mug stands; a drained mug of his own he has done
+# with), nothing where Anya is serving or at her elbow at the bar.
+func clearable() -> Array:
+	var out: Array = []
 	var serving: Dictionary = round[0].seat if not round.is_empty() and anya.state in ["carry","place"] else {}
+	for i in range(litter.size()-1,-1,-1):
+		if not is_instance_valid(litter[i].node) or litter[i].node.is_queued_for_deletion(): litter.remove_at(i)
+	for thing in litter:
+		var at: Vector3 = thing.node.global_position
+		if anya_near(at): continue
+		if seats.any(func(seat): return place_in_use(seat) and Vector2(seat.mug.x-at.x,seat.mug.z-at.z).length() < USE_REACH): continue
+		out.append(thing)
 	for seat in seats:
 		if seat == serving or seat.left == null or not is_instance_valid(seat.left): continue
-		var d: float = seat.serve.distance_to(selene.at)
-		if d < nearest:
-			nearest = d
-			best = seat
-	if best.is_empty(): return false
-	chore = {"seat":best,"mug":best.left}
-	best.left = null
-	selene.route = way(selene.at,best.serve)
-	selene.route.append(best.serve)
-	selene.state = "to_mug"
+		seat.left.set_meta("kind","mug")
+		out.append({"node":seat.left,"kind":"mug","seat":seat})
+	return out
+
+# Something to clear: the nearest, and what lies by it that goes where it
+# goes, as much as her hands will hold (a mug or a bottle in each fist, her
+# left palm under plates, the right hand then free for one more).
+func clear_next() -> bool:
+	var things: Array = clearable()
+	if things.is_empty(): return false
+	for thing in things: thing.stand = stand_by(thing.node.global_position)
+	things.sort_custom(func(a, b): return a.stand.distance_to(selene.at) < b.stand.distance_to(selene.at))
+	var first: Dictionary = things[0]
+	var to: String = "crate" if first.kind == "bottle" else "tub"
+	var picks: Array = []
+	var plates = 0
+	var fists = {"l":false,"r":false}
+	for thing in things:
+		if ("crate" if thing.kind == "bottle" else "tub") != to: continue
+		if thing.node.global_position.distance_to(first.node.global_position) > TAKE_REACH: continue
+		var side = ""
+		if thing.kind == "plate":
+			# The first onto her left palm; the rest by her right hand onto it.
+			if fists.l or plates >= PLATES: continue
+			plates += 1
+			side = "l" if plates == 1 else "r"
+		else:
+			side = "r" if not fists.r else ("l" if not fists.l and plates == 0 else "")
+			if side == "": continue
+			fists[side] = true
+		picks.append({"node":thing.node,"kind":thing.kind,"side":side,"seat":thing.get("seat",{})})
+	# (The plates first, then what goes in the fists; claimed, so no one
+	# else clears them meanwhile.)
+	picks.sort_custom(func(a, b): return a.kind == "plate" and b.kind != "plate")
+	for pick in picks:
+		if not pick.seat.is_empty(): pick.seat.left = null
+		for i in range(litter.size()-1,-1,-1):
+			if litter[i].node == pick.node: litter.remove_at(i)
+	chore = {"kind":"clear","picks":picks,"stand":first.stand,"to":to,"in":{"l":[],"r":[]},"i":0}
+	selene.route = way(selene.at,first.stand)
+	selene.route.append(first.stand)
+	selene.state = "to_things"
 	return true
 
-# A table no one is at, clear of mugs, and not wiped for a while: she wipes
-# it at a place or two.
+# Where she stands to put things away, and where each goes.
+func put_place() -> Vector3:
+	return tub_stand if chore.to == "tub" else empties_stand
+
+# How her hands hold what they have, as she walks or stands (all but `busy`,
+# the hand at work).
+func carry_pose(busy: String = "") -> void:
+	var body = selene.body
+	var held: Dictionary = chore.get("in",{"l":[],"r":[]})
+	for side in ["l","r"]:
+		if side == busy: continue
+		if held[side].is_empty():
+			if side == "r" and body.arms.has("r"):
+				body.arms.r.weight = 0.0
+				body.arms.r.curl = 0.0
+			elif side == "l" and busy != "l": body.reach(Vector3.ZERO,0.0,0.0)
+		elif not is_instance_valid(held[side][0]): continue
+		elif held[side][0].get_meta("kind","") == "plate": lay_palm(body,body.global_transform*TRAY_CARRY,body.global_transform.basis*PALM_UP,1.0)
+		else: body.drink_reach(side,body.global_transform*carried_at(body,side),Vector3.UP,1.0,1.0)
+
+# How far she leans to reach `point` (more, the further it is from her).
+func lean_for(point: Vector3) -> float:
+	return clampf((Vector2(point.x-selene.at.x,point.z-selene.at.z).length()-ARM_REACH)*1.1,0.0,LEAN_MOST)
+
+# Taking up what she came for, one thing after another: the hand goes to
+# it, takes it, and brings it in (a plate onto those on her left palm).
+func take_things(delta: float) -> void:
+	var body = selene.body
+	var picks: Array = chore.picks
+	if chore.i >= picks.size():
+		chore.i = 0
+		selene.phase_time = 0.0
+		selene.route = way(selene.at,put_place())
+		selene.route.append(put_place())
+		selene.state = "carry"
+		lean_to = 0.0
+		return
+	var pick: Dictionary = picks[chore.i]
+	var node: Node3D = pick.node
+	if not is_instance_valid(node):
+		chore.i += 1
+		selene.phase_time = 0.0
+		return
+	var t: float = selene.phase_time
+	var reach_t: float = smoothstep(0.0,1.0,t/(TAKE*.5))
+	var bring_t: float = smoothstep(0.0,1.0,(t-TAKE*.5)/(TAKE*.5))
+	var side: String = pick.side
+	carry_pose(side if pick.kind != "plate" or chore.in.l.is_empty() else "")
+	if not pick.has("from"): pick.from = node.global_transform
+	var from: Transform3D = pick.from
+	body.turn_to(from.origin-selene.at,delta,8.0)
+	lean_to = lean_for(from.origin)
+	if pick.kind == "plate":
+		# By its near rim; then onto her palm, on top of the others.
+		var rim: Vector3 = from.origin+Vector3(selene.at.x-from.origin.x,0,selene.at.z-from.origin.z).normalized()*.2+Vector3.UP*.02
+		var on: Transform3D = tray.global_transform*Transform3D(Basis.from_scale(from.basis.get_scale()),Vector3.UP*(ON_PALM+PLATE_STEP*chore.in.l.size()))
+		if t < TAKE*.5:
+			body.drink_reach(side,rim,Vector3.UP,reach_t,reach_t*.6) if side == "r" else lay_palm(body,rim,body.global_transform.basis*Person.GRIP_HAND,reach_t)
+		else:
+			# (Level all the way, lifted clear of what else is on the table.)
+			var path = Transform3D(from.basis,from.origin.lerp(on.origin,bring_t)+Vector3.UP*.08*sin(bring_t*PI))
+			node.global_transform = path
+			var under: Vector3 = path.origin+(rim-from.origin)
+			if side == "r": body.drink_reach("r",under,Vector3.UP,1.0-smoothstep(.7,1.0,bring_t),.6)
+			else: lay_palm(body,under.lerp(body.global_transform*TRAY_CARRY,bring_t),(body.global_transform.basis*Person.GRIP_HAND).slerp(body.global_transform.basis*PALM_UP,bring_t),1.0)
+		if t >= TAKE:
+			if node.get_parent() != tray:
+				if node.get_parent() != null: node.get_parent().remove_child(node)
+				tray.add_child(node)
+			node.transform = Transform3D(Basis.from_scale(from.basis.get_scale()),Vector3.UP*(ON_PALM+PLATE_STEP*chore.in.l.size()))
+			chore.in.l.append(node)
+			if side == "r":
+				body.arms.r.weight = 0.0
+				body.arms.r.curl = 0.0
+	else:
+		# By its handle, or its neck; then up into the fist and in to her.
+		var grip: Vector3 = from*grip_point(node)
+		var carried: Vector3 = body.global_transform*carried_at(body,side)
+		if t < TAKE*.5: body.drink_reach(side,grip,Vector3.UP,reach_t,smoothstep(.5,1.0,reach_t))
+		else:
+			if node.get_parent() == self or node.get_parent() == world: take_up(body,node,side)
+			in_fist(node,from,1.0-bring_t)
+			body.drink_reach(side,grip.lerp(carried,bring_t)+Vector3.UP*.04*sin(bring_t*PI),Vector3.UP,1.0,1.0)
+		if t >= TAKE:
+			in_fist(node,from,0.0)
+			chore.in[side].append(node)
+	if t >= TAKE:
+		chore.i += 1
+		selene.phase_time = 0.0
+
+# Putting away what she carries, a hand at a time: into the tub (washed,
+# and in to Anya: gone), or into the crate of empties, a bottle standing in
+# each of its places (the oldest taken away when it is full).
+func put_things(delta: float) -> void:
+	var body = selene.body
+	var target: Vector3 = tub_at if chore.to == "tub" else empties_at
+	body.turn_to(target-selene.at,delta,8.0)
+	lean_to = lean_for(target)
+	var side: String = "r" if not chore.in.r.is_empty() else ("l" if not chore.in.l.is_empty() else "")
+	if side == "":
+		body.let_go()
+		lean_to = 0.0
+		chore = {}
+		idle(selene)
+		selene.timer = 0.0
+		return
+	carry_pose(side)
+	var t: float = selene.phase_time
+	var down_t: float = smoothstep(0.0,1.0,t/(PUT*.55))
+	var back_t: float = smoothstep(0.0,1.0,(t-PUT*.55)/(PUT*.45))
+	if chore.get("dunked",false) or (not chore.has("there") and chore.in[side][0].get_meta("kind","") == "plate"):
+		# The stack let down into the water, and her hand out again.
+		var water: Vector3 = tub_at+Vector3.UP*(TUB_WATER-.03)
+		var carried: Vector3 = body.global_transform*TRAY_CARRY
+		lay_palm(body,carried.lerp(water,down_t if t < PUT*.55 else 1.0-back_t),body.global_transform.basis*PALM_UP,1.0)
+		if t >= PUT*.55 and not chore.get("dunked",false):
+			chore.dunked = true
+			for plate in chore.in.l: plate.queue_free()
+		if t >= PUT:
+			chore.in.l.clear()
+			chore.erase("dunked")
+			body.reach(Vector3.ZERO,0.0,0.0)
+			selene.phase_time = 0.0
+		return
+	var carried: Vector3 = body.global_transform*carried_at(body,side)
+	if not chore.has("there"):
+		var node: Node3D = chore.in[side][0]
+		var pose: Transform3D
+		if node.has_meta("put"): pose = node.get_meta("put")
+		elif chore.to == "tub": pose = stood(node,tub_at+Vector3(chore_rng.randf_range(-.05,.05),TUB_WATER-.1,chore_rng.randf_range(-.05,.05)),chore_rng.randf_range(0,TAU))
+		else: pose = stood(node,empties_slot(),chore_rng.randf_range(0,TAU))
+		node.set_meta("put",pose)
+		var there: Vector3 = pose*grip_point(node)
+		if t < PUT*.55:
+			in_fist(node,pose,smoothstep(.6,1.0,down_t))
+			body.drink_reach(side,carried.lerp(there,down_t),Vector3.UP,1.0,1.0)
+		else:
+			# Let go: in the water (and gone), or standing in the crate.
+			in_fist(node,pose,1.0)
+			put_down(node)
+			node.global_transform = pose
+			node.remove_meta("put")
+			if body.held == node: body.held = null
+			if chore.to == "tub": node.queue_free()
+			else:
+				empties.append(node)
+				if empties.size() > EMPTIES_SLOTS.x*EMPTIES_SLOTS.y: empties.pop_front().queue_free()
+			chore.there = there
+	if chore.has("there"):
+		var there: Vector3 = chore.there
+		body.drink_reach(side,there.lerp(carried,back_t*.5)+Vector3.UP*.06*back_t,Vector3.UP,1.0-back_t,1.0-back_t)
+	if t >= PUT:
+		chore.in[side].pop_front()
+		chore.erase("there")
+		if side == "r":
+			body.arms.r.weight = 0.0
+			body.arms.r.curl = 0.0
+		selene.phase_time = 0.0
+
+# ---- Wiping ----
+
+# A place she may wipe: no one sits there (or is coming to), nothing stands
+# there, and it has not been wiped since its last drinker got up, or for
+# WIPE_REST.
+func wants_wiping(i: int) -> bool:
+	var seat: Dictionary = seats[i]
+	if place_in_use(seat) or chore_clock-wiped[i] < WIPE_REST: return false
+	if seat.left != null and is_instance_valid(seat.left): return false
+	return not litter.any(func(thing): return is_instance_valid(thing.node) and Vector2(seat.mug.x-thing.node.global_position.x,seat.mug.z-thing.node.global_position.z).length() < USE_REACH)
+
+# The nearest place that wants wiping, and the others at its table that do.
 func wipe_next() -> bool:
-	var tables: Array = []
-	for seat in seats:
-		if not seat.table in tables: tables.append(seat.table)
-	tables = tables.filter(func(t): return chore_clock-wiped[t] >= WIPE_REST and not table_in_use(t) and not seats.any(func(s): return s.table == t and s.left != null and is_instance_valid(s.left)))
-	if tables.is_empty(): return false
-	tables.sort_custom(func(a, b): return a.distance_to(selene.at) < b.distance_to(selene.at))
-	var table: Vector3 = tables[0]
-	var places: Array = seats.filter(func(s): return s.table == table)
-	places.sort_custom(func(a, b): return a.serve.distance_to(selene.at) < b.serve.distance_to(selene.at))
-	# The nearest place, and the one furthest from it.
-	wiping = [places[0]]
-	if WIPE_SPOTS > 1 and places.size() > 1:
-		var far = places.slice(1)
-		far.sort_custom(func(a, b): return a.serve.distance_to(places[0].serve) > b.serve.distance_to(places[0].serve))
-		wiping.append(far[0])
-	chore = {"table":table}
+	var due: Array = range(seats.size()).filter(func(i): return wants_wiping(i))
+	if due.is_empty(): return false
+	due.sort_custom(func(a, b): return seats[a].serve.distance_to(selene.at) < seats[b].serve.distance_to(selene.at))
+	var table: Vector3 = seats[due[0]].table
+	wiping = due.filter(func(i): return seats[i].table == table)
 	next_wipe()
 	return true
 
 func next_wipe() -> void:
+	while not wiping.is_empty() and not wants_wiping(wiping[0]): wiping.pop_front()
 	if wiping.is_empty():
 		done_wiping()
 		return
-	var seat: Dictionary = wiping.pop_front()
-	chore.seat = seat
-	selene.route = way(selene.at,seat.serve)
-	selene.route.append(seat.serve)
+	var i: int = wiping.pop_front()
+	chore = {"kind":"wipe","place":i}
+	selene.route = way(selene.at,seats[i].serve)
+	selene.route.append(seats[i].serve)
 	selene.state = "to_table"
 
-func done_wiping() -> void:
-	if chore.has("table"): wiped[chore.table] = chore_clock
-	wiping.clear()
-	if selene.body.held == rag:
-		selene.body.hold(null)
+# The rag out from her apron's string into her hand, or back.
+func rag_in_hand(holding: bool) -> void:
+	rag_hung.visible = not holding
+	if holding:
+		if rag.get_parent() != null: rag.get_parent().remove_child(rag)
+		palm.add_child(rag)
+		rag.transform = Transform3D.IDENTITY
+		selene.body.held = rag
+	else:
+		if selene.body.held == rag: selene.body.held = null
 		stow(rag)
+
+func done_wiping() -> void:
+	wiping.clear()
+	rag_in_hand(false)
 	chore = {}
+	lean_to = 0.0
 	back_to_post()
 
-# The bar, when there is nothing else for her: no mug to fetch and no table
-# free to wipe. She takes up the mugs set at its end (STACK apart in her
-# hand), carries them to the wash tub behind it (tub_at, its water TUB_WATER
-# up), and wipes the bar's top down from behind it at BAR_SPOTS places
-# along its west half (BAR_WIPE_TIME at each), keeping clear of Anya's end
-# and of Anya (ANYA_CLEAR). Not again for BAR_REST, unless mugs are set
-# there meanwhile.
+# Wiping at `spot` (on a table or the bar top): her palm on the rag going
+# round and round on the top, eased in over the first half second and out
+# over the last (`time` gone, `left` to go).
+func wipe_at(spot: Vector3, time: float, left: float, delta: float) -> void:
+	var body = selene.body
+	body.turn_to(spot-selene.at,delta,8.0)
+	lean_to = lean_for(spot)
+	var turn: float = time/WIPE_BEAT*TAU
+	var at: Vector3 = spot+Vector3(cos(turn),0,sin(turn))*WIPE_ROUND+Vector3.UP*WIPE_ABOVE
+	lay_palm(body,at,palm_down(body),smoothstep(0.0,.5,time)*smoothstep(0.0,.5,left))
+
+# ---- The bar ----
+
+# The bar, when there is nothing else for her: nothing to clear and no free
+# place to wipe. She wipes the bar's top down from behind it at BAR_SPOTS
+# places along its west half (BAR_WIPE_TIME at each), keeping clear of
+# Anya's end and of Anya (ANYA_CLEAR). Not again for BAR_REST. Behind its
+# west end stand the wash tub (TUB, its water TUB_WATER up) and the crate of
+# empties (EMPTIES), the bottles standing in it in EMPTIES_SLOTS rows.
 const BAR_REST = 60.0
 const BAR_SPOTS = [3.7,4.9,6.1]
 const BAR_TOP = 1.12
@@ -1919,17 +2640,22 @@ const BAR_ACROSS = 8.13
 const BEHIND_BAR = 7.72
 const BAR_WIPE_TIME = 3.0
 const ANYA_CLEAR = 1.3
-const STACK = .9
 const TUB_WATER = .5
+const EMPTIES_SLOTS = Vector2i(3,7)
+const EMPTIES_HEIGHT = .3
 var bar_wiped = -BAR_REST
 var bar_spots: Array = []
 var tub_at = Vector3.ZERO
 var tub_stand = Vector3.ZERO
+var empties_at = Vector3.ZERO
+var empties_stand = Vector3.ZERO
+var empties: Array = []
+var empties_crate: Node3D
 
 func lay_tub() -> void:
 	var c = Interiors.INN
-	tub_at = Vector3(c.x+1.55,0,c.z+7.35)
-	tub_stand = nearest_open(Vector3(c.x+2.3,0,c.z+7.55))
+	tub_at = c+TUB
+	tub_stand = floor_nearest(Vector3(c.x+2.3,0,c.z+7.55))
 	var tub = Kit.prop("barrel",.62)
 	tub.name = "WashTub"
 	add_child(tub)
@@ -1946,79 +2672,103 @@ func lay_tub() -> void:
 	water.material_override = dark
 	add_child(water)
 	water.position = tub_at+Vector3.UP*.55
+	# The crate the empties stand in, long side to the wall.
+	empties_at = c+EMPTIES
+	empties_stand = floor_nearest(empties_at+Vector3(.9,0,0))
+	empties_crate = Kit.prop("crate_empty",EMPTIES_HEIGHT)
+	empties_crate.name = "Empties"
+	add_child(empties_crate)
+	empties_crate.position = empties_at
+	empties_crate.rotation.y = PI/2
 
+# The crate's next free place for a bottle, on its floor.
+func empties_slot() -> Vector3:
+	var k: int = empties.size()%(EMPTIES_SLOTS.x*EMPTIES_SLOTS.y)
+	var inner = Vector2(EMPTIES_SIZE.x-.1,EMPTIES_SIZE.y-.1)
+	var across: float = (float(k%EMPTIES_SLOTS.x)+.5)/EMPTIES_SLOTS.x-.5
+	var along: float = (float(k/EMPTIES_SLOTS.x)+.5)/EMPTIES_SLOTS.y-.5
+	return empties_at+Vector3(across*inner.x,.03,along*inner.y)
+
+# (Called away from it to clear something, she comes back to wipe the rest.)
 func tend_bar() -> bool:
-	if washing.is_empty() and chore_clock-bar_wiped < BAR_REST: return false
-	chore = {"bar":true}
-	if not washing.is_empty():
-		selene.route = way(selene.at,counter_stand)
-		selene.route.append(counter_stand)
-		selene.state = "to_counter"
-	else: start_bar_wipe()
+	if bar_spots.is_empty():
+		if chore_clock-bar_wiped < BAR_REST: return false
+		var c = Interiors.INN
+		bar_spots = BAR_SPOTS.map(func(x): return Vector3(c.x+x,BAR_TOP,c.z+BAR_ACROSS))
+	chore = {"kind":"bar"}
+	next_bar_wipe()
 	return true
 
-func start_bar_wipe() -> void:
-	var c = Interiors.INN
-	bar_spots = BAR_SPOTS.map(func(x): return Vector3(c.x+x,BAR_TOP,c.z+BAR_ACROSS))
-	chore = {"bar":true}
-	next_bar_wipe()
-
 func next_bar_wipe() -> void:
-	# (A mug to fetch meanwhile, and she leaves the bar for it.)
-	while not bar_spots.is_empty() and anya_near(bar_spots[0]): bar_spots.pop_front()
-	if bar_spots.is_empty() or seats.any(func(s): return s.left != null and is_instance_valid(s.left)):
+	if bar_spots.is_empty():
 		done_bar()
 		return
-	var spot: Vector3 = bar_spots.pop_front()
+	# (Something to clear meanwhile, and she leaves the bar for it; Anya at
+	# every place left to wipe, and she waits a moment for her to go.)
+	var clear: Array = bar_spots.filter(func(spot): return not anya_near(spot))
+	if not clearable().is_empty() or clear.is_empty():
+		rag_in_hand(false)
+		chore = {}
+		lean_to = 0.0
+		selene.body.let_go()
+		idle(selene)
+		selene.timer = 0.0
+		return
+	var spot: Vector3 = clear[0]
+	bar_spots.erase(spot)
 	chore.spot = spot
 	# (Close behind the bar, where Anya stands to draw.)
-	var stand = Vector3(spot.x,0,Interiors.INN.z+BEHIND_BAR)
-	selene.route = way(selene.at,nearest_open(stand))
+	var stand = floor_nearest(Vector3(spot.x,0,Interiors.INN.z+BEHIND_BAR))
+	selene.route = way(selene.at,stand)
 	selene.route.append(stand)
 	selene.state = "to_bar"
 
 func done_bar() -> void:
 	bar_wiped = chore_clock
 	bar_spots.clear()
-	if selene.body.held == rag:
-		selene.body.hold(null)
-		stow(rag)
+	rag_in_hand(false)
 	chore = {}
+	lean_to = 0.0
+	selene.body.let_go()
 	idle(selene)
 
 func anya_near(spot: Vector3) -> bool:
 	return Vector2(anya.at.x-spot.x,anya.at.z-spot.z).length() < ANYA_CLEAR
 
-# Puts down whatever she is about (the inn shut, the clock jumped).
+# Puts down whatever she is about (the inn shut, the clock jumped): what is
+# in her hands goes in to be washed.
 func drop_chores() -> void:
-	selene.body.reach(Vector3.ZERO,0.0,0.0)
+	selene.body.let_go()
 	selene.body.figure.rotation.x = 0.0
-	if selene.body.held != null:
-		var held = selene.body.held
-		selene.body.hold(null)
-		if held == rag: stow(rag)
-		else: held.queue_free()
-	elif chore.has("mug") and is_instance_valid(chore.mug): chore.mug.queue_free()
+	lean_to = 0.0
+	for side in chore.get("in",{}):
+		for node in chore.in[side]:
+			if is_instance_valid(node): node.queue_free()
+	if chore.get("kind","") == "clear":
+		for pick in chore.picks:
+			if is_instance_valid(pick.node) and pick.node.get_parent() != self and pick.node.get_parent() != world: pick.node.queue_free()
+	rag_in_hand(false)
+	selene.body.held = null
 	chore = {}
 	wiping.clear()
 	bar_spots.clear()
 
 func chores(delta: float) -> void:
 	chore_clock += delta
-	for i in range(washing.size()-1,-1,-1):
-		washing[i].left -= delta
-		if washing[i].left <= 0.0:
-			if is_instance_valid(washing[i].mug): washing[i].mug.queue_free()
-			washing.remove_at(i)
 	if selene.state in ABED:
-		if not chore.is_empty() or selene.body.held != null: drop_chores()
+		if not chore.is_empty() or selene.body.held != null or rag.get_parent() == palm: drop_chores()
 		retire(selene,delta)
 		return
 	selene.timer -= delta
 	selene.phase_time += delta
 	var body = selene.body
-	# She leans to the table as she wipes it, and straightens again.
-	body.figure.rotation.x = move_toward(body.figure.rotation.x,WIPE_LEAN if selene.state == "wipe" else 0.0,delta*.5)
+	# She leans to the table as she wipes it, or to what she reaches for,
+	# and straightens again.
+	var lean: float = maxf(WIPE_LEAN,lean_to) if selene.state in ["wipe","bar_wipe"] else (lean_to if selene.state in ["take","put"] else 0.0)
+	body.figure.rotation.x = move_toward(body.figure.rotation.x,lean,delta*.5)
+	# Her hand flat on the rag, or under plates.
+	var flat: bool = rag.get_parent() == palm or not tray.get_children().filter(func(n): return not n.is_queued_for_deletion()).is_empty()
+	flat_hand.weight = move_toward(flat_hand.weight,1.0 if flat else 0.0,delta*4.0)
 	match selene.state:
 		"to_post":
 			if advance(selene,delta): idle(selene)
@@ -2031,163 +2781,70 @@ func chores(delta: float) -> void:
 				if abed(selene) and people.all(func(w): return not w.state in ["to_inn","sit_down","wait","drink"]):
 					drop_chores()
 					go_to_bed(selene)
-				elif not fetch_mug() and not wipe_next(): tend_bar()
-		"to_mug":
-			if not is_instance_valid(chore.get("mug")):
-				chore = {}
-				back_to_post()
-			elif advance(selene,delta):
+				elif not clear_next() and not wipe_next() and not tend_bar() and selene.at.distance_to(selene_spot) > .2: back_to_post()
+		"to_things":
+			carry_pose()
+			# (Something she came for taken up by someone else, or come into
+			# use: she leaves it.)
+			if chore.picks.any(func(p): return not is_instance_valid(p.node)):
+				chore.picks = chore.picks.filter(func(p): return is_instance_valid(p.node))
+				if chore.picks.is_empty():
+					chore = {}
+					back_to_post()
+					return
+			if advance(selene,delta):
 				selene.state = "take"
 				selene.phase_time = 0.0
 				body.play("Idle",.2)
-		"take":
-			var mug: Node3D = chore.mug
-			if not is_instance_valid(mug):
-				drop_chores()
-				back_to_post()
-				return
-			var t = selene.phase_time
-			var on_table: Vector3 = body.hand_for(mug.global_position) if body.held != mug else body.hand_for(chore.seat.mug)
-			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
-			body.turn_to(chore.seat.mug-selene.at,delta,8.0)
-			if t < .6: body.reach(on_table,smoothstep(0.0,1.0,t/.6),smoothstep(0.0,1.0,t/.6))
-			elif t < 1.2:
-				if body.held != mug: body.hold(mug)
-				body.reach(on_table.lerp(carried,smoothstep(0.0,1.0,(t-.6)/.6)),1.0,1.0)
-			else:
-				selene.route = way(selene.at,counter_stand)
-				selene.route.append(counter_stand)
-				selene.state = "carry"
+		"take": take_things(delta)
 		"carry":
-			body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
+			carry_pose()
 			if advance(selene,delta):
-				selene.state = "put_away"
+				selene.state = "put"
 				selene.phase_time = 0.0
 				body.play("Idle",.2)
-		"put_away":
-			var spot: Vector3 = counter+Vector3(.17*mini(washing.size(),3),0,0)
-			body.turn_to(spot-selene.at,delta,8.0)
-			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
-			var down: Vector3 = body.hand_for(spot)
-			var t = selene.phase_time
-			if t < .7: body.reach(carried.lerp(down,smoothstep(0.0,1.0,t/.7)),1.0,1.0)
-			elif t < 1.2:
-				if body.held != null:
-					var mug: Node3D = body.held
-					body.hold(null)
-					add_child(mug)
-					mug.position = spot
-					mug.rotation = Vector3(0,chore_rng.randf_range(0,TAU),0)
-					washing.append({"mug":mug,"left":WASHED})
-				body.reach(down,1.0-smoothstep(0.0,1.0,(t-.7)/.5),0.0)
-			else:
-				chore = {}
-				back_to_post()
-		"to_counter":
-			if advance(selene,delta):
-				selene.state = "gather"
-				selene.phase_time = 0.0
-				body.play("Idle",.2)
-		"gather":
-			# The mugs at the bar's end taken up, one stacked in another.
-			var t = selene.phase_time
-			var first: Node3D = washing[0].mug if not washing.is_empty() and is_instance_valid(washing[0].mug) else null
-			if first == null and body.held == null:
-				start_bar_wipe()
-				return
-			var at_bar: Vector3 = body.hand_for(first.global_position) if body.held == null else body.hand_for(counter)
-			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
-			body.turn_to(counter-selene.at,delta,8.0)
-			if t < .6: body.reach(at_bar,smoothstep(0.0,1.0,t/.6),smoothstep(0.0,1.0,t/.6))
-			elif t < 1.2:
-				if body.held == null:
-					body.hold(first)
-					var stacked = 1
-					for w in washing.slice(1):
-						if not is_instance_valid(w.mug): continue
-						if w.mug.get_parent() != null: w.mug.get_parent().remove_child(w.mug)
-						first.add_child(w.mug)
-						w.mug.transform = Transform3D(Basis.IDENTITY,Vector3(0,STACK*stacked,0))
-						stacked += 1
-					washing.clear()
-				body.reach(at_bar.lerp(carried,smoothstep(0.0,1.0,(t-.6)/.6)),1.0,1.0)
-			else:
-				selene.route = way(selene.at,tub_stand)
-				selene.route.append(tub_stand)
-				selene.state = "to_tub"
-		"to_tub":
-			body.reach(body.hand_for(body.global_transform*CARRY),1.0,1.0)
-			if advance(selene,delta):
-				selene.state = "wash"
-				selene.phase_time = 0.0
-				body.play("Idle",.2)
-		"wash":
-			# Into the tub with them, and gone (washed, and in to Anya).
-			var t = selene.phase_time
-			body.turn_to(tub_at-selene.at,delta,8.0)
-			var carried: Vector3 = body.hand_for(body.global_transform*CARRY)
-			var dipped: Vector3 = body.hand_for(tub_at+Vector3.UP*TUB_WATER)
-			if t < .7: body.reach(carried.lerp(dipped,smoothstep(0.0,1.0,t/.7)),1.0,1.0)
-			elif t < 1.3:
-				if body.held != null:
-					var washed: Node3D = body.held
-					body.hold(null)
-					washed.queue_free()
-				body.reach(dipped,1.0-smoothstep(0.0,1.0,(t-.7)/.6),0.0)
-			else:
-				body.reach(Vector3.ZERO,0.0,0.0)
-				start_bar_wipe()
+		"put": put_things(delta)
 		"to_bar":
 			if anya_near(chore.spot):
+				bar_spots.append(chore.spot)
 				next_bar_wipe()
 			elif advance(selene,delta):
 				selene.state = "bar_wipe"
 				selene.phase_time = 0.0
 				selene.timer = BAR_WIPE_TIME
 				body.play("Idle",.2)
-				body.hold(rag)
+				rag_in_hand(true)
 		"bar_wipe":
 			if anya_near(chore.spot):
-				body.reach(Vector3.ZERO,0.0,0.0)
+				body.let_go()
+				bar_spots.append(chore.spot)
 				next_bar_wipe()
 				return
-			var t = selene.phase_time
-			var spot: Vector3 = chore.spot
-			body.turn_to(spot-selene.at,delta,8.0)
-			var turn: float = t/WIPE_BEAT*TAU
-			var rag_at: Vector3 = spot+Vector3(cos(turn),0,sin(turn))*WIPE_ROUND+Vector3.UP*WIPE_ABOVE
-			var down: Basis = palm_down(body)
-			body.reach(rag_at-down*body.GRIP_AT,smoothstep(0.0,.5,t)*smoothstep(0.0,.5,selene.timer),.55)
-			body.arm.grip = down
+			wipe_at(chore.spot,selene.phase_time,selene.timer,delta)
 			if selene.timer <= 0.0:
-				body.reach(Vector3.ZERO,0.0,0.0)
+				body.let_go()
 				next_bar_wipe()
 		"to_table":
-			if table_in_use(chore.table):
-				done_wiping()
+			if place_in_use(seats[chore.place]):
+				next_wipe()
 			elif advance(selene,delta):
 				selene.state = "wipe"
 				selene.phase_time = 0.0
 				selene.timer = WIPE_TIME
 				body.play("Idle",.2)
-				body.hold(rag)
+				rag_in_hand(true)
 		"wipe":
 			# Someone come to sit here: she leaves it be.
-			if table_in_use(chore.table):
-				done_wiping()
+			var i: int = chore.place
+			if place_in_use(seats[i]):
+				body.let_go()
+				next_wipe()
 				return
-			var seat: Dictionary = chore.seat
-			var t = selene.phase_time
-			body.turn_to(seat.mug-selene.at,delta,8.0)
-			var turn: float = t/WIPE_BEAT*TAU
-			# The rag goes round on the table's top, her hand on it, palm down.
-			var rag_at: Vector3 = seat.mug+Vector3(cos(turn),0,sin(turn))*WIPE_ROUND+Vector3.UP*(WIPE_ABOVE+world.lift(seat.at))
-			var down: Basis = palm_down(body)
-			var ease_in: float = smoothstep(0.0,.5,t)*smoothstep(0.0,.5,selene.timer)
-			body.reach(rag_at-down*body.GRIP_AT,ease_in,.55)
-			body.arm.grip = down
+			var seat: Dictionary = seats[i]
+			wipe_at(seat.mug+Vector3.UP*(world.lift(seat.at)-.02),selene.phase_time,selene.timer,delta)
 			if selene.timer <= 0.0:
-				body.reach(Vector3.ZERO,0.0,0.0)
+				wiped[i] = chore_clock
+				body.let_go()
 				next_wipe()
 
 # ---- Zeno ----
@@ -2218,7 +2875,7 @@ const HEARD = 30.0
 const BEHIND = 1.58
 const CART_TURN = 2.6
 const ZENO_LOOK = {"who":"man","garment":"Tunic","cloth":Color(.64,.58,.46),"wear":.22,"hair":"Hair_Buzzed","beard":true,"hair_colour":Color(.18,.12,.08),
-	"skin":"light","tone":Color(1.0,.9,.8),"belt":Color(.35,.24,.15),"shoes":Color(.3,.21,.13),"size":1.0,"seed":.58}
+	"skin":"light","tone":Color(1.0,.9,.8),"belt":Color(.35,.24,.15),"shoes":Color(.3,.21,.13),"size":1.0,"seed":.58,"apron":Color(.8,.76,.66)}
 var zeno: Walker
 var cart = {}
 var cart_at = Vector3.ZERO
@@ -2241,7 +2898,6 @@ func hire_zeno() -> void:
 	zeno = Walker.new()
 	zeno.body = figure(ZENO_LOOK)
 	zeno.body.name = "Zeno"
-	tie_apron(zeno.body)
 	BreadCart.put_on(BreadCart.straw_hat(),zeno.body)
 	zeno.speed = ZENO_WALK
 	cart = BreadCart.handcart(bread_rng)

@@ -38,7 +38,9 @@ const SIZE = {
 	# The produce stalls' wares.
 	"carrot_crate":Vector3(.71,.41,.57),
 	# The street sleepers' bedding (the props kit's bed, without its frame).
-	"bedroll":Vector3(1.34,.42,2.14),"apple_barrel":Vector3(.7,.9,.7),"crate_empty":Vector3(.71,.24,.41)}
+	"bedroll":Vector3(1.34,.42,2.14),
+	# The elders' thrones (tools/make_throne.py), built at their real size.
+	"throne":Vector3(1.62,2.4,1.49),"throne_elder":Vector3(.98,1.19,.73),"apple_barrel":Vector3(.7,.9,.7),"crate_empty":Vector3(.71,.24,.41)}
 
 # The model's dimensions at its own proportions, `height` metres tall.
 static func sized(id: String, height: float) -> Vector3:
@@ -120,6 +122,16 @@ static func shared(name: String) -> Material:
 		"Stone_Light": m = gritty(Color(.62,.56,.47),.9)
 		"RoofTiles_Red": m = gritty(Color(.52,.26,.16),1.6)
 		"Bag": m = gritty(Color(.50,.42,.30),2.2)
+		# The elders' thrones (tools/make_throne.py): white marble, gold leaf
+		# and crimson velvet, its pile catching the light at the edges.
+		"ThroneMarble": m = marble()
+		"ThroneGold": m = gold()
+		"ThroneVelvet":
+			m = gritty(Color(.25,.035,.05),3.2).duplicate()
+			m.roughness = .95
+			m.rim_enabled = true
+			m.rim = .4
+			m.rim_tint = .3
 		"Wood":
 			m = Art.material("wood",Color(.62,.50,.38)).duplicate()
 			m.uv1_world_triplanar = true

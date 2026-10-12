@@ -14,6 +14,7 @@ const BladeGlow = preload("res://scripts/blade_glow.gd")
 const Items = preload("res://scripts/items.gd")
 const TwoHandGrip = preload("res://scripts/two_hand_grip.gd")
 const StaffHand = preload("res://scripts/staff_hand.gd")
+const KiltStrips = preload("res://scripts/kilt_strips.gd")
 # A slain statue breaks apart into individual physics-driven stone fragments:
 # a front sweeps down the body, the stone above it cracking loose (the statue
 # shader's shatter) and each fragment let go as the front reaches it. A blast
@@ -223,24 +224,28 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 			var rest: bool = mesh.skin != null and mesh.mesh is ArrayMesh
 			if rest: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 			mesh.material_override = Art.plate(String(mesh.name),rest).duplicate()
-		elif mesh.name.begins_with("HeroBracers") or mesh.name.begins_with("HeroBelt"):
-			# The warrior's raised shells, painted with him (tools/paint_kits.py).
+		elif mesh.name.begins_with("HeroGauntlets") or mesh.name.begins_with("HeroPauldrons"):
+			# The warrior's articulated steel: gauntlets over his hands and
+			# pauldrons over his shoulders (assets/shaders/harness.gdshader).
+			mesh.visible = hero_class == "warrior"
+			var rest: bool = mesh.skin != null and mesh.mesh is ArrayMesh
+			if rest: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
+			mesh.material_override = Art.harness(String(mesh.name),rest).duplicate()
+		elif mesh.name.begins_with("HeroBelt"):
+			# The warrior's belt, a raised shell painted with him (tools/paint_kits.py).
 			mesh.visible = hero_class == "warrior"
 			if mesh.skin != null and mesh.mesh is ArrayMesh: mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
 			mesh.material_override = Art.hero_kit("warrior")
 		elif mesh.name.begins_with("HeroKilt"):
-			# Hanging pteruges that swing and fold over his legs.
+			# Pteruges: stiff strips of leather that swing from his belt, the
+			# legs pushing them aside (setup_kilt).
 			mesh.visible = hero_class == "warrior"
-			var kilt = ShaderMaterial.new()
-			kilt.shader = load("res://assets/shaders/kilt.gdshader")
+			var leather = ShaderMaterial.new()
+			leather.shader = load("res://assets/shaders/kilt.gdshader")
 			if mesh.skin != null and mesh.mesh is ArrayMesh:
 				mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
-				kilt.set_shader_parameter("rest_pose",true)
-			# Its waistband sits close on his waist; only below it does the
-			# cloth fold out over his thighs.
-			kilt.set_shader_parameter("fold_from",.03)
-			mesh.material_override = kilt
-			if hero_class == "warrior": cloak_mesh = mesh
+				leather.set_shader_parameter("rest_pose",true)
+			mesh.material_override = leather
 		elif mesh.name.begins_with("WizardSashEnd"):
 			# Single sheets of dark leather, seen from both sides, hanging on
 			# the robe's skirt: they swing with it and fold over his legs just
@@ -398,7 +403,7 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 	skeleton.skeleton_updated.connect(shown_pose_updated)
 	if not stone and hero_class == "ranger": setup_cloak()
 	elif not stone and hero_class == "wizard": setup_cloak("robe_")
-	elif not stone and hero_class == "warrior": setup_cloak("kilt_")
+	elif not stone and hero_class == "warrior": setup_kilt()
 	elif stone and skeleton.find_bone("cloak_0_0") >= 0:
 		# A statue's stone cloth (the Crowned Statue's cape) swings and folds
 		# over the legs as the ranger's cloak does; its stone material is its
@@ -409,9 +414,8 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 				cloak_mesh = mesh
 		setup_cloak()
 	# Cloth over something thicker than the bare legs stands further off them:
-	# the ranger's cloak and the wizard's skirt over their boots, the
-	# warrior's kilt over the full muscle of his thighs, the Oracle's cape over
-	# its robe's skirt and sash.
+	# the ranger's cloak and the wizard's skirt over their boots, the Oracle's
+	# cape over its robe's skirt and sash.
 	if cloak_mesh != null:
 		var robed = stone and enemy_kind == "wizard"
 		cloth_clearance = .08 if robed else (.02 if not stone else 0.0)
@@ -530,7 +534,13 @@ func wear(equipment: Dictionary) -> void:
 		var own: bool = on and item.get("look",{}).has("mesh")
 		var shown: Array = Art.pieces_of(hero_class,item) if on else []
 		if not on or tint != null: plain = false
-		if not on or own: dressed = false
+		# (The cut body stands in while what it is cut under is worn: the
+		# wizard's robe, the ranger's cloak, and his boots or any shoes, the
+		# ranger's being cut away at the feet. The rest of it is all there,
+		# head, hands and feet, whatever else is worn or not: with the whole
+		# body under the robe, its shoulders stood out through the cloth.)
+		if slot == CUT_UNDER.get(hero_class,"") and (not on or own): dressed = false
+		if slot == "feet" and hero_class == "ranger" and not on: dressed = false
 		var part: int = Art.BODY_SLOTS.find(slot)
 		if part >= 0:
 			if not on: bare[part] = 1.0
@@ -546,18 +556,33 @@ func wear(equipment: Dictionary) -> void:
 			hat.transform = HAT_ON_HEAD
 		# Shoes of their own (the Marathon Boots) hang from each foot bone:
 		# made for the left foot about its ankle in the rest pose's axes, the
-		# right its mirror, each turned into its bone's own frame.
+		# right its mirror, each turned into its bone's own frame. A boot's
+		# shaft (its parts named ...Calf) hangs from the shin bone instead,
+		# so it bends at the ankle.
 		if own and slot == "feet":
 			for side in ["l","r"]:
 				var bone: int = skeleton.find_bone("foot_"+side)
 				if bone < 0: continue
-				var attachment = BoneAttachment3D.new()
-				attachment.bone_name = "foot_"+side
-				skeleton.add_child(attachment)
+				var mirror = Basis.from_scale(Vector3(1.0 if side == "l" else -1.0,1.0,1.0))
+				var ankle: Vector3 = skeleton.get_bone_global_rest(bone).origin
 				var shoe: Node3D = Art.worn_model(item.look)
-				attachment.add_child(shoe)
-				shoe.transform = Transform3D(skeleton.get_bone_global_rest(bone).basis.inverse()*Basis.from_scale(Vector3(1.0 if side == "l" else -1.0,1.0,1.0)),Vector3.ZERO)
-				shoe_items.append(attachment)
+				var shin: int = skeleton.find_bone("calf_"+side)
+				for pair in [[bone,"foot_"],[shin,"calf_"]]:
+					if pair[0] < 0: continue
+					var attachment = BoneAttachment3D.new()
+					attachment.bone_name = pair[1]+side
+					skeleton.add_child(attachment)
+					shoe_items.append(attachment)
+					var holder: Node3D = shoe
+					if pair[1] == "calf_":
+						holder = Node3D.new()
+						for piece in shoe.find_children("*Calf*","MeshInstance3D",true,false):
+							var placed: Transform3D = piece.transform
+							piece.get_parent().remove_child(piece)
+							holder.add_child(piece)
+							piece.transform = placed
+					attachment.add_child(holder)
+					holder.transform = skeleton.get_bone_global_rest(pair[0]).affine_inverse()*Transform3D(mirror,ankle)
 		for mesh_name in Art.slot_pieces(hero_class,slot):
 			var mesh: MeshInstance3D = parts.get(mesh_name)
 			if mesh == null: continue
@@ -567,20 +592,32 @@ func wear(equipment: Dictionary) -> void:
 			if finish is ShaderMaterial and finish.shader.resource_path.ends_with("cloak.gdshader"):
 				finish.set_shader_parameter("cloth_color",tint if tint != null else (Color(.1,.19,.1) if hero_class == "ranger" else Color(.13,.16,.27)))
 				finish.set_shader_parameter("gilded",1.0 if gilded else 0.0)
+				if gilded: finish.set_shader_parameter("dragon_map",Art.dragon_map())
 				finish.set_shader_parameter("tatter",Art.cloth_tatter(mesh_name,gilded))
 			elif mesh_name == "WizardSash":
 				mesh.material_override = Art.sash_material(gilded)
 			elif finish is ShaderMaterial and finish.shader.resource_path.ends_with("sash_end.gdshader"):
 				Art.gild_sash_end(finish,gilded)
-			elif finish is ShaderMaterial and (finish.shader.resource_path.ends_with("gladiator_helm.gdshader") or finish.shader.resource_path.ends_with("kilt.gdshader") or finish.shader.resource_path.ends_with("plate.gdshader")):
+			elif finish is ShaderMaterial and (finish.shader.resource_path.ends_with("gladiator_helm.gdshader") or finish.shader.resource_path.ends_with("kilt.gdshader") or finish.shader.resource_path.ends_with("plate.gdshader") or finish.shader.resource_path.ends_with("harness.gdshader")):
 				finish.set_shader_parameter("tint",tint if tint != null else Color.WHITE)
 				finish.set_shader_parameter("recolor",1.0 if tint != null else 0.0)
 			elif not ("Sash" in mesh_name or "Pouch" in mesh_name or "Brooch" in mesh_name):
 				mesh.material_override = Art.hero_kit(hero_class) if tint == null else Art.kit_shell(hero_class,tint)
+	# His leg plates go into his boots: inside them they are not drawn.
+	var cuisses: MeshInstance3D = parts.get("HeroCuisses")
+	var greaves: MeshInstance3D = parts.get("HeroGreaves")
+	if cuisses != null and cuisses.material_override is ShaderMaterial:
+		cuisses.material_override.set_shader_parameter("cut_below",Art.LEGS_IN_BOOTS if greaves != null and greaves.visible else -9.0)
+	# A boot's wing would stand out through a robe's skirt hung to the
+	# ankles: under one it is folded away out of sight.
+	var skirt: MeshInstance3D = parts.get("WizardRobeSkirt")
+	for shoe in shoe_items:
+		for wing in shoe.find_children("Wing*","MeshInstance3D",true,false): wing.visible = skirt == null or not skirt.visible
 	# Bareheaded, his hair shows.
 	if parts.has("Hair_SimpleParted"): parts["Hair_SimpleParted"].visible = bare_headed()
-	# The ranger's and the wizard's own bodies are cut away under their cloak,
-	# robe and boots: with any of the kit off, the whole body is worn instead.
+	# The ranger's and the wizard's own bodies are cut away under their cloak
+	# or robe (and the ranger's at his feet): with that off, the whole body is
+	# worn instead.
 	var cut: MeshInstance3D = parts.get({"ranger":"RangerBody","wizard":"WizardBody"}.get(hero_class,""))
 	var whole: MeshInstance3D = parts.get("SuperHero_Male")
 	if cut != null: cut.visible = dressed
@@ -651,6 +688,9 @@ const HAT_ON_HEAD = Transform3D(Basis(Vector3.UP,PI),Vector3(0,.13,0))
 # The clips are keyed with the same seat (tools/import_heavy.py PALM,
 # PALM_IN) and the second hand is held to it (scripts/two_hand_grip.gd).
 const PALM_SEAT = Vector3(-.028,.085,0)
+# The piece of the kit the ranger's and the wizard's own cut bodies are cut
+# away under (tools/outfit_hero.py): his cloak, his robe.
+const CUT_UNDER = {"ranger":"head","wizard":"chest"}
 # Shoes worn in the kit's boots' place (the Marathon Boots), one attachment
 # a foot.
 var shoe_items: Array = []
@@ -993,7 +1033,7 @@ func arm(weapon: String, swung: String = "") -> void:
 	if weapon in ["heavy","pike"] and not is_stone:
 		# (The left hand a fixed way along the haft from the right: below it
 		# on a sword's or an axe's, ahead of it on the spear's.)
-		two_hands.along = -.2 if weapon == "heavy" else .55
+		two_hands.along = -.12 if weapon == "heavy" else .55
 		two_hands.weight = 1.0 if clips.has(CARRIES[weapon.capitalize()]) else 0.0
 	# The weapon hand (the bow hand for an archer) and a shield hand stay
 	# closed on their grips.
@@ -2194,9 +2234,6 @@ const CLOAK_FLUTTER = .35
 # and settles sooner.
 const CLOTH_LIGHT = {"stiffness":CLOAK_STIFFNESS,"drag":CLOAK_DRAG,"gravity":CLOAK_GRAVITY,"flow":CLOAK_FLOW,"momentum":CLOAK_MOMENTUM,"flutter":CLOAK_FLUTTER}
 const CLOTH_HEAVY = {"stiffness":1.6,"drag":.75,"gravity":2.0,"flow":.3,"momentum":.004,"flutter":.12}
-# A short kilt of leather strips: stiff, swaying with the stride, barely
-# trailing.
-const CLOTH_KILT = {"stiffness":2.4,"drag":.6,"gravity":1.6,"flow":.04,"momentum":.01,"flutter":.06}
 # A long wool robe's skirt, hung from the waist: heavier than a cloak, it
 # hangs straight down, barely trails as he runs and sways with his stride.
 const CLOTH_ROBE = {"stiffness":1.6,"drag":.75,"gravity":2.4,"flow":.05,"momentum":.02,"flutter":.1}
@@ -2224,9 +2261,8 @@ var cloak_last_position = null
 var cloak_clock = 0.0
 var cloak_velocity = Vector3.ZERO
 
-# `prefix` names the chains: cloak_ (the ranger's cloak, a statue's cape),
-# robe_ (the wizard's skirt) or kilt_ (the warrior's), all on the one hero
-# skeleton.
+# `prefix` names the chains: cloak_ (the ranger's cloak, a statue's cape) or
+# robe_ (the wizard's skirt), both on the one hero skeleton.
 func setup_cloak(prefix: String = "cloak_") -> void:
 	if skeleton.find_bone(prefix+"0_0") < 0: return
 	if cloak_mesh != null: skeleton.skeleton_updated.connect(cloak_capsules)
@@ -2236,7 +2272,6 @@ func setup_cloak(prefix: String = "cloak_") -> void:
 	while skeleton.find_bone(prefix+"0_%d" % segments) >= 0: segments += 1
 	var hangs_from: int = skeleton.get_bone_parent(skeleton.find_bone(prefix+"0_0"))
 	if hangs_from != skeleton.find_bone("pelvis"): cloth_feel = CLOTH_HEAVY
-	if prefix == "kilt_": cloth_feel = CLOTH_KILT
 	if prefix == "robe_": cloth_feel = CLOTH_ROBE
 	cloak = SpringBoneSimulator3D.new()
 	cloak.name = "CloakPhysics"
@@ -2260,8 +2295,7 @@ func setup_cloak(prefix: String = "cloak_") -> void:
 		cloak.set_center_node(i,cloak.get_path_to(self))
 	var hips = SpringBoneCollisionCapsule3D.new()
 	hips.bone_name = "pelvis"
-	# (A kilt hangs close round the hips; a cloak stands off them.)
-	hips.radius = .1 if prefix == "kilt_" else .15
+	hips.radius = .15
 	hips.height = .5
 	cloak.add_child(hips)
 	# Down the centre line between the legs, to the floor, so the cloak's
@@ -2285,6 +2319,20 @@ func setup_cloak(prefix: String = "cloak_") -> void:
 		cloak.set_enable_all_child_collisions(i,false)
 		cloak.set_collision_count(i,colliders.size())
 		for k in colliders.size(): cloak.set_collision_path(i,k,cloak.get_path_to(colliders[k]))
+
+# The warrior's kilt: rigid strips of leather, each swung on its own from his
+# belt and pushed aside by his legs (scripts/kilt_strips.gd).
+var kilt: SkeletonModifier3D
+# The air's push on the strips as he moves, for each metre a second of his
+# (smoothed) speed, and against his (smoothed) acceleration.
+const KILT_FLOW = .45
+const KILT_MOMENTUM = .06
+func setup_kilt() -> void:
+	if skeleton.find_bone("kilt_0") < 0: return
+	kilt = KiltStrips.new()
+	kilt.name = "KiltPhysics"
+	skeleton.add_child(kilt)
+	kilt.setup(skeleton,parts.get("SuperHero_Male"))
 
 # The legs as capsules in the cloak mesh's own space, for its shader, set
 # after every pose so the cloth is tested against where the legs are now.
@@ -2317,7 +2365,7 @@ func bone_length(bone: String) -> float:
 	return skeleton.get_bone_rest(children[0]).origin.length()
 
 func cloak_tick(dt: float) -> void:
-	if cloak == null or dt <= 0: return
+	if (cloak == null and kilt == null) or dt <= 0: return
 	cloak_clock += dt
 	var at: Vector3 = global_position
 	var velocity = Vector3.ZERO
@@ -2328,6 +2376,9 @@ func cloak_tick(dt: float) -> void:
 	var previous: Vector3 = cloak_velocity
 	cloak_velocity = cloak_velocity.lerp(velocity.limit_length(8.0),1.0-exp(-dt/CLOAK_SETTLE_TIME))
 	var acceleration: Vector3 = (cloak_velocity-previous)/dt
+	if kilt != null:
+		kilt.external_force = -cloak_velocity*KILT_FLOW-acceleration*KILT_MOMENTUM
+		return
 	# Speeds are measured in the world; the simulation runs in the rig's
 	# (scaled) units, so a larger statue's cloth gets the same lift.
 	var push: Vector3 = (-cloak_velocity*cloth_feel.flow-acceleration*cloth_feel.momentum)/rig.scale.x

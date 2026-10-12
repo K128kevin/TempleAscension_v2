@@ -49,9 +49,10 @@ static func family(item: Dictionary) -> String:
 # Rarity colours an item's name. The gear a class starts with and the common
 # items are white; a prefix or a suffix makes an uncommon (green) item of a
 # common one, both or one of the rare affixes a rare (blue) one; the uniques
-# are purple.
+# are purple. Special and quest items (the basement's gate key) are a class of
+# their own, orange; they never drop at random, so they are not in RARITIES.
 const RARITIES = ["common","uncommon","rare","unique"]
-const RARITY_COLORS = {"common":Color(.93,.91,.82),"uncommon":Color(.45,.92,.5),"rare":Color(.45,.65,1.0),"unique":Color(.8,.52,1.0)}
+const RARITY_COLORS = {"common":Color(.93,.91,.82),"uncommon":Color(.45,.92,.5),"rare":Color(.45,.65,1.0),"unique":Color(.8,.52,1.0),"quest":Color(1.0,.58,.16)}
 # How likely each rarity is when something drops (weights), and from the
 # Crowned Statue, which drops nothing less than rare.
 const RARITY_WEIGHTS = {"common":58,"uncommon":28,"rare":11,"unique":3}
@@ -70,7 +71,8 @@ const ATTRIBUTES = ["strength","dexterity","intelligence","vitality","willpower"
 # less damage from a blocked attack) and `armor`, counted with what is worn.
 # `bonus`: attributes it adds.
 # `rarity`: "starting" never drops; "common" drops, and is what prefixes and
-# suffixes are put on; "unique" drops only for the class it is `for` (for
+# suffixes are put on; "quest" (special and quest items, orange) is never
+# random loot; "unique" drops only for the class it is `for` (for
 # every class if that is ""), with its own `effect`; `any_class` armor is
 # worn by every class, whatever its weight. `look` is how it is shown (scripts/visual.gd): a
 # weapon's or shield's model, its size in metres, how far up from its butt
@@ -191,7 +193,7 @@ const BASES = {
 
 	# --- Carried, not worn or held: the key to the arena basement's gate,
 	# which one of its bandits keeps (scripts/game.gd). Never random loot.
-	"gate_key":{"name":"Rusted Gate Key","slot":"key"}}
+	"gate_key":{"name":"Rusted Gate Key","rarity":"quest","slot":"key"}}
 # (`ALL` is the name the rest of the game has long used for the catalogue.)
 const ALL = BASES
 
@@ -296,11 +298,11 @@ static func exists(thing) -> bool:
 
 # An instance's rarity: its base's for a unique; rare with a rare affix or
 # both an uncommon prefix and suffix; uncommon with one; else common (the
-# starting gear too: it is white).
+# starting gear too: it is white); a quest item's (orange) is its own.
 static func rarity(thing) -> String:
 	var inst: Dictionary = thing if thing is Dictionary else {"base":thing}
 	var base: Dictionary = BASES.get(inst.get("base",""),{})
-	if base.get("rarity","") == "unique": return "unique"
+	if base.get("rarity","") in ["unique","quest"]: return base.rarity
 	var p: String = inst.get("prefix","")
 	var s: String = inst.get("suffix","")
 	if RARE_PREFIXES.has(p) or RARE_SUFFIXES.has(s): return "rare"

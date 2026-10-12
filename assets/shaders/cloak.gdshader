@@ -30,15 +30,27 @@ uniform float fold_depth = 0.004;
 uniform float robe = 0.0;
 uniform float sleeve_end = 0.56;
 // A gilded robe (1: the Robe of the Lost Emperor): cleanly hemmed, never worn,
-// its stitching gold, and a dragon embroidered on it in gold thread: its
-// head and winding body down the back, the head at the top, mouth open
-// upward, and its wings wrapped round both sides to the front of the chest
-// as if it held the wearer.
+// its stitching gold, and a long eastern dragon embroidered down its back in
+// couched gold thread among clouds (tools/paint_dragon.py paints it:
+// `dragon_map`, the robe unrolled about the body over DRAGON_SPAN; R the
+// gold's cover, G its threads' height, B their tone).
 uniform float gilded = 0.0;
 uniform vec3 gold_color : source_color = vec3(0.86, 0.63, 0.25);
+uniform sampler2D dragon_map : hint_default_black, filter_linear_mipmap_anisotropic, repeat_disable;
+// The picture's span on the robe unrolled: from (x0, y0), metres round from
+// the middle of the back (to the right as the back is seen) and up, its
+// width and height (tools/paint_dragon.py U0..U1, V0..V1).
+const vec4 DRAGON_SPAN = vec4(-0.32, 0.12, 0.64, 1.36);
+// How high the gold thread stands from the wool (metres), for its relief.
+const float THREAD_RELIEF = 0.0009;
 
 varying vec3 cloth_position;
 varying vec3 cloth_normal;
+// The mesh's own normal, in view space, as it is posed: which side of the
+// cloth it points out of (the mesh's skirts and hems are not all wound the
+// same way: the ranger's cloak below the waist and the wizard's robe's skirt
+// have theirs pointing in, toward the legs).
+varying vec3 posed_normal;
 
 float hash3(vec3 p) {
 	p = fract(p * 0.1031);
@@ -67,98 +79,40 @@ float fbm3(vec3 p) {
 	return total / 0.9375;
 }
 
-// Distance from `q` to the segment `a`-`b`.
-float seg(vec2 q, vec2 a, vec2 b) {
-	vec2 ab = b - a;
-	float t = clamp(dot(q - a, ab) / dot(ab, ab), 0.0, 1.0);
-	return length(q - a - ab * t);
-}
-
-// The dragon's right wing, as a polygon on the robe unrolled (metres round
-// it from the middle of the back, and up): from its root at the shoulder
-// along the arm to the wrist, then its four fingers' tips with the membrane
-// scalloped between them, and the trailing edge back to the body. (The left
-// wing is its mirror.)
-const vec2 WING[12] = {vec2(0.03, 1.24), vec2(0.16, 1.34), vec2(0.42, 1.36), vec2(0.43, 1.29), vec2(0.50, 1.26), vec2(0.47, 1.18), vec2(0.52, 1.14), vec2(0.45, 1.07), vec2(0.48, 1.02), vec2(0.36, 1.05), vec2(0.22, 1.05), vec2(0.03, 1.08)};
-const vec2 WRIST = vec2(0.16, 1.34);
-
-// Signed distance from `q` to the wing (negative inside).
-float wing_shape(vec2 q) {
-	float d = dot(q - WING[0], q - WING[0]);
-	float s = 1.0;
-	for (int i = 0, j = 11; i < 12; j = i, i++) {
-		vec2 e = WING[j] - WING[i];
-		vec2 w = q - WING[i];
-		vec2 b = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
-		d = min(d, dot(b, b));
-		bvec3 c = bvec3(q.y >= WING[i].y, q.y < WING[j].y, e.x * w.y > e.y * w.x);
-		if (all(c) || all(not(c))) s *= -1.0;
-	}
-	return s * sqrt(d);
-}
-
-float cover(float d, float blur) {
-	return 1.0 - smoothstep(-blur, blur, d);
-}
-
-// The dragon embroidered on a gilded robe, on the robe unrolled (`q`: metres
-// round it from the middle of the back, and up): its cover (x, 0 to 1) and
-// the shade of its thread there (y: 1 plain, less in the scales' shadows,
-// more along the outlines).
-vec2 dragon(vec2 q) {
-	float blur = max((fwidth(q.x) + fwidth(q.y)) * 0.5, 0.0006);
-	// The body: a serpent winding down the back from the neck to the tail's
-	// point, thickest under the wings.
-	float wave = (q.y - 1.30) * 20.94;
-	float spine = 0.04 * sin(wave);
-	float slope = 0.838 * cos(wave);
-	float girth = mix(0.0, 0.034, smoothstep(0.34, 1.05, q.y)) * (1.0 - 0.3 * smoothstep(1.2, 1.3, q.y));
-	float body = abs(q.x - spine) / sqrt(1.0 + slope * slope) - girth;
-	body = max(body, max(0.34 - q.y, q.y - 1.30));
-	// Its scales: rows of arcs across it, staggered.
-	vec2 sc = vec2(q.x - spine, q.y) / 0.013;
-	sc.x += 0.5 * mod(floor(sc.y), 2.0);
-	vec2 cell = fract(sc) - 0.5;
-	float ring = abs(length(cell) - 0.42);
-	float scales = (1.0 - smoothstep(0.05, 0.13, ring)) * step(cell.y, 0.0) * smoothstep(0.012, 0.02, girth);
-	// The head: a long skull, the jaws open upward with a gap between them,
-	// an eye, and two horns swept back down along the neck.
-	vec2 hc = vec2(0.0, 1.315);
-	float head = (length((q - hc) / vec2(0.05, 0.045)) - 1.0) * 0.045;
-	float upper = seg(q, vec2(-0.03, 1.33), vec2(-0.017, 1.41)) - 0.012;
-	float lower = seg(q, vec2(0.03, 1.33), vec2(0.023, 1.41)) - 0.011;
-	float horns = min(seg(q, vec2(-0.035, 1.305), vec2(-0.075, 1.245)), seg(q, vec2(0.035, 1.305), vec2(0.075, 1.245))) - 0.004;
-	float eye = length(q - vec2(-0.018, 1.325)) - 0.006;
-	// Its teeth: small points along the jaws' inner edges.
-	float teeth = min(seg(q, vec2(-0.01, 1.365), vec2(-0.004, 1.372)), seg(q, vec2(0.012, 1.375), vec2(0.006, 1.383)));
-	teeth = min(teeth, seg(q, vec2(-0.005, 1.39), vec2(0.0, 1.396))) - 0.0025;
-	float skull = min(min(head, min(upper, lower)), min(horns, teeth));
-	// The wings, mirrored: the membrane stitched in rays from the wrist,
-	// the arm and the fingers in solid thread.
-	vec2 w = vec2(abs(q.x), q.y);
-	float wing = wing_shape(w);
-	float bones = seg(w, WING[0], WRIST) - 0.009;
-	for (int i = 2; i <= 8; i += 2) bones = min(bones, seg(w, WRIST, WING[i]) - 0.0045);
-	vec2 ray = w - WRIST;
-	float fan = step(0.5, fract(atan(ray.y, ray.x) * 26.0));
-	float membrane = cover(wing, blur) * mix(0.0, 1.0, fan) * smoothstep(0.03, 0.08, length(ray));
-	// Put together: cover, and the thread's shade.
-	float outline = cover(abs(body) - 0.003, blur) + cover(abs(skull) - 0.0025, blur) + cover(abs(wing) - 0.002, blur);
-	float c = max(max(cover(body, blur), cover(skull, blur)), max(membrane, cover(bones, blur)));
-	c = max(c, min(outline, 1.0));
-	c *= 1.0 - cover(eye, blur);
-	float shade = 1.0 - 0.4 * scales * cover(body, blur) + 0.18 * min(outline, 1.0) - 0.12 * membrane * (1.0 - cover(bones, blur));
-	return vec2(clamp(c, 0.0, 1.0), shade);
+// Where a point of the robe (its rest pose) lies on the dragon's picture:
+// metres round the body from the middle of the back (as the back is seen,
+// left to right) and down from the picture's top, as a share of the picture.
+vec2 dragon_uv(vec3 p) {
+	vec2 c = vec2(p.x, p.z + 0.02);
+	float round_back = -atan(c.x, -c.y) * length(c);
+	return vec2((round_back - DRAGON_SPAN.x) / DRAGON_SPAN.z, (DRAGON_SPAN.y + DRAGON_SPAN.w - p.y) / DRAGON_SPAN.w);
 }
 
 void vertex() {
 	cloth_position = rest_pose ? CUSTOM0.xyz : VERTEX;
 	cloth_normal = rest_pose ? CUSTOM1.xyz : NORMAL;
 	VERTEX = fold_cloth(VERTEX);
+	posed_normal = (MODELVIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
 }
 
 void fragment() {
 	vec3 p = cloth_position;
+	// The side of the cloth seen, and its normals, found from the surface
+	// itself rather than from its winding: the face as it lies on screen,
+	// turned toward the eye; the mesh's normal turned to that side (the
+	// renderer's own flip for a two-sided face is not to be trusted on every
+	// GPU: on the Intel Macs it flips the side facing the eye); and, in the
+	// cloak's rest pose, whether that side faces out from the body (the
+	// outside of the cloth) or in toward it (its inside, in shadow).
+	vec3 face = cross(dFdx(VERTEX), dFdy(VERTEX));
+	if (dot(face, VIEW) < 0.0) face = -face;
+	bool stored_side = dot(posed_normal, face) >= 0.0;
+	NORMAL = normalize(stored_side ? posed_normal : -posed_normal);
+	vec3 seen_normal = stored_side ? cloth_normal : -cloth_normal;
+	// (Out from the body's middle line up to the chest, and from the chest
+	// over the shoulders and the hood: their tops face up and out.)
+	vec3 from_body = p - vec3(0.0, clamp(p.y, 0.0, 1.15), 0.0);
+	bool outside = dot(seen_normal, from_body) >= 0.0;
 	float thin = 0.0;
 	// (Gilded: hemmed straight, and of an even, unworn cloth.)
 	if (gilded > 0.5 && p.y < hem_height) discard;
@@ -166,12 +120,26 @@ void fragment() {
 	// unrolled round the body (the rest pose), kept off the sleeves.
 	float gold = 0.0;
 	float gold_shade = 1.0;
+	// The embroidery's relief, as the slope of its threads round the body
+	// and up it.
+	vec2 thread_slope = vec2(0.0);
+	float thread_crown = 0.5;
 	if (gilded > 0.5) {
-		vec2 unrolled = vec2(atan(p.x, -p.z) * 0.2, p.y);
-		vec2 embroidery = dragon(unrolled);
-		float sleeve = smoothstep(0.2, 0.24, abs(p.x)) * smoothstep(1.15, 1.25, p.y);
-		gold = embroidery.x * (1.0 - sleeve);
-		gold_shade = embroidery.y;
+		vec2 uv = dragon_uv(p);
+		if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)))) {
+			vec4 work = texture(dragon_map, uv);
+			// (The heights a pixel's breadth along and down, or a texel's
+			// close up.)
+			vec2 reach = max(fwidth(uv), 1.0 / vec2(textureSize(dragon_map, 0)));
+			float along = texture(dragon_map, uv + vec2(reach.x, 0.0)).g;
+			float below = texture(dragon_map, uv + vec2(0.0, reach.y)).g;
+			thread_slope = vec2((along - work.g) / (reach.x * DRAGON_SPAN.z), (work.g - below) / (reach.y * DRAGON_SPAN.w)) * THREAD_RELIEF;
+			// Kept off the sleeves.
+			float sleeve = smoothstep(0.2, 0.24, abs(p.x)) * smoothstep(1.15, 1.25, p.y);
+			gold = work.r * (1.0 - sleeve);
+			gold_shade = (0.35 + 0.75 * work.b * 1.1) * (0.8 + 0.3 * work.g);
+			thread_crown = work.g;
+		}
 	}
 	if (tatter > 0.0) {
 		// The hem frays into ragged tongues of differing length.
@@ -258,22 +226,22 @@ void fragment() {
 	}
 	// The gold thread: raised a little, its satin stitches catching the
 	// light along them.
-	float satin = 0.85 + 0.25 * step(0.5, fract((p.x + p.y + p.z) * 260.0));
-	color = mix(color, gold_color * 0.85 * satin * gold_shade * (0.9 + grain * 0.2), gold);
-	h += gold * 0.0008;
+	color = mix(color, gold_color * 0.85 * gold_shade * (0.92 + grain * 0.16), gold);
+	h += gold * 0.0004;
 	// The weave: photographed wool, its threads' relief and the shade
 	// down in between them; the gold thread lies over it.
-	vec3 rn = normalize(cloth_normal);
+	vec3 rn = normalize(seen_normal);
 	vec3 tw = tri_weights(rn);
 	vec3 wp = p / weave_tile;
 	vec4 wd = mat_data(wp, rn, tw, weave_layer);
 	float ws = mat_shade(wp, rn, tw, weave_layer);
 	color *= mix(1.0, mix(1.0, ws, 0.3) * (0.82 + 0.18 * wd.g), 1.0 - gold);
 	// (Lit without the wrap it once had, which flattened it, the wool is
-	// drawn a little lighter to keep its colour.)
-	color *= 1.5;
+	// drawn a little lighter to keep its colour; less so now that its
+	// normals face the light they should, so it keeps the shade it had.)
+	color *= 1.15;
 	// The inside of the cloth, out of the light.
-	if (!FRONT_FACING) color *= 0.55;
+	if (!outside) color *= 0.55;
 	// (Hidden in the shadows: scripts/visual.gd set_shadowed.)
 	ALBEDO = mix(color, vec3(0.02, 0.02, 0.04), shadowed * 0.92);
 	vec3 sx = dFdx(VERTEX);
@@ -283,7 +251,15 @@ void fragment() {
 	float det = dot(sx, r1);
 	vec3 gradient = (dFdx(h) * r1 + dFdy(h) * r2) * sign(det) / max(abs(det), 0.000001);
 	NORMAL = normalize(NORMAL - gradient);
-	vec3 bent = mat_normal(wp, rn, tw, weave_layer, mix(1.5, 0.4, gold));
+	vec3 bent = mat_normal(wp, rn, tw, weave_layer, mix(1.5, 0.0, gold));
+	if (gold > 0.0) {
+		// The gold thread's own relief, from the picture: round the body and
+		// up it, on the cloth's rest pose.
+		vec3 round_way = normalize(cross(vec3(0.0, 1.0, 0.0), rn) + vec3(1e-4, 0.0, 0.0));
+		vec3 up_way = normalize(cross(rn, round_way));
+		vec3 relief = normalize(rn - (round_way * thread_slope.x + up_way * thread_slope.y) * gold);
+		bent = bend_more(bent, relief, rn);
+	}
 	NORMAL = detail_normal(bent, rn, p, VERTEX, NORMAL);
 	// Wool's fibres catch the light at a glancing angle: a soft sheen at the
 	// edges of the folds.
@@ -291,7 +267,8 @@ void fragment() {
 	RIM_TINT = 0.7;
 	// A dull, matte wool; the gold thread has a satin sheen, no mirror's
 	// gloss (that threw a broad pale highlight over the embroidery).
-	ROUGHNESS = mix(0.86 + wd.r * 0.12, 0.62, gold);
+	// (The thread's crowns, burnished, glint; down between them it is duller.)
+	ROUGHNESS = mix(0.86 + wd.r * 0.12, mix(0.66, 0.44, thread_crown), gold);
 	SPECULAR = mix(0.03, 0.35, gold);
 	METALLIC = gold * 0.8;
 }

@@ -8,7 +8,12 @@ extends Node3D
 ##   skin      "light" or "dark", and `tone`, a tint over it; `dirt` 0…1
 ##   hair      a hairstyle of that body's, or ""; `hair_colour`; `beard`; `braid`
 ##   belt      a colour, or null for none
-##   shoes     a colour of leather, or none: most go barefoot
+##   apron     a colour of linen, or none
+##   shoes     a colour of leather, or none: the rest wear leather sandals
+##             (`sandals` their colour, else one by `seed`), but for the
+##             starving, who go barefoot
+##   gaunt     0 fed … 1 starving: thin, sallow, barefoot, the hair grown
+##             out long and matted, a man's beard long with it (starve)
 ##   size      its height against the body's own (a child is about .6)
 ##   bulk      0 as the body comes; 1 broad and heavy (thick trunk, arms and neck)
 const Kit = preload("res://scripts/world_art.gd")
@@ -66,6 +71,14 @@ func setup(appearance: Dictionary) -> void:
 	var worn: Array = [look.garment]
 	if look.get("under","") != "": worn.append(look.under)
 	var wear: float = look.get("wear",0.0)
+	var gaunt: float = look.get("gaunt",0.0)
+	# The starving have let their hair and beards grow, and go barefoot.
+	var hair: String = look.get("hair","")
+	var beard: String = "Hair_Beard" if look.get("beard",false) else ""
+	if gaunt > 0.0:
+		hair = "Hair_Matted"
+		if look.who == "man": beard = "Hair_BeardLong"
+	var sandals: bool = look.get("shoes") == null and gaunt <= 0.0
 	for mesh in skeleton.find_children("*","MeshInstance3D",true,false):
 		var part: String = mesh.name
 		var keep = true
@@ -74,14 +87,20 @@ func setup(appearance: Dictionary) -> void:
 		elif part == "Eyes": material = shared("eyes")
 		elif part == "Eyebrows": material = hair_material(1 if look.who == "man" else 2)
 		elif part.begins_with("Hair_"):
-			keep = part == look.get("hair","") or (part == "Hair_Beard" and look.get("beard",false))
-			if keep: material = hair_material(2 if part in ["Hair_Long","Hair_Buns"] else 1)
+			keep = part == hair or part == beard
+			if keep: material = hair_material(2 if part in ["Hair_Long","Hair_Buns","Hair_Matted"] else 1,part in ["Hair_Matted","Hair_BeardLong"])
 		elif part == "Braid":
 			keep = look.get("braid",false)
 			if keep: material = hair_material(0)
 		elif part == "Belt":
 			keep = look.get("belt") != null
 			if keep: material = belt_material(look.belt)
+		elif part == "Sandals":
+			keep = sandals
+			if keep: material = belt_material(look.get("sandals",SANDALS[int(look.get("seed",0.0)*1000.0) % SANDALS.size()]))
+		elif part == "Apron":
+			keep = look.get("apron") != null
+			if keep: material = cloth(look.apron,APRON_WEAR+wear*.5,"linen")
 		else:
 			keep = part in worn
 			if keep: material = cloth(look.cloth if part == look.garment else look.get("under_cloth",Color(.86,.84,.78)),wear if part == look.garment else wear*.5,look.get("weave","linen") if part == look.garment else "linen")
@@ -99,7 +118,7 @@ func setup(appearance: Dictionary) -> void:
 		# (A figure's bounds follow its skeleton; a seated or reaching one
 		# must not be culled by where it stood at rest.)
 		mesh.extra_cull_margin = 1.0
-	starve(look.get("gaunt",0.0))
+	starve(gaunt)
 	# A child's head is large for its body.
 	if look.get("child",false): skeleton.set_bone_pose_scale(skeleton.find_bone("Head"),Vector3.ONE*1.22)
 	# A heavy build: the whole figure broadened across and through (its own
@@ -119,6 +138,12 @@ func setup(appearance: Dictionary) -> void:
 	# size and shape in any hand (pin).
 	pin_to_hand(grip,"hand_l",GRIP_MUG,GRIP_AT)
 	skeleton.skeleton_updated.connect(pin)
+	for mesh in skeleton.find_children("Apron","MeshInstance3D",true,false):
+		# (Its place at rest is carried in CUSTOM0, for it to hang from the hips.)
+		mesh.mesh = Art.rest_pose_mesh(mesh.mesh)
+		apron = mesh
+		skeleton.skeleton_updated.connect(apron_legs)
+		apron_legs()
 	arms = {"l":arm}
 	hands = {"l":hand}
 	play("Idle",0.0)
@@ -275,9 +300,25 @@ const THIN = {"pelvis":.02,"spine_01":.028,"spine_02":.03,"spine_03":.025,"neck_
 const GAUNT_FRAME = .08
 const GAUNT_TONE = Color(.93,.9,.83)
 const THIN_BINDS = 72
+# A starving woman's feet, at the ends of her thinned shins, would look too
+# large: they are drawn this much smaller along and across (not in height,
+# so that she still stands on the ground).
+const GAUNT_FEET = .84
+# Sandals' leather, one picked by each wearer's seed.
+const SANDALS = [Color(.26,.17,.10),Color(.31,.22,.14),Color(.22,.15,.10),Color(.34,.26,.17),Color(.28,.19,.11)]
 func starve(gaunt: float) -> void:
 	if gaunt <= 0.0: return
 	figure.scale = Vector3(1.0-GAUNT_FRAME*gaunt,1.0,1.0-GAUNT_FRAME*gaunt)*size
+	if look.who == "woman":
+		for side in ["l","r"]:
+			var foot = skeleton.find_bone("foot_"+side)
+			var rest: Basis = skeleton.get_bone_global_rest(foot).basis
+			var smaller = Vector3.ONE
+			for k in 3:
+				# (Each of the bone's own axes by how near upright it lies.)
+				var upright: float = absf(rest[k].normalized().y)
+				smaller[k] = lerpf(lerpf(1.0,GAUNT_FEET,gaunt),1.0,upright*upright)
+			skeleton.set_bone_pose_scale(foot,smaller)
 	for mesh in skeleton.find_children("*","MeshInstance3D",true,false):
 		if mesh.skin == null or not mesh.material_override is ShaderMaterial: continue
 		var thin = PackedFloat32Array()
@@ -294,6 +335,71 @@ func starve(gaunt: float) -> void:
 				var tone: Vector3 = material.get_shader_parameter("tone")
 				material.set_shader_parameter("tone",tone.lerp(tone*Vector3(GAUNT_TONE.r,GAUNT_TONE.g,GAUNT_TONE.b),gaunt))
 			material = material.next_pass as ShaderMaterial
+
+# An apron (tools/make_townsfolk.py) is held as the skirt under it is, so it
+# lies on the lap of one sitting; but standing and walking it hangs from the
+# hips (all but its top, which stays on the skirt at the waist: APRON_HANG
+# metres down to hang free), and a leg striding forward pushes it out, as
+# cloth is pushed (assets/shaders/cloth.gdshaderinc, cloth_fold.gdshaderinc):
+# the thigh (from APRON_THIGH_FROM down it, as a ball at the hip joint itself
+# would push it out at the waist) and the shin as capsules, as thick as the
+# leg and the skirt about it (APRON_LEGS: from bone, to bone, radius, to
+# which the fold adds its margin), drawn in toward the body's middle
+# (APRON_INWARD, so a stride pushes it forward, not its sides out). A leg
+# drawn back leaves it hanging. How far it hangs goes by the thighs: hanging
+# while both are within APRON_UPRIGHT.y of straight down (as cosines), on
+# the lap once either is past APRON_UPRIGHT.x. All set in the apron's own
+# space every time the skeleton is posed. The fold works only below the
+# hips (APRON_FOLD_FROM, from the pelvis).
+const APRON_LEGS = [["thigh","calf",.16],["calf","foot",.12]]
+const APRON_THIGH_FROM = .25
+const APRON_INWARD = .5
+const APRON_FOLD_FROM = .12
+const APRON_HANG = .3
+const APRON_UPRIGHT = Vector2(.35,.6)
+var apron: MeshInstance3D
+func apron_legs() -> void:
+	if not is_instance_valid(apron) or not apron.is_inside_tree(): return
+	var to_mesh: Transform3D = apron.global_transform.affine_inverse()*skeleton.global_transform
+	var bone = func(name: String) -> Vector3: return to_mesh*skeleton.get_bone_global_pose(skeleton.find_bone(name)).origin
+	# (The rig faces +Z, and stands up +Y.)
+	var forward: Vector3 = (to_mesh.basis*Vector3.BACK).normalized()
+	var up: Vector3 = (to_mesh.basis*Vector3.UP).normalized()
+	var pelvis = skeleton.find_bone("pelvis")
+	var hips_moved: Transform3D = to_mesh*skeleton.get_bone_global_pose(pelvis)*skeleton.get_bone_global_rest(pelvis).affine_inverse()*to_mesh.affine_inverse()
+	var centre: Vector3 = bone.call("pelvis")
+	var upright = 1.0
+	for side in ["l","r"]:
+		var down: float = (bone.call("calf_"+side)-bone.call("thigh_"+side)).normalized().dot(-up)
+		upright = minf(upright,clampf(inverse_lerp(APRON_UPRIGHT.x,APRON_UPRIGHT.y,down),0.0,1.0))
+	var a = PackedVector3Array(); var b = PackedVector3Array(); var r = PackedFloat32Array()
+	if upright > 0.0:
+		for side in ["l","r"]:
+			if (bone.call("calf_"+side)-bone.call("thigh_"+side)).dot(forward) <= 0.0: continue
+			for leg in APRON_LEGS:
+				for end in [leg[0],leg[1]]:
+					var at: Vector3 = bone.call(end+"_"+side)
+					if end == "thigh": at = at.lerp(bone.call("calf_"+side),APRON_THIGH_FROM)
+					var across: Vector3 = (at-centre)-forward*(at-centre).dot(forward)-up*(at-centre).dot(up)
+					(a if end == leg[0] else b).append(at-across*APRON_INWARD)
+				r.append(leg[2])
+	var waist: Vector3 = to_mesh*skeleton.get_bone_global_rest(skeleton.find_bone("spine_01")).origin
+	var material = apron.material_override as ShaderMaterial
+	while material != null:
+		material.set_shader_parameter("hanging",smoothstep(0.0,1.0,upright))
+		material.set_shader_parameter("hips",Projection(hips_moved))
+		material.set_shader_parameter("hang_from",waist.y)
+		material.set_shader_parameter("hang_over",APRON_HANG)
+		material.set_shader_parameter("capsule_a",a)
+		material.set_shader_parameter("capsule_b",b)
+		material.set_shader_parameter("capsule_radius",r)
+		material.set_shader_parameter("capsule_count",a.size())
+		material.set_shader_parameter("leg_capsules",a.size())
+		material.set_shader_parameter("body_forward",forward)
+		material.set_shader_parameter("body_center",centre)
+		material.set_shader_parameter("fold_from",APRON_FOLD_FROM)
+		material.set_shader_parameter("min_reach",0.0)
+		material = material.next_pass as ShaderMaterial
 
 # A belt of worn leather, its own (so it is drawn in with its wearer when he
 # starves: starve, as his body and clothes are).
@@ -327,7 +433,15 @@ func flesh(cover: Dictionary, worn: Array, wear: float) -> ShaderMaterial:
 		m.set_shader_parameter("sleeve",maxf(0.0,sleeve-.05))
 	return m
 
+# Cloth is never brighter than undyed linen in the sun: dyes paler than
+# PALEST (by their brightest part) are drawn toward it, so a white blouse or
+# apron keeps its weave and shading instead of glaring flat white.
+const PALEST = .5
+# An apron is worked in: soiled and stained more than what it covers.
+const APRON_WEAR = .25
 func cloth(colour: Color, wear: float, weave: String) -> ShaderMaterial:
+	var brightest: float = maxf(colour.r,maxf(colour.g,colour.b))
+	if brightest > PALEST: colour = colour*((PALEST+(brightest-PALEST)*.25)/brightest)
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/cloth.gdshader")
 	m.set_shader_parameter("weave",load("res://assets/textures/cloth_%s.jpg" % weave))
@@ -344,16 +458,19 @@ func cloth(colour: Color, wear: float, weave: String) -> ShaderMaterial:
 	m.next_pass = inside
 	return m
 
-func hair_material(sheet: int) -> StandardMaterial3D:
+# Hair long unwashed (the starving's: `matted`) is dulled with dust and grease.
+const MATTED = Color(.30,.26,.21)
+func hair_material(sheet: int, matted: bool = false) -> StandardMaterial3D:
 	var colour: Color = look.get("hair_colour",Color(.2,.14,.1))
-	var key = "hair%d%s" % [sheet,colour.to_html()]
+	var key = "hair%d%s%s" % [sheet,colour.to_html(),"matted" if matted else ""]
 	if materials.has(key): return materials[key]
 	var m = StandardMaterial3D.new()
 	# (The pack's hair sheets are mid-brown; the tint takes them darker or grey.)
 	if sheet > 0: m.albedo_texture = load("res://assets/textures/hair_%d.jpg" % sheet)
+	if matted: colour = colour.lerp(MATTED,.3)*.85
 	m.albedo_color = colour*(2.2 if sheet > 0 else 1.0)
-	m.roughness = .6
-	m.metallic_specular = .3
+	m.roughness = .85 if matted else .6
+	m.metallic_specular = .15 if matted else .3
 	materials[key] = m
 	return m
 

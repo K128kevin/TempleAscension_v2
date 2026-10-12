@@ -16,6 +16,14 @@ extends RefCounted
 ## the next, and the hand that holds it follows by the arm's IK
 ## (scripts/arm_reach.gd, `tool`), the fist closed round it with the wrist
 ## straight; he bends over his work from the waist (scripts/body_lean.gd).
+##
+## He is heard at it (tools/make_sounds.py): each time the hammer's face
+## meets the blade, one of four short clanks on the anvil; while the blade
+## is on the grindstone, its edge grinds on the turning stone, harder as he
+## draws it across and with the wheel's speed. Both come from where the work
+## is, panned by where that lies from the camera, and as loud as the hero is
+## near (HEARD_NEAR: by his distance, not the camera's, which hangs far above
+## him), and only from inside the smithy.
 const Interiors = preload("res://scripts/world_interiors.gd")
 const Art = preload("res://scripts/assets.gd")
 const Kit = preload("res://scripts/world_art.gd")
@@ -42,7 +50,19 @@ const NEAR = .03
 # A stroke of the hammer: its time, and how far round the hammer swings up.
 const STROKE = 1.15
 const SWING = 1.9
+# Where in a stroke he begins: the hammer already half raised, as he holds
+# it ready (stroke(.55)), going on up; not brought down first.
+const STROKE_START = .26
 const WHEEL_SPEED = 9.0
+# His sounds: the blows on the anvil (smith-hammer-1…4) and the grinding
+# (smith-grind, looped), at their loudness (dB) heard from beside the work;
+# heard at that within HEARD_NEAR metres, falling off as the hero goes
+# further (6 dB each time the distance doubles), and only inside the smithy:
+# from the street he is not heard at all.
+const BLOWS = 4
+const BLOW_DB = -12.0
+const GRIND_DB = -15.0
+const HEARD_NEAR = 3.0
 
 var folk
 var world
@@ -68,6 +88,13 @@ var wheel_turn = 0.0
 var wheel_rate = 0.0
 var sparks: CPUParticles3D
 var struck = false
+# The blows struck so far (each heard once), the grinding (a held sound; null
+# where nothing is heard) and how loud it is now (0…1), and how far through
+# a pass of the blade over the stone he is.
+var strikes = 0
+var grinder: AudioStreamPlayer3D
+var grind_level = 0.0
+var grind_pass = 0.0
 
 func setup(townsfolk, overworld, smith_walker) -> void:
 	folk = townsfolk
@@ -288,6 +315,7 @@ func tick(delta: float) -> void:
 	wheel_turn = fposmod(wheel_turn+wheel_rate*delta,TAU)
 	wheel.basis = Basis(Vector3.BACK,wheel_turn)*Basis.from_scale(wheel_size)
 	sparks.emitting = working == "grind" and wheel_rate > WHEEL_SPEED*.6
+	grinding_heard(delta,working == "grind")
 	settle(delta,working)
 
 # Done for the day at once (the clock has jumped to the night): every tool
@@ -307,13 +335,15 @@ func down_tools() -> void:
 	plan = []
 	wheel_rate = 0.0
 	sparks.emitting = false
+	grind_level = 0.0
+	if is_instance_valid(grinder): grinder.stop()
 
 # One of his labours at `t` seconds into it: the hands put where it has
 # them. `ending` asks only whether it is at a moment he can stop on.
 func work(kind: String, t: float, ending: bool) -> bool:
 	match kind:
 		"hammer":
-			var through = fposmod(t,STROKE)/STROKE
+			var through = fposmod(t+STROKE_START*STROKE,STROKE)/STROKE
 			if ending: return through > .5 and through < .62
 			# Up over the shoulder, a breath there, down hard, a moment on the steel.
 			var raised: float
@@ -322,12 +352,15 @@ func work(kind: String, t: float, ending: bool) -> bool:
 			elif through < .78: raised = 1.0-pow((through-.6)/.18,2.0)
 			else: raised = 0.0
 			put("r",stroke(raised))
-			if through >= .78 and not struck: spark()
+			if through >= .78 and not struck:
+				spark()
+				blow()
 			struck = through >= .78
 			lean_wanted = .42-.1*raised
 		"grind":
 			if ending: return absf(sin(t*1.7)) < .12
 			var along = .13*sin(t*1.7)
+			grind_pass = t*1.7
 			put("r",grinding(along))
 			put("l",pressing(along))
 		"stoke":
@@ -357,6 +390,78 @@ func spark() -> void:
 	burst.color = Color(1,.75,.35,.95)
 	burst.emitting = true
 	folk.get_tree().create_timer(.8).timeout.connect(burst.queue_free)
+
+# ---- What he is heard doing ----
+
+# The game's sound (scripts/audio.gd), and where the hero is; null where
+# there is no game (a test's bare world).
+func sounds():
+	var game = world.get_parent()
+	return game.get("sound") if game != null else null
+
+func hero() -> Vector3:
+	var game = world.get_parent()
+	var player = game.get("player") if game != null else null
+	return player.position if is_instance_valid(player) else Vector3.INF
+
+# How loud he is heard from where the hero is (0…1): full beside the work,
+# falling off with distance, nothing outside the smithy's walls.
+func heard(at: Vector3) -> float:
+	var from: Vector3 = hero()
+	if not from.is_finite() or not world.rooms[1].area.has_point(Vector2(from.x,from.z)): return 0.0
+	var distance = Vector2(from.x-at.x,from.z-at.z).length()
+	return clampf(HEARD_NEAR/maxf(distance,HEARD_NEAR),0.0,1.0)
+
+# A sound coming from `at` in the room: panned by where it lies from the
+# camera, but as loud as the caller sets it (no falloff of its own).
+func source(at: Vector3) -> AudioStreamPlayer3D:
+	var player = AudioStreamPlayer3D.new()
+	player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+	player.attenuation_filter_db = 0.0
+	player.panning_strength = 1.5
+	folk.add_child(player)
+	player.global_position = at
+	return player
+
+# The hammer meeting the blade: one blow on the anvil, never the same twice.
+func blow() -> void:
+	strikes += 1
+	var sound = sounds()
+	if sound == null: return
+	sound.note("smith-hammer")
+	var at: Vector3 = places.face+Vector3(-.12,SWORD.z,0)
+	var loud = heard(at)
+	if loud <= 0.0 or sound.muted or DisplayServer.get_name() == "headless": return
+	var player = source(at)
+	player.stream = sound.stream("smith-hammer-%d" % (randi() % BLOWS+1))
+	player.volume_db = BLOW_DB+linear_to_db(loud)+randf_range(-1.5,1.5)
+	player.pitch_scale = randf_range(.96,1.04)
+	player.finished.connect(player.queue_free)
+	player.play()
+
+# The blade on the turning stone: heard while steel meets it, the harder as
+# he draws the blade across (fastest mid-pass) and the faster the wheel goes;
+# eased in and out, the loop kept running (paused with the game).
+func grinding_heard(delta: float, on_stone: bool) -> void:
+	var sound = sounds()
+	var wanted = 0.0
+	if on_stone:
+		wanted = clampf(wheel_rate/WHEEL_SPEED,0.0,1.0)*(.7+.3*absf(cos(grind_pass)))
+		if grind_level <= 0.0 and sound != null: sound.note("smith-grind")
+	grind_level = move_toward(grind_level,wanted,delta*4.0)
+	if sound == null or DisplayServer.get_name() == "headless": return
+	var loud = grind_level*heard(places.stone)
+	if loud <= .001:
+		if is_instance_valid(grinder) and grinder.playing: grinder.stop()
+		return
+	if not is_instance_valid(grinder):
+		# (Imported to loop: assets/audio/smith-grind.wav.import.)
+		grinder = source(places.stone)
+		grinder.stream = sound.stream("smith-grind")
+		sound.holding.append(grinder)
+	if not grinder.playing: grinder.play(randf()*grinder.stream.get_length())
+	grinder.volume_db = GRIND_DB+linear_to_db(loud)
+	grinder.pitch_scale = .9+.1*clampf(wheel_rate/WHEEL_SPEED,0.0,1.0)
 
 # A hand beginning to reach: from where the arm hangs now.
 func start(side: String, local: bool) -> void:

@@ -336,7 +336,7 @@ func build_skills(body: VBoxContainer) -> void:
 func build_bag(body: VBoxContainer) -> void:
 	body.add_theme_constant_override("separation",8)
 	if slot_styles.is_empty():
-		for look in [["empty",Color(.3,.27,.2)],["common",Color(.5,.46,.36)],["uncommon",Items.RARITY_COLORS.uncommon.darkened(.25)],["rare",Items.RARITY_COLORS.rare.darkened(.15)],["unique",Items.RARITY_COLORS.unique.darkened(.15)],["no",Color(.75,.22,.16)],["yes",Color(.5,.85,.5)]]:
+		for look in [["empty",Color(.3,.27,.2)],["common",Color(.5,.46,.36)],["uncommon",Items.RARITY_COLORS.uncommon.darkened(.25)],["rare",Items.RARITY_COLORS.rare.darkened(.15)],["unique",Items.RARITY_COLORS.unique.darkened(.15)],["quest",Items.RARITY_COLORS.quest.darkened(.15)],["no",Color(.75,.22,.16)],["yes",Color(.5,.85,.5)]]:
 			var style = hud.panel_style(Color(.055,.055,.06,.98),look[1])
 			style.set_content_margin_all(0)
 			style.set_corner_radius_all(3)

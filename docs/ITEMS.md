@@ -37,6 +37,10 @@ two-handed. (No spear is made yet; the spear's own motions are kept for one.)
   one of the **rare** prefixes or suffixes alone.
 - **Unique** (purple): one of a kind, with an effect of its own. Each class
   has one that drops for it alone; the Marathon Boots drop for everyone.
+- **Quest** (orange): special and quest items, such as the Rusted Gate Key
+  the colosseum basement's bandit carries. They never drop at random; their
+  names are orange wherever an item's name is coloured (over it on the
+  ground, in the bag, in its tip) and their bag slot is framed in orange.
 
 An item in play is its base with its affixes, so "Swift Steel Full Helm of
 Zeus" is a Steel Full Helm with Swift's Dexterity and Zeus's Strength and
@@ -89,9 +93,12 @@ Staff of the Lost Emperor does.
 ## The uniques' effects
 
 - **Robe of the Lost Emperor** (wizard): every time a spell damages a target,
-  a 10% chance to recover 20 mana. Black, with a dragon embroidered on it in
-  gold thread: its head, mouth open upward, and winding body down the back,
-  its wings wrapped round both sides to the chest as if it held the wearer.
+  a 10% chance to recover 20 mana. Black, with a long, wingless eastern
+  dragon worked down its back in couched gold thread among scrolling clouds:
+  its head in profile on the upper back (branched horns, a flaming mane, long
+  whiskers, jaws parted), its scaled body winding under the sash to a
+  flame-tufted tail by the hem, four legs with hooked talons
+  (`tools/paint_dragon.py`).
 - **Ancient Gladiator's Helmet** (warrior): dark steel, spiked over the crown,
   a heavy brow and a mask of nose bar and cheek plates; every attack has a 10% chance to
   grant **Rallying Cry**, 25% more attack speed and damage for 10 seconds,
@@ -99,7 +106,10 @@ Staff of the Lost Emperor does.
 - **The Bow of Odysseus** (ranger): each arrow has a 25% chance to stun its
   target for 2 seconds (as Shield Bash's stun, shorter when repeated).
 - **Marathon Boots** (everyone): +6 to every attribute and 20% faster
-  movement; light armor any class may wear.
+  movement; light armor any class may wear. High boots of creased, seamed and
+  well-worn gilded leather to mid-calf on dark heeled soles, strapped and
+  buckled, a white feathered wing in a gilt bracket at each ankle
+  (`tools/make_shoes.py`).
 - **Lightning Hammer** (warrior): a two-handed hammer; each hit has a 10%
   chance to call lightning down on its target for 200–300 damage, which
   leaps to up to 4 more targets within 10 m, a quarter weaker with each leap.

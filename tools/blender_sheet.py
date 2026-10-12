@@ -13,7 +13,9 @@ import math
 import bpy
 from mathutils import Vector, Matrix
 
-VIEWS = {'side': ((-6.0, 0.25, 1.0), (0.0, 0.25, 1.0)), 'front': ((0.0, -6.0, 1.0), (0.0, 0.0, 1.0)), 'quarter': ((-4.2, -4.2, 2.6), (0.0, 0.0, 0.95)), 'top': ((0.0, 0.3, 8.0), (0.0, 0.3, 0.0))}
+# (The 'game' and 'rear' views look down at the game's own angle, 43 degrees
+# (scripts/overworld.gd VIEW), from his front right and from behind his left.)
+VIEWS = {'side': ((-6.0, 0.25, 1.0), (0.0, 0.25, 1.0)), 'front': ((0.0, -6.0, 1.0), (0.0, 0.0, 1.0)), 'game': ((-3.6, -3.6, 5.6), (0.0, 0.0, 0.9)), 'rear': ((3.6, 3.6, 5.6), (0.0, 0.0, 0.9)), 'quarter': ((-4.2, -4.2, 2.6), (0.0, 0.0, 0.95)), 'top': ((0.0, 0.3, 8.0), (0.0, 0.3, 0.0))}
 
 def prop(rig, bone, seat, parts, name='WeaponStandIn'):
     """A stand-in weapon hung on `bone`: `parts` are (z0, z1, radius) runs
@@ -72,7 +74,7 @@ def aim(cam, at, target):
     d = Vector(target)-Vector(at)
     cam.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
 
-def render(rig, name, phases, out_dir, pose, views=('side', 'front', 'quarter', 'top')):
+def render(rig, name, phases, out_dir, pose, views=('side', 'front', 'game', 'rear')):
     """`pose(t)` sets the figure at `t` of the clip; each phase is rendered
     from each view."""
     out = Path(out_dir)

@@ -16,12 +16,15 @@ the left forearm).
   SkillBash       Shield Bash: a backhand blow of the shield behind a step
   SkillExecute    the blade raised far behind the head and brought down
                   with the whole body, to the knees
-  SkillSlam       Thunder Slam: wound up like a serve, the blade dropped
-                  behind the hip and swung up far over the head as the body
-                  arches, then the whole body hurled forward and down and
-                  the blade brought down flat on the ground ahead
-  DualSkillSlam   the same with a weapon in each hand: both pulled back and
-                  swung over the head together, both slammed down
+  SkillSlam       Thunder Slam, one circle on his right: the blade held
+                  before the belly pointed ahead, swung down past the outside
+                  of his right leg and back behind him as the arm drops and
+                  swings back with the chest turned to it, up behind him, over
+                  the head as the body arches, and down before him, the whole
+                  body hurled forward and down, the blade brought down level
+                  on the ground
+  DualSkillSlam   the same with a weapon in each hand: both arms swung out
+                  and over the head together, both slammed down
   SkillShockwave  Shockwave: a violent stomp, stepping forward into it
   SkillCry        War Cry: blade thrust at the sky, shield flung wide, head
                   back
@@ -241,13 +244,15 @@ def sword(target, pole, blade, fingers=None):
     point_hand('r', blade, fingers)
     return at
 
-def grip(side, target, pole, blade, fingers=None):
+def grip(side, target, pole, blade, fingers=None, swing=math.radians(150)):
     """An arm bent to `target` with the weapon in its fist pointed along
     `blade`, as an arm can be: the wrist bent no further than a wrist bends,
     the elbow swung round the arm's line from `pole` to where the forearm
     need not be wrung, and the forearm rolled after the fist
     (tools/blender_arm.py). Returns the blade's way as set."""
-    y, z, turned = held.fist(rig.pose.bones, side, lambda y: Vector(target), blade, fingers, pole)
+    chest = rig.pose.bones['spine_03'].matrix
+    facing = (chest.to_quaternion() @ CHEST_FRONT).normalized()
+    y, z, turned = held.fist(rig.pose.bones, side, lambda y: Vector(target), blade, fingers, pole, swing=swing, avoid=facing)
     return z
 
 def hips(down=0.0, forward=0.0, aside=0.0):
@@ -261,6 +266,8 @@ def guard(forward=0.0, out=0.0, up=0.0):
 
 reset()
 chest0 = rig.pose.bones['spine_03'].matrix.copy()
+# (The chest's front in its own frame: an elbow is kept from pointing there.)
+CHEST_FRONT = chest0.to_quaternion().inverted() @ V(0, -1, 0)
 GUARD_HAND = chest0.inverted() @ rig.pose.bones['hand_l'].head
 GUARD_POLE = chest0.inverted() @ V(.65, -.45, 1.0)
 SWORD_HOME = rig.pose.bones['hand_r'].head.copy()
@@ -446,71 +453,100 @@ def execute(t):
 # length to the point (Leap lands lower, so tips it less).
 SLAM_HAND = .14
 SLAM_AHEAD = .6
-FLAT_BLADE = V(0, -1, -.3)
+FLAT_BLADE = V(0, -1, -.1)
 LEAP_BLADE = V(0, -1, -.25)
 
 # Thunder Slam's wind-up and blow, after film of the swing made with a stick
-# in one hand, shared by the one-handed and the dual swing: the blade is
-# lifted a little across the front, then its point swung down to his left
-# toes and across low before him as the hand draws back to the right hip,
-# the body turning after it; the arm straightens out to his right with the
-# blade hanging below the fist, and rises so, hanging, until the arm is
-# level at the shoulder; then up, the point swung out and up past the arm's
-# line, over the head as the back arches and the heels rise; and the whole
-# body is hurled forward and down behind it on a long stride of the lead
-# foot, the hips dropped, the back folded, the blade struck down flat along
-# the ground ahead; held there, and a slow rise. The head follows the hand
-# through the wind-up; the free arm bends up and out for balance as the
-# sword arm goes out, and is thrown down and forward with the blow. The
-# fingers lie along the forearm, the wrist is bent no further than a wrist
-# bends, and the elbow swung to where the forearm is not wrung
-# (tools/blender_arm.py).
-def slam_body(t):
-    drop = sample([(0, 0), (.08, .6), (.18, 1), (.3, .5), (.46, 0), (1, 0)], t)
-    back = sample([(0, 0), (.1, 0), (.3, 1), (.46, 1), (.58, 0), (1, 0)], t)
-    up = sample([(0, 0), (.4, 0), (.58, 1), (.66, 0), (1, 0)], t)
-    down = sample([(0, 0), (.58, 0), (.66, 1), (.84, 1), (1, 0)], t)
-    hips(down=.08*drop+.02*back-.08*up+.5*down, forward=-.02*drop-.06*back-.08*up+.28*down, aside=-.04*back)
-    rotate('pelvis', (1, 0, 0), .1*drop-.05*back-.2*up+.35*down)
-    rotate('spine_01', (1, 0, 0), .1*drop-.08*back-.38*up+.55*down)
-    rotate('spine_02', (1, 0, 0), .06*drop-.06*back-.28*up+.4*down)
-    rotate('spine_03', (1, 0, 0), .02*drop-.03*back-.14*up+.25*down)
-    rotate('pelvis', (0, 0, 1), -.1*drop-.3*back-.1*up+.15*down)
-    rotate('spine_01', (0, 0, 1), -.05*drop-.2*back+.1*down)
-    rotate('spine_02', (0, 0, 1), -.15*back+.05*up+.1*down)
-    rotate('spine_01', (0, 1, 0), -.1*back-.04*up)
-    rotate('spine_02', (0, 1, 0), -.1*back-.04*up)
-    rotate('neck_01', (0, 0, 1), -.3*back-.1*up)
-    rotate('neck_01', (1, 0, 0), .15*drop-.15*up+.1*down)
-    rotate('Head', (0, 0, 1), -.25*back)
-    rotate('Head', (1, 0, 0), .1*drop+.1*back+.3*up-.2*down)
-    plant(lead='l', forward=.65*down, lift=.16*math.sin(math.pi*sample([(0, 0), (.54, 0), (.68, 1), (1, 1)], t)))
-    return drop, back, up, down
+# in one hand, shared by the one-handed and the dual swing. The weapon never
+# leaves his forehand side. First the hand stays before the belly and the
+# blade, held up, is tipped over to his right and let fall down his right
+# side, the hand drawing to the right hip as it comes. Then the arm
+# straightens (a shade short of locked), and arm and blade swing up
+# together on his right as one lever, the blade lagging a half right angle
+# behind the arm (the wrist bent no further than a wrist bends), the chest
+# turned to face the swing and the head after it: from hanging below the
+# fist, out level at the shoulder, up over the head as the back arches; the
+# blade comes over the top as the whole body folds forward and down behind
+# it on a long stride of the lead foot, the hips dropped, the back bent, the
+# blade struck down flat along the ground ahead; held there, and a slow
+# rise. The free arm bends back for balance as the sword arm goes out, and
+# is thrown down and forward with the blow. The fingers lie along the
+# forearm and the elbow is swung no further than SLAM_SWING_PATH allows from
+# where it is asked to where the forearm is not wrung (tools/blender_arm.py).
+def slam_body(t, side_scale=1.0):
+    square = sample([(0, 0), (.06, 1), (.14, .6), (.26, 0), (1, 0)], t)
+    side = sample([(0, 0), (.1, 0), (.26, 1), (.42, .8), (.52, 0), (1, 0)], t)*side_scale
+    up = sample([(0, 0), (.4, 0), (.49, 1), (.56, 0), (1, 0)], t)
+    down = sample([(0, 0), (.54, 0), (.66, 1), (.84, 1), (1, 0)], t)
+    hips(down=.06*square+.02*side-.08*up+.45*down, forward=-.02*square-.06*side-.08*up+.3*down, aside=-.04*side)
+    rotate('pelvis', (1, 0, 0), .08*square-.05*side-.2*up+.3*down)
+    rotate('spine_01', (1, 0, 0), .08*square-.06*side-.38*up+.55*down)
+    rotate('spine_02', (1, 0, 0), .05*square-.04*side-.28*up+.45*down)
+    rotate('spine_03', (1, 0, 0), .02*square-.02*side-.14*up+.3*down)
+    rotate('pelvis', (0, 0, 1), -.4*side+.15*down)
+    rotate('spine_01', (0, 0, 1), -.35*side+.1*down)
+    rotate('spine_02', (0, 0, 1), -.3*side+.1*down)
+    rotate('spine_01', (0, 1, 0), -.08*side-.04*up)
+    rotate('spine_02', (0, 1, 0), -.08*side-.04*up)
+    rotate('neck_01', (0, 0, 1), -.3*side-.1*up)
+    rotate('neck_01', (1, 0, 0), .15*square-.15*up+.1*down)
+    rotate('Head', (0, 0, 1), -.25*side)
+    rotate('Head', (1, 0, 0), .1*square+.1*side+.3*up-.2*down)
+    plant(lead='l', forward=.6*down, lift=.16*math.sin(math.pi*sample([(0, 0), (.52, 0), (.64, 1), (1, 1)], t)))
+    return square, side, up, down
 
-SLAM_HAND_PATH = [(0, SWORD_HOME), (.08, V(-.2, -.14, 1.02)), (.18, V(-.38, -.02, .95)), (.28, V(-.56, .1, 1.22)), (.38, V(-.66, .14, 1.4)), (.46, V(-.66, .14, 1.5)),
-    (.53, V(-.55, .1, 1.76)), (.58, V(-.3, .12, 1.94)), (.62, V(-.15, -.25, 2.05)), (.66, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.84, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)]
-SLAM_BLADE_PATH = [(0, V(-.2, -1, .3)), (.08, V(.4, -.5, .75)), (.18, V(.35, -.7, -.62)), (.28, V(-.2, -.15, -.97)), (.38, V(-.4, -.05, -.92)), (.46, V(-.9, -.05, .45)),
-    (.53, V(-.5, .1, .86)), (.58, V(0, .35, .94)), (.62, V(0, -.75, .65)), (.66, FLAT_BLADE), (.84, FLAT_BLADE), (1, V(-.2, -1, .3))]
-# (Where the elbow is asked to bend toward, before it is swung to suit the
-# forearm: back and down as the arm goes out, forward and out over the head.)
-SLAM_POLE_PATH = [(0, V(-.75, .1, .9)), (.2, V(-.7, .4, .9)), (.46, V(-.65, .35, 1.0)), (.56, V(-.7, -.2, 1.8)), (.64, V(-.9, -.4, .9)), (1, V(-.75, .1, .9))]
+# The hand before the belly through the first drop, then at the end of the
+# arm (SLAM_ARM_PATH from the shoulder, SLAM_REACH out, by SLAM_LEVER's
+# weight), and down on the ground for the blow. The blade is kept at least
+# a half right angle off the arm's line, on the side the elbow's pit faces,
+# so the wrist is never wrung: ahead of the arm as it hangs, trailing below
+# and behind as the arm swings back and up, above the arm as it comes over
+# and down, and level on the ground at the blow.
+SLAM_REACH = .486
+SLAM_HAND_PATH = [(0, SWORD_HOME), (.06, V(-.25, -.32, 1.0)),
+    (.66, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.84, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)]
+SLAM_ARM_PATH = [(0, V(-.35, -.2, -.9)), (.06, V(-.45, -.5, -.74)), (.12, V(-.45, -.5, -.74)), (.18, V(-.5, -.1, -.86)), (.24, V(-.35, .3, -.89)), (.30, V(-.5, .6, -.62)), (.38, V(-.55, .6, .58)), (.44, V(-.3, .35, .89)),
+    (.49, V(-.15, 0, .99)), (.54, V(0, -.5, .87)), (.58, V(0, -.97, .26)), (.62, V(0, -.87, -.5)), (.66, V(0, -.64, -.77)), (1, V(0, -.64, -.77))]
+SLAM_LEVER = [(0, 0), (.06, 0), (.12, 1), (.62, 1), (.66, 0), (1, 0)]
+SLAM_BLADE_PATH = [(0, V(-.2, -1, .3)), (.06, V(0, -.87, .5)), (.12, V(-.4, -.9, .17)), (.18, V(-.9, -.1, -.42)), (.24, V(-.45, .85, -.27)), (.30, V(0, .1, -1)), (.38, V(0, .75, -.66)),
+    (.44, V(0, .9, .44)), (.49, V(0, .75, .66)), (.54, V(0, .3, .95)), (.58, V(0, -.5, .87)), (.62, V(0, -.76, .65)), (.66, FLAT_BLADE), (.84, FLAT_BLADE), (1, V(-.2, -1, .3))]
+# (Where the elbow is asked to bend toward, chosen with SKILLS_PROBE so the
+# elbow points back, down or out and the fist is not turned far.)
+SLAM_POLE_PATH = [(0, V(-.75, .1, .9)), (.06, V(-.2, .25, 1.1)), (.12, V(-.4, .3, 1.1)), (.18, V(-.3, .4, 1.1)), (.24, V(-.3, .4, 1.1)), (.30, V(-.45, .4, .9)), (.38, V(-.55, .3, .9)),
+    (.44, V(-.6, .2, 1.1)), (.49, V(-.6, 0, 1.3)), (.54, V(-.6, -.1, 1.1)), (.58, V(-.6, -.2, 1.0)), (.62, V(-.6, -.3, .9)), (.66, V(-.5, -.3, .5)), (1, V(-.75, .1, .9))]
+SLAM_SWING_PATH = [(0, 35), (.06, 35), (.12, 150), (.49, 150), (.54, 35), (.92, 35), (1, 35)]
+# (The arm is held fully straight while the blade trails below it, since the
+# fist can only carry it there with the elbow turned up, which a straight
+# arm does not show; and a shade bent, the elbow asked for, through the blow.)
+SLAM_REACH_PATH = [(0, .494), (.49, .494), (.54, .486), (1, .486)]
+
+def slam_hand(t, side='r'):
+    """Where the sword hand is at `t`: before the body, or out from its
+    shoulder along SLAM_ARM_PATH, a shade short of the arm's length."""
+    shoulder = rig.pose.bones['upperarm_'+side].matrix.translation
+    along = vsample(SLAM_ARM_PATH, t)
+    at = vsample(SLAM_HAND_PATH, t)
+    if side == 'l': along, at = mirror_x(along), mirror_x(at)
+    return at.lerp(shoulder+along.normalized()*sample(SLAM_REACH_PATH, t), sample(SLAM_LEVER, t))
 
 def slam(t):
-    drop, back, up, down = slam_body(t)
-    grip('r', vsample(SLAM_HAND_PATH, t), vsample(SLAM_POLE_PATH, t), vsample(SLAM_BLADE_PATH, t))
-    # The free arm bent up and out as the sword arm goes out, thrown up and
-    # forward as the weapon comes over, then down and out as the blow lands.
-    guard(forward=.05*drop+.1*back+.3*up+.3*down, out=.1*drop+.2*back+.05*up-.05*down, up=-.05*drop+.3*back+.4*up-.3*down)
+    square, side, up, down = slam_body(t)
+    grip('r', slam_hand(t), vsample(SLAM_POLE_PATH, t), vsample(SLAM_BLADE_PATH, t), swing=math.radians(sample(SLAM_SWING_PATH, t)))
+    # The free arm bent back as the sword arm goes out, thrown up and forward
+    # as the weapon comes over, then down and out as the blow lands.
+    guard(forward=-.05*square-.15*side+.3*up+.3*down, out=.1*square+.2*side+.05*up-.05*down, up=-.05*square+.15*side+.4*up-.3*down)
 
 def mirror_x(v):
     return V(-v.x, v.y, v.z)
 
 def dual_slam(t):
     # A weapon in each hand: the left does as the right, mirrored, both
-    # swung back and over the head together and both slammed down.
-    slam_body(t)
-    grip('r', vsample(SLAM_HAND_PATH, t), vsample(SLAM_POLE_PATH, t), vsample(SLAM_BLADE_PATH, t))
-    grip('l', mirror_x(vsample(SLAM_HAND_PATH, t)), mirror_x(vsample(SLAM_POLE_PATH, t)), mirror_x(vsample(SLAM_BLADE_PATH, t)))
+    # swung out and over the head together and both slammed down (the chest
+    # kept nearer square, since both arms go out).
+    slam_body(t, side_scale=.4)
+    swing = math.radians(sample(SLAM_SWING_PATH, t))
+    grip('r', slam_hand(t), vsample(SLAM_POLE_PATH, t), vsample(SLAM_BLADE_PATH, t), swing=swing)
+    grip('l', slam_hand(t, 'l'), mirror_x(vsample(SLAM_POLE_PATH, t)), mirror_x(vsample(SLAM_BLADE_PATH, t)), swing=swing)
 
 def leap(t):
     # A deep crouch, the arms swung back; the spring, the body stretched and
@@ -892,6 +928,31 @@ if not (DRY and ONLY):
 if os.environ.get('SWINGS_ONLY'):
     raise SystemExit
 
+def probe():
+    """SKILLS_PROBE=s,s,...: at those moments of Thunder Slam, the sword
+    elbow's pole swept right round the arm's line (no swing allowed the fist)
+    and the fist's turn printed for each: where the elbow should be asked for."""
+    for s in [float(v) for v in os.environ['SKILLS_PROBE'].split(',')]:
+        reset(); slam_body(s)
+        shoulder = rig.pose.bones['upperarm_r'].matrix.translation.copy()
+        hand = slam_hand(s)
+        axis = (hand-shoulder).normalized()
+        base = vsample(SLAM_POLE_PATH, s)
+        chest = rig.pose.bones['spine_03'].matrix
+        facing = (chest.to_quaternion() @ CHEST_FRONT).normalized()
+        row = []
+        for k in range(12):
+            reset(); slam_body(s)
+            pole = shoulder+Quaternion(axis, math.radians(30*k)) @ (base-shoulder)
+            y, z, turned = held.fist(rig.pose.bones, 'r', lambda y: Vector(hand), vsample(SLAM_BLADE_PATH, s), None, pole, swing=0.0)
+            B = rig.pose.bones
+            point = B['lowerarm_r'].matrix.translation-(B['upperarm_r'].matrix.translation+B['hand_r'].matrix.translation)/2
+            pn = point.normalized() if point.length > .01 else Vector((0, 0, 0))
+            row.append('%3d:%4d/f%+.1f/u%+.1f' % (30*k, math.degrees(turned), pn.dot(facing), pn.z))
+        print('SKILLS_PROBE %.2f pole %s |' % (s, ' '.join('%.2f' % v for v in base)), ' '.join(row))
+    raise SystemExit
+
+if os.environ.get('SKILLS_PROBE'): probe()
 for name, pose in [('SkillCleave', cleave), ('SkillStrike', strike), ('SkillStab', stab), ('SkillBash', bash), ('SkillExecute', execute),
         ('SkillSlam', slam), ('SkillShockwave', shockwave), ('SkillCry', cry), ('SkillCharge', charge), ('SkillLeap', leap)]:
     if ONLY and name not in ONLY: continue

@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 d, clip, out = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 phases = (d/(clip+'.phases')).read_text().split()
-views = [v for v in ('side', 'front', 'quarter', 'top') if (d/('%s-%s-00.png' % (clip, v))).exists()]
+views = [v for v in ('side', 'front', 'game', 'rear', 'quarter', 'top') if (d/('%s-%s-00.png' % (clip, v))).exists()]
 first = Image.open(d/('%s-%s-00.png' % (clip, views[0])))
 W, H = first.size
 sheet = Image.new('RGB', (W*len(phases), H*len(views)), 'black')

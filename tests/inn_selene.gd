@@ -1,8 +1,10 @@
 extends SceneTree
 ## Anya's inn: the candles lit on its tables and its bar, and Selene, who
 ## works for Anya (scripts/townsfolk.gd chores): she clears a mug left where
-## no one sits, carrying it to the bar, and wipes down a table no one is at,
-## her rag going round and round over its top.
+## no one sits, by its handle in her fist, carrying it to the wash tub behind
+## the bar, and wipes down a table no one is at, her palm on her rag going
+## round and round over its top; between whiles the rag hangs at her waist.
+## (Clearing all that is left about over a long shift: tests/inn_shift.gd.)
 const Data = preload("res://scripts/data.gd")
 const Interiors = preload("res://scripts/world_interiors.gd")
 const Daylight = preload("res://scripts/daylight.gd")
@@ -54,10 +56,14 @@ func test():
 			folk.tick(.1,Vector3(-262,0,144))
 			if until.call(): return true
 		return false
+	# (Last night's things cleared away already: that is tests/inn_shift.gd.)
+	for thing in folk.litter: thing.node.queue_free()
+	folk.litter.clear()
 	var at_work = run.call(60.0,func(): return selene.state == "idle")
 	check(selene != null and selene.body.name == "Selene" and at_work and folk.inn.has_point(Vector2(selene.at.x,selene.at.z)),"Selene works in the inn")
 	check(folk.named_at(selene.at).get("name","") == "Selene","Her name shows over her")
 	check(selene.body.skeleton.find_children("Apron","MeshInstance3D",true,false).size() == 1,"She wears an apron")
+	check(folk.rag_hung.visible and folk.rag_hung.is_visible_in_tree(),"and her rag hangs at her waist")
 	# A mug left where no one sits: she fetches it to the bar.
 	var empty: Array = folk.seats.filter(func(s): return s.taken == null)
 	check(not empty.is_empty(),"There is an empty place at a table")
@@ -67,10 +73,28 @@ func test():
 	seat.left = mug
 	var held = run.call(60.0,func(): return selene.body.held == mug)
 	check(held,"She comes for the mug left at an empty place and takes it up")
-	var shelved = run.call(30.0,func(): return folk.washing.any(func(w): return w.mug == mug))
-	check(shelved and mug.position.distance_to(folk.counter) < .6,"and sets it on the bar to be washed")
-	var washed = run.call(90.0,func(): return not is_instance_valid(mug) or mug.is_queued_for_deletion())
-	check(washed,"and in time she carries it to the wash")
+	# (Its handle in her fist, as the skeleton is posed.)
+	var fist = {"far":0.0,"seen":0}
+	var grip = func():
+		if selene.body.held != mug or not is_instance_valid(mug) or selene.state != "carry": return
+		var side: String = "r" if mug.get_parent() == selene.body.handle_grips.get("r") else "l"
+		var sk: Skeleton3D = selene.body.skeleton
+		var hand: Transform3D = sk.global_transform*sk.get_bone_global_pose(sk.find_bone("hand_"+side))
+		fist.far = maxf(fist.far,(mug.global_transform*selene.body.MUG_HANDLE).distance_to(hand*selene.body.arms[side].palm))
+		fist.seen += 1
+	selene.body.skeleton.skeleton_updated.connect(grip)
+	var to_tub = false
+	for i in 300:
+		hour += 1.0/30
+		world.set_time(hour)
+		folk.tick(1.0/30,Vector3(-262,0,144))
+		await process_frame
+		if selene.state == "put" and folk.chore.get("to","") == "tub": to_tub = true
+		if not is_instance_valid(mug): break
+	selene.body.skeleton.skeleton_updated.disconnect(grip)
+	check(fist.seen > 10 and fist.far < .03,"She carries it by its handle, her fist round it (%.3f m off at most)" % fist.far)
+	var washed = run.call(30.0,func(): return not is_instance_valid(mug) or mug.is_queued_for_deletion())
+	check(washed and to_tub,"and puts it in the wash tub behind the bar")
 	# A table no one is at: she wipes it, round and round.
 	var table: Vector3 = tables[0]
 	for walker in folk.people:
@@ -87,11 +111,9 @@ func test():
 			walker.timer = 1000.0
 	for s in folk.seats:
 		if s.table == table: folk.clear_mug(s)
-	for t in folk.wiped: folk.wiped[t] = -folk.WIPE_REST
-	for other in tables:
-		if other != table: folk.wiped[other] = folk.chore_clock+10000.0
+	for i in folk.wiped: folk.wiped[i] = -folk.WIPE_REST if folk.seats[i].table == table else folk.chore_clock+10000.0
 	var wiping = run.call(90.0,func(): return selene.state == "wipe")
-	check(wiping and selene.body.held == folk.rag,"At a table no one is at she sets to wiping it, her rag in hand")
+	check(wiping and selene.body.held == folk.rag and not folk.rag_hung.visible,"At a table no one is at she sets to wiping it, her rag in hand")
 	var spots: Array = []
 	var hand: int = selene.body.skeleton.find_bone("hand_l")
 	# (Her arm reaches as the skeleton is posed, its modifiers applied: read
@@ -115,8 +137,9 @@ func test():
 	var spread = 0.0
 	for p in spots: spread = maxf(spread,Vector2(p.x-middle.x,p.z-middle.z).length())
 	check(low > .84 and high < .93 and spread > .04 and spread < .2,"Her rag goes round and round on the table's top (%.2f to %.2f m up, %.2f m about)" % [low,high,spread])
-	var done = run.call(30.0,func(): return selene.state in ["to_post","idle"] and folk.wiped[table] > 0.0)
-	check(done and selene.body.held == null,"Then she puts the rag away and goes back to her place")
+	var places: Array = range(folk.seats.size()).filter(func(i): return folk.seats[i].table == table)
+	var done = run.call(60.0,func(): return selene.state in ["to_post","idle"] and places.all(func(i): return folk.wiped[i] > 0.0))
+	check(done and selene.body.held == null and folk.rag_hung.visible,"Then, every place at it wiped, she hangs the rag at her waist again and goes back to her place")
 	# She goes home at night.
 	hour = Daylight.NIGHT+200.0
 	world.set_time(hour)

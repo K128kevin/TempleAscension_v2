@@ -3,6 +3,18 @@
 // metres over the cloth; its second UV set carries how near the hem or cuff a
 // point is (x) and how far down the garment's length (y).
 #include "gaunt.gdshaderinc"
+// An apron (scripts/townsperson.gd apron_legs) is held as the skirt beneath
+// it is, to lie on a lap; standing it hangs from the hips instead (`hanging`
+// of the way: `hips`, the hips' move from rest, applied to its place at
+// rest, CUSTOM0), all but its top (from the height `hang_from` at rest,
+// over `hang_over` below it), and the legs push it out as they stride
+// (cloth_fold.gdshaderinc). Any other garment, given neither, follows its
+// wearer as it is held.
+#include "cloth_fold.gdshaderinc"
+uniform float hanging = 0.0;
+uniform mat4 hips = mat4(1.0);
+uniform float hang_from = 0.0;
+uniform float hang_over = 0.3;
 // The weave's photographed relief, its shade in the hollows between the
 // threads and its roughness (assets/shaders/detail.gdshaderinc), the same
 // photograph as `weave`, laid the same.
@@ -120,4 +132,9 @@ void fragment() {
 // (Over a starving body, a garment is drawn in with it: gaunt.gdshaderinc.)
 void vertex() {
 	VERTEX = gaunt_inset(VERTEX, NORMAL, BONE_INDICES, BONE_WEIGHTS);
+	if (hanging > 0.0) {
+		float loose = clamp((hang_from - CUSTOM0.y) / hang_over, 0.0, 1.0) * hanging;
+		VERTEX = mix(VERTEX, (hips * vec4(CUSTOM0.xyz, 1.0)).xyz, loose);
+	}
+	if (capsule_count > 0) VERTEX = fold_cloth(VERTEX);
 }

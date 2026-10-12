@@ -1436,6 +1436,12 @@ const BOLT_SPEED = 10.3
 # as Skills.reach): an arrow carried on through its targets by Penetrating
 # Arrows stops there all the same.
 const RANGED_REACH = 15.0
+# How far up a unit's body an arrow strikes it, over the point a metre up
+# that every shot is judged against (within its radius): the hero's arrows fly
+# level from the nock, at his eye line (1.3 to 1.6 m: higher still for Rapid
+# Fire's first, loosed as the bow comes up from the carry), and an arrow at
+# shoulder or head height strikes a man as surely as one at his belt.
+const ARROW_BODY_SPAN = .5
 
 # `skill`: a skill's shot rather than the normal attack's.
 # `extra`: what one of the ranger's arrows carries besides its damage
@@ -1476,8 +1482,7 @@ func tick_projectiles(dt: float) -> void:
 			var candidates: Array = targets(p.source if puppet_attack(p.source) else player) if friendly else [player]
 			for a in candidates:
 				if a.dead or a.uid in p.hit or a.dormant: continue
-				var closest = Geometry3D.get_closest_point_to_segment(a.position+Vector3.UP,before,after)
-				if closest.distance_to(a.position+Vector3.UP) < (1.1 if a.kind=="boss" else (.9 if p.type=="ice" else .55)):
+				if body_gap(a,p,before,after) < (1.1 if a.kind=="boss" else (.9 if p.type=="ice" else .55)):
 					if friendly:
 						var kind: String = "physical" if p.type=="arrow" else ("frost" if p.type=="ice" else p.type)
 						# The hero's own shots count as his hits.
@@ -1499,6 +1504,15 @@ func tick_projectiles(dt: float) -> void:
 		if remove:
 			p.node.queue_free()
 			projectiles.remove_at(i)
+
+# How near a shot passes, between `before` and `after`, to the unit `a`: to
+# the point a metre up, or, for an arrow, to its body from there up through
+# its shoulders (ARROW_BODY_SPAN).
+static func body_gap(a, p: Dictionary, before: Vector3, after: Vector3) -> float:
+	var middle: Vector3 = a.position+Vector3.UP
+	if p.type != "arrow": return Geometry3D.get_closest_point_to_segment(middle,before,after).distance_to(middle)
+	var pair: PackedVector3Array = Geometry3D.get_closest_points_between_segments(middle,middle+Vector3.UP*ARROW_BODY_SPAN,before,after)
+	return pair[0].distance_to(pair[1])
 
 func blast(at: Vector3, radius: float, damage: float, friendly: bool, skill: bool = false) -> void:
 	area_damage(at,radius,damage,friendly,null,skill)

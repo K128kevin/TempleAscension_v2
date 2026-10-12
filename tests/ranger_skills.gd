@@ -86,6 +86,18 @@ func play(seconds: float):
 		game.tick_projectiles(STEP)
 		for e in game.enemies: e.tick(STEP)
 
+# As play(), a frame at a time (`step` seconds each), with the frames shown
+# between: the skeleton posed, the bow and its nocked arrow following it.
+func shown(seconds: float, step: float):
+	for i in maxi(1,roundi(seconds/step)):
+		await process_frame
+		game.player.tick(step)
+		game.tick_scheduled(step)
+		game.skills.tick(step)
+		game.player_control(step)
+		game.tick_projectiles(step)
+		for e in game.enemies: e.tick(step)
+
 func lost(e) -> float: return e.max_hp-e.hp
 # `hits` blows of `percent` of a normal attack with the weapon in hand (the
 # bow's 16 to 24, the dagger's 12 to 20: scripts/items.gd), at 5 Dexterity.
@@ -148,6 +160,27 @@ func test():
 	check(game.player.busy<1.2,"its four arrows loosed quickly (%.2fs)" % game.player.busy)
 	play(1.8)
 	check(within(foe,4,100),"and fires four (%.1f)" % lost(foe))
+	# Frame by frame as the game shows it, from the bow carried at his side:
+	# the first arrow, loosed as the bow comes up (at his eye line, higher
+	# than the rest), strikes as surely as the others, at any frame rate.
+	for rate in [30.0,60.0,144.0]:
+		hero({"rapid_fire":5}); foe.hp = foe.max_hp
+		game.player.visual.play(game.player.visual.idle_action())
+		await shown(.8,1.0/rate)
+		check(game.skills.cast("rapid_fire",at),"Rapid Fire from the carry (%d fps)" % rate)
+		var heights: Array = []
+		var seen: Array = []
+		var struck = 0
+		var last: float = foe.hp
+		for i in ceili(1.6*rate):
+			await shown(1.0/rate,1.0/rate)
+			for p in game.projectiles:
+				if not p.node in seen:
+					seen.append(p.node)
+					heights.append(snappedf(p.node.position.y,.01))
+			if foe.hp < last: struck += 1
+			last = foe.hp
+		check(seen.size()==4 and struck==4,"every one of its four arrows strikes, the first too (%d fps: %d of %d, loosed at %s m)" % [rate,struck,seen.size(),heights])
 	clear()
 
 	# Power Shot: the aim, then the shot.

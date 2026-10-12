@@ -125,13 +125,15 @@ def untwist(B, side):
     set_world(hand, hm.translation, hm.to_quaternion())
     return turned
 
-def fist(B, side, wrist_of, along, fingers, pole, swing=math.radians(150), steps=12, hold=1.0, deviation=True):
+def fist(B, side, wrist_of, along, fingers, pole, swing=math.radians(150), steps=12, hold=1.0, deviation=True, avoid=None):
     """The arm and the fist set on a weapon running along `along` (world)
     through the fist, whose wrist is at `wrist_of(y)` (the fingers' way `y`
     given, since the weapon's seat lies off the wrist); the fingers laid as
     near `fingers` as the wrist allows (or, none given, along the forearm);
     the elbow toward `pole` (world), or swung round the arm's line up to
-    `swing` either way from it to where the forearm need not be wrung.
+    `swing` either way from it to where the forearm need not be wrung (and,
+    `avoid` given, a way the elbow's point is kept from: the chest's front,
+    where an elbow reads as bent the wrong way).
     Returns (y, z, turn): the fingers' and the weapon's ways as set and the
     fist's turn from the forearm (radians)."""
     shoulder = B['upperarm_'+side].matrix.translation.copy()
@@ -164,13 +166,14 @@ def fist(B, side, wrist_of, along, fingers, pole, swing=math.radians(150), steps
         off = math.atan2(base.cross(want).dot(z), base.dot(want))
         return (Quaternion(z, hold*max(-FLEX, min(FLEX, off))) @ base).normalized()
     p = Vector(pole)
+    if swing <= 0: steps = 0
     for pass_ in range(2):
         z, y = square(z, y)
         axis = (Vector(wrist_of(y))-shoulder).normalized()
         best = None
         tried = []
         for k in range(-steps, steps+1):
-            angle = swing*k/steps
+            angle = swing*k/steps if steps else 0.0
             q = shoulder+Quaternion(axis, angle) @ (Vector(pole)-shoulder)
             for i in range(2):
                 arm(B, side, wrist_of(y), q)
@@ -178,7 +181,17 @@ def fist(B, side, wrist_of, along, fingers, pole, swing=math.radians(150), steps
             turn_hand(B, side, y.cross(z), y, z)
             turned = twist(B, side)
             tried.append((angle, turned))
-            cost = (max(0.0, abs(turned)-math.radians(45))/TURN_MAX)**2*6+(angle/swing)**2
+            cost = (max(0.0, abs(turned)-math.radians(45))/TURN_MAX)**2*6+((angle/swing)**2 if swing > 0 else 0.0)
+            if avoid is not None:
+                point = B['lowerarm_'+side].matrix.translation-(B['upperarm_'+side].matrix.translation+B['hand_'+side].matrix.translation)/2
+                if point.length > .01: cost += 3*max(0.0, point.normalized().dot(Vector(avoid)))**2
+                # (Nor swung in against the chest: the elbow kept a span from
+                # the spine's line, or the forearm would cross the chest.)
+                a, b = B['spine_02'].matrix.translation, B['neck_01'].matrix.translation
+                d = b-a
+                e = B['lowerarm_'+side].matrix.translation
+                near = a+d*max(0.0, min(1.0, (e-a).dot(d)/max(1e-9, d.dot(d))))
+                cost += 4*max(0.0, (.22-(e-near).length)/.22)**2
             if best is None or cost < best[0]: best = (cost, angle, q, y, turned)
         _, angle, p, y, turned = best
         for i in range(2):

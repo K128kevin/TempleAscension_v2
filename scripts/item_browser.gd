@@ -43,7 +43,7 @@ func open() -> void:
 # Its filter: which base items are listed ("all": everything but the key).
 static func shows(id: String, which: String) -> bool:
 	var rarity: String = Items.BASES[id].get("rarity","")
-	if rarity.is_empty(): return false
+	if rarity.is_empty() or rarity == "quest": return false
 	if which == "all": return true
 	return rarity == which
 

@@ -314,8 +314,9 @@ def add_hood(rig, deep=False, shade=False):
 
 # The warrior's armor as a shell of the body (see tools/outfit_hero.py): the
 # armored part of the body is copied and thickened outward, keeping its UVs
-# and skin weights. `covered(bone, height)` picks the part.
-def body_shell(body, rig, name, covered, offset, thickness, raised=(), raise_by=0.0):
+# and skin weights. `covered(bone, height)` picks the part; `shape(shell)`,
+# if given, reshapes it once it stands off the body, before it is thickened.
+def body_shell(body, rig, name, covered, offset, thickness, raised=(), raise_by=0.0, shape=None):
     import bpy, bmesh
     shell=body.copy(); shell.data=body.data.copy(); shell.name=name
     bpy.context.scene.collection.objects.link(shell)
@@ -331,6 +332,7 @@ def body_shell(body, rig, name, covered, offset, thickness, raised=(), raise_by=
     mesh.to_mesh(shell.data); mesh.free()
     for v in shell.data.vertices:
         v.co+=v.normal*(raise_by if bone(v).startswith(raised) else offset)
+    if shape: shape(shell)
     for modifier in list(shell.modifiers): shell.modifiers.remove(modifier)
     solid=shell.modifiers.new('Plate thickness','SOLIDIFY')
     solid.thickness=thickness; solid.offset=-1.0; solid.use_rim=True

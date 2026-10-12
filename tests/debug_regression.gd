@@ -56,7 +56,7 @@ func test():
 		check(Items.make(Items.PLAIN.axe) in game.run.bag and Items.make(Items.PLAIN.bow) in game.run.bag and game.move_item("bag:%d" % game.run.bag.find(Items.make(Items.PLAIN.bow)),"main").is_empty() and Data.weapon(game.run)==2,"Debug grants weapons usable through the inventory")
 		var browser=debug.browser
 		key(KEY_F5)
-		var listed: int=Items.BASES.keys().filter(func(id): return Items.BASES[id].has("rarity")).size()
+		var listed: int=Items.BASES.keys().filter(func(id): return Items.BASES[id].get("rarity","") not in ["","quest"]).size()
 		check(browser.is_open() and browser.list.get_child_count()==listed,"F5 opens the item browser, listing every base item but the key")
 		var sorted=0
 		for which in ["starting","common","unique"]:

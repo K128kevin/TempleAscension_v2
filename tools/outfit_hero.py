@@ -15,9 +15,15 @@ and the wizard's robe and deep hood.
 The wizard wears a copy of the body without the torso, arms and legs its robe
 covers, so nothing pierces it as he moves. The hoods and the robe are the same authored
 KayKit pieces the Oracle statue wears (tools/prepare_enemy_outfits.py).
+The warrior's kit is built by tools/warrior_kit.py.
+
+With `-- --warrior-only` only the warrior's kit is rebuilt (and his kilt's
+bones), every other piece kept as warrior.glb has it: a few minutes rather
+than a quarter of an hour, for working on his kit.
 """
 from pathlib import Path
 import importlib.util
+import sys
 import bpy
 import math
 import bmesh
@@ -27,6 +33,11 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT/'assets/models/character'
 spec = importlib.util.spec_from_file_location('outfits',ROOT/'tools/prepare_enemy_outfits.py')
 outfits = importlib.util.module_from_spec(spec); spec.loader.exec_module(outfits)
+spec = importlib.util.spec_from_file_location('warrior_kit',ROOT/'tools/warrior_kit.py')
+warrior_kit = importlib.util.module_from_spec(spec); spec.loader.exec_module(warrior_kit)
+WARRIOR_ONLY = '--warrior-only' in sys.argv
+# The warrior's pieces (tools/warrior_kit.py), and those he wore before.
+WARRIOR_PIECES = ('HeroArmor','HeroPauldrons','HeroGauntlets','HeroBracers','HeroBelt','HeroGreaves','HeroCuisses','HeroKilt')
 # The Rogue's boot, cuff included, ends here in its own model space.
 BOOT_TOP = .22
 # Supple leather: snug over the calf, keeping a little of the boot's shape.
@@ -47,6 +58,24 @@ def clip_starts(path):
     return {a.get('name', ''): min(document['accessors'][s['input']]['min'][0] for s in a['samplers']) for a in document.get('animations', [])}
 BEGAN = clip_starts(OUTPUT/'warrior.glb')
 
+def export():
+    """Writes warrior.glb, every clip with the timing it came in with
+    (clip_starts)."""
+    rig.animation_data.action = None
+    # Every clip goes out with the timing it came in with (clip_starts above).
+    for track in rig.animation_data.nla_tracks:
+        if BEGAN.get(track.name, 1.0) > 1/60: continue
+        for strip in list(track.strips):
+            if strip.frame_start != 1: continue
+            action, first, last, name = strip.action, strip.action_frame_start, strip.action_frame_end, strip.name
+            track.strips.remove(strip)
+            strip = track.strips.new(name, 0, action)
+            strip.action_frame_start = first
+            strip.action_frame_end = last
+    for track in rig.animation_data.nla_tracks: track.mute = False
+    bpy.context.scene.frame_set(0)
+    bpy.ops.export_scene.gltf(filepath=str(OUTPUT/'warrior.glb'),export_format='GLB',export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True)
+
 bpy.ops.wm.read_factory_settings(use_empty=True)
 
 # The clips are baked at 30 fps (tools/import_combat.py); exporting at
@@ -55,15 +84,21 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 
 bpy.context.scene.render.fps=30
 bpy.ops.import_scene.gltf(filepath=str(OUTPUT/'warrior.glb'))
-for old in [o for o in bpy.data.objects if o.name.startswith(('Hero','Ranger','Wizard'))]:
+for old in [o for o in bpy.data.objects if (o.name.startswith(WARRIOR_PIECES) if WARRIOR_ONLY else o.name.startswith(('Hero','Ranger','Wizard')))]:
     bpy.data.objects.remove(old,do_unlink=True)
 rig = next(o for o in bpy.data.objects if o.type=='ARMATURE')
 # The ranger's cloak bones are rebuilt below.
-outfits.remove_bones(rig,'cloak_')
-outfits.remove_bones(rig,'cape_')
 outfits.remove_bones(rig,'kilt_')
-outfits.remove_bones(rig,'robe_')
+if not WARRIOR_ONLY:
+    outfits.remove_bones(rig,'cloak_')
+    outfits.remove_bones(rig,'cape_')
+    outfits.remove_bones(rig,'robe_')
 body = next(o for o in bpy.data.objects if o.type=='MESH' and 'SuperHero' in o.name)
+if WARRIOR_ONLY:
+    warrior_kit.build(outfits,rig,body)
+    export()
+    print('WARRIOR_KIT_READY')
+    sys.exit(0)
 before = set(bpy.data.objects)
 bpy.ops.import_scene.gltf(filepath=str(outfits.SOURCE/'Rogue.glb'))
 imported = set(bpy.data.objects)-before
@@ -121,19 +156,6 @@ helm.data.materials.append(bpy.data.materials.new('HelmSteel'))
 for face in helm.data.polygons: face.material_index = 0
 print('HERO_HELMET_READY',len(helm.data.vertices))
 
-# The scale armor as a real shell: the armored part of the body (chest, back,
-# shoulders and upper arms, as painted by tools/paint_hero.py) is copied and
-# thickened outward, keeping its UVs, texture and skin weights, so the cuirass
-# has bulk instead of being painted flat on the skin. The gladiator statue
-# wears the same shell (tools/prepare_enemy_outfits.py).
-# After his concept art the warrior's arms are bare below the shoulder caps.
-shoulder_x = abs((rig.matrix_world @ rig.data.bones['upperarm_l'].head_local).x)
-def warrior_cuirass(bone, z, co):
-    if bone.startswith(('upperarm','clavicle')): return abs(co.x) < shoulder_x+.1
-    if bone.startswith(('spine_02','spine_03')): return True
-    return bone.startswith(('spine_01','pelvis','root')) and z >= outfits.CUIRASS_BOTTOM
-armor = outfits.body_shell(body,rig,'HeroArmor',warrior_cuirass,.025,.02,('clavicle','upperarm'),.035)
-print('HERO_ARMOR_READY',len(armor.data.vertices))
 
 # The KayKit mage's tunic drawn down into an ankle-length robe (with the named
 # sleeves and cape), close-fitted over the chest and arms, as one object.
@@ -496,90 +518,8 @@ def ranger_kit():
     print('RANGER_KIT',[o.name for o in kit])
 ranger_kit()
 
-# The warrior's kit, after his concept art: bracers and a broad belt as raised
-# shells of the body (painted by tools/paint_kits.py through the body's UVs);
-# his steel plated boots (HeroGreaves: greaves over the shins up over the
-# knee, and the feet plated with them) and, for the plated leg armor that
-# drops, cuisses over the thighs (HeroCuisses), both shells of the body too but
-# drawn as hammered plate by assets/shaders/plate.gdshader; and an armoured
-# kilt of hanging plates over a tattered underskirt.
-# The warrior's kilt: its top (tucked under the belt), hem and flare (how much
-# wider at the hem than the hips: it hangs close, not out like a skirt).
-KILT_TOP = .995
-KILT_HEM = .64
-KILT_FLARE = .12
-# The greaves' knee cops reach this far over the knee, and the cuisses come
-# down over them from here, so the two lap with no skin between.
-KNEE = (rig.matrix_world @ rig.data.bones['calf_l'].head_local).z
-GREAVE_TOP = KNEE+.07
-CUISSE_LOW = KNEE+.04
-CUISSE_TOP = .955
-CUISSE_FAULD = .76
-# The plated boots' toes: a sabaton's smooth rounded cap, not the shape of
-# the toes beneath (the shell is a copy of the foot). Over the fore part of
-# each foot the shell's outer skin is laid on a cap of its own: a rounded
-# section (a superellipse, flat underneath) whose width and height draw in
-# toward a blunt tip, blended into the instep behind it.
-TOE_HEIGHT = .11
-TOE_FROM = -.03
-TOE_BLEND = .035
-def round_toes(shell):
-    mesh = bmesh.new(); mesh.from_mesh(shell.data)
-    mesh.verts.ensure_lookup_table()
-    mesh.normal_update()
-    for side in (-1, 1):
-        toes = [v for v in mesh.verts if v.co.z < TOE_HEIGHT and v.co.y < TOE_FROM+TOE_BLEND and (v.co.x > 0) == (side > 0)]
-        if not toes: continue
-        centre = sum((v.co for v in toes), Vector((0, 0, 0)))/len(toes)
-        outer = [v for v in toes if (v.co-centre).dot(v.normal) > 0]
-        if not outer: continue
-        xs = [v.co.x for v in outer]; zs = [v.co.z for v in outer]; ys = [v.co.y for v in outer]
-        xc = (max(xs)+min(xs))/2
-        sole = min(zs)
-        top0 = max(v.co.z for v in outer if v.co.y > TOE_FROM-.04)
-        w0 = (max(xs)-min(xs))/2
-        tip = min(ys)-.006
-        n = 2.6
-        for v in outer:
-            s = max(0.0, min(1.0, (v.co.y-TOE_FROM)/(tip-TOE_FROM)))
-            width = w0*(1-s**3)**.5
-            top = top0-(top0-sole-.022)*s**1.3
-            zc = (top+sole)/2; h = (top-sole)/2
-            a = math.atan2(v.co.z-zc, v.co.x-xc)
-            c, sn = math.cos(a), math.sin(a)
-            cap = Vector((xc+width*math.copysign(abs(c)**(2/n), c), v.co.y, zc+h*math.copysign(abs(sn)**(2/n), sn)))
-            cap.z = max(cap.z, sole)
-            blend = max(0.0, min(1.0, (TOE_FROM-v.co.y)/TOE_BLEND+1.0)) if v.co.y > TOE_FROM else 1.0
-            v.co = v.co.lerp(cap, blend)
-    mesh.to_mesh(shell.data); mesh.free()
-
-def warrior_kit():
-    shells = []
-    shells.append(outfits.body_shell(body,rig,'HeroBracers',lambda bone,z: bone.startswith('lowerarm'),.011,.009))
-    shells.append(outfits.body_shell(body,rig,'HeroBelt',lambda bone,z: bone.startswith(('spine_01','pelvis','root','spine_02')) and .953<z<1.047,.03,.012))
-    shells.append(outfits.body_shell(body,rig,'HeroGreaves',lambda bone,z: (bone.startswith(('calf','foot','ball')) or (bone.startswith('thigh') and z<GREAVE_TOP)) and z<GREAVE_TOP,.014,.012))
-    round_toes(shells[-1])
-    # (The cuisses take in the hips under the belt too, a fauld round them.)
-    shells.append(outfits.body_shell(body,rig,'HeroCuisses',lambda bone,z: (bone.startswith(('thigh','calf')) or (bone.startswith(('pelvis','root','spine_01')) and z>CUISSE_FAULD)) and CUISSE_LOW<z<CUISSE_TOP,.02,.014))
-    for shell in shells[-2:]:
-        for poly in shell.data.polygons: poly.use_smooth = True
-    print('WARRIOR_KNEE %.3f' % KNEE)
-    # The kilt: a ring of hanging cloth from under the belt to mid-thigh,
-    # swung by chains of bones on the spring simulation and folded over the
-    # legs by its shader, as the ranger's cloak is; the shader draws it as the
-    # concept's pteruges (scripts/visual.gd, assets/shaders/kilt.gdshader).
-    names = {g.index:g.name for g in body.vertex_groups}
-    waist = [(body,v) for v in body.data.vertices if KILT_TOP-.04<v.co.z<KILT_TOP+.01 and v.groups and not (outfits.region_of_bone(names[max(v.groups,key=lambda g:g.weight).group]) or '').startswith('arm')]
-    kilt = bpy.data.objects.new('HeroKilt',bpy.data.meshes.new('HeroKilt'))
-    bpy.context.scene.collection.objects.link(kilt)
-    # Its top follows his own waist closely all round (just inside the
-    # belt), not the widest of the hips beside it.
-    outfits.cloth_sheet(kilt,waist,top=KILT_TOP,hem=KILT_HEM,flare=KILT_FLARE,reach=math.pi,columns=72,rows=16,offset=.016,window=.1,smoothing=2)
-    outfits.cloth_chains(rig,kilt,'pelvis',KILT_TOP+.01,(KILT_TOP-.07,KILT_TOP),chains=16,segments=5,prefix='kilt_')
-    kilt.parent = rig
-    kilt.modifiers.new('Armature','ARMATURE').object = rig
-    print('WARRIOR_KIT',[o.name for o in shells+[kilt]])
-warrior_kit()
+# The warrior's kit (tools/warrior_kit.py).
+warrior_kit.build(outfits,rig,body)
 
 # The wizard's kit, after his concept art (painted by tools/paint_kits.py):
 # boots as the ranger's but lower, bracers showing below his sleeves, and a
@@ -792,7 +732,7 @@ wizard_kit()
 # skin weights carried over to the new points, and shaded smooth; the cloth
 # shader's folding (cloth_fold.gdshaderinc) also has four times the points
 # to move.
-ROUNDED = ('RangerCloak','WizardRobe','WizardRobeSkirt','WizardHood','HeroKilt')
+ROUNDED = ('RangerCloak','WizardRobe','WizardRobeSkirt','WizardHood')
 def round_cloth(obj):
     if obj.data.shape_keys: return
     before = len(obj.data.vertices)
@@ -809,18 +749,5 @@ def round_cloth(obj):
 for obj in list(bpy.data.objects):
     if obj.type == 'MESH' and obj.name.startswith(ROUNDED): round_cloth(obj)
 
-rig.animation_data.action = None
-# Every clip goes out with the timing it came in with (clip_starts above).
-for track in rig.animation_data.nla_tracks:
-    if BEGAN.get(track.name, 1.0) > 1/60: continue
-    for strip in list(track.strips):
-        if strip.frame_start != 1: continue
-        action, first, last, name = strip.action, strip.action_frame_start, strip.action_frame_end, strip.name
-        track.strips.remove(strip)
-        strip = track.strips.new(name, 0, action)
-        strip.action_frame_start = first
-        strip.action_frame_end = last
-for track in rig.animation_data.nla_tracks: track.mute = False
-bpy.context.scene.frame_set(0)
-bpy.ops.export_scene.gltf(filepath=str(OUTPUT/'warrior.glb'),export_format='GLB',export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True)
-print('HERO_BOOTS_READY',len(boots_object.data.vertices))
+export()
+print('HERO_BOOTS_READY',len(bpy.data.objects['HeroBoots'].data.vertices))

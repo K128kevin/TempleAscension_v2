@@ -1,7 +1,8 @@
 extends Node3D
 ## A guard at one of the town's gates (scripts/world_town.gd): a man armored as
 ## the centurion statues are (tools/make_guard.py), at life size and in real
-## steel, leather and wool, steel gauntlets on his hands. He stands his watch
+## steel, leather and wool, steel gauntlets on his hands and mail breeches
+## under his leg plates. He stands his watch
 ## day and night, his spear grounded upright in his right fist
 ## (scripts/arm_reach.gd holds the hand to its grip) and his shield on his
 ## left forearm. He is no part of the town's round (scripts/townsfolk.gd): he
@@ -54,6 +55,10 @@ func setup(variant: float) -> void:
 				var gauntlets: ShaderMaterial = armor.duplicate()
 				gauntlets.set_shader_parameter("gauntlet",true)
 				mesh.material_override = gauntlets
+			elif part == "ArmorHose":
+				var breeches: ShaderMaterial = armor.duplicate()
+				breeches.set_shader_parameter("hose",true)
+				mesh.material_override = breeches
 		mesh.extra_cull_margin = 1.0
 	# His spear (a legionary's hasta), its butt on the ground below his fist,
 	# its blade's flat turned to the front; no two quite alike.

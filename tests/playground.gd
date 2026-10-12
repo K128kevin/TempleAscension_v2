@@ -283,9 +283,10 @@ func test():
 	var cloth: ShaderMaterial = pg.heroes[1].visual.cloak_mesh.material_override
 	pg.heroes[1].visual.cloak_capsules()
 	check(cloth.shader.resource_path.ends_with("cloak.gdshader") and cloth.get_shader_parameter("capsule_count") == 10 and (cloth.get_shader_parameter("capsule_a") as PackedVector3Array).size() == 10 and cloth.get_shader_parameter("leg_capsules") == 6,"The ranger's cloak folds over his legs and arms (cloth shader with limb capsules)")
-	# The warrior's kilt swings on its own chains and folds over his legs.
-	var kilt_sim = pg.heroes[0].visual.cloak
-	check(kilt_sim != null and kilt_sim.setting_count == 16 and pg.heroes[0].visual.cloth_feel == pg.heroes[0].visual.CLOTH_KILT and pg.heroes[0].visual.cloak_mesh.name.begins_with("HeroKilt"),"The warrior's kilt is simulated cloth")
+	# The warrior's kilt is stiff strips of leather, each swung on its own
+	# from his belt and pushed aside by his legs (never stretched).
+	var kilt_sim = pg.heroes[0].visual.kilt
+	check(kilt_sim != null and kilt_sim.strip_count == 18 and kilt_sim.piece_bone.size() == 54 and kilt_sim.tab_count == 18 and kilt_sim.tube_bone.size() == 6 and pg.heroes[0].visual.cloak == null,"The warrior's kilt is strips of stiff leather in three rigid pieces, swung from his belt and pushed aside by his legs and hips")
 	# The wizard's robe's skirt swings on its own chains and folds over his
 	# legs, the sash's ends with it, just outside it.
 	var wizard_visual = pg.heroes[2].visual
@@ -309,7 +310,7 @@ func test():
 		var ranger = hero.uid == "hero:ranger"
 		check(kit.all(func(n): return worn.get(n,not ranger) == ranger) and not worn.get("HeroBoots",false),"Only the ranger wears the ranger's kit (%s)" % hero.uid)
 	# The warrior and wizard have their own detailed kits too.
-	var kits = {"hero:warrior":["HeroBracers","HeroBelt","HeroKilt","HeroGreaves","HeroArmor"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardRobeSkirt","WizardHood"]}
+	var kits = {"hero:warrior":["HeroGauntlets","HeroPauldrons","HeroBelt","HeroKilt","HeroGreaves","HeroArmor"],"hero:wizard":["WizardBoots","WizardBootsFeet","WizardBracers","WizardSash","WizardSashEnd0","WizardRobe","WizardRobeSkirt","WizardHood"]}
 	for hero in pg.heroes:
 		var worn = {}
 		for mesh in hero.visual.skin_meshes: worn[String(mesh.name)] = mesh.visible

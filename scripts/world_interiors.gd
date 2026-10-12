@@ -20,6 +20,8 @@ const INN_BAYS = Vector2i(5,4)
 # Anya's own bed, in the kitchen behind the bar (from the inn's corner): the
 # back room under the loft, by its door.
 const ANYA_BED = Vector3(14.2,0,2.35)
+# How long the benches at the west table are (the table is three metres).
+const BENCH_LENGTH = 2.1
 const SMITHY = Vector3(-245.5,0,-69.5)
 const SMITHY_BAYS = Vector2i(4,3)
 
@@ -149,8 +151,12 @@ static func inn(world, tint: Color, wood: Color) -> Dictionary:
 	put(world,"barrel_rack",Vector3(c.x+8.4,0,edge+.05),1.3)
 	put(world,"barrel_rack",Vector3(c.x+10.0,0,edge+.05),1.3)
 	put(world,"shelf_bottles",Vector3(c.x+9.2,2.0,edge-.2),.65)
-	for spot in [[3.5,.1],[4.4,-.15],[6.1,.12],[7.9,-.1],[9.6,.05],[10.5,-.12]]: put(world,"mug",Vector3(c.x+spot[0],1.12,bar+spot[1]),.17,spot[0]*2.0)
-	for spot in [[5.2,-.1],[5.45,.12],[8.7,.08]]: put(world,"bottle",Vector3(c.x+spot[0],1.12,bar+spot[1]),.36)
+	# Last night's mugs and bottles are still on the bar, and its plates and
+	# mugs on the tables: things left about, for Selene to clear away
+	# (scripts/townsfolk.gd chores), as room["litter"].
+	var litter: Array = []
+	for spot in [[3.5,.1],[4.4,-.15],[6.1,.12],[7.9,-.1],[9.6,.05],[10.5,-.12]]: litter.append({"kind":"mug","node":put(world,"mug",Vector3(c.x+spot[0],1.12,bar+spot[1]),.17,spot[0]*2.0)})
+	for spot in [[5.2,-.1],[5.45,.12],[8.7,.08]]: litter.append({"kind":"bottle","node":put(world,"bottle",Vector3(c.x+spot[0],1.12,bar+spot[1]),.36)})
 	candle(world,Vector3(c.x+7.0,1.12,bar-.1),.44,false)
 	lamp(world,Vector3(c.x+7.0,2.4,bar+.4),1.1,7.0)
 	put(world,"lantern",Vector3(c.x+2.2,1.9,edge-.4),.8)
@@ -159,7 +165,12 @@ static func inn(world, tint: Color, wood: Color) -> Dictionary:
 	var west = Vector3(c.x+4.6,0,c.z+12.6)
 	put(world,"table",west,.85)
 	world.block_rect(Rect2(west.x-1.5,west.z-.6,3.0,1.2),world.LOW,false)
-	for side in [-1.0,1.0]: put(world,"bench",west+Vector3(0,0,side*.98),.5,0.0,.5)
+	# (Its benches shorter than the table, so there is room to stand at
+	# its corners and serve those sitting at its ends.)
+	for side in [-1.0,1.0]:
+		var bench: Vector3 = west+Vector3(0,0,side*.98)
+		world.place("bench",bench,Vector3(BENCH_LENGTH,.5,.5))
+		world.block_disc(bench,.5,world.LOW,false)
 	var east = Vector3(c.x+13.4,0,c.z+11.0)
 	put(world,"table",east,.85,PI/2)
 	world.block_rect(Rect2(east.x-.6,east.z-1.5,1.2,3.0),world.LOW,false)
@@ -168,9 +179,9 @@ static func inn(world, tint: Color, wood: Color) -> Dictionary:
 		candle(world,table+Vector3(0,.85,0),.4,true)
 		for spot in [Vector3(-.8,0,.2),Vector3(.7,0,-.2),Vector3(.2,0,.3)]:
 			var turned: Vector3 = spot if table==west else Vector3(spot.z,0,spot.x)
-			put(world,"plate",table+turned+Vector3(0,.85,0),.03)
-			put(world,"mug",table+turned*1.3+Vector3(.15,.85,-.15),.17,spot.x*3.0)
-	put(world,"bottle",west+Vector3(-.3,.85,-.25),.36)
+			litter.append({"kind":"plate","node":put(world,"plate",table+turned+Vector3(0,.85,0),.03)})
+			litter.append({"kind":"mug","node":put(world,"mug",table+turned*1.3+Vector3(.15,.85,-.15),.17,spot.x*3.0)})
+	litter.append({"kind":"bottle","node":put(world,"bottle",west+Vector3(-.3,.85,-.25),.36)})
 	put(world,"barrel",Vector3(c.x+1.7,0,c.z+14.3),1.0,0.0,.4)
 	put(world,"barrel",Vector3(c.x+2.6,0,c.z+14.5),.85,.8,.4)
 	put(world,"cabinet",Vector3(c.x+1.35,0,c.z+9.6),1.5,PI/2,.5)
@@ -198,6 +209,7 @@ static func inn(world, tint: Color, wood: Color) -> Dictionary:
 	world.place("nightstand",own+Vector3(-1.5,0,-.9),Kit.sized("nightstand",.95))
 	world.place("candlestick",own+Vector3(-1.5,.95,-.9),Kit.sized("candlestick",.36))
 	lamp(world,Vector3(c.x+10.0,2.2,c.z+4.0),.8,8.0)
+	room["litter"] = litter
 	return room
 
 # The smithy: the forge and its chimney against the north wall, anvils before

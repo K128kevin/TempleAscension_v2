@@ -63,20 +63,28 @@ static func road(world) -> void:
 	world.add_place("palace road","road",Vector3(x,0,-66),8.0)
 
 # A wall of clean white stone shuts the hill off from the town, with a
-# towered gate where the road goes through.
+# towered gate where the road goes through. Either side it runs from the
+# gate's tower to the town's wall (Town.town_wall), which comes up from the
+# south round the hill's ground there: it ends against the tower at that
+# corner, and goes no further.
+# (The gate's towers' half-width, and the town wall's corner towers'.)
+const GATE_TOWER = 1.9
+const CORNER_TOWER = 1.8
 static func precinct(world) -> void:
 	var x: float = world.HILL.x
 	var material = Kit.masonry(STONE,WOOD,.4,Town.KEPT)
 	var gold = Kit.gold()
-	var at = x-66.0
-	while at<x+66.0:
-		var middle = at+2.0
-		at += 4.0
-		if absf(middle-x)<6.5 or world.margin_at(Vector3(middle,0,WALL_Z))<-9.0: continue
-		var piece = world.place("wall",Vector3(middle,0,WALL_Z),Vector3(4.0,6.4,1.4),material)
-		var coping = world.place("floor",Vector3(middle,6.4,WALL_Z),Vector3(4.05,.3,1.8),Kit.marble())
-		world.block_rect(Rect2(middle-2.0,WALL_Z-.7,4.0,1.4))
-		world.screen([piece,coping])
+	for side in [-1.0,1.0]:
+		var from: float = x+side*(7.6+GATE_TOWER)
+		var to: float = x+side*(world.HILL_REACH.x-CORNER_TOWER)
+		var bays: int = maxi(1,roundi(absf(to-from)/4.0))
+		var bay: float = absf(to-from)/bays
+		for i in bays:
+			var middle = from+side*bay*(i+.5)
+			var piece = world.place("wall",Vector3(middle,0,WALL_Z),Vector3(bay,6.4,1.4),material)
+			var coping = world.place("floor",Vector3(middle,6.4,WALL_Z),Vector3(bay+.05,.3,1.8),Kit.marble())
+			world.block_rect(Rect2(middle-bay*.5,WALL_Z-.7,bay,1.4))
+			world.screen([piece,coping])
 	var towers: Array = []
 	for side in [-1.0,1.0]:
 		var tower = Vector3(x+side*7.6,0,WALL_Z)
@@ -138,7 +146,10 @@ const THRONE_HALF = 14.0
 # the depth of its stair.
 const DAIS = Vector3(1.8,7.0,7.0)
 const DAIS_STAIR = 4.0
-const THRONE_HEIGHT = 3.2
+# The great throne (tools/make_throne.py, at its own size: 2.4 m to its
+# crest, on its own two-step plinth), and how far from the dais's back its
+# middle stands.
+const THRONE_BACK = 1.0
 # The bedchambers' walls (z, north to south) on each side, and where each
 # chamber's door is (the bay of the throne room's side wall it opens from).
 const WEST_ROOMS = [[-132.0,-124.0,1],[-124.0,-116.0,3],[-116.0,-108.0,4]]
@@ -300,9 +311,10 @@ static func throne_room(world, x: float) -> void:
 	world.block_rect(Rect2(x-DAIS.z,HALL.z+1.0,.6,DAIS.y),world.LOW,false)
 	world.block_rect(Rect2(x+DAIS.z-.6,HALL.z+1.0,.6,DAIS.y),world.LOW,false)
 	for side in [-1.0,1.0]: world.block_rect(Rect2(x+side*(DAIS.z+5.0)*.5-(DAIS.z-5.0)*.5,dais_top-.6,DAIS.z-5.0,.6),world.LOW,false)
-	var throne = world.place("chair",Vector3(x,0,HALL.z+3.2),Kit.sized("chair",THRONE_HEIGHT),gold,0.0)
+	var seat = Vector3(x,0,HALL.z+1.0+THRONE_BACK)
+	var throne = world.place("throne",seat,Vector3.ONE,null,0.0)
 	throne.set_meta("great_throne",true)
-	world.block_disc(Vector3(x,0,HALL.z+3.2),1.0,world.LOW,false)
+	world.block_rect(Rect2(x-.85,seat.z-.65,1.7,1.5),world.LOW,false)
 	# Crimson hangings behind it, fires to either side.
 	for offset in [-4.0,0.0,4.0]: Town.hanging(world,"cloth_red",Vector3(x+offset,2.0,HALL.z+1.02),5.0 if offset == 0.0 else 4.2,0.0,Town.CRIMSON)
 	for side in [-1.0,1.0]:

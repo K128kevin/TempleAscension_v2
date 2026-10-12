@@ -78,11 +78,47 @@ middle) and the Steel Full Helm (a tall rounded skull down over the ears and nec
 with a riveted face plate, an eye slot across it and a field of holes below). Each
 part is named for its finish (Steel, Dark, Bright, Rivet) and coloured by
 Art.worn_model with the plate shader as plain hammered steel (Art.hammered); the
-kit's own helm is hidden while one is worn. The warrior's leg plates are shells of his own
-body made there too: `HeroGreaves` (shins, knee cops and the feet, his Steel
-Plated Boots) and `HeroCuisses` (thighs and hips, for Plated Leg Armor, shown in
-the kilt's place), both drawn as hammered steel by `assets/shaders/plate.gdshader`
-on their rest pose. His kilt hangs close (12% wider at the hem than the hips). `assets/textures/wood_planks.png` (cut from the
+kit's own helm is hidden while one is worn. The rest of the warrior's kit is
+built by `tools/warrior_kit.py` (run from `outfit_hero.py`; `-- --warrior-only`
+rebuilds just his pieces in a few minutes), every piece shaped as rigid armor
+rather than a skin of his muscles: each cross-section of a shell is laid on its
+convex hull, and each line down it too (`Outline`). `HeroArmor`, the scale
+cuirass, is a shell of his torso and the tops of his shoulders drawn out that
+way, hanging straight from the chest, its open edges evened out; its scales are
+painted over everything it covers, so no skin shows on it. `HeroPauldrons` are
+made afresh round each upper arm, clear of the cuirass: a domed cop and three
+lames lapping down to mid upper arm. `HeroGauntlets` are his hands and wrists
+stood off the skin with a flared bell cuff that ends halfway up the forearm,
+their plates (cuff, four lames over the back of the hand, a knuckle plate, a
+scale per finger joint, a leather palm) carried in their UVs for
+`assets/shaders/harness.gdshader`, which draws both. `HeroGreaves`, the Steel
+Plated Boots, are lofted from the sole a centimetre or so off the leg: a
+sabaton of the foot's own size with a rounded toe and overlapping toe lames
+(drawn by the shader), two lames over the ankle, and a greave following the
+shin and calf to a rolled rim, level all round at mid-shin. `HeroCuisses`,
+Plated Leg Armor, covers what long trousers would, from under the belt to the
+ankles (cuisse lames, a domed knee cop, greaves, mail between the legs); worn
+with the boots, it is cut off inside them (plate.gdshader `cut_below`). Both are hammered steel by
+`assets/shaders/plate.gdshader` on their rest pose. `HeroKilt` is pteruges: 18
+separate strips of stiff leather, each three rigid pieces creased 10 and 21 cm
+down (bones `kilt_<i>`, `kilt_<i>_1`, `kilt_<i>_2`, its end `kilt_<i>_tip`),
+hung from the pelvis at the belt's lower edge, and a row of 18 short tabs
+(`kilt_<18+i>`) over their tops. `scripts/kilt_strips.gd` swings each piece as a
+damped pendulum and keeps it out of his body, which it fits at setup from his
+own skinned mesh, sampled across its faces: each thigh, hip crease and calf top
+as a tube whose outline at every 1.5 cm along it and every 1/32 of a turn round
+it is his outermost flesh there (the hips' own flesh moves with the hips the
+strips hang from, and the strips are cut to clear it). Every frame each piece,
+from the belt down, is turned out of the flesh along its normal (its middle,
+tip and edges: the edges from the strip's own width and curl), and a piece
+lying near a leg is laid down onto it and twisted a little to lie flat on it.
+A thigh raised up through a strip's hinge carries the hinge up onto it (under
+its tab), so the strips in front of a rising knee ride on top of the thigh.
+Nothing stretches (`assets/shaders/kilt.gdshader` draws them). Its data is in
+flat packed arrays and nothing is allocated per frame. `tools/kilt_check.gd` measures how
+far the strips go into, or stand off, his skinned body through a clip. The forearms are bare above the
+gauntlets (`tools/paint_kits.py`); the statues carved from his kit keep the old
+manica and wraps, the warrior's height map being painted from that. `assets/textures/wood_planks.png` (cut from the
 Quaternius furniture trim sheet by `tools/paint_hero.py`) remains available as a
 wood material. Hit reactions for anyone holding a shield (ShieldHit, ShieldHitHead, ShieldHitStagger,
 ShieldHitKnockdown) keep that 60° forearm turn, so a hit does not flip the shield.
@@ -195,7 +231,17 @@ bushes; they were replaced.)
   make the rim (not round the town, which is closed by its own wall of the gate
   wall's modules, towered at the corners: Town.town_wall; the world's `walled`
   says where no rock stands), drawn in batches: cliff faces along the far walls, boulders rising
-  away from the camera on the near ones.
+  away from the camera on the near ones. Here and there a stretch of the town
+  wall has fallen into a breach (Town.ruin): no kit module, but a mesh built
+  for it, column by column of stones broken off at their own heights, each
+  face of the wall to its own, tops tilted and chipped, the line dropping
+  from the standing wall either side (steeply where it breaks off a whole
+  bay) to a low point that differs from bay to bay (1.6 to 3.8 m); its fallen
+  stones lie in heaps of rubble and dressed blocks at its foot, more the lower
+  it has fallen. It is drawn in the masonry shader as the rest of the wall is,
+  and still closes the town. The palace hill's white wall (its gate guarded
+  by marble centurions) runs from its gate's towers to the town wall's towers
+  at the hill's corners, and no further.
 - **Buildings, arena, town wall and temple front.** KayKit Dungeon Remastered wall
   modules: `wall`, `wall_arched`, `wall_window` (closed shutters), `wall_archwindow`,
   `wall_door`, `arch`, `wall_broken`, `wall_half`, `pillar`, `pillar_decorated`,
@@ -273,7 +319,10 @@ bushes; they were replaced.)
   dresses it for real (`scripts/town_guard.gd`): the body in the warrior's
   painted skin and kit, the armor through `assets/shaders/guard_armor.gdshader`
   (the knight's palette read only for what each part is made of: hammered and
-  rusting steel, bronze, red wool, leather, all dusty), a grounded spear, and the
+  rusting steel, bronze, red wool, leather, all dusty), mail breeches under the leg
+  plates (his own hips and legs, cut from his body and stood off it, drawn as rows
+  of steel rings: where the knight's plates part, behind the thigh and knee and
+  round the calf above the boot, mail shows rather than skin), a grounded spear, and the
   KayKit square shield painted as a red
   legionary's board (`assets/shaders/guard_shield.gdshader`). Two stand at each
   of the town's gates. The spear is a legionary's hasta (`assets/models/props/hasta.glb`,
@@ -300,8 +349,22 @@ bushes; they were replaced.)
   the next; sleeves lofted along the arms), skinned from the flesh nearest it. Men
   have a knee-length tunic, a short sleeveless sack and a mid-calf robe; women a
   gown, a shift, and Anya's long-sleeved blouse and square-necked dress (the tube
-  with its neck cut out, leaving straps over the shoulders); there is a belt, and
-  Anya's braid is laid down her back lobe over lobe. Each mesh carries extra data
+  with its neck cut out, leaving straps over the shoulders); the gown and dress
+  lie well off the shoulders and the blouse close on them, so it never shows
+  through. There is a belt, and Anya's braid is laid down her back lobe over lobe.
+  An apron (Selene's, Zeno's) is the front of the skirt beneath it, laid a little
+  off it: held as that skirt is, so it lies on a seated lap, but standing and
+  walking it hangs from the hips and a striding leg pushes it out
+  (`cloth.gdshaderinc` with `cloth_fold.gdshaderinc`; `scripts/townsperson.gd`
+  `apron_legs` gives it the legs). Sandals are made for each body's feet: a flat
+  sole a little larger than the foot's print and straps across the toes, the
+  instep, round the ankle and up the heel, each where a plane cuts the foot. All
+  townsfolk wear them but the shod and the starving, who go barefoot; the
+  starving also have the woman's long hair grown out and matted (fitted to the
+  man's head too) and the men a long beard, the locks stretched, combed off the
+  body and straggling (`grown`), and a starving woman's feet are drawn smaller.
+  The body's seam points are joined, so a figure drawn in by hunger
+  (`gaunt.gdshaderinc`) does not crack at its seams. Each mesh carries extra data
   in its second UV set: on the body, every point's height at rest and how far
   along the arm it is, so `assets/shaders/townsfolk_skin.gdshader` leaves out the
   flesh under a garment (and dirties the poor); on a garment, how near its hem or
@@ -327,6 +390,9 @@ bushes; they were replaced.)
   tool is put exactly where the work needs it and the hand holding it follows by
   IK (`scripts/arm_reach.gd`, which turns the fist to lie round the tool with the
   wrist straight), while he bends over it from the waist (`scripts/body_lean.gd`).
+  He is heard at it: a blow rings out each time the hammer's face meets the blade
+  (the moment the sparks fly), and the grinding sounds while the blade is on the
+  turning stone (see Audio).
   The grindstone's wheel is cut from its frame by `tools/prepare_whetstone.py`
   (`whetstone_wheel.glb`) so that it can turn. `scripts/townsperson.gd` dresses a figure and
   `scripts/townsfolk.gd` runs the town: its own A* grid of the streets (the arena,
@@ -397,8 +463,17 @@ bushes; they were replaced.)
   `statue_marble.png` laid at one size in the world (plinths, kerbs, columns, the
   Elders' Box), so its veins keep their shape on blocks of any proportion; the box's
   walls are built of wall modules near the kit's own four metres square rather than
-  one module stretched to the wall's length. Thrones are the props kit's `chair`, gilded;
-  rails, cornices, column heads and feet are the paving mesh, gilded.
+  one module stretched to the wall's length. The thrones are built for the game by
+  `tools/make_throne.py` (`assets/models/props/throne.glb` and `throne_elder.glb`,
+  at their real size): a solid seat block of white marble on a stepped marble plinth,
+  panelled and framed in gilt, gilt lion's feet; solid arms, marble side panels under
+  gilt rails ending in scrolls; a tall solid back, raked a little, its inner face a
+  crimson velvet pad in a gilt frame, posts with finials at its corners and a gilt
+  sunburst crest; a deep velvet cushion. Their surfaces (`ThroneMarble`, `ThroneGold`,
+  `ThroneVelvet`) are dressed in the world's marble, gold leaf and a crimson velvet
+  whose pile catches the light at its edges. The elders' box has five of the smaller,
+  plinthless throne, 1.2 m to its crest. Rails, cornices, column heads and feet are the
+  paving mesh, gilded.
 - **The palace hill.** The world's ground is one flat slab; the hill is
   `assets/models/props/hill.glb`, a two-metre grid raised to the hill's height by
   `tools/make_hill.py` (like the palms, built for this game rather than taken from a
@@ -412,7 +487,8 @@ bushes; they were replaced.)
   tower over it and the walls on the camera's side are lifted away while the hero is
   inside (`Overworld.rooms`). The throne room (28 m by 24) runs from the door to a
   marble dais edged with gold, a deck of its own climbed by the stairs mesh, where
-  the props kit's chair stands gilded at 3.2 m as the great throne, crimson hangings
+  the great throne (`tools/make_throne.py`, 2.4 m to its crest on its own two-step
+  plinth, its seat a big man's) stands, crimson hangings
   behind it, fires in gilded bowls either side; two rows of marble columns with
   gilded heads and feet, a crimson runner (the kit's banner cloth laid flat) and
   benches along the walls, the floor between left clear for the town to gather.
@@ -547,12 +623,34 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   weapon no further than 55°), the elbow is swung round the arm's line from where
   it was asked to the nearest place that leaves the fist turned no further than a
   forearm turns (measured from the elbow's pit: at the middle the thumb points at
-  it), and the forearm is rolled after the fist. Both exporters take `SKILLS_DRY`
+  it; and never, given the chest's front, to where the elbow points at it, which
+  reads as an elbow bent the wrong way), and the forearm is rolled after the
+  fist. Both exporters take `SKILLS_DRY`
   / `HEAVY_DRY` (author and check, write nothing) and `SHEET_DIR` (render each
   clip authored as a contact sheet in Blender itself, `tools/blender_sheet.py`,
-  laid out by `tools/sheet_compose.py`: his right side, the front, the front
-  right quarter and from above, a stand-in weapon on the fist), which is how a
-  swing is judged without the eleven-minute export and reimport. The shockwave of a blow
+  laid out by `tools/sheet_compose.py`: his right side, the front, and the
+  game's own 43° downward view from his front right and from behind his left,
+  a stand-in weapon on the fist), which is how a swing is judged without the
+  eleven-minute export and reimport. Thunder Slam itself (all three clips) is
+  one circle on his right, after the user's drawing of the head's path: the
+  weapon held before the belly pointed ahead is swung down past the outside of
+  his right leg and back behind him as the arms drop and swing back with the
+  chest turned to it, up behind him, over the head, and down before him to meet
+  the ground level, as a hammer meets a nail, a stride ahead of a deep kneel.
+  The weapon is glued to the right fist with its head beyond the thumb, so that
+  hand can never hold it hanging thumb-up: the weapon is kept at least a half
+  right angle off the arms' line all the way round (a wrist deviates no
+  further), passing the arms' line only out to the side, and above the line
+  through the blow, which is what lets the blow come down level without a
+  flip. While the weapon trails below the arms the fist can only carry it with
+  the elbow turned up, so those keys hold the arms fully straight (no bend
+  direction shows) and leave the elbows free; through the blow the arms are a
+  shade short of straight (`reach()`, the `ea` channel) with each elbow asked
+  for a direction found with `HEAVY_PROBE=s,...` (each elbow's pole swept
+  right round the arm at those moments, the fist's turn and the elbow's way
+  printed for each) so every elbow points back or down. The left hand takes
+  the haft with its thumb toward the head or the butt, whichever wrings its
+  forearm less (`hold()`). The shockwave of a blow
   on the ground is `scripts/shockwave.gd`: a disc laid on the floor over the blow's
   reach (a slice of one for the slam's arc) and a low wall standing on the front,
   both drawn by `assets/shaders/shockwave.gdshader` (the racing front, its haze,
@@ -577,7 +675,7 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   `Pike...`), by `tools/import_pike.py`: keyed frame by frame as the sword's skill
   swings are, each from its own stance and back to it, each skill's blow landing at
   the same moment of its clip as the sword's (`scripts/skills.gd` WARRIOR_CLIPS).
-  The weapon is carried by the right hand; the left holds the haft 0.2 m below it
+  The weapon is carried by the right hand; the left holds the haft 0.12 m below it
   (0.55 m ahead of it on the spear), and `scripts/two_hand_grip.gd` keeps it there
   as one clip fades into another. Each script reads the model from `HERO_GLB` (by
   default the game's own) and can author a few clips alone (`HEAVY_ONLY`,
@@ -650,8 +748,30 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   when it drops (`Art.item_model`): a weapon's or shield's own, or for armor the
   pieces of its class's kit (and, where a piece is only painted on the body, that
   part of the body's surface: `assets/shaders/hero_body.gdshader`, which also
-  draws the hero's skin wherever he wears nothing). `tools/preview_gear.gd`
-  renders a hero in any equipment, front and back.
+  draws the hero's skin wherever he wears nothing; none is shown under a
+  robe). `tools/preview_gear.gd` renders a hero in any equipment, front and
+  back (`--pan` frames one figure close up).
+- The Robe of the Lost Emperor's dragon is painted by `tools/paint_dragon.py`
+  (python3, numpy and Pillow) into `assets/textures/emperor_dragon.png`: the
+  robe unrolled round the body (metres round from the middle of the back, and
+  up), R the gold's cover, G the threads' height, B their tone, imported
+  lossless. `cloak.gdshader` (`gilded`, `dragon_map`) lays it on the robe's
+  rest pose and takes the thread's relief from its heights. The wizard wears his
+  cut body (`WizardBody`) whenever a robe is on, whatever hat or shoes he has:
+  the whole body's shoulders stood out through the robe.
+- The Marathon Boots (`tools/make_shoes.py`, Blender) are one voxel-remeshed
+  boot cut at the ankle: the foot and its sole hang from the foot bone, the
+  shaft, straps, buckles and wing (parts named `...Calf`) from the shin bone,
+  so it bends there; the foot is sunk a hair under the shaft where they lap, so
+  no step shows. Their gilded leather is `assets/shaders/gilt_leather.gdshader`
+  (`Art.gilt_leather`): the photographed leather's grain through uneven gilt,
+  creases at the ankle and over the toes, seams with stitching (welt, toe cap,
+  quarters, back, under the cuff) and the gilt rubbed through to brown hide on
+  the toe, heel and edges. The wing is five primaries and four secondaries under
+  a row of coverts, in a small riveted gilt bracket ("Metal"); the feathers are
+  `assets/shaders/feather.gdshader`, their outline the mesh's own (tapered,
+  round-tipped), off-white to warm grey-cream with a gilt tint at the root, the
+  barbs blurred out far off, each feather's seed in its second UVs. Under the wizard's robe the wings are hidden.
 - The hero's walk (the R key) is the animation library's `Walk_Loop`, retargeted as
   the clip `Walk` by `tools/import_walk.py`. The walks that carry a weapon
   (SwordWalk, RangerWalk, WizardWalk) are made from it when the figure is set up
@@ -677,6 +797,7 @@ animation licenses sit beside it. Rebuild with Blender:
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_townsfolk.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_bandits.py
 .tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_bedroll.py
+.tools/Blender.app/Contents/MacOS/Blender --background --python tools/make_throne.py
 ```
 
 ## Additional authored geometry (CC0)
@@ -919,7 +1040,13 @@ material detail and something to reflect (the user asked for them to be
   clip a frame late.
 - **Cloth.** The cloak and robe wear photographed wool, their folds shaded
   deeper and their inside darker (burley light: the wrap lighting they had
-  flattened them). The townspeople's and bandits' garments hang in folds
+  flattened them). Which side of the cloth is seen, and which way its normal
+  faces, is found from the surface itself (`cloak.gdshader`: the face toward
+  the eye, then whether that side faces out from the body at rest), not from
+  the winding: the ranger's cloak below the waist and the wizard's skirt are
+  wound inside out, which drew their whole lower half as the cloth's dark
+  inside, and on the Intel Macs the engine's own flip for a two-sided face
+  turns the side facing the eye away from it. The townspeople's and bandits' garments hang in folds
   (`cloth.gdshaderinc` `drape`, deeper toward the hem) and carry the weave's relief.
 - **Metal and wood.** Plate, helmets, guards' armour, shields, swords, axes,
   hammers, spears, staffs, quivers and sheaths are full metal now (they were
@@ -1019,6 +1146,24 @@ original `LevelScene.updateFountainAmbience`: zero outside the court, otherwise
 `clamp(1 - distance_to_fountain / half_room_diagonal, 0, 1)`. It uses the player's
 ground position rather than the camera, respects the sound toggle, is silent
 during pause, and stops when the floor is unloaded.
+
+`assets/audio/smith-hammer-1.wav` to `smith-hammer-4.wav` and `smith-grind.wav` are
+synthesised by `tools/make_sounds.py` (`python3 tools/make_sounds.py smith`: noise,
+tones and filters, no recording) and are original to this project. The four blows
+are Orion's hammer striking the sword on the anvil, each one short dead clank
+rather than a ringing note: a hard crack of steel on steel, a dense cluster of
+steel's inharmonic partials damped within a few hundredths of a second (the blade
+on the face and the hammer on the blade stop each other ringing), the hammer's
+weight thudding into the anvil, in a very short tail of the small stone room. One
+of them, by chance, at a pitch up to 4% higher or lower, plays each time the hammer
+meets the blade. The grinding is the blade's edge on the turning grindstone: steel hissing on
+the stone, the grit's crackle, the blade singing faintly, the wheel's rumble and the
+knock of its axle once a turn; it loops seamlessly (imported looping), louder as he
+draws the blade across and with the wheel's speed. Both come from where the work is
+(`AudioStreamPlayer3D`, panned by where that lies from the camera) and, like the
+are as loud as the hero is near: full within 3 m, 6 dB quieter each time the
+distance doubles, and heard only while the hero is inside the smithy
+(`scripts/smith.gd`).
 
 ## HUD
 

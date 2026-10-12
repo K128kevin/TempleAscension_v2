@@ -17,12 +17,17 @@ place on the body, so patterns run continuously across UV seams:
   - fingerless leather gloves;
   - the face and skin from the character's own texture, with stubble.
 
-That is the ranger. The warrior: a steel scale cuirass with lion medallions,
-a baldric, a broad studded belt with a lion boss and a key-pattern band,
-leather pteruges at the shoulders, a cloth wrap on the upper arm, a steel
-manica on the sword arm and leather wraps on the other, a tattered red-grey
-underskirt, and strapped
-sandals over the bare feet (his shins bare). The wizard: wrapped leather bracers, dark
+That is the ranger. The warrior: a steel scale cuirass with lion medallions
+(over the tops of his shoulders, out to the joint, where the cuirass's shell
+covers them: tools/warrior_kit.py), a baldric, a broad studded belt with a
+lion boss and a key-pattern band, a cloth wrap on the upper arm, his forearms bare above his
+gauntlets (meshes of their own), a tattered red-grey underskirt, and
+strapped sandals over the bare feet (his shins bare). The stone statues
+carved from his kit (the gladiator, the centurion, the boss) keep his older
+one, with the scales ending short of the shoulders, leather pteruges at
+the shoulders, a steel manica on the
+sword arm and leather wraps on the other: the warrior's height map, which
+only they use, is painted from that. The wizard: wrapped leather bracers, dark
 trousers, worn leather boots with ankle straps and buckles, and a creased
 leather sash knotted at the front.
 
@@ -46,6 +51,7 @@ SKIN_ROUGH = ROOT/'source_art/universal_stage/T_Superhero_Male_Roughness.png'
 OUT = ROOT/'assets/textures'
 SIZE = 2048
 RIGHT_SIGN = 1.0
+SHOULDER_X = .22
 import sys
 # `--only warrior` (etc.) paints just that hero's kit.
 ONLY = [sys.argv[sys.argv.index('--only')+1]] if '--only' in sys.argv else None
@@ -137,7 +143,7 @@ def band(x, lo, hi, soft=.002):
 
 # --- Painting ------------------------------------------------------------------
 
-def paint(maps, skin, recipe):
+def paint(maps, skin, recipe, statue=False):
     pos = maps['position'][...,:3]
     cls = np.rint(maps['limb'][...,0]*16).astype(np.int32)
     # Texels off the body (and its bake margin) carry no limb.
@@ -376,6 +382,11 @@ def paint(maps, skin, recipe):
         # --- the steel scale cuirass (chest, back, and over the collarbones)
         sx = 0.0
         if (C==UPPERARM).any(): sx = np.percentile(np.abs(x[C==UPPERARM]),12)
+        # (Over the tops of the shoulders to the joint, under the cuirass's
+        # shell: the statues' scales end short of it.)
+        # (The cloth wrap on the upper arm keeps its place from the shoulder.)
+        wrap_x = sx
+        if not statue: sx = SHOULDER_X
         cuirass = ((C==TORSO)&(z>1.045))|((C==UPPERARM)&(np.abs(x)<sx))
         # Large overlapping scales, as in the concept: each a rounded plate
         # lapping over the row below, bright along its raised middle, darker
@@ -430,17 +441,21 @@ def paint(maps, skin, recipe):
         albedo[key] *= 1.5; height[key] += .0005
         medallion(belt & (y<-.04), x, z-1.0, .045)
         # --- shoulders: hanging leather strips (pteruges) over the shoulder caps
-        cap = (C==UPPERARM)&(np.abs(x)>=sx)&(np.abs(x)<sx+.09)
+        # (The statues'; the hero's shoulders are under his pauldrons, his
+        # arms bare below them.)
+        cap = ((C==UPPERARM)&(np.abs(x)>=sx)&(np.abs(x)<sx+.09)) if statue else np.zeros(n,bool)
         arm_ang = np.arctan2(y, z-1.42)
         strip = ((arm_ang*4.5/math.pi)%1.0)
         pt = leather([.25,.13,.07],.85)*(1-.4*(strip>.86))[:,None]
         put(cap, pt, leather_h+.0028-.0012*(strip>.86), .62)
         # --- bare arms; a cloth wrap round the left upper arm
-        wrap = (C==UPPERARM)&(~right)&(np.abs(np.abs(x)-(sx+.2))<.03)
+        wrap = (C==UPPERARM)&(~right)&(np.abs(np.abs(x)-(wrap_x+.2))<.03)
         tw = np.sin((np.abs(x)*120.0+np.arctan2(y,z-1.41)*2.0))
         put(wrap, np.array([.24,.22,.21])*(.8+tw[:,None]*.15)*(.85+mottle[:,None]*.3), .002+tw*.0006, .9)
-        # --- forearms: a steel manica on the sword arm, leather wraps on the shield arm
-        fa = C==FOREARM
+        # --- forearms: a steel manica on the sword arm, leather wraps on the
+        # shield arm (the statues'; the hero's are bare above his gauntlets)
+        if not statue: fa = np.zeros(n,bool)
+        else: fa = C==FOREARM
         along = np.abs(x)
         lames = (along*34.0)%1.0
         man = fa & right
@@ -452,8 +467,8 @@ def paint(maps, skin, recipe):
         lw = fa & ~right
         diag = ((along*30.0+np.arctan2(y,z-1.41)*1.4)%1.0)
         put(lw, leather([.25,.14,.08],.9)*(1-.35*(diag<.12))[:,None], leather_h+.0018-.0008*(diag<.12), .62)
-        # Leather wraps over the hands' knuckles.
-        hand = C==HAND
+        # Leather wraps over the hands' knuckles (the statues').
+        hand = (C==HAND) if statue else np.zeros(n,bool)
         hw = ((along*40.0+np.arctan2(y,z-1.41))%1.0)
         put(hand, leather([.24,.13,.08],.85)*(1-.3*(hw<.15))[:,None], leather_h+.001, .62)
         # --- the tattered red-grey underskirt below the kilt
@@ -569,8 +584,9 @@ def main():
     skin_normal = raw(SKIN_NORMAL)[...,:3]*2-1
     # The roughness is the green channel (glTF's packing).
     skin_rough = raw(SKIN_ROUGH)[...,1]
-    global RIGHT_SIGN
+    global RIGHT_SIGN, SHOULDER_X
     RIGHT_SIGN = 1.0 if (rig.matrix_world @ rig.data.bones['upperarm_r'].head_local).x>0 else -1.0
+    SHOULDER_X = abs((rig.matrix_world @ rig.data.bones['upperarm_l'].head_local).x)+.01
     pos = maps['position'][...,:3]
     for recipe in ONLY or ['ranger','warrior','wizard']:
         albedo,height,rough,baked,dressed,kind = paint(maps,skin,recipe)
@@ -601,6 +617,9 @@ def main():
         save('hero_kit_'+recipe+'_rough',np.stack([r,metal,covered],-1))
         # The relief as a height map (0.5 the bare surface, 1/255 = 0.04mm),
         # for the statues, which carve it into stone (statue_stone.gdshader).
+        if recipe == 'warrior':
+            # (Carved from his older kit: see the note at the top.)
+            height = paint(maps,skin,recipe,statue=True)[1]
         hm = np.full((SIZE,SIZE),.5,np.float32); hm[baked] = np.clip(.5+height*100.0,0,1)
         save('hero_kit_'+recipe+'_height',np.repeat(hm[...,None],3,2))
         # What each texel is made of: red leather, green cloth, blue metal

@@ -17,10 +17,15 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 #include "res://assets/shaders/detail.gdshaderinc"
 uniform bool rest_pose = false;
 // Where the plates run, up the leg: the rims sit at `rim_low` and
-// `rim_high`, the lames between them every `lame` metres (0: one plate).
+// `rim_high`, the lames between them every `lame` metres (0: one plate), from
+// `lame_from` (if above `rim_low`) up.
 uniform float rim_low = 0.03;
 uniform float rim_high = 0.55;
 uniform float lame = 0.0;
+uniform float lame_from = -9.0;
+// Leg armor plated as trousers are: within `mail_x` of the middle, between
+// the legs, it is mail (0: none).
+uniform float mail_x = 0.0;
 // The knee cop's height (below 0: none), the ankle's, where the foot's plates
 // meet the greave under a rolled rim (below 0: none), and whether a shin
 // ridge runs down the front.
@@ -28,8 +33,14 @@ uniform float knee = -1.0;
 uniform float ankle = -1.0;
 uniform float ridge = 1.0;
 // Below the ankle, lames across the foot every `toe_lame` metres from the
-// ankle to the toes (0: one plate): a sabaton.
+// ankle to the toes (0: one plate): a sabaton, each lame lapping the one
+// ahead of it.
 uniform float toe_lame = 0.0;
+// Below this height nothing is drawn (the leg plates inside the boots).
+uniform float cut_below = -9.0;
+// How much it has rusted (1: as the helms; the boots and leg plates, kept
+// oiled, a few dark specks).
+uniform float rust_amount = 1.0;
 // The legs' axes, out from the figure's middle.
 uniform float leg_x = 0.1;
 
@@ -71,6 +82,7 @@ uniform float recolor = 0.0;
 
 void fragment() {
 	vec3 p = plate_position;
+	if (p.y < cut_below) discard;
 	// Round the leg this point is on (metres along its girth), and how
 	// squarely it faces the front.
 	vec2 off = vec2(p.x - sign(p.x) * leg_x, p.z);
@@ -84,8 +96,8 @@ void fragment() {
 	float patina = smoothstep(0.45, 0.75, noise3(p * 14.0 + 3.0));
 	vec3 color = vec3(0.66, 0.67, 0.69) * (0.82 + dents * 0.22) * (0.95 + grain * 0.08);
 	color = mix(color, vec3(0.32, 0.31, 0.3), patina * 0.55);
-	float rust = smoothstep(0.82, 0.93, noise3(p * 60.0 + 11.0)) * smoothstep(0.55, 0.85, noise3(p * 9.0));
-	color = mix(color, vec3(0.34, 0.19, 0.1), rust * 0.8);
+	float rust = smoothstep(0.82, 0.93, noise3(p * 60.0 + 11.0)) * smoothstep(0.55, 0.85, noise3(p * 9.0)) * clamp(rust_amount, 0.0, 1.0);
+	color = mix(color, mix(vec3(0.12, 0.08, 0.06), vec3(0.34, 0.19, 0.1), rust_amount), rust * 0.8);
 	float scratch_a = smoothstep(0.92, 0.97, noise2(vec2(p.x * 700.0 + p.y * 120.0, p.y * 25.0 + p.z * 40.0)));
 	float scratch_b = smoothstep(0.93, 0.97, noise2(vec2(p.y * 650.0 - p.z * 200.0, p.x * 30.0)));
 	float scratch = max(scratch_a, scratch_b);
@@ -94,8 +106,9 @@ void fragment() {
 	float rough = 0.32 + dents * 0.12 + patina * 0.25 + rust * 0.4 - scratch * 0.1;
 	// The lames: each plate laps over the one below, a dark seam in its
 	// shadow and rivets along its lower edge.
-	if (lame > 0.0 && p.y > rim_low && p.y < rim_high) {
-		float up = fract((p.y - rim_low) / lame) * lame;
+	float lames_from = max(rim_low, lame_from);
+	if (lame > 0.0 && p.y > lames_from && p.y < rim_high) {
+		float up = fract((p.y - lames_from) / lame) * lame;
 		float seam = smoothstep(0.012, 0.0, up);
 		h -= 0.0016 * seam;
 		color *= 1.0 - 0.45 * seam;
@@ -124,7 +137,8 @@ void fragment() {
 	if (toe_lame > 0.0 && ankle > 0.0 && p.y < ankle - 0.012 && p.z > 0.0) {
 		float ahead = fract(p.z / toe_lame) * toe_lame;
 		float toe_seam = smoothstep(0.01, 0.0, ahead);
-		h -= 0.0014 * toe_seam;
+		// Each lame rises toward its front edge, which stands over the next.
+		h += 0.0022 * ahead / toe_lame - 0.0014 * toe_seam;
 		color *= 1.0 - 0.4 * toe_seam;
 		float tr = rivets(p.x - sign(p.x) * leg_x, ahead - 0.016, 0.028, 0.0034);
 		h += 0.0015 * tr;
@@ -153,6 +167,21 @@ void fragment() {
 		color = mix(color, vec3(0.66) * (0.85 + 0.3 * dome), dome * 0.7);
 		float ring = abs(boss - 0.82);
 		if (ring < 0.06) color *= 1.0 - 0.4 * front * (1.0 - ring / 0.06);
+	}
+	// Mail between the legs: rows of riveted iron rings, dark between them.
+	float mail = 0.0;
+	if (mail_x > 0.0) {
+		mail = (1.0 - smoothstep(mail_x, mail_x + 0.012, abs(p.x))) * smoothstep(0.7, 0.74, p.y) * (1.0 - smoothstep(rim_high - 0.06, rim_high - 0.03, p.y));
+		if (mail > 0.0) {
+			vec2 q = vec2(p.x + p.z, p.y) * 220.0;
+			q.x += step(1.0, mod(floor(q.y), 2.0)) * 0.5;
+			float ring = abs(length(fract(q) - 0.5) - 0.3);
+			float wire = 1.0 - smoothstep(0.06, 0.13, ring);
+			vec3 iron = mix(vec3(0.06, 0.055, 0.05), vec3(0.42, 0.42, 0.43) * (0.8 + dents * 0.3), wire);
+			color = mix(color, iron, mail);
+			h = mix(h, 0.0006 * wire, mail);
+			rough = mix(rough, 0.5 - 0.15 * wire, mail);
+		}
 	}
 	// The photographed steel: its scratches, mottling and pits, grime in its
 	// hollows.

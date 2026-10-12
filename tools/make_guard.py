@@ -6,8 +6,9 @@ close-fitted over the hero's body at the centurion's heavy build. But he is a
 man, at life size, not stone: the pieces are kept apart, each with its own
 material, for the game to dress in earnest (scripts/town_guard.gd): the body in
 the warrior's painted skin and kit, the armor in worn steel, bronze, leather and
-red wool over the knight's own palette, and steel gauntlets cut from his own
-hands. He keeps only the clips a man standing watch with spear and shield, or
+red wool over the knight's own palette, steel gauntlets cut from his own
+hands, and mail breeches (also cut from him) under the leg plates.
+He keeps only the clips a man standing watch with spear and shield, or
 walking his round of the town (scripts/town_watch.gd), needs.
 
 Run after outfit_hero.py and paint_kits.py have written warrior.glb:
@@ -86,6 +87,34 @@ bm.from_mesh(mesh)
 bm.verts.ensure_lookup_table()
 bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.index not in keep], context='VERTS')
 for v in bm.verts: v.co += v.normal*GAUNTLET_LIFT
+bm.to_mesh(mesh)
+bm.free()
+mesh.materials.clear()
+mesh.materials.append(bpy.data.materials.get('Armor') or bpy.data.materials.new('Armor'))
+
+# His breeches: mail from the waist into the boots, under the
+# plates (a copy of his own hips and legs stood HOSE_LIFT off them), so that
+# where the knight's plates part (behind the thigh and knee, round the calf
+# above the boot, under the seat) mail shows, not bare skin.
+HOSE_LIFT = .005
+HOSE_TOP = 1.06
+LEG_BONES = ('thigh_', 'calf_', 'pelvis')
+hose = body.copy()
+hose.data = body.data.copy()
+hose.name = 'ArmorHose'
+bpy.context.collection.objects.link(hose)
+names = {g.index: g.name for g in hose.vertex_groups}
+mesh = hose.data
+keep = set()
+for v in mesh.vertices:
+    best = max(v.groups, key=lambda g: g.weight, default=None)
+    if best is None or not names[best.group].startswith(LEG_BONES): continue
+    if (hose.matrix_world @ v.co).z < HOSE_TOP: keep.add(v.index)
+bm = bmesh.new()
+bm.from_mesh(mesh)
+bm.verts.ensure_lookup_table()
+bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.index not in keep], context='VERTS')
+for v in bm.verts: v.co += v.normal*HOSE_LIFT
 bm.to_mesh(mesh)
 bm.free()
 mesh.materials.clear()

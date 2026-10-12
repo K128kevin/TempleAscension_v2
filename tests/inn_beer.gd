@@ -4,8 +4,8 @@ extends SceneTree
 ## each one full, and its beer goes down a sip at a time, its surface level
 ## and inside the mug, until it is drained and set by; Anya or Selene clears
 ## it; Selene is never idle while a mug waits to be cleared; and with every
-## table taken and nothing to clear, she clears the bar's end and wipes the
-## bar down.
+## table taken, she clears the mugs left on the bar, washing them in the tub
+## behind it, and with nothing to clear wipes the bar down.
 const Data = preload("res://scripts/data.gd")
 const Daylight = preload("res://scripts/daylight.gd")
 const Kit = preload("res://scripts/world_art.gd")
@@ -36,10 +36,10 @@ func mugs() -> Array:
 		if walker.mug != null and is_instance_valid(walker.mug): all.append(walker.mug)
 	for seat in folk.seats:
 		if seat.left != null and is_instance_valid(seat.left): all.append(seat.left)
-	for w in folk.washing:
-		if is_instance_valid(w.mug): all.append(w.mug)
+	for thing in folk.litter:
+		if is_instance_valid(thing.node) and thing.kind == "mug": all.append(thing.node)
 	for body in [folk.anya.body,folk.selene.body]:
-		if is_instance_valid(body.held) and body.held.name != "Rag": all.append(body.held)
+		if is_instance_valid(body.held) and body.held.name != "Rag" and body.held.get_meta("kind","mug") == "mug": all.append(body.held)
 	if is_instance_valid(folk.anya.mug) and folk.anya.mug.is_visible_in_tree(): all.append(folk.anya.mug)
 	return all
 
@@ -84,6 +84,9 @@ func test():
 	folk.tick(.1,Vector3(-262,0,144))
 	var selene = folk.selene
 	var anya = folk.anya
+	# (Last night's things cleared away already: that is tests/inn_shift.gd.)
+	for thing in folk.litter: thing.node.queue_free()
+	folk.litter.clear()
 	await run(60.0,func(): return selene.state == "idle" and anya.state == "post")
 	# A patron sat down, starving (his frame narrower than it is tall), to
 	# be served.
@@ -97,7 +100,7 @@ func test():
 	check(served,"Anya brings the patron his drink")
 	var beer = Beer.of(patron.mug) if served else null
 	check(served and beer.fill > .99 and beer.visible,"His mug comes full of beer (%.2f)" % (beer.fill if beer else -1.0))
-	check(served and beer.material.albedo_color.get_luminance() > Beer.AMBER.get_luminance()+.1,"with a head of foam on it")
+	check(served and beer.head > .9,"with a head of foam on it (%.2f)" % (beer.head if beer else -1.0))
 	# A sip at a time it goes down, its surface level and inside the mug.
 	var levels: Array = [1.0]
 	var seen = {"level":true,"inside":true,"idle":0.0}
@@ -144,15 +147,32 @@ func test():
 			s.taken = sitter
 			sitter.seat = s
 			folk.sit(sitter)
+	# (Every one of them, and those already sitting, served and lingering
+	# over a drink, so no drained mug is set by meanwhile.)
+	for walker in folk.people:
+		if walker.seat.is_empty(): continue
+		if walker.state == "wait" or walker.mug == null:
+			if walker.mug != null: walker.mug.queue_free()
+			walker.mug = Kit.prop("mug",.17)
+			folk.set_down(walker.mug,walker.seat)
+			Beer.of(walker.mug).fill = 1.0
+		walker.state = "drink"
+		walker.phase = ""
+		walker.sip = 100000.0
+	for s in folk.seats:
+		if s.left != null and is_instance_valid(s.left): s.left.queue_free()
+		s.left = null
+	var set_on_bar: Array = []
 	for i in 2:
 		var mug = Kit.prop("mug",.17)
 		folk.add_child(mug)
-		mug.position = folk.counter+Vector3(.17*i,0,0)
-		folk.washing.append({"mug":mug,"left":folk.WASHED})
-	var set_on_bar: Array = folk.washing.map(func(w): return w.mug)
+		mug.position = Vector3(folk.Interiors.INN.x+3.5+.17*i,1.12,folk.Interiors.INN.z+8.6)
+		mug.set_meta("kind","mug")
+		folk.litter.append({"node":mug,"kind":"mug"})
+		set_on_bar.append(mug)
 	folk.bar_wiped = folk.chore_clock-folk.BAR_REST
-	var gathered = await run(60.0,func(): return selene.state in ["gather","to_tub","wash"] and folk.washing.is_empty())
-	check(gathered,"Every table taken, she takes up the mugs at the bar's end")
+	var gathered = await run(60.0,func(): return selene.state in ["carry","put"] and set_on_bar.all(func(m): return is_instance_valid(m) and m.get_parent() != folk))
+	check(gathered,"Every table taken, she takes up the mugs left on the bar, one in each hand")
 	var washed = await run(30.0,func(): return set_on_bar.all(func(m): return not is_instance_valid(m) or m.is_queued_for_deletion()))
 	check(washed,"and washes them in the tub behind the bar")
 	var rag_path: Array = []

@@ -127,24 +127,35 @@ The temple stands in a larger world, one continuous outdoor map
   moment: one who comes in sits at a table and waits; Anya, the innkeeper (a
   young woman, dark hair in a braid, a white blouse under a brown dress; her
   name shows when the cursor is on her), fills a mug at the barrels behind her
-  bar, carries it upright in her fist round to the table and sets it down in
-  front of the drinker, clearing the empties; a patron drinks for a minute,
+  bar, carries it upright by its handle, her fist round it, round to the
+  table and sets it down in front of the drinker, taking up his empty; a
+  patron drinks for a minute,
   now and then taking it up with the hand on its side, his fingers round its
   handle, lifting it upright, his wrist kept straight and his elbow out from
   his side, until its rim meets his lips, tipping it back for a sip and
-  setting it down again as it stood; then leaves or waits for another. The
-  candles on the inn's tables and its bar burn day and night. Selene, a
-  serving woman in an apron who works for Anya, keeps the common room: she
-  takes up the mugs left where no one sits and carries them to the bar to be
-  washed, and wipes down any table no one is at with her rag, round and
-  round; between whiles she stands by the bar's west end. She lives in the
-  house nearest the inn and goes home once it is shut. Each mug comes full
-  of beer, a head of foam on it, and goes down a sip at a time until it is
-  drained; the drinker sets it by, and Anya, bringing him another, takes it
-  away, or Selene comes for it. Selene clears every mug set by or left on
-  the tables; with every table taken and none to clear, she gathers the mugs
-  at the bar's end, washes them in the tub behind it, and wipes the bar top
-  down. Their clothes are
+  setting it down again as it stood; then leaves or waits for another. A
+  woman sitting there rests her hands on top of her lap, not lost in her
+  skirt. The candles on the inn's tables and its bar burn day and night, each
+  flame a flicker of particles round a bright heart, swaying together in the
+  room's air, a thread of smoke going up. Selene, a serving woman in an
+  apron who works for Anya, keeps the common room: whatever is left about
+  that no one is using (last night's mugs, plates and bottles on the tables
+  and the bar, a mug a drinker has drained) she clears away, a mug or a
+  bottle in each fist by its handle or neck and plates stacked on her palm:
+  mugs and plates into the wash tub behind the bar's west end, bottles into
+  the crate of empties beside it. She wipes down every place at the tables
+  no one is using with her rag (a frayed, worn square of grey linen bunched
+  under her palm, which hangs from her apron's string between whiles), round
+  and round; with nothing else to do she wipes the bar top down, and between
+  whiles stands by the bar's west end. Neither she nor Anya ever walks
+  through a bench or a stool: the common room's floor is laid out finely,
+  round its furniture as it stands. She lives in the house nearest the inn
+  and goes home once it is shut. Each mug comes full of beer under a head of
+  creamy foam (fine bubbles, a few large ones, the odd burst pore), which the
+  first sips drink away to dark amber beer with a ring of foam at the wall,
+  foam left clinging in lacy rings to the mug's inside as it goes down a sip
+  at a time until it is drained; the drinker sets it by, and Anya, bringing
+  him another, takes it away, or Selene comes for it. Their clothes are
   neutral and plain, and most are poor: fifteen in rags (frayed, patched,
   holed and filthy), nine in worn and patched tunics and gowns, six decently
   dressed. Most of those in rags are thin with hunger (the five come to the
@@ -408,12 +419,13 @@ the whole head; the Steel Full Helm and the Ancient Gladiator's Helmet are
 helmets of their own too, after the references given for them), a cuirass of
 large overlapping steel scales
 with lion medallions and a baldric, a broad studded belt with a lion boss,
-leather strips at the shoulders, a steel manica on the sword arm, a kilt of
-leather pteruges (studded tabs, steel leaf motifs and a Greek-key band) that
-swings and folds over his legs like the ranger's cloak, over a tattered
-underskirt, and steel plated boots: hammered greaves with a shin ridge and
-knee cops, the feet plated under them. (Plated leg armor that drops shows as
-lamed steel cuisses over the thighs, in the kilt's place.) Ranger with bow: knee-high strapped leather boots,
+lamed steel pauldrons over the shoulders, steel gauntlets over his hands and
+fingers with a bell cuff to mid-forearm, a kilt of separate stiff leather
+pteruges (studded tabs, steel leaf motifs and a Greek-key band), each swinging
+from his belt on its own and pushed aside by his legs as he walks and runs,
+over a tattered underskirt, and steel plated boots: close-fitting sabatons
+with toe and ankle lames, and greaves to a rolled rim at mid-shin. (Plated leg armor that drops plates his legs
+from the waist to the ankles, in the kilt's place.) Ranger with bow: knee-high strapped leather boots,
 leather knee guards, a tattered green wool tunic, a broad belt and crossed
 straps, laced bracers, fingerless gloves, a beard, and a quiver, sheathed
 dagger, pouch and brooch; over it a weathered, frayed dark green hooded cloak
@@ -487,19 +499,17 @@ weapon never crosses into his body. With the sword, every warrior skill has a sw
 a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for
 Vampiric and Shadow Strike, the shield shoved out behind a step for Shield Bash, the
 blade wound far back and brought down with the whole body for Execute, wound up
-in one great slow circle for Thunder Slam, after film of the swing made with a
-stick (the point swung down to his toes and across low before him as the hand
-draws back to the right hip and the body turns after it, the arm straightened
-out to his right with the blade hanging below the fist and raised so, hanging,
-to the shoulder, then the point swung out and up past the arm's line and over the
-head as he arches back, and only then, two thirds of the way through the swing,
-the whole body hurled forward and down and the blade slammed flat into the
-ground ahead; with a weapon in each hand both arms do the same, mirrored, and
-both are slammed down; a two-handed weapon's head is swung over to his left and
-down past his knee, across low to his right as the hands come round to the hip,
-raised hanging out to his right with the shoulders turned after it, the left
-arm reaching across the chest, then out and up and over, and driven into the
-ground a stride ahead), the pommel hammered down from a deep
+in one great circle on his right for Thunder Slam, after the user's drawing of
+the head's path (the blade held before the belly pointed ahead is swung down
+past the outside of his right leg and back behind him as the arm drops and
+swings back with the chest turned to it, up behind him and over the head as he
+arches back, and, two thirds of the way through the swing, the whole body is
+hurled forward and down and the blade brought down level on the ground ahead;
+the weapon never crosses to his left, no elbow bends the wrong way, and no
+wrist is wrung; with a weapon in each hand both arms do the same, mirrored, and
+both are slammed down; a two-handed weapon is swung the same way with both
+hands together on the haft, and the head meets the ground level, as a hammer
+meets a nail, a stride ahead of a deep kneel), the pommel hammered down from a deep
 crouch for Shockwave, the blade thrust at the sky for War Cry, a braced run behind
 the shield for Shield Charge (the sprint, the shield held straight out before him),
 and for Leap a deep crouch, the spring, the body stretched in the air with the blade

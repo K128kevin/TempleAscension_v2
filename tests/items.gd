@@ -125,7 +125,7 @@ func test():
 	for id in Items.BASES:
 		var item: Dictionary = Items.BASES[id]
 		var sound = item.has("name") and item.slot in Items.ARMOR_SLOTS+["weapon","shield","key"]
-		if item.slot == "key": sound = sound and not item.has("rarity")
+		if item.slot == "key": sound = sound and item.get("rarity","") == "quest"
 		else: sound = sound and item.rarity in ["starting","common","unique"]
 		if item.slot in Items.ARMOR_SLOTS: sound = sound and item.weight in Items.ARMOR_OF.values() and item.armor > 0
 		elif item.slot == "weapon": sound = sound and item.kind in Items.KIND_TITLES and item.hands in [1,2] and ((item.has("damage") and item.damage[0] > 0 and item.damage[1] >= item.damage[0] and item.speed > 0) or item.kind == "staff")
@@ -171,6 +171,7 @@ func test():
 	sword = Items.get_item(it("steel_longsword","sharpened","zeus"))
 	check(sword.damage == [24.0,33.6] and sword.bonus == {"strength":3,"dexterity":2} and sword.rarity == "rare" and sword.speed == 1.1 and sword.affixes.size() == 1,"A Sharpened Steel Longsword of Zeus: 20%% more damage, Zeus's attributes, rare (%s)" % [sword])
 	check(Items.rarity(it("steel_longsword")) == "common" and Items.rarity(it("steel_longsword","lightweight")) == "uncommon" and Items.rarity(it("steel_longsword","","zeus")) == "uncommon" and Items.rarity(it("steel_longsword","heros")) == "rare" and Items.rarity(it("steel_longsword","","hades")) == "rare" and Items.rarity(it("bow_of_odysseus")) == "unique" and Items.rarity(it("simple_shortsword")) == "common","Rarity: none, one, both, a rare affix, a unique")
+	check(Items.rarity(it("gate_key")) == "quest" and Items.color(it("gate_key")) == Items.RARITY_COLORS.quest and Items.describe(it("gate_key")).rarity == "quest" and Items.RARITY_COLORS.quest.r > .9 and Items.RARITY_COLORS.quest.b < .3 and not "quest" in Items.RARITIES,"A quest item (the gate key) is its own rarity, orange, and never random loot")
 	check(not Items.valid_instance(it("steel_longsword","heros","zeus")) and not Items.valid_instance(it("steel_longsword","sharpened","hades")) and not Items.valid_instance(it("bow_of_odysseus","tough")) and not Items.valid_instance(it("simple_shortsword","tough")) and not Items.valid_instance({"base":"steel_longsword","extra":1}) and not Items.valid_instance("steel_longsword"),"A rare affix stands alone; nothing goes on a unique or the starting gear")
 	check(is_equal_approx(Items.get_item(it("steel_longsword","lightweight")).speed,1.3) and Items.get_item(it("steel_breastplate","durable")).armor == 21.0*1.2 and Items.get_item(it("war_hammer","heavy")).damage == [42.0,54.0],"Lightweight +0.2 attacks a second; Durable +20% armor; Heavy +20% damage")
 	var shield: Dictionary = Items.get_item(it("tower_shield","spiked"))
@@ -729,7 +730,7 @@ func test():
 	# --- Items show on the hero.
 	hero("warrior")
 	var look = game.player.visual
-	check(not look.parts.HeroHelmet.visible and look.parts.HeroArmor.visible and look.parts.HeroKilt.visible and look.parts.HeroBracers.visible and look.parts.HeroGreaves.visible and not look.parts.HeroCuisses.visible and not look.parts.Hair_SimpleParted.visible,"The warrior's starting kit is drawn, his greaves with it, his helmet a mesh of its own in the kit helm's place")
+	check(not look.parts.HeroHelmet.visible and look.parts.HeroArmor.visible and look.parts.HeroKilt.visible and look.parts.HeroGauntlets.visible and look.parts.HeroPauldrons.visible and look.parts.HeroGreaves.visible and not look.parts.HeroCuisses.visible and not look.parts.Hair_SimpleParted.visible,"The warrior's starting kit is drawn, his greaves with it, his helmet a mesh of its own in the kit helm's place")
 	var helm_parts = func(): return look.hat_item.find_children("*","MeshInstance3D",true,false).map(func(m): return String(m.name).rstrip("0123456789._"))
 	check(is_instance_valid(look.hat_item) and look.hat_item.bone_name == "Head" and helm_parts.call().has("Steel") and helm_parts.call().has("Rivet") and look.hat_item.find_children("*","MeshInstance3D",true,false)[0].material_override.shader.resource_path.ends_with("plate.gdshader"),"The Gladiator's Helmet hangs from his head: hammered steel, riveted (%s)" % [helm_parts.call()])
 	game.move_item("head","bag:0")
@@ -745,7 +746,7 @@ func test():
 	game.run.bag[2] = it("steel_breastplate","durable"); game.move_item("bag:2","chest")
 	check(look.parts.HeroArmor.visible and look.parts.HeroArmor.material_override != Art.hero_kit("warrior") and look.parts.SuperHero_Male.material_override.get_shader_parameter("recolor").x == 1.0 and look.parts.SuperHero_Male.material_override.get_shader_parameter("tint_chest") == Items.BASES.steel_breastplate.look.tint,"A steel breastplate is steel, affix or no")
 	game.move_item("legs","bag:3"); game.move_item("hands","bag:4")
-	check(not look.parts.HeroKilt.visible and not look.parts.HeroBelt.visible and not look.parts.HeroBracers.visible,"Kilt and gauntlets come off")
+	check(not look.parts.HeroKilt.visible and not look.parts.HeroBelt.visible and not look.parts.HeroGauntlets.visible and look.parts.HeroGreaves.visible,"Kilt and gauntlets come off")
 	game.run.bag[9] = it("plated_leg_armor","tough"); game.move_item("bag:9","legs")
 	check(look.parts.HeroCuisses.visible and look.parts.HeroBelt.visible and not look.parts.HeroKilt.visible and look.parts.HeroCuisses.material_override.shader.resource_path.ends_with("plate.gdshader"),"Plated leg armor is steel cuisses in the kilt's place")
 	game.move_item("legs","bag:9"); game.move_item("feet","bag:%d" % Items.free_bag_slot(game.run))

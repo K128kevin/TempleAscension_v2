@@ -60,9 +60,10 @@ const UNDER_DOOR = Vector2(3.2,6.0)
 const BOX_HALF = 7.1
 const BOX_FLOOR = 6.6
 const THRONES = 5
-# The thrones' height (a chair's seat about half way up it), how far apart
-# they stand, and the height of the marble-topped table before them.
-const THRONE_HEIGHT = 1.1
+# The thrones' height (tools/make_throne.py's elders' throne, its seat at a
+# chair's height), how far apart they stand, and the height of the
+# marble-topped table before them.
+const THRONE_HEIGHT = 1.19
 const THRONE_SPACING = 1.3
 const TABLE_HEIGHT = .78
 # The street that rings the arena: the buildings stand along its far side.
@@ -203,8 +204,8 @@ static func gate_wall(world) -> void:
 # runs along the north and south sides from the gate wall to the west end,
 # and from the north side out round the palace hill's ground; the south
 # gate (south_gate) fills a gap left in the south side.
-# It is old: its stone far more worn than the gate's, its top ragged, and
-# here and there a bay crumbled down to a broken stub.
+# It is old: its stone far more worn than the gate's, its top uneven, and
+# here and there a stretch fallen into a ragged breach (ruin).
 static func town_wall(world) -> void:
 	var material = Kit.masonry(CREAM,BROWN,.4,.92)
 	var south: float = world.WALL_SOUTH
@@ -233,10 +234,23 @@ static func town_wall(world) -> void:
 			if skipped: continue
 			# (Its own place in the ring decides a bay's state, the same every
 			# time: most stand, worn, at an uneven height; a few have fallen.)
-			var lot: float = fposmod(middle.x*7.31+middle.z*3.17,13.0)
-			var crumbled: bool = lot < 1.7
-			var height: float = 3.9+lot*.1 if crumbled else 5.1+fposmod(lot*2.9,1.0)*.9
-			var piece = world.place("wall_broken" if crumbled else "wall",middle,Vector3(bay,height,1.4),material,yaw)
+			var lot: float = wall_lot(middle)
+			var piece: Node3D
+			if lot < CRUMBLED:
+				# Fallen: its top broken away to a ragged line, low in the
+				# middle of the breach and rising to meet the standing wall
+				# either side (a tower, the gate's wall or a bay still whole).
+				var edges: Array = []
+				for end in [-1.0,1.0]:
+					var next: Vector3 = middle+along*end*(bay*.5+BAY*.5)
+					var inside: bool = (run-bay > .1 if end < 0.0 else run < length-.1)
+					for opening in openings:
+						if opening.has_point(Vector2(next.x,next.z)): inside = false
+					var other: float = wall_lot(next)
+					edges.append((breach_low(middle,lot)+breach_low(next,other))*.5 if inside and other < CRUMBLED else (wall_height(other) if inside else 5.6)-.35)
+				piece = ruin(world,middle,bay,yaw,edges[0],breach_low(middle,lot),edges[1],material)
+			else:
+				piece = world.place("wall",middle,Vector3(bay,wall_height(lot),1.4),material,yaw)
 			world.block_rect(Rect2(middle.x-(bay*.5 if yaw == 0.0 else .7),middle.z-(.7 if yaw == 0.0 else bay*.5),bay if yaw == 0.0 else 1.4,1.4 if yaw == 0.0 else bay))
 			world.screen([piece])
 	# A tower at every corner but the gate wall's own ends.
@@ -245,6 +259,105 @@ static func town_wall(world) -> void:
 		var tower = world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material)
 		world.block_rect(Rect2(at.x-1.8,at.z-1.7,3.6,3.4))
 		world.screen([tower])
+
+# A bay of the town wall: its lot (from its place in the ring, the same every
+# time), whether it has fallen (lot under CRUMBLED), the height it stands to
+# if not, and how low it has fallen at its middle if so (from 1.6 to 3.8 m:
+# breaches differ, and so do the bays of one breach).
+const CRUMBLED = 1.7
+static func wall_lot(middle: Vector3) -> float:
+	return fposmod(middle.x*7.31+middle.z*3.17,13.0)
+static func wall_height(lot: float) -> float:
+	return 5.1+fposmod(lot*2.9,1.0)*.9
+static func breach_low(middle: Vector3, lot: float) -> float:
+	return 1.6+fposmod(sin(middle.x*12.9898+middle.z*78.233+lot)*43758.5453,1.0)*2.2
+
+# A fallen bay of the town wall, `bay` long and 1.4 thick, centred on
+# `middle` at its foot and turned by `yaw` as a wall module is. Its top is
+# what is left of its courses: the stones of each column standing at their
+# own height and the wall's two faces broken unevenly, tops tilted and
+# chipped. The line they follow drops from `left` (its start's height,
+# meeting the next bay) to `low` at its middle and climbs to `right` at its
+# end: steeply where it meets standing wall, which it breaks off, and
+# straight on into a neighbouring breach. The stones it shed lie at its foot.
+const RUIN_COURSE = .16
+const RUIN_SINK = .3
+# Texels of the wall kit's palette that are plain stone, light to dark (the
+# masonry shader reads the palette's light and dark stones faintly).
+const RUIN_STONES = [Vector2(.627,.004),Vector2(.107,.004),Vector2(.002,.04)]
+static func ruin(world, middle: Vector3, bay: float, yaw: float, left: float, low: float, right: float, material: Material) -> Node3D:
+	var rng = RandomNumberGenerator.new()
+	rng.seed = hash(Vector2i(roundi(middle.x*10.0),roundi(middle.z*10.0)))
+	var standing = func(edge: float, t: float) -> float:
+		# (t from 0 at the edge to 1 at the middle.)
+		return lerpf(edge,low,t) if edge < 4.0 else low+(edge-low)*pow(1.0-t,2.4)
+	var tool = SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var at = -bay*.5
+	while at < bay*.5-.05:
+		var width = minf(rng.randf_range(.5,1.1),bay*.5-at)
+		if bay*.5-at-width < .4: width = bay*.5-at
+		var centre = at+width*.5
+		var t = (centre+bay*.5)/bay
+		var line: float = standing.call(left,t*2.0) if t < .5 else standing.call(right,(1.0-t)*2.0)
+		var top = snappedf(line+rng.randf_range(-.3,.25),RUIN_COURSE)
+		# Near a standing edge the stones hold to it.
+		if t*bay < .5: top = left+rng.randf_range(-.25,0.0)
+		elif (1.0-t)*bay < .5: top = right+rng.randf_range(-.25,0.0)
+		top = maxf(top,1.2)
+		# The two faces, each broken to its own height; the core between
+		# them rubble-filled, between the two.
+		var front = top+rng.randf_range(-.5,.1)
+		var back = top+rng.randf_range(-.5,.1)
+		var core = minf(front,back)+rng.randf_range(-.1,.15)
+		var stone: Vector2 = RUIN_STONES[rng.randi()%RUIN_STONES.size()]
+		for slab in [[-.7,-.3,back],[-.3,.3,core],[.3,.7,front]]:
+			var inset = rng.randf_range(0.0,.025) if slab[0] < -.5 or slab[1] > .5 else 0.0
+			var z0 = slab[0]+(inset if slab[0] < -.5 else 0.0)
+			var z1 = slab[1]-(inset if slab[1] > .5 else 0.0)
+			var tops: Array = []
+			for k in 4: tops.append(slab[2]+rng.randf_range(-.12,.05))
+			ruin_block(tool,Vector3(at,-RUIN_SINK,z0),Vector3(at+width,0,z1),tops,stone)
+		at += width
+	tool.generate_normals()
+	var node = MeshInstance3D.new()
+	node.mesh = tool.commit()
+	node.material_override = material
+	world.add_child(node)
+	node.position = middle+Vector3.UP*world.lift(middle)
+	node.rotation.y = yaw
+	node.set_meta("ruin",true)
+	# The stones it shed, either side, the more the lower it has fallen:
+	# a heap of rubble against its foot, and dressed blocks fallen whole and
+	# lying where they rolled.
+	var along = Vector3(cos(yaw),0,-sin(yaw))
+	var across = Vector3(sin(yaw),0,cos(yaw))
+	var shed = clampf((4.2-low)/2.2,.3,1.0)
+	for side in [-1.0,1.0]:
+		var heap = middle+along*rng.randf_range(-bay*.25,bay*.25)+across*side*rng.randf_range(1.0,1.4)
+		world.place("rubble",heap,Vector3(rng.randf_range(2.2,3.2),rng.randf_range(.4,.8)*shed+.15,rng.randf_range(1.0,1.5)),material,yaw+rng.randf_range(-.3,.3))
+		for i in roundi(rng.randf_range(2.0,5.0)*shed):
+			var block = MeshInstance3D.new()
+			block.mesh = worn_block(Vector3(rng.randf_range(.45,.8),rng.randf_range(.28,.42),rng.randf_range(.32,.5)),rng,RUIN_STONES[rng.randi()%RUIN_STONES.size()])
+			block.material_override = material
+			world.add_child(block)
+			var spot = middle+along*rng.randf_range(-bay*.45,bay*.45)+across*side*rng.randf_range(.95,2.6)
+			block.position = spot+Vector3.UP*(world.lift(spot)-.06)
+			block.rotation = Vector3(rng.randf_range(-.25,.25),rng.randf_range(0,TAU),rng.randf_range(-.25,.25))
+	return node
+
+# One block of a ruin: from `lo` (its base corner) to `hi`'s x and z, its
+# four top corners at `tops` (-x-z, +x-z, +x+z, -x+z). Every face drawn but
+# the base.
+static func ruin_block(tool: SurfaceTool, lo: Vector3, hi: Vector3, tops: Array, stone: Vector2) -> void:
+	var b = [Vector3(lo.x,lo.y,lo.z),Vector3(hi.x,lo.y,lo.z),Vector3(hi.x,lo.y,hi.z),Vector3(lo.x,lo.y,hi.z)]
+	var u = []
+	for k in 4: u.append(Vector3(b[k].x,tops[k],b[k].z))
+	var quads = [[u[0],u[1],u[2],u[3]],[b[0],b[1],u[1],u[0]],[b[1],b[2],u[2],u[1]],[b[2],b[3],u[3],u[2]],[b[3],b[0],u[0],u[3]]]
+	for q in quads:
+		for k in [0,1,2,0,2,3]:
+			tool.set_uv(stone)
+			tool.add_vertex(q[k])
 
 # The gate in the town's south wall at the end of the southern alley, built
 # as the town gate is: a stretch of wall, two towers flanking the way
@@ -419,10 +532,10 @@ const KERB_TONE = Color(.7,.65,.58)
 # A block of old stone `size` big, standing on its base at the origin: its
 # top edges and corners worn round (WEAR deep) and its faces a little uneven
 # (ROUGH), so it sits in the ground as stone long trodden past does, not as
-# a cut box.
+# a cut box. `stone`, if given, is the wall kit palette's texel it is painted from.
 const WEAR = .07
 const ROUGH = .012
-static func worn_block(size: Vector3, rng: RandomNumberGenerator) -> ArrayMesh:
+static func worn_block(size: Vector3, rng: RandomNumberGenerator, stone: Vector2 = Vector2(-1,-1)) -> ArrayMesh:
 	var box = BoxMesh.new()
 	box.size = size
 	box.subdivide_width = maxi(2,int(size.x/.12))
@@ -445,6 +558,8 @@ static func worn_block(size: Vector3, rng: RandomNumberGenerator) -> ArrayMesh:
 		var bump = sin(p.x*23.0+seed)*cos(p.z*19.0-seed)*sin(p.y*29.0+seed*.5)
 		if p.y > -half.y+.01: p += (p-Vector3(0,p.y,0)).normalized()*ROUGH*bump+Vector3.UP*ROUGH*.5*bump
 		data.set_vertex(i,p+Vector3.UP*half.y)
+		# (A block of the town wall's: plain stone of the kit's palette.)
+		if stone.x >= 0.0: data.set_vertex_uv(i,stone)
 	var worn = ArrayMesh.new()
 	data.commit_to_surface(worn)
 	tool = SurfaceTool.new()
@@ -557,18 +672,19 @@ static func royal_box(world) -> void:
 		nodes.append(bowl)
 	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR+4.6,back+2.8),Vector3(BOX_HALF*2.0-.6,.12,5.4),crimson))
 	nodes.append(world.place("floor",Vector3(x,BOX_FLOOR+4.48,back+5.4),Vector3(BOX_HALF*2.0-.2,.34,.45),gold))
-	# The five elders' thrones, in a row facing the sand: gilded chairs of a
-	# man's size, all alike (the inn's seats are of the same height).
-	var seats = front-4.2
+	# The five elders' thrones, in a row facing the sand: marble and gilt,
+	# velvet-cushioned, of a man's size and all alike (their seats are of the
+	# inn's seats' height).
+	var seats = front-4.45
 	for i in THRONES:
 		var offset = (i-(THRONES-1)*.5)*THRONE_SPACING
-		var throne = world.place("chair",Vector3(x+offset,BOX_FLOOR,seats),Kit.sized("chair",THRONE_HEIGHT),gold,0.0)
+		var throne = world.place("throne_elder",Vector3(x+offset,BOX_FLOOR,seats),Vector3.ONE*THRONE_HEIGHT/Kit.SIZE.throne_elder.y,null,0.0)
 		throne.set_meta("throne",true)
 		nodes.append(throne)
 	# Before them a long table on gilded legs, topped with a single slab of
 	# veined marble overhanging it a little all round.
 	var reach = (THRONES-1)*THRONE_SPACING+1.0
-	var table_at = seats+.95
+	var table_at = seats+1.2
 	for side in [-1.0,1.0]:
 		var frame = world.place("table",Vector3(x+side*reach*.25,BOX_FLOOR,table_at),Vector3(reach*.5,TABLE_HEIGHT-.06,.86),gold)
 		frame.set_meta("elders_table",true)

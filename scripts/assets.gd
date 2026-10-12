@@ -403,7 +403,7 @@ const BODY_SLOTS = ["chest","legs","feet","hands"]
 # The pieces of each class's kit that are meshes of their own, by slot (the
 # rest is painted on the body).
 const PIECES = {
-	"warrior":{"head":["HeroHelmet"],"chest":["HeroArmor"],"legs":["HeroKilt","HeroBelt"],"feet":["HeroGreaves"],"hands":["HeroBracers"]},
+	"warrior":{"head":["HeroHelmet"],"chest":["HeroArmor","HeroPauldrons"],"legs":["HeroKilt","HeroBelt"],"feet":["HeroGreaves"],"hands":["HeroGauntlets"]},
 	"ranger":{"head":["RangerCloak","RangerBrooch"],"chest":["RangerBelt","RangerPouch"],"legs":[],"feet":["RangerBoots","RangerBootsFeet"],"hands":["RangerBracers"]},
 	"wizard":{"head":["WizardHood"],"chest":["WizardRobe","WizardRobeSkirt","WizardSash","WizardSashEnd0","WizardSashEnd1"],"legs":[],"feet":["WizardBoots","WizardBootsFeet"],"hands":["WizardBracers"]}}
 # The class that wears each weight of armor.
@@ -429,30 +429,51 @@ static func slot_pieces(hero_class: String, slot: String) -> Array:
 	slot_pieces_known[key] = names
 	return names
 
-# The hero's leg plates (assets/shaders/plate.gdshader): the greaves of his
-# plated boots (a shin ridge and knee cops, the feet plated under them) and
-# the cuisses of plated leg armor (lames down the thigh). `rest_pose`: on a
-# mesh carrying its rest pose (Art.rest_pose_mesh).
+# The hero's leg plates (assets/shaders/plate.gdshader, tools/warrior_kit.py):
+# his plated boots (sabatons laminated over the feet, a shaft to mid-shin with
+# a ridge down its front and a rolled rim at its top), and plated leg armor
+# (HeroCuisses: the legs plated from the waist to the ankles, lames down the
+# thighs, a cop over each knee and greaves with a ridge down the shins).
+# `rest_pose`: on a mesh carrying its rest pose (Art.rest_pose_mesh).
+# (Worn with the boots, the leg plates are cut off this high, inside them.)
+const LEGS_IN_BOOTS = .285
 static func plate(mesh_name: String, rest_pose: bool = false) -> ShaderMaterial:
 	var key = "plate%s%s" % [mesh_name,rest_pose]
 	if materials.has(key): return materials[key]
 	var m = ShaderMaterial.new()
 	m.shader = load("res://assets/shaders/plate.gdshader")
 	m.set_shader_parameter("rest_pose",rest_pose)
+	m.set_shader_parameter("leg_x",.114)
 	if "Cuisses" in mesh_name:
-		m.set_shader_parameter("rim_low",.59)
-		m.set_shader_parameter("rim_high",.94)
-		m.set_shader_parameter("lame",.1)
-		m.set_shader_parameter("knee",-1.0)
+		m.set_shader_parameter("rim_low",.105)
+		m.set_shader_parameter("rim_high",.99)
+		m.set_shader_parameter("lame",.085)
+		m.set_shader_parameter("lame_from",.63)
+		m.set_shader_parameter("knee",.547)
 		m.set_shader_parameter("ridge",1.0)
+		m.set_shader_parameter("mail_x",.045)
+		m.set_shader_parameter("rust_amount",.3)
 	else:
-		m.set_shader_parameter("rim_low",.035)
-		m.set_shader_parameter("rim_high",.605)
+		m.set_shader_parameter("rim_low",-9.0)
+		m.set_shader_parameter("rim_high",.297)
 		m.set_shader_parameter("lame",0.0)
-		m.set_shader_parameter("knee",.545)
-		m.set_shader_parameter("ankle",.1)
-		m.set_shader_parameter("toe_lame",.034)
+		m.set_shader_parameter("knee",-1.0)
+		m.set_shader_parameter("ankle",.064)
+		m.set_shader_parameter("toe_lame",.03)
 		m.set_shader_parameter("ridge",1.0)
+		m.set_shader_parameter("rust_amount",.3)
+	materials[key] = m
+	return m
+
+# The warrior's articulated steel (assets/shaders/harness.gdshader): his
+# pauldrons and his gauntlets. `rest_pose`: on a mesh carrying its rest pose.
+static func harness(mesh_name: String, rest_pose: bool = false) -> ShaderMaterial:
+	var key = "harness%s%s" % [mesh_name,rest_pose]
+	if materials.has(key): return materials[key]
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/harness.gdshader")
+	m.set_shader_parameter("rest_pose",rest_pose)
+	m.set_shader_parameter("kind",1 if "Gauntlets" in mesh_name else 0)
 	materials[key] = m
 	return m
 
@@ -548,8 +569,11 @@ static func worn_model(look: Dictionary) -> Node3D:
 		elif part.begins_with("Dark"): mesh.material_override = hammered(Color(.4,.42,.47))
 		elif part.begins_with("Bright"): mesh.material_override = hammered(Color(.62,.64,.68))
 		elif part.begins_with("Rivet"): mesh.material_override = hammered(Color(.66,.67,.7))
-		# (The Marathon Boots, tools/make_shoes.py: gold, with white wings.)
-		elif part.begins_with("Gold"): mesh.material_override = worn_part("gold",gold().albedo_color)
+		# (The Marathon Boots, tools/make_shoes.py: gilded leather on dark
+		# leather soles, with feathered wings.)
+		elif part.begins_with("Gold"): mesh.material_override = gilt_leather()
+		elif part.begins_with("Metal"): mesh.material_override = worn_part("gold",Color(.72,.55,.28))
+		elif part.begins_with("Sole"): mesh.material_override = worn_part("leather",Color(.15,.085,.045))
 		elif part.begins_with("Wing"): mesh.material_override = feather()
 		else: mesh.material_override = worn_part("felt",look.get("tint",Color(.12,.13,.2)))
 	return node
@@ -557,6 +581,15 @@ static func worn_model(look: Dictionary) -> Node3D:
 # One material of a worn piece (assets/shaders/worn.gdshader): felt, leather,
 # bronze or gold in its colour, with photographed detail over it.
 const WORN = {"felt":[8.0,.06,0.0,Vector2(.8,.98),1.4],"leather":[6.0,.12,0.0,Vector2(.45,.8),1.2],"bronze":[3.0,.1,1.0,Vector2(.3,.6),.8],"gold":[4.0,.12,1.0,Vector2(.25,.5),.6]}
+
+# Gilded leather (the Marathon Boots): gold leaf on a brown hide, creased,
+# seamed and rubbed through (assets/shaders/gilt_leather.gdshader).
+static func gilt_leather() -> ShaderMaterial:
+	if materials.has("gilt_leather"): return materials.gilt_leather
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/gilt_leather.gdshader")
+	materials.gilt_leather = m
+	return m
 static func worn_part(kind: String, tint: Color) -> ShaderMaterial:
 	var key = "worn%s%s" % [kind,tint.to_html()]
 	if materials.has(key): return materials[key]
@@ -572,14 +605,12 @@ static func worn_part(kind: String, tint: Color) -> ShaderMaterial:
 	materials[key] = m
 	return m
 
-# White feathers (the Marathon Boots' wings): soft and matte.
-static func feather() -> StandardMaterial3D:
+# White flight feathers (the Marathon Boots' wings): quill, barbs and down
+# (assets/shaders/feather.gdshader).
+static func feather() -> ShaderMaterial:
 	if materials.has("feather"): return materials.feather
-	var m = StandardMaterial3D.new()
-	m.albedo_color = Color(.96,.96,.94)
-	m.roughness = .85
-	m.metallic_specular = .2
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var m = ShaderMaterial.new()
+	m.shader = load("res://assets/shaders/feather.gdshader")
 	materials.feather = m
 	return m
 
@@ -679,13 +710,15 @@ static func piece_material(mesh_name: String, hero_class: String, tint = null, g
 	if "Greaves" in mesh_name or "Cuisses" in mesh_name:
 		var steel: ShaderMaterial = plate(mesh_name,true)
 		return steel if tint == null else recolored(steel,tint)
+	if "Gauntlets" in mesh_name or "Pauldrons" in mesh_name:
+		var steel: ShaderMaterial = harness(mesh_name,true)
+		return steel if tint == null else recolored(steel,tint)
 	if "Helmet" in mesh_name or "Kilt" in mesh_name:
 		var key = "piece%s" % mesh_name
 		if not materials.has(key):
 			var m = ShaderMaterial.new()
 			m.shader = load("res://assets/shaders/%s.gdshader" % ("gladiator_helm" if "Helmet" in mesh_name else "kilt"))
 			m.set_shader_parameter("rest_pose",true)
-			if "Kilt" in mesh_name: m.set_shader_parameter("fold_from",.03)
 			materials[key] = m
 		return materials[key] if tint == null else recolored(materials[key],tint)
 	if "Cloak" in mesh_name or "Hood" in mesh_name or "Robe" in mesh_name:
@@ -698,6 +731,7 @@ static func piece_material(mesh_name: String, hero_class: String, tint = null, g
 			m.set_shader_parameter("rest_pose",true)
 			m.set_shader_parameter("tatter",cloth_tatter(mesh_name,gilded))
 			m.set_shader_parameter("gilded",1.0 if gilded else 0.0)
+			if gilded: m.set_shader_parameter("dragon_map",dragon_map())
 			m.set_shader_parameter("hem_height",.3 if "Cloak" in mesh_name else (.14 if "Robe" in mesh_name else -1.0))
 			materials[key] = m
 		return materials[key]
@@ -711,6 +745,11 @@ static func piece_material(mesh_name: String, hero_class: String, tint = null, g
 # armor item is (and, where it is only painted on the body, that part of the
 # body's surface). It stands as it is worn or held, its foot at the origin;
 # `bounds` (metadata) is the box it fills.
+# The gold dragon embroidered down a gilded robe's back
+# (tools/paint_dragon.py; assets/shaders/cloak.gdshader `dragon_map`).
+static func dragon_map() -> Texture2D:
+	return load("res://assets/textures/emperor_dragon.png")
+
 # How worn a cloak, hood or robe is (assets/shaders/cloak.gdshader `tatter`):
 # the ranger's cloak weathered and torn, the wizard's wool lightly worn, a
 # gilded robe not at all.
@@ -735,14 +774,15 @@ static func item_model(thing) -> Node3D:
 	# A piece that is a mesh of its own (the wizard's hat), as it is worn.
 	if look.has("mesh"):
 		var own: Node3D = worn_model(look)
-		# (A shoe is made for the left foot: a pair is shown, the right its mirror.)
+		# (A shoe is made for the left foot: a pair is shown, the right its
+		# mirror, each on its own side, so what is on their outer sides shows.)
 		if item.slot == "feet":
 			var pair = Node3D.new()
-			own.position.x = -.06
+			own.position.x = .08
 			pair.add_child(own)
 			var right: Node3D = worn_model(look)
 			right.scale.x = -1.0
-			right.position.x = .06
+			right.position.x = -.08
 			pair.add_child(right)
 			own = pair
 		var box = AABB()
@@ -777,7 +817,12 @@ static func item_model(thing) -> Node3D:
 		var piece = MeshInstance3D.new()
 		piece.mesh = rest_pose_mesh(mesh) if mesh is ArrayMesh else mesh
 		piece.material_override = piece_material(mesh_name,hero_class,tint,look.get("gilded",false))
-		if item.slot == "hands":
+		if item.slot == "hands" and "Gauntlets" in mesh_name:
+			# One of the pair (they are made on arms held wide apart).
+			var steel: ShaderMaterial = piece.material_override.duplicate()
+			steel.set_shader_parameter("keep_side",1.0)
+			piece.material_override = steel
+		elif item.slot == "hands":
 			# One of the pair (they are made on arms held wide apart).
 			var one: ShaderMaterial = hero_body(hero_class,true)
 			one.set_shader_parameter("rest_pose",true)
@@ -805,7 +850,10 @@ static func item_model(thing) -> Node3D:
 		shell.mesh = hand.mesh
 		shell.material_override = glove_shell(tint if tint != null else Color.WHITE,1.0)
 		root.add_child(shell)
-	if item.slot in BODY_SLOTS and (first or item.slot in ["chest","legs"]):
+	# (A robe hides the whole of the body under it: none is shown with it,
+	# or the shoulders stood out through the cloth.)
+	var robed: bool = hero_class == "wizard" and item.slot == "chest" and not first
+	if item.slot in BODY_SLOTS and (first or item.slot in ["chest","legs"]) and not robed:
 		# Painted on the body: that part of the body's own surface.
 		var body = MeshInstance3D.new()
 		var mesh: Mesh = hero_mesh("SuperHero_Male")
@@ -825,6 +873,8 @@ static func item_model(thing) -> Node3D:
 			"feet":AABB(Vector3(-.2,0,-.15),Vector3(.4,parts.feet_top,.32)),"hands":AABB(Vector3(-.93,1.3,-.1),Vector3(1.86,.2,.2))}[item.slot]
 		box = region if first else box.merge(region)
 	if item.slot == "hands": box = AABB(Vector3(BODY_PARTS[hero_class].arm_from-.04,1.34,-.1),Vector3(.52 if look.get("gloved",false) else .3,.16,.2))
+	# (The warrior's gauntlets: the hand and the cuff, halfway up the forearm.)
+	if item.slot == "hands" and names.has("HeroGauntlets"): box = AABB(Vector3(.58,1.33,-.1),Vector3(.4,.18,.2))
 	root.set_meta("bounds",box)
 	return root
 

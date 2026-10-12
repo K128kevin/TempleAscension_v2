@@ -75,13 +75,13 @@ func town_checks():
 		if not inside: continue
 		if node.has_meta("throne"):
 			thrones += 1
-			throne_heights.append(node.scale.y*Overworld.Kit.SIZE.chair.y)
+			throne_heights.append(node.scale.y*Overworld.Kit.SIZE.throne_elder.y)
 			# A chair's seat is on its own +Z side: the sand is south of the box.
 			facing_sand = facing_sand and (node.global_transform.basis*Vector3.BACK).normalized().distance_to(Vector3.BACK)<.01
 		if node.has_meta("elders_table") and node.find_children("*","MeshInstance3D",true,false)[0].material_override == marble: marble_top = true
 		if node.has_meta("statue") and node.get_meta("statue")=="lion" and node.get_meta("marble"): sculptures += 1
 	check(facing_sand,"The thrones face the sand")
-	# Chairs of a man's size, like the inn's seats, the middle one no larger.
+	# Thrones of a man's size, like the inn's seats, the middle one no larger.
 	check(throne_heights.size()==5 and throne_heights.all(func(h): return is_equal_approx(h,throne_heights[0]) and h>.9 and h<1.3),"The thrones are alike and of a man's size (%s)" % [throne_heights])
 	check(marble_top,"A marble-topped table stands before the thrones")
 	check(thrones==5 and sculptures==0 and box != null and box.find_children("*","MeshInstance3D",true,false)[0].material_override == marble,"The box is marble, with five thrones and no statues (%d)" % sculptures)
@@ -149,7 +149,11 @@ func town_checks():
 	var great_throne: Node3D = null
 	for node in world.get_children(): if node.has_meta("great_throne"): great_throne = node
 	var dais_top = Overworld.HILL_HEIGHT+Palace.PODIUM+Palace.DAIS.x
-	check(great_throne != null and is_equal_approx(great_throne.position.y,dais_top) and great_throne.scale.y*Overworld.Kit.SIZE.chair.y>3.0 and great_throne.position.z<hall.at.z,"A great throne stands at the far end, raised on its dais")
+	# A throne, not a giant chair: the made model (tools/make_throne.py), of
+	# a great man's size with its plinth and crest.
+	var throne_height: float = great_throne.scale.y*Overworld.Kit.SIZE.throne.y if great_throne != null else 0.0
+	var made = great_throne != null and great_throne.find_children("*","MeshInstance3D",true,false).any(func(m): return m.name == "ThroneVelvet")
+	check(great_throne != null and made and is_equal_approx(great_throne.position.y,dais_top) and throne_height>2.0 and throne_height<2.8 and great_throne.position.z<hall.at.z,"A great throne stands at the far end, raised on its dais (%.1f m)" % throne_height)
 	var up_stair = world.path(hall.at,great_throne.position+Vector3(0,0,1.6))
 	var rising = true
 	var was = 0.0
@@ -592,8 +596,23 @@ func test():
 	var turned = 0.0
 	var wheel_was: Basis = smith.wheel.basis
 	var anvil_top: float = smith.places.face.y
+	# Every time the hammer comes down onto the blade a blow is heard, once.
+	var contacts = 0
+	var on_blade = false
+	var strikes_before: int = smith.strikes
+	var grind_heard = 0.0
+	var grind_elsewhere = 0.0
 	for step in 3600:
 		folk.tick(.05,Overworld.START)
+		var head_y = INF
+		for m in smith.tools.hammer.node.find_children("*","MeshInstance3D",true,false):
+			if m.get_parent().position.y > .2: head_y = minf(head_y,(m.global_transform*m.get_aabb()).position.y)
+		# (Swung at the blade at his work: not taken up off the anvil's face
+		# or laid down on it.)
+		var hammering = not smith.plan.is_empty() and smith.plan[0].get("work","") == "hammer"
+		var meeting = hammering and head_y < anvil_top+smith.SWORD.z+.015
+		if meeting and not on_blade: contacts += 1
+		on_blade = meeting
 		if smith.plan.is_empty(): continue
 		var doing: Dictionary = smith.plan[0]
 		if not doing.has("work"): continue
@@ -601,16 +620,19 @@ func test():
 		for side in smith.hands: held[doing.work+":"+side] = smith.hands[side].tool
 		if doing.work == "hammer":
 			for m in smith.tools.sword.node.find_children("*","MeshInstance3D",true,false): blade_low = minf(blade_low,(m.global_transform*m.get_aabb()).position.y)
-			for m in smith.tools.hammer.node.find_children("*","MeshInstance3D",true,false):
-				if m.get_parent().position.y > .2: head_low = minf(head_low,(m.global_transform*m.get_aabb()).position.y)
+			head_low = minf(head_low,head_y)
+			grind_elsewhere = maxf(grind_elsewhere,smith.grind_level)
 		if doing.work == "grind":
 			turned += wheel_was.x.normalized().angle_to(smith.wheel.basis.x.normalized())
 			wheel_was = smith.wheel.basis
+			grind_heard = maxf(grind_heard,smith.grind_level)
 	check(tasks.has("hammer") and tasks.has("grind") and tasks.has("stoke") and world.rooms[1].area.has_point(Vector2(folk.orion.at.x,folk.orion.at.z)),"Orion goes between the anvil, the grindstone and the forge, and stays in his smithy (%s)" % str(tasks.keys()))
 	check(held.get("hammer:l","")=="sword" and held.get("hammer:r","")=="hammer" and held.get("grind:r","")=="sword" and held.get("stoke:r","")=="rod","He holds the sword he took down in his left hand and the hammer in his right at the anvil, the sword in his right at the grindstone, the rod at the forge (%s)" % str(held))
 	check(absf(blade_low-anvil_top)<.004,"The sword lies on the anvil's face, not in it (%.3fm above)" % (blade_low-anvil_top))
 	check(absf(head_low-(anvil_top+smith.SWORD.z))<.012,"The hammer's face comes down onto the blade, and no further (%.3fm above it)" % (head_low-anvil_top-smith.SWORD.z))
 	check(turned>20.0,"The grindstone turns while he grinds (%.0f radians)" % turned)
+	check(contacts>=8 and smith.strikes-strikes_before==contacts,"A blow rings out each time the hammer meets the blade, once (%d blows, %d strokes)" % [smith.strikes-strikes_before,contacts])
+	check(grind_heard>.6 and grind_elsewhere==0.0,"The grinding is heard while the blade is on the stone, and not at the anvil (%.2f, %.2f)" % [grind_heard,grind_elsewhere])
 	# His tools are their own size in his hand, not stretched with his broad
 	# figure: the hammer a forearm long, the blade and the rod about a metre.
 	var tool_sizes = {}

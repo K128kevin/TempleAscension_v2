@@ -19,6 +19,9 @@ uniform float seed = 0.0;
 // steel lames over the backs of the hands and fingers, oiled leather on the
 // palms (which face down in the rest pose, the arms held out).
 uniform bool gauntlet = false;
+// His mail breeches (cut from his own hips and legs, under the plates): seen
+// only where the plates part, behind the thigh and knee and above the boots.
+uniform bool hose = false;
 
 varying vec3 rest;
 varying vec3 rest_normal;
@@ -74,6 +77,18 @@ void fragment() {
 		lit = palm ? 0.3 : mix(0.35, 0.75, smoothstep(0.0, 0.12, band));
 		spread = palm ? 1.0 : 0.0;
 		base = palm ? vec3(0.3, 0.18, 0.1) : vec3(lit);
+	}
+	if (hose) {
+		// Rows of riveted rings, each row set half a ring along from the
+		// last, dark where they overlap; faded to their average where a ring
+		// is smaller than a pixel.
+		vec2 cell = vec2((rest.x + rest.z) * 150.0, rest.y * 190.0);
+		cell.x += mod(floor(cell.y), 2.0) * 0.5;
+		float ring = abs(length(fract(cell) - 0.5) - 0.3);
+		float fine = 1.0 - smoothstep(0.35, 0.9, max(fwidth(cell.x), fwidth(cell.y)));
+		lit = mix(0.42, mix(0.62, 0.12, smoothstep(0.04, 0.16, ring)), fine);
+		spread = 0.0;
+		base = vec3(lit);
 	}
 	if (spread < 0.1) {
 		// Steel: hammered, grained, oxidised dark in patches, rusting in

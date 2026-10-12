@@ -20,11 +20,29 @@
                       silences between them, as recorded, each faded out
                       at its end.
 
-  python3 tools/make_sounds.py
+And Orion's at his work in the smithy (scripts/smith.gd), synthesised (noise,
+tones and filters; no recording), with a generator of their own so the
+sounds above are made as they always were:
+
+  smith-hammer-1..4.wav  His hammer striking the sword on the anvil: one
+                      short dead clank (a hard crack, a dense cluster of
+                      steel's partials damped within a few hundredths of a
+                      second, the hammer's weight thudding into the anvil),
+                      heard in the small stone room. Four blows, none quite
+                      like another.
+  smith-grind.wav     The blade's edge held to the turning grindstone: steel
+                      hissing on wet sandstone, the grit crackling, the
+                      blade singing faintly, the wheel rumbling round. It
+                      loops (its end flows into its start; the wheel turns
+                      a whole number of times in it).
+
+  python3 tools/make_sounds.py          (all of them)
+  python3 tools/make_sounds.py smith    (Orion's only)
 """
 from pathlib import Path
 import math
 import subprocess
+import sys
 import tempfile
 import wave
 import numpy as np
@@ -195,9 +213,122 @@ def whoosh():
     return finish(biquad((air+edge)*stop+thud+crunch, 'low', 4200.0, .7), level=level)
 
 
+# ---- Orion's smithy ----
+
+smithy_rng = np.random.default_rng(4411)
+
+
+def room(signal, decay=.16, mix=.13):
+    """Heard in the smithy: a short tail of the small stone room's
+    reflections, dense noise dying away, under the dry sound."""
+    t = times(decay*5)
+    tail = smithy_rng.standard_normal(len(t))*np.exp(-t/decay)
+    tail = biquad(tail, 'low', 3800.0, .7)
+    tail[:int(.006*RATE)] = 0
+    wet = np.convolve(signal, tail)[:len(signal)]
+    return signal+wet/np.max(np.abs(wet))*np.max(np.abs(signal))*mix
+
+
+# A blow is heard as a clank, not a note: the blade lying on the anvil's face
+# and the hammer's face on it damp each other at once, so what rings is a
+# dense cluster of steel's inharmonic partials, none standing out as a pitch,
+# all dying within a few hundredths of a second. CLANK_MODES partials spread
+# over CLANK_SPAN (times `pitch`), each lasting about `ring` seconds.
+CLANK_MODES = 28
+CLANK_SPAN = (1.0, 7.5)
+
+
+def hammer(pitch, ring, blow, brightness):
+    """One stroke of the hammer on the blade, the blade on the anvil: a
+    short dead clank. `pitch` the bottom of its metallic cluster (Hz),
+    `ring` about how long its partials last (s), `blow` how hard the knock,
+    `brightness` how loud its top end."""
+    t = times(.32)
+    n = len(t)
+    clank = np.zeros(n)
+    for _ in range(CLANK_MODES):
+        ratio = math.exp(smithy_rng.uniform(math.log(CLANK_SPAN[0]), math.log(CLANK_SPAN[1])))
+        f = pitch*ratio
+        level = smithy_rng.uniform(.3, 1.0)*brightness**math.log2(ratio)
+        decay = ring*smithy_rng.uniform(.4, 1.3)/ratio**.35
+        clank += np.sin(2*math.pi*f*t+smithy_rng.uniform(0, 2*math.pi))*level*np.exp(-t/decay)
+    clank /= np.max(np.abs(clank))
+    noise = smithy_rng.standard_normal(n)
+    # Steel struck on steel: a hard bright crack at the instant of the blow,
+    # rough metallic noise under the clank, the hammer's weight thudding into
+    # the anvil's mass, and the blade chattering on the face for an instant.
+    crack = biquad(noise*np.exp(-t/.0025), 'high', 2200.0, .7)*1.4*blow
+    grit = biquad(noise*np.exp(-t/(ring*.5)), 'band', pitch*3.0, .9)*.9
+    thud = np.sin(2*math.pi*np.cumsum(110+90*np.exp(-t/.008))/RATE)*np.exp(-t/.022)*.8*blow
+    chatter = biquad(noise*np.exp(-t/.018)*(1+np.sign(np.sin(2*math.pi*55*t)))*.5, 'band', 1400.0, 1.2)*.35*blow
+    signal = clank*.65*blow+crack+grit+thud+chatter
+    signal = room(signal, decay=.05, mix=.08)
+    return finish(biquad(signal, 'low', 8500.0, .7), peak=.86, drive=1.3)
+
+
+# The grindstone: how long the loop is, how often the wheel goes round in it
+# (a whole number of times, so it loops), and the stretch its end is laid
+# over its start with.
+GRIND_LOOP = 6.0
+GRIND_TURNS = 9
+GRIND_SEAM = .5
+
+
+def grind():
+    t = times(GRIND_LOOP+GRIND_SEAM)
+    n = len(t)
+    turn = 2*math.pi*GRIND_TURNS/GRIND_LOOP*t
+    noise = smithy_rng.standard_normal(n)
+    # Steel hissing on the stone: two bands of noise, the stone not quite
+    # round, so it bites harder once a turn.
+    bite = 1+.18*np.sin(turn+.7)+.06*np.sin(2*turn+2.1)
+    hiss = biquad(noise, 'band', 2700.0, .7)*1.0+biquad(noise, 'band', 5200.0, 1.1)*.4+biquad(noise, 'band', 1400.0, 1.2)*.35
+    hiss = biquad(hiss, 'high', 700.0, .7)*bite
+    # The grit: a crackle of tiny scrapes, thick and uneven.
+    grains = np.zeros(n)
+    for k in np.nonzero(smithy_rng.random(n) < 2600/RATE)[0]:
+        grains[k] = smithy_rng.exponential(1.0)*smithy_rng.choice((-1, 1))
+    grit = biquad(biquad(grains, 'band', 3400.0, 1.2), 'high', 1200.0, .7)*.6*bite
+    # The blade singing faintly where the stone takes it.
+    sing = (biquad(noise, 'band', 2650.0, 18.0)+biquad(noise, 'band', 4120.0, 22.0)*.7)*3.0*(1+.3*np.sin(turn))
+    # The wheel's own rumble, and a soft knock of its axle each turn.
+    rumble = biquad(biquad(smithy_rng.standard_normal(n), 'low', 140.0, .7), 'high', 45.0, .7)*2.2
+    axle = np.zeros(n)
+    for k in range(GRIND_TURNS+1):
+        start = int(k*GRIND_LOOP/GRIND_TURNS*RATE)
+        span = min(n-start, int(.06*RATE))
+        if span > 0: axle[start:start+span] += np.sin(2*math.pi*95*np.arange(span)/RATE)*np.exp(-np.arange(span)/RATE/.02)
+    signal = hiss*.6+grit+sing*.35+rumble*.5+axle*.25
+    # (Steel on stone is harsh, but not a hiss of static: the top rolled off.)
+    signal = biquad(biquad(signal, 'low', 7000.0, .7), 'low', 9000.0, .7)
+    signal = room(signal, decay=.12, mix=.1)
+    # (Seamless: its last GRIND_SEAM seconds laid over its first, crossfaded.)
+    seam = int(GRIND_SEAM*RATE)
+    loop = signal[:n-seam].copy()
+    fade = np.linspace(0, 1, seam)
+    loop[:seam] = loop[:seam]*np.sqrt(fade)+signal[n-seam:]*np.sqrt(1-fade)
+    loop = np.tanh(loop/np.max(np.abs(loop))*1.1)
+    return loop/np.max(np.abs(loop))*.8
+
+
+# Four blows: [bottom of the clank, how long it lasts, knock, brightness].
+HAMMER_BLOWS = [(700.0, .045, 1.0, .9), (780.0, .04, .85, .85), (640.0, .055, 1.1, .95), (840.0, .038, .9, .8)]
+
+
+def smith_sounds():
+    for i, blow in enumerate(HAMMER_BLOWS):
+        write('smith-hammer-%d.wav' % (i+1), hammer(*blow))
+    write('smith-grind.wav', grind())
+
+
+if __name__ == '__main__' and sys.argv[1:] == ['smith']:
+    smith_sounds()
+    sys.exit()
+
 if __name__ == '__main__':
     write('lightning-zap.wav', zap())
     write('power-whoosh.wav', whoosh())
     write('sword-hit-flesh.wav', blade_hit())
     for i, hit in enumerate(arrow_hits()):
         write('arrow-flesh-%d.wav' % (i+1), hit)
+    smith_sounds()

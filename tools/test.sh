@@ -43,6 +43,7 @@ run "$godot_bin" --headless --path . --script tests/one_cast.gd --log-file "$PWD
 run "$godot_bin" --headless --path . --script tests/inn_sip.gd --log-file "$PWD/test-results/inn-sip.log"
 run "$godot_bin" --headless --path . --script tests/inn_selene.gd --log-file "$PWD/test-results/inn-selene.log"
 run "$godot_bin" --headless --path . --script tests/inn_beer.gd --log-file "$PWD/test-results/inn-beer.log"
+run "$godot_bin" --headless --path . --script tests/inn_shift.gd --log-file "$PWD/test-results/inn-shift.log"
 run "$godot_bin" --headless --path . --script tests/zeno.gd --log-file "$PWD/test-results/zeno.log"
 run "$godot_bin" --headless --path . --script tests/procedural_maps.gd --log-file "$PWD/test-results/procedural-maps.log"
 run "$godot_bin" --headless --path . --script tests/map_integration.gd --log-file "$PWD/test-results/map-integration.log"
