@@ -487,12 +487,19 @@ weapon never crosses into his body. With the sword, every warrior skill has a sw
 a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for
 Vampiric and Shadow Strike, the shield shoved out behind a step for Shield Bash, the
 blade wound far back and brought down with the whole body for Execute, wound up
-in one great slow circle for Thunder Slam (the blade drawn down past the hip, far
-back behind the shoulder, up and over the head as he arches back, and only then,
-two thirds of the way through the swing, the whole body hurled forward and down
-and the blade slammed flat into the ground ahead; with a weapon in each hand both
-are swung round together and both slammed down, and a two-handed weapon is swung
-round the same way and driven down as a man splits a log), the pommel hammered down from a deep
+in one great slow circle for Thunder Slam, after film of the swing made with a
+stick (the point swung down to his toes and across low before him as the hand
+draws back to the right hip and the body turns after it, the arm straightened
+out to his right with the blade hanging below the fist and raised so, hanging,
+to the shoulder, then the point swung out and up past the arm's line and over the
+head as he arches back, and only then, two thirds of the way through the swing,
+the whole body hurled forward and down and the blade slammed flat into the
+ground ahead; with a weapon in each hand both arms do the same, mirrored, and
+both are slammed down; a two-handed weapon's head is swung over to his left and
+down past his knee, across low to his right as the hands come round to the hip,
+raised hanging out to his right with the shoulders turned after it, the left
+arm reaching across the chest, then out and up and over, and driven into the
+ground a stride ahead), the pommel hammered down from a deep
 crouch for Shockwave, the blade thrust at the sky for War Cry, a braced run behind
 the shield for Shield Charge (the sprint, the shield held straight out before him),
 and for Leap a deep crouch, the spring, the body stretched in the air with the blade

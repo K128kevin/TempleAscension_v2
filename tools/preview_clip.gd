@@ -100,7 +100,7 @@ func capture():
 		# As the game holds it (scripts/visual.gd equip): the model's +Y along
 		# the hand's +Z, its butt `grip` metres behind the fist.
 		item.rotation.x = PI/2
-		item.position = Vector3(0,.075,-grip)
+		item.position = Vector3(-.028,.085,-grip)
 	var offhand = arg("offhand","")
 	if not offhand.is_empty():
 		marker = MeshInstance3D.new()

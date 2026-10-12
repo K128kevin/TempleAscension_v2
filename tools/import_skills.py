@@ -47,12 +47,25 @@ swing, and each of the three is keyed stepping with either foot.
   SwordThrustR/L  the thrust, following on from the backhand
 
   .tools/Blender.app/Contents/MacOS/Blender --background --python tools/import_skills.py
+
+  SKILLS_ONLY=SkillSlam,...  author only those skills again (the rest keep
+                             their clips); SWINGS_ONLY=1 only the attack cycle
+  SKILLS_DRY=1               author and check, but write nothing back
+  SHEET_DIR=/path            render each skill authored as a contact sheet
+                             there (tools/blender_sheet.py; implies
+                             SKILLS_DRY), at the moments SHEET_PHASES lists
 """
 from pathlib import Path
-import math, os
+import math, os, sys
 import bpy
 from mathutils import Vector, Matrix, Quaternion
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'tools'))
+import blender_sheet as sheet
+import blender_arm as held
+SHEET_DIR = os.environ.get('SHEET_DIR', '')
+SHEET_PHASES = [float(v) for v in os.environ.get('SHEET_PHASES', '0,.08,.16,.24,.32,.4,.46,.52,.58,.62,.66,.75,.9,1').split(',')]
+DRY = bool(os.environ.get('SKILLS_DRY')) or bool(SHEET_DIR)
 OUT = ROOT/'assets/models/character'
 # name: seconds
 CLIPS = {'SkillCleave': 1.0, 'SkillStrike': 1.0, 'SkillStab': .9, 'SkillBash': .9, 'SkillExecute': 1.3, 'SkillSlam': 1.6,
@@ -61,6 +74,9 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.context.scene.render.fps = 30
 bpy.ops.import_scene.gltf(filepath=str(OUT/'warrior.glb'))
 rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
+# (The stand-in for the sheets: a sword's blade from the fist, with the
+# length the game's checks use.)
+if SHEET_DIR: sheet.prop(rig, 'hand_r', (-.028, .085), [(0, 1.08, .011), (-.03, .03, .05)])
 # The normal attack's swings (scripts/combat_animation.gd SWORD_CHAIN): each
 # clip is SWING_SECONDS of swing and then TAIL_SECONDS of recovery, keyed at
 # a quarter of the speed it is played at so the fast cuts are sampled closely.
@@ -96,6 +112,7 @@ frame(0)
 BASE = {b.name: b.matrix_basis.copy() for b in rig.pose.bones}
 PLANTED = {s: rig.pose.bones['foot_'+s].matrix.translation.copy() for s in 'lr'}
 KNEES = {s: rig.pose.bones['calf_'+s].matrix.translation.copy() for s in 'lr'}
+held.init(rig)
 rig.animation_data.action = bpy.data.actions['Run']
 RUN_SPAN = bpy.data.actions['Run'].frame_range.y/30
 RUN = []
@@ -224,6 +241,15 @@ def sword(target, pole, blade, fingers=None):
     point_hand('r', blade, fingers)
     return at
 
+def grip(side, target, pole, blade, fingers=None):
+    """An arm bent to `target` with the weapon in its fist pointed along
+    `blade`, as an arm can be: the wrist bent no further than a wrist bends,
+    the elbow swung round the arm's line from `pole` to where the forearm
+    need not be wrung, and the forearm rolled after the fist
+    (tools/blender_arm.py). Returns the blade's way as set."""
+    y, z, turned = held.fist(rig.pose.bones, side, lambda y: Vector(target), blade, fingers, pole)
+    return z
+
 def hips(down=0.0, forward=0.0, aside=0.0):
     shift('pelvis', V(aside, -forward, -down))
 
@@ -264,13 +290,24 @@ def author(name, pose, keep=()):
             update()
         # SLAM_CHECK=1: how high the blade is over the ground (its two ends)
         # through Thunder Slam and Leap, and how near the body it comes.
-        if name in ('SkillSlam', 'SkillLeap') and os.environ.get('SLAM_CHECK') and (f % 3 == 0):
+        if name in ('SkillSlam', 'DualSkillSlam', 'SkillLeap') and os.environ.get('SLAM_CHECK') and (f % 3 == 0):
             c = clearances()
             hand = rig.pose.bones['hand_r'].matrix
             ends = [hand @ V(0, .075, 0), hand @ V(0, .075, 1.08)]
-            print('SLAM_CHECK', name, round(t, 2), 'blade z', round(ends[0].z, 3), round(ends[1].z, 3), 'worst body', min((v, k) for k, v in c.items() if k.startswith('blade /') and k != 'blade / ground'), 'wrist', round(c['wrist']))
+            print('SLAM_CHECK', name, round(t, 2), 'blade z', round(ends[0].z, 3), round(ends[1].z, 3), 'worst body', min((v, k) for k, v in c.items() if k.startswith('blade /') and k != 'blade / ground'), 'arm', min((v, k) for k, v in c.items() if k.startswith('arm /')), 'wrist', round(c['wrist']), 'twist', round(c['twist']))
         keys(f)
     finish(name, a, length)
+    if SHEET_DIR:
+        def at(t):
+            reset()
+            pose(t)
+            w = settle(t)
+            if w > 0:
+                for b in rig.pose.bones:
+                    if b.name in keep: continue
+                    b.matrix_basis = blend(b.matrix_basis, BASE[b.name], w)
+                update()
+        sheet.render(rig, name, SHEET_PHASES, SHEET_DIR, at)
 
 # ---- The clips ----
 
@@ -412,50 +449,58 @@ SLAM_AHEAD = .6
 FLAT_BLADE = V(0, -1, -.3)
 LEAP_BLADE = V(0, -1, -.25)
 
-# Thunder Slam's wind-up and blow, shared by the one-handed and the dual
-# swing: the blade dropped low behind the hip as the body coils back, then
-# swung up and far back over the head, the back arched, the chest open, the
-# hips rising; then the whole body hurled forward and down behind it on a
-# long stride of the lead foot, the hips dropped, the back folded, the blade
-# struck down flat along the ground ahead (its length meets the floor, not
-# its point); held there, and a slow rise.
-# (The wind-up is slow and wide, the weapon's point drawing one great
-# circle beside him: from pointing down and forward at his toes, swung down
-# and back past the right hip, up behind the right shoulder with the elbow
-# bending, over the head, and only then the fast blow, two thirds of the way
-# through the clip. The hand keeps to his right side throughout, never
-# behind the body, so the arm bends as an arm does and the blade stays
-# clear of him.)
+# Thunder Slam's wind-up and blow, after film of the swing made with a stick
+# in one hand, shared by the one-handed and the dual swing: the blade is
+# lifted a little across the front, then its point swung down to his left
+# toes and across low before him as the hand draws back to the right hip,
+# the body turning after it; the arm straightens out to his right with the
+# blade hanging below the fist, and rises so, hanging, until the arm is
+# level at the shoulder; then up, the point swung out and up past the arm's
+# line, over the head as the back arches and the heels rise; and the whole
+# body is hurled forward and down behind it on a long stride of the lead
+# foot, the hips dropped, the back folded, the blade struck down flat along
+# the ground ahead; held there, and a slow rise. The head follows the hand
+# through the wind-up; the free arm bends up and out for balance as the
+# sword arm goes out, and is thrown down and forward with the blow. The
+# fingers lie along the forearm, the wrist is bent no further than a wrist
+# bends, and the elbow swung to where the forearm is not wrung
+# (tools/blender_arm.py).
 def slam_body(t):
-    drop = sample([(0, 0), (.12, 1), (.36, 0), (1, 0)], t)
-    back = sample([(0, 0), (.12, 0), (.36, 1), (.56, 0), (1, 0)], t)
-    up = sample([(0, 0), (.36, 0), (.56, 1), (.66, 0), (1, 0)], t)
-    down = sample([(0, 0), (.56, 0), (.66, 1), (.84, 1), (1, 0)], t)
-    hips(down=.1*drop+.04*back-.08*up+.5*down, forward=-.02*drop-.1*back-.1*up+.28*down)
-    rotate('pelvis', (1, 0, 0), .12*drop-.05*back-.25*up+.35*down)
-    rotate('spine_01', (1, 0, 0), .12*drop-.12*back-.42*up+.55*down)
-    rotate('spine_02', (1, 0, 0), .08*drop-.1*back-.3*up+.4*down)
-    rotate('spine_03', (1, 0, 0), .03*drop-.05*back-.15*up+.25*down)
-    rotate('pelvis', (0, 0, 1), -.15*drop-.4*back-.15*up+.15*down)
-    rotate('neck_01', (1, 0, 0), -.05*back-.2*up+.1*down)
-    rotate('Head', (1, 0, 0), -.1*drop+.15*back+.35*up-.2*down)
+    drop = sample([(0, 0), (.08, .6), (.18, 1), (.3, .5), (.46, 0), (1, 0)], t)
+    back = sample([(0, 0), (.1, 0), (.3, 1), (.46, 1), (.58, 0), (1, 0)], t)
+    up = sample([(0, 0), (.4, 0), (.58, 1), (.66, 0), (1, 0)], t)
+    down = sample([(0, 0), (.58, 0), (.66, 1), (.84, 1), (1, 0)], t)
+    hips(down=.08*drop+.02*back-.08*up+.5*down, forward=-.02*drop-.06*back-.08*up+.28*down, aside=-.04*back)
+    rotate('pelvis', (1, 0, 0), .1*drop-.05*back-.2*up+.35*down)
+    rotate('spine_01', (1, 0, 0), .1*drop-.08*back-.38*up+.55*down)
+    rotate('spine_02', (1, 0, 0), .06*drop-.06*back-.28*up+.4*down)
+    rotate('spine_03', (1, 0, 0), .02*drop-.03*back-.14*up+.25*down)
+    rotate('pelvis', (0, 0, 1), -.1*drop-.3*back-.1*up+.15*down)
+    rotate('spine_01', (0, 0, 1), -.05*drop-.2*back+.1*down)
+    rotate('spine_02', (0, 0, 1), -.15*back+.05*up+.1*down)
+    rotate('spine_01', (0, 1, 0), -.1*back-.04*up)
+    rotate('spine_02', (0, 1, 0), -.1*back-.04*up)
+    rotate('neck_01', (0, 0, 1), -.3*back-.1*up)
+    rotate('neck_01', (1, 0, 0), .15*drop-.15*up+.1*down)
+    rotate('Head', (0, 0, 1), -.25*back)
+    rotate('Head', (1, 0, 0), .1*drop+.1*back+.3*up-.2*down)
     plant(lead='l', forward=.65*down, lift=.16*math.sin(math.pi*sample([(0, 0), (.54, 0), (.68, 1), (1, 1)], t)))
     return drop, back, up, down
 
-SLAM_HAND_PATH = [(0, SWORD_HOME), (.12, V(-.28, -.08, .9)), (.24, V(-.36, .12, .8)), (.36, V(-.42, .3, 1.0)), (.46, V(-.4, .3, 1.5)), (.56, V(-.26, .1, 2.05)), (.62, V(-.12, -.3, 2.1)), (.66, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.84, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)]
-SLAM_BLADE_PATH = [(0, V(-.2, -1, .3)), (.12, V(-.1, -.5, -.85)), (.24, V(0, .35, -.92)), (.36, V(0, .96, -.2)), (.46, V(0, .7, .7)), (.56, V(0, .15, .98)), (.62, V(0, -.6, .8)), (.66, FLAT_BLADE), (.84, FLAT_BLADE), (1, V(-.2, -1, .3))]
-
-def slam_pole(t):
-    # (The elbow out to the right and back as the blade swings behind, up
-    # and out as it rises over the head, down and forward for the blow.)
-    return V(-.95, .25, 1.0) if t < .3 else (V(-.95, .4, 1.85) if t < .6 else V(-.9, -.4, .9))
+SLAM_HAND_PATH = [(0, SWORD_HOME), (.08, V(-.2, -.14, 1.02)), (.18, V(-.38, -.02, .95)), (.28, V(-.56, .1, 1.22)), (.38, V(-.66, .14, 1.4)), (.46, V(-.66, .14, 1.5)),
+    (.53, V(-.55, .1, 1.76)), (.58, V(-.3, .12, 1.94)), (.62, V(-.15, -.25, 2.05)), (.66, V(-.18, -SLAM_AHEAD, SLAM_HAND)), (.84, V(-.18, -SLAM_AHEAD+.03, SLAM_HAND-.02)), (1, SWORD_HOME)]
+SLAM_BLADE_PATH = [(0, V(-.2, -1, .3)), (.08, V(.4, -.5, .75)), (.18, V(.35, -.7, -.62)), (.28, V(-.2, -.15, -.97)), (.38, V(-.4, -.05, -.92)), (.46, V(-.9, -.05, .45)),
+    (.53, V(-.5, .1, .86)), (.58, V(0, .35, .94)), (.62, V(0, -.75, .65)), (.66, FLAT_BLADE), (.84, FLAT_BLADE), (1, V(-.2, -1, .3))]
+# (Where the elbow is asked to bend toward, before it is swung to suit the
+# forearm: back and down as the arm goes out, forward and out over the head.)
+SLAM_POLE_PATH = [(0, V(-.75, .1, .9)), (.2, V(-.7, .4, .9)), (.46, V(-.65, .35, 1.0)), (.56, V(-.7, -.2, 1.8)), (.64, V(-.9, -.4, .9)), (1, V(-.75, .1, .9))]
 
 def slam(t):
     drop, back, up, down = slam_body(t)
-    sword(vsample(SLAM_HAND_PATH, t), slam_pole(t), vsample(SLAM_BLADE_PATH, t))
-    # The free arm swung back with the wind-up, thrown up and forward as the
-    # weapon comes over, then down and out as the blow lands.
-    guard(forward=.1*drop+.2*back+.35*up+.25*down, out=.1*back+.1*up-.1*down, up=-.1*drop+.2*back+.5*up-.2*down)
+    grip('r', vsample(SLAM_HAND_PATH, t), vsample(SLAM_POLE_PATH, t), vsample(SLAM_BLADE_PATH, t))
+    # The free arm bent up and out as the sword arm goes out, thrown up and
+    # forward as the weapon comes over, then down and out as the blow lands.
+    guard(forward=.05*drop+.1*back+.3*up+.3*down, out=.1*drop+.2*back+.05*up-.05*down, up=-.05*drop+.3*back+.4*up-.3*down)
 
 def mirror_x(v):
     return V(-v.x, v.y, v.z)
@@ -464,12 +509,8 @@ def dual_slam(t):
     # A weapon in each hand: the left does as the right, mirrored, both
     # swung back and over the head together and both slammed down.
     slam_body(t)
-    sword(vsample(SLAM_HAND_PATH, t), slam_pole(t), vsample(SLAM_BLADE_PATH, t))
-    hand = mirror_x(vsample(SLAM_HAND_PATH, t))
-    blade = mirror_x(vsample(SLAM_BLADE_PATH, t))
-    arm('l', hand, mirror_x(slam_pole(t)))
-    fore = rig.pose.bones['lowerarm_l']
-    point_hand('l', blade, fore.matrix.to_quaternion() @ V(0, 1, 0))
+    grip('r', vsample(SLAM_HAND_PATH, t), vsample(SLAM_POLE_PATH, t), vsample(SLAM_BLADE_PATH, t))
+    grip('l', mirror_x(vsample(SLAM_HAND_PATH, t)), mirror_x(vsample(SLAM_POLE_PATH, t)), mirror_x(vsample(SLAM_BLADE_PATH, t)))
 
 def leap(t):
     # A deep crouch, the arms swung back; the spring, the body stretched and
@@ -797,6 +838,7 @@ def clearances():
     out['arm / shield'] = off_board(fore[0], fore[1], .045)
     y = B['lowerarm_r'].matrix.to_quaternion() @ V(0, 1, 0)
     out['wrist'] = math.degrees(y.angle(B['hand_r'].matrix.to_quaternion() @ V(0, 1, 0)))
+    out['twist'] = math.degrees(held.twist(B, 'r'))
     out['reach'] = short[0]
     out['stretch'] = stretch[0]
     return out
@@ -841,9 +883,11 @@ def author_swing(name, start, foot, opening=False):
         if k in ('wrist', 'reach', 'stretch'): print('SWING_CHECK', name, k, round(-v, 3), 'at', round(t, 2))
         elif v < .08: print('SWING_CHECK', name, k, round(v, 3), 'at', round(t, 2))
 
-author_swing('SwordOpen', 0, 'r', opening=True)
-for start, name in enumerate(['SwordCut1', 'SwordCut2', 'SwordThrust']):
-    for foot in 'rl': author_swing(name+foot.upper(), start, foot)
+# (A dry run of some skills alone leaves the attack cycle be.)
+if not (DRY and ONLY):
+    author_swing('SwordOpen', 0, 'r', opening=True)
+    for start, name in enumerate(['SwordCut1', 'SwordCut2', 'SwordThrust']):
+        for foot in 'rl': author_swing(name+foot.upper(), start, foot)
 
 if os.environ.get('SWINGS_ONLY'):
     raise SystemExit
@@ -860,5 +904,6 @@ used = {s.action for t in rig.animation_data.nla_tracks for s in t.strips}
 for a in list(bpy.data.actions):
     if a not in used: bpy.data.actions.remove(a)
 bpy.context.scene.frame_set(0)
+if DRY: raise SystemExit(print('SKILLS_DRY: nothing written'))
 bpy.ops.export_scene.gltf(filepath=str(OUT/'warrior.glb'), export_format='GLB', export_animations=True, export_animation_mode='NLA_TRACKS', export_force_sampling=True)
 print('SKILL_ANIMATIONS_READY', len(rig.animation_data.nla_tracks))

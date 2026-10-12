@@ -539,7 +539,20 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   carried by two-bone IK with the fist turned outright so the blade runs where the
   swing sends it, the shield arm held in its guard (moved as the swing needs), both
   feet kept planted by leg IK (the charge borrows the sprint's legs), and each eased
-  out of the stance and back into it so nothing leaps between frames. The shockwave of a blow
+  out of the stance and back into it so nothing leaps between frames. Thunder
+  Slam's arm (and both of the dual swing's) is set by `tools/blender_arm.py`,
+  which the two-handed clips share: the fist is set on the weapon with the wrist
+  bent no further than a wrist bends (the weapon tipped back toward square across
+  the forearm, the fingers laid along the forearm's line or turned about the
+  weapon no further than 55°), the elbow is swung round the arm's line from where
+  it was asked to the nearest place that leaves the fist turned no further than a
+  forearm turns (measured from the elbow's pit: at the middle the thumb points at
+  it), and the forearm is rolled after the fist. Both exporters take `SKILLS_DRY`
+  / `HEAVY_DRY` (author and check, write nothing) and `SHEET_DIR` (render each
+  clip authored as a contact sheet in Blender itself, `tools/blender_sheet.py`,
+  laid out by `tools/sheet_compose.py`: his right side, the front, the front
+  right quarter and from above, a stand-in weapon on the fist), which is how a
+  swing is judged without the eleven-minute export and reimport. The shockwave of a blow
   on the ground is `scripts/shockwave.gd`: a disc laid on the floor over the blow's
   reach (a slice of one for the slam's arc) and a low wall standing on the front,
   both drawn by `assets/shaders/shockwave.gdshader` (the racing front, its haze,
@@ -570,6 +583,8 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   default the game's own) and can author a few clips alone (`HEAVY_ONLY`,
   `PIKE_ONLY`). Run `import_pike.py` last: it re-seats every other clip's strip so
   none is exported a frame late.
+  `HEAVY_CHECK=2` prints every frame's wrist bends and fist turns, the weapon's
+  clearances from the body and the ground and the hands' reach.
   Their run and walk are made when the figure is set up (`Visual.derive_carries`):
   the plain run and walk with both arms held as the stance holds them. So are a
   left hand's blows, for a weapon in each hand (`Visual.derive_mirrors`: OffCut,
