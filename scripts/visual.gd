@@ -1921,6 +1921,9 @@ const SKILL_WAKE_SPEED = 15.0
 const SKILL_WAKE = [.25,.05]
 # (Cleave's sweep is followed far round after the blow, its wake with it.)
 const SKILL_WAKES = {"SkillCleave":[.16,.12]}
+# (A two-handed Thunder Slam's weapon leaves its wake from the moment it is
+# hauled down off the top of the swing, while it is still gathering speed.)
+const SKILL_WAKE_SPEEDS = {"HeavySlam":9.0}
 var blade_tip_was = null
 # Thunder Slam's charge on the blade (scripts/blade_charge.gd): how strong it
 # is over the swing, as shares of the clip (forming as he raises the sword,
@@ -2472,7 +2475,7 @@ func advance(dt: float) -> void:
 		if not cutting and u >= 0.0 and blade_tip_was != null and dt > 0.0:
 			var speed: float = (tip-blade_tip_was).length()/dt/rig.scale.x
 			var wake: Array = SKILL_WAKES.get(state,SKILL_WAKE)
-			cutting = not dead and speed > SKILL_WAKE_SPEED and u >= contact-wake[0] and u <= contact+wake[1]
+			cutting = not dead and speed > SKILL_WAKE_SPEEDS.get(state,SKILL_WAKE_SPEED) and u >= contact-wake[0] and u <= contact+wake[1]
 		blade_tip_was = tip
 		sword_trail.step(dt,cutting,blade*Vector3(0,edge[0],0),blade*Vector3(0,edge[1],0))
 		if is_instance_valid(blade_charge):

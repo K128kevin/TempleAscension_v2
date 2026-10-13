@@ -845,8 +845,10 @@ def execute(t):
 # forward and down behind it on a long stride of the left foot, the head
 # smashed into the ground ahead, level, as a hammer meets a nail; held; and
 # the weapon is swung up before him back onto the shoulder. The hands keep
-# together on the haft; the fingers lie along their forearms.
-SLAM_CLOCK = [(0, 0, 0), (.03, .03, 1.0), (.66, .66, 1.0, 0), (.72, .72, 0), (1, 1, 0)]
+# together on the haft; the fingers lie along their forearms. (The clock
+# lingers a little at the top and brings the weapon down from it fast, at
+# its fastest as it lands.)
+SLAM_CLOCK = [(0, 0, 0), (.03, .03, 1.0), (.57, .52, 1.5), (.66, .66, 1.4, 0), (.72, .72, 0), (1, 1, 0)]
 DOWN = dict(er=(-.9, -.3, -.1), el=(.9, .1, -.1))
 LUNGE = dict(rh=.8, rk=(0, .1, -.4))
 
