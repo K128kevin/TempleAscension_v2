@@ -422,7 +422,8 @@ with lion medallions and a baldric, a broad studded belt with a lion boss,
 lamed steel pauldrons over the shoulders, steel gauntlets over his hands and
 fingers with a bell cuff to mid-forearm, a kilt of separate stiff leather
 pteruges (studded tabs, steel leaf motifs and a Greek-key band), each swinging
-from his belt on its own and pushed aside by his legs as he walks and runs,
+from his belt on its own and pushed aside by his legs as he walks and runs
+(still as he stands, but for his body's own sway),
 over a tattered underskirt, and steel plated boots: close-fitting sabatons
 with toe and ankle lames, and greaves to a rolled rim at mid-shin. (Plated leg armor that drops plates his legs
 from the waist to the ankles, in the kilt's place.) Ranger with bow: knee-high strapped leather boots,
@@ -507,9 +508,11 @@ arches back, and, two thirds of the way through the swing, the whole body is
 hurled forward and down and the blade brought down level on the ground ahead;
 the weapon never crosses to his left, no elbow bends the wrong way, and no
 wrist is wrung; with a weapon in each hand both arms do the same, mirrored, and
-both are slammed down; a two-handed weapon is swung the same way with both
-hands together on the haft, and the head meets the ground level, as a hammer
-meets a nail, a stride ahead of a deep kneel), the pommel hammered down from a deep
+both are slammed down; a two-handed weapon is swung round the same circle
+with both hands together on the haft, its head carried out past his right hip
+at belt height and round behind him rather than down by his leg, and the head
+meets the ground level, as a hammer meets a nail, a stride ahead of a deep
+kneel), the pommel hammered down from a deep
 crouch for Shockwave, the blade thrust at the sky for War Cry, a braced run behind
 the shield for Shield Charge (the sprint, the shield held straight out before him),
 and for Leap a deep crouch, the spring, the body stretched in the air with the blade

@@ -111,7 +111,16 @@ it is his outermost flesh there (the hips' own flesh moves with the hips the
 strips hang from, and the strips are cut to clear it). Every frame each piece,
 from the belt down, is turned out of the flesh along its normal (its middle,
 tip and edges: the edges from the strip's own width and curl), and a piece
-lying near a leg is laid down onto it and twisted a little to lie flat on it.
+lying near a leg is drawn down onto it as it swings (its weight, damped) and
+twisted a little, at a limited rate, to lie flat on it. The flesh's outline is
+blended smoothly along and round each tube (tapering away where there is no
+flesh, between the legs), and a push out of it, or the draw onto it, moves a
+piece without setting it swinging (it keeps only the flesh's own motion), and
+puts it out at once only as far as it and the flesh came together (deeper only
+at `GIVE`): so a man standing still has his strips lie still, moving only as
+his body does. (They did not: every jump of the flesh's outline, or of the
+way out of it, threw a strip, which swung back and was thrown again; the
+strips flapped and shook in an idle.)
 A thigh raised up through a strip's hinge carries the hinge up onto it (under
 its tab), so the strips in front of a rising knee ride on top of the thigh.
 Nothing stretches (`assets/shaders/kilt.gdshader` draws them). Its data is in
@@ -637,20 +646,18 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   his right leg and back behind him as the arms drop and swing back with the
   chest turned to it, up behind him, over the head, and down before him to meet
   the ground level, as a hammer meets a nail, a stride ahead of a deep kneel.
-  The weapon is glued to the right fist with its head beyond the thumb, so that
-  hand can never hold it hanging thumb-up: the weapon is kept at least a half
-  right angle off the arms' line all the way round (a wrist deviates no
-  further), passing the arms' line only out to the side, and above the line
-  through the blow, which is what lets the blow come down level without a
-  flip. While the weapon trails below the arms the fist can only carry it with
-  the elbow turned up, so those keys hold the arms fully straight (no bend
-  direction shows) and leave the elbows free; through the blow the arms are a
-  shade short of straight (`reach()`, the `ea` channel) with each elbow asked
-  for a direction found with `HEAVY_PROBE=s,...` (each elbow's pole swept
-  right round the arm at those moments, the fist's turn and the elbow's way
-  printed for each) so every elbow points back or down. The left hand takes
-  the haft with its thumb toward the head or the butt, whichever wrings its
-  forearm less (`hold()`). The shockwave of a blow
+  The two-handed clip (HeavySlam, `tools/import_heavy.py`) is keyed as a man
+  swings it rather than as the weapon's path: the hands as a direction and
+  reach from the middle of the shoulders in the chest's own frame, the right
+  elbow's direction in that frame, and the right wrist's cock and turn on its
+  forearm, all found again each frame about the chest as it then stands. So
+  the hands ride round before the turning chest, where both of his short arms
+  reach them without either crossing into it, and nothing is asked of a wrist
+  that it cannot give, so the fist never tips the weapon or turns it over
+  between frames; the left elbow points away from the side of its arm the
+  head lies on, so the left fist (thumb toward the head) is never wrung or
+  flipped. Its head swings out and down past his right hip at belt height,
+  the lowest it goes, round behind him and up, with no second dip. The shockwave of a blow
   on the ground is `scripts/shockwave.gd`: a disc laid on the floor over the blow's
   reach (a slice of one for the slam's arc) and a low wall standing on the front,
   both drawn by `assets/shaders/shockwave.gdshader` (the racing front, its haze,

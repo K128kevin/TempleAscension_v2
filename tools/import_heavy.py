@@ -30,13 +30,12 @@ hand's X; the left palm, hand_l's (0, .075, 0), sits at hand_r's
                   straight down before him
   HeavyExecute    the weapon hauled far back over the head, the body arched,
                   then brought down with everything, down to the knee
-  HeavySlam       Thunder Slam, one circle on his right: the weapon held
-                  before the belly pointed ahead, swung down past the outside
-                  of his right leg and back behind him as the arms drop and
-                  swing back with the chest turned to it, up behind him, over
-                  the head, and down before him to meet the ground level, as
-                  a hammer meets a nail, a stride ahead of a deep kneel; held;
-                  a slow rise
+  HeavySlam       Thunder Slam, one circle on his right: the weapon swung out
+                  and down past his right hip and round behind him as the
+                  chest turns away to it, the hands carried before the chest,
+                  then all the way up behind him, over the head, and down
+                  before him to meet the ground level, as a hammer meets a
+                  nail, a stride ahead of a deep kneel; held; the rise
   HeavyShockwave  Shockwave: the weapon turned head down and hoisted as he
                   draws himself up, then rammed straight down into the ground
                   before his feet behind a stamp of the lead foot
@@ -714,72 +713,160 @@ EXECUTE = [K(0),
 def execute(t):
     play(t, EXECUTE_CLOCK, EXECUTE)
 
-# Thunder Slam, after film of the swing made with a stick in both hands.
-# First the hands stay before the belly and the weapon is turned about them
-# in the plane of his front like a clock's hand: from upright, over to his
-# left, down past his left knee, through the bottom and round to his right,
-# the hands drawing out to the right hip as it comes. Then the arms
-# straighten, and arms and weapon swing up together on his right as one
-# lever, the weapon lagging a half right angle behind the arms (the wrists
-# bent no further than wrists bend), the chest turned to face the swing and
-# the head after it: from hanging below the hands, out level at the shoulder,
-# up over the head as the back arches and the heels rise; the weapon whips
-# over the top, and the whole body is hurled forward and down behind it on
-# a long stride of the left foot, the head smashed into the ground ahead;
-# held; a slow rise. The hands keep together on the haft; the fingers lie
-# along their forearms (tools/blender_arm.py).
-SLAM_CLOCK = [(0, 0, 0), (.03, .03, 1.0), (.66, .66, 1.0, 0), (.84, .84, 0), (1, 1, 0)]
+# Thunder Slam, after film of the swing made with a stick in both hands, and
+# the user's drawing of the head's path: one circle on his right. From the
+# stance the chest turns away to his right, carrying the hands down before it
+# as he sinks and leans into it, and the weapon's head swings out and down to
+# his right, past his right hip at the height of the belt (the lowest it ever
+# goes: it never drops to the foot behind him), and on round behind him; and
+# from there it rises all the way: up behind him as the hands come up before
+# the chest past the right shoulder, over the head as the back arches and the
+# heels rise; the weapon whips over the top, and the whole body is hurled
+# forward and down behind it on a long stride of the left foot, the head
+# smashed into the ground ahead, level, as a hammer meets a nail; held; and
+# the weapon is swung up before him back onto the shoulder. The hands keep
+# together on the haft; the fingers lie along their forearms.
+SLAM_CLOCK = [(0, 0, 0), (.03, .03, 1.0), (.66, .66, 1.0, 0), (.72, .72, 0), (1, 1, 0)]
 DOWN = dict(er=(-.9, -.3, -.1), el=(.9, .1, -.1))
 LUNGE = dict(rh=.8, rk=(0, .1, -.4))
-STRIDE = dict(lf=(.6, 0, 0), rh=.7, rp=.2)
 
-def swung(degrees, forward=-.14):
-    """A direction in the plane of his front, `degrees` round from straight
-    down toward his right and on up over his head, tipped `forward` (the
-    weapon passes before the legs, not through them)."""
-    t = math.radians(degrees)
-    v = Vector((-math.sin(t), forward, -math.cos(t)))
-    return tuple(v.normalized())
-# (Thunder Slam keeps its arms a shade short of straight, so no elbow is
-# ever locked, and its elbows within SLAM_SWING of where they are asked,
-# which is chosen with HEAVY_PROBE so that every elbow points back, down or
-# out and no fist is turned far from its forearm. The hammer is glued to the
-# right fist with its head beyond the thumb, so the right hand can never hold
-# it hanging thumb-up: the weapon is kept at least a half right angle off the
-# arms' line, on the side the elbows' pits face, through the whole swing.)
-NATURAL = dict(nf=1, es=35.0, ea=.006)
-# (While the weapon trails below the arms' line the fist can only carry it
-# with the elbow turned up, which a fully straight arm does not show: those
-# keys hold the arms straight and leave the elbows free.)
-STRAIGHT = dict(nf=1, es=150.0, ea=.0015)
-SLAM = [K(0),
-    # The weapon held before the belly, pointed ahead and a little up; then
-    # the arms drop and swing back as the chest turns to his right, and the
-    # weapon swings down past the outside of his right leg and back behind
-    # him, never within a half right angle of the arms' line.
-    K(.06, down=.04, turn=-.05, twist=-.1, lean=.06, hp=.15, g=(-.25, -.32, 1.0), z=(0, -.87, .5), er=(0, .24, -.25), el=(.08, .29, -.07), **NATURAL),
-    reach(.12, (-.45, -.5, -.74), down=.06, turn=-.1, twist=-.2, lean=.08, hy=-.2, hp=.2, z=(-.4, -.9, .17), er=(-.2, .2, -.1), el=(.2, .2, -.1), **STRAIGHT),
-    reach(.18, (-.5, -.1, -.86), down=.08, turn=-.2, twist=-.4, lean=.06, hy=-.3, hp=.2, z=(-.9, -.1, -.42), er=(-.1, .3, -.1), el=(.2, .3, -.1), **STRAIGHT),
-    reach(.24, (-.35, .3, -.89), down=.08, turn=-.3, twist=-.6, lean=.04, bend=-.05, hy=-.4, hp=.2, z=(-.45, .85, -.27), er=(-.1, .3, -.1), el=(.2, .3, -.1), **STRAIGHT),
-    # The lever: the arms swung back and up behind him on his right, the
-    # weapon trailing below and behind them, the chest turned to it.
-    reach(.30, (-.5, .6, -.62), down=.06, turn=-.4, twist=-.8, lean=0, bend=-.1, hy=-.5, hp=.1, z=(0, .1, -1), er=(-.09, -.46, .03), el=(.1, .13, -.4), **STRAIGHT),
-    reach(.38, (-.55, .6, .58), down=.03, turn=-.4, twist=-.85, lean=-.08, bend=-.12, hy=-.5, hp=-.1, z=(0, .75, -.66), er=(.44, -.3, .05), el=(.2, .2, -.4), lh=.2, rh=.2, **STRAIGHT),
-    reach(.44, (-.3, .35, .89), down=.0, turn=-.25, twist=-.5, lean=-.2, tilt=-.04, bend=-.06, hy=-.3, hp=-.3, z=(0, .9, .44), er=(.15, -.28, -.33), el=(.19, .17, -.27), lh=.35, rh=.35, **STRAIGHT),
-    reach(.49, (-.15, 0, .99), down=-.05, turn=-.05, twist=-.15, lean=-.26, tilt=-.05, hp=-.4, z=(0, .75, .66), er=(.27, -.26, -.17), el=(.32, .24, -.1), lh=.45, rh=.45, **STRAIGHT),
+def chest():
+    """The middle of the shoulders and the chest's own ways as it stands:
+    forward, to his right, and up along the spine."""
+    right = (B['upperarm_r'].matrix.translation-B['upperarm_l'].matrix.translation).normalized()
+    up = B['neck_01'].matrix.translation-B['spine_02'].matrix.translation
+    up = (up-right*up.dot(right)).normalized()
+    return (B['upperarm_r'].matrix.translation+B['upperarm_l'].matrix.translation)/2, up.cross(right), right, up
+
+def in_chest(v, frame):
+    """A direction given in the chest's own ways (forward, right, up), in the world's."""
+    mid, f, r, u = frame
+    return f*v[0]+r*v[1]+u*v[2]
+
+def wrist(fore, pole, cock, turn):
+    """The weapon's way from a right fist on a forearm running along `fore`
+    with its elbow pointed toward `pole`: cocked `cock` degrees from the
+    forearm's line (square across it at 90, back toward the elbow past that)
+    and turned `turn` degrees about it from the elbow's pit, where the thumb
+    points at the forearm's middle turn."""
+    pit = -(pole-fore*pole.dot(fore)).normalized()
+    turn, cock = math.radians(turn), math.radians(cock)
+    return fore*math.cos(cock)+(pit*math.cos(turn)+fore.cross(pit)*math.sin(turn))*math.sin(cock)
+
+# The swing is keyed as a man swings it, rather than as the weapon's path
+# (which, keyed outright, asked the wrists and elbows for what they could not
+# give, so that the fist tipped the weapon and the elbows swung round from one
+# frame to the next, and asked the hands for places right of the chest that
+# drew the arms in through it):
+# where the hands are, as a direction from the middle of the shoulders in
+# the chest's own ways (`a`) and a reach along it (`o`); where the right
+# elbow points (`pr`, the chest's ways); and how the right wrist holds the
+# weapon (`k`, its cock, and `tw`, its turn: wrist()). All of it is found
+# again each frame about the chest as it then stands, so the hands are
+# carried round by the chest as it turns, always before it, where both arms
+# reach them without either crossing into it, and nothing is ever asked of a
+# wrist or a forearm that it cannot do, so nothing is tipped or turned over
+# for it between two frames: the weapon's head goes round on one smooth
+# path, and the elbows and fists with it. The left elbow points away from
+# the side of its arm the weapon's head lies on, where the left fist (its
+# thumb toward the head) need not be turned on its forearm at all. `w`
+# blends all this in from the stance as HeavyIdle begins (its keys read off
+# it, and the whole figure eased to it as `w` falls) and back out to it, so
+# the clip leaves the stance and comes back to it without a seam.
+reset()
+idle(0.0)
+IDLE = {b.name: b.matrix_basis.copy() for b in B}
+_frame = chest()
+_poles = []
+for _s in 'rl':
+    _d = (B['hand_'+_s].matrix.translation-B['upperarm_'+_s].matrix.translation).normalized()
+    _p = B['lowerarm_'+_s].matrix.translation-B['upperarm_'+_s].matrix.translation
+    _poles.append((_p-_d*_p.dot(_d)).normalized())
+_home = B['hand_r'].matrix @ V(0, PALM, 0)-_frame[0]
+_chest = lambda v: tuple(Vector(v).dot(_frame[k]) for k in (1, 2, 3))
+# (And the stance's right wrist, as wrist() has it.)
+_fore = (B['hand_r'].matrix.translation-B['lowerarm_r'].matrix.translation).normalized()
+_z = B['hand_r'].matrix.to_quaternion() @ V(0, 0, 1)
+_pit = -(_poles[0]-_fore*_poles[0].dot(_fore)).normalized()
+_t = _z-_fore*_z.dot(_fore)
+HOME = dict(a=_chest(_home.normalized()), o=_home.length, pr=_chest(_poles[0]), pl=_chest(_poles[1]), w=0.0,
+    k=math.degrees(_fore.angle(_z)), tw=math.degrees(math.atan2(_fore.dot(_pit.cross(_t)), _pit.dot(_t))))
+reset()
+
+def toward(key, v, share):
+    """A channel `share` of the way from the stance's to `v`."""
+    return tuple(Vector(HOME[key]).lerp(Vector(v), share))
+# (The arms a shade short of straight, so no elbow is ever locked.)
+ARMS = dict(nf=1, ea=.004, w=1.0, pl=(0, 0, -1))
+SLAM = [K(0, **HOME),
+    # The chest turns away to his right, carrying the hands out before it,
+    # and he sinks and leans into it; the weapon's head swings over to his
+    # right and down past his right hip and on round behind him.
+    K(.12, down=.09, turn=-.09, twist=-.16, lean=.2, hy=-.2, a=(.85, .05, -.52), o=.55, pr=(-.4, .55, -.75), k=103, tw=61, **ARMS),
+    K(.18, down=.14, turn=-.14, twist=-.26, lean=.35, hy=-.3, hp=-.1, a=(.8, 0, -.6), o=.55, pr=(-.5, .55, -.65), k=94, tw=68, **ARMS),
+    K(.24, down=.15, turn=-.22, twist=-.4, lean=.32, bend=-.05, hy=-.4, hp=-.1, a=(.8, 0, -.6), o=.55, pr=(-.5, .5, -.7), k=88, tw=78, **ARMS),
+    K(.30, down=.12, turn=-.33, twist=-.62, lean=.18, bend=-.1, hy=-.5, hp=-.05, a=(.85, .05, -.45), o=.55, pr=(-.4, .3, -.85), k=94, tw=84, **ARMS),
+    # And up behind him, the hands rising before the chest past the right
+    # shoulder, the chest turned right round to it.
+    K(.36, down=.05, turn=-.45, twist=-.85, lean=-.06, bend=-.12, hy=-.5, hp=-.05, a=(.92, .1, .05), o=.55, pr=(-.2, 0, -1), k=104, tw=62, lh=.15, rh=.15, **ARMS),
+    K(.42, down=.02, turn=-.45, twist=-.85, lean=-.16, tilt=-.03, bend=-.1, hy=-.35, hp=-.25, a=(.7, .1, .7), o=.55, pr=(.5, -.3, -.8), k=96, tw=46, lh=.3, rh=.3, **ARMS),
+    K(.48, down=-.03, turn=-.25, twist=-.45, lean=-.24, tilt=-.05, bend=-.06, hy=-.1, hp=-.4, a=(.25, .3, .92), o=.55, pr=(.8, -.4, -.4), k=84, tw=34, lh=.42, rh=.42, **ARMS),
     # Over the top and down before him, the weapon kept above the arms' line
     # all the way, so it comes down level; the body folds into the blow and
     # the arms are thrown out to meet the ground ahead, the elbows down.
-    reach(.54, (0, -.5, .87), down=.02, fwd=.08, turn=.02, twist=.05, lean=.05, hp=-.4, z=(0, .3, .95), er=(.28, 0, -.37), el=(.15, .42, -.11), lf=(.25, .08, 0), rh=.4, **NATURAL),
-    reach(.58, (0, -.97, .26), down=.1, fwd=.18, turn=.06, twist=.2, lean=.3, tilt=.08, hp=-.35, z=(0, -.5, .87), er=(.03, .04, -.51), el=(.48, 0, .17), lf=(.35, .06, 0), rh=.5, rp=.1, **NATURAL),
-    reach(.62, (0, -.87, -.5), down=.3, fwd=.28, turn=.1, twist=.3, lean=.6, tilt=.15, hp=-.25, z=(0, -.76, .65), er=(.18, .33, -.35), el=(0, .15, -.49), lf=(.42, .03, 0), rh=.55, rp=.15, **NATURAL),
-    reach(.66, (0, -.64, -.77), 'hit', down=.56, fwd=.32, side=-.03, turn=.15, twist=.45, lean=.95, tilt=.2, hp=-.1, z=(0, -1, 0), er=(.05, .46, -.21), el=(-.16, .2, -.44), lf=(.45, 0, 0), rh=.6, rp=.2, **NATURAL),
-    reach(.84, (0, -.64, -.77), down=.56, fwd=.32, side=-.03, turn=.15, twist=.45, lean=.97, tilt=.2, hp=-.05, z=(0, -1, 0), er=(.05, .46, -.21), el=(-.16, .2, -.44), lf=(.45, 0, 0), rh=.6, rp=.2, **NATURAL),
-    K(.92, nf=.5, down=.25, fwd=.22, twist=.2, lean=.45, g=(.0, -.62, .95), z=(-.2, -.85, .5), n=(.8, -.5, .2), er=(-.5, .2, -.5), lf=(.4, .02, 0), rh=.5),
-    K(1)]
+    K(.54, down=.02, fwd=.08, turn=.02, twist=.05, lean=.05, hp=-.4, a=(.34, .12, .93), o=.6, pr=(.8, -.4, -.4), k=80, tw=-6, lf=(.25, .08, 0), rh=.4, **ARMS),
+    K(.58, down=.1, fwd=.18, turn=.06, twist=.2, lean=.3, tilt=.08, hp=-.35, a=(.66, .12, .74), o=.6, pr=(0, -.3, -.95), k=78, tw=-27, lf=(.35, .06, 0), rh=.5, rp=.1, **ARMS),
+    K(.62, down=.3, fwd=.28, turn=.1, twist=.3, lean=.6, tilt=.15, hp=-.25, a=(.92, .1, .37), o=.6, pr=(0, -.3, -.95), k=66, tw=-11, lf=(.42, .03, 0), rh=.55, rp=.15, **ARMS),
+    K(.66, 'hit', down=.56, fwd=.32, side=-.03, turn=.15, twist=.45, lean=.95, tilt=.2, hp=-.1, a=(.98, .11, .19), o=.6, pr=(0, -.3, -.95), k=55, tw=10, lf=(.45, 0, 0), rh=.6, rp=.2, **ARMS),
+    K(.72, down=.56, fwd=.32, side=-.03, turn=.15, twist=.45, lean=.97, tilt=.2, hp=-.05, a=(.97, .12, .2), o=.6, pr=(0, -.3, -.95), k=55, tw=10, lf=(.45, 0, 0), rh=.6, rp=.2, **ARMS),
+    # The rise: the weapon's head lifted off the ground and swung up before
+    # him to stand over the right shoulder again.
+    K(.83, down=.3, fwd=.2, twist=.1, lean=.42, tilt=.08, a=(.9, -.05, -.43), o=.55, pr=toward('pr', (0, -.3, -.95), .6), k=92, tw=38, lf=(.4, .02, 0), rh=.45, **ARMS),
+    K(.94, down=.05, fwd=.04, twist=-.22, lean=.1, a=toward('a', (.9, -.05, -.43), .2), o=.38, pr=toward('pr', (0, -.3, -.95), .15), k=118, tw=56, lf=(.06, 0, 0), rh=.05, **dict(ARMS, w=.6)),
+    K(1, **HOME)]
+
+def carried(channel, s):
+    """One of Thunder Slam's own channels (which the stance has not) carried
+    through its keys as value() carries the stance's."""
+    kind = 'down' if isinstance(SLAM[0][1][channel], float) else 'g'
+    return value([(r[0], {kind: r[1][channel]}, r[2]) for r in SLAM], kind, s)
+
+def slam_pose(c, s):
+    """Thunder Slam's figure from its channels `c` (at `s` along it)."""
+    body(**{k: c[k] for k in BODY+BACK})
+    for side in 'lr':
+        at = c[side+'f']
+        foot(side, forward=at[0], lift=at[1], aside=at[2], heel=c[side+'h'], pivot=c[side+'p'], knee=c[side+'k'])
+    frame = chest()
+    g = frame[0]+in_chest(carried('a', s), frame).normalized()*carried('o', s)
+    er = in_chest(carried('pr', s), frame)
+    w = carried('w', s)
+    z = Vector(c['z']).normalized()
+    if w > 0:
+        grip.arm(B, 'r', g, B['upperarm_r'].matrix.translation+er)
+        fore = (B['hand_r'].matrix.translation-B['lowerarm_r'].matrix.translation).normalized()
+        z = z.lerp(wrist(fore, er, carried('k', s), carried('tw', s)), w).normalized()
+    el = in_chest(carried('pl', s), frame).normalized()
+    d = ((g-z*HANDS)-B['upperarm_l'].matrix.translation).normalized()
+    away = z-d*z.dot(d)
+    if away.length > 1e-3: el = el.lerp(-away.normalized(), w)
+    hold(g, z, c['n'], er, el, free=c['nf'], swing=0.0, ease=c['ea'])
 
 def slam(t):
-    play(t, SLAM_CLOCK, SLAM)
+    # (The body leads the arms but for the blow itself, which the hands
+    # carried before the chest would otherwise reach before the clock does.)
+    window = ease(t/.12)*ease((1-t)/.12)*(1-ease((t-.54)/.1)*ease((.9-t)/.06))
+    s = clock(SLAM_CLOCK, t)
+    ahead = {k: clock(SLAM_CLOCK, t+LEAD[0]*window) for k in BODY}|{k: clock(SLAM_CLOCK, t+LEAD[1]*window) for k in BACK}
+    slam_pose({k: value(SLAM, k, ahead.get(k, s)) for k in STANCE}, s)
+    rest = 1-carried('w', s)
+    if rest > 0:
+        for b in B:
+            m = b.matrix_basis
+            loc, rot, scale = m.decompose()
+            l0, r0, s0 = IDLE[b.name].decompose()
+            b.matrix_basis = Matrix.LocRotScale(loc.lerp(l0, rest), rot.slerp(r0, rest), scale.lerp(s0, rest))
+        update()
 
 # Shockwave: the weapon is swung over before him, its head round to the left
 # and down, and hoisted in both hands as he draws himself up, the lead knee
@@ -842,31 +929,6 @@ def leap(t):
 
 AUTHORS = {'HeavyIdle': idle, 'HeavySwing1': swing1, 'HeavyCleave': cleave, 'HeavyStrike': strike, 'HeavyExecute': execute,
     'HeavySlam': slam, 'HeavyShockwave': shockwave, 'HeavyCry': cry, 'HeavyLeap': leap}
-def probe():
-    """HEAVY_PROBE=s,s,...: at those moments of Thunder Slam, each elbow's
-    pole swept right round the arm's line (no swing allowed the fist) and the
-    fist's turn printed for each: where an elbow should be asked for."""
-    for s in [float(v) for v in os.environ['HEAVY_PROBE'].split(',')]:
-        c = {k: value(SLAM, k, s) for k in STANCE}
-        c['es'] = 0.0
-        for side, key in (('r', 'er'), ('l', 'el')):
-            base = Vector(c[key])
-            reset(); pose(c)
-            axis = (Vector(c['g'])-B['upperarm_'+side].matrix.translation).normalized()
-            row = []
-            for k in range(12):
-                angle = math.radians(30*k)
-                cc = dict(c); cc[key] = tuple(Quaternion(axis, angle) @ base)
-                reset(); pose(cc)
-                m = measure()
-                point = B['lowerarm_'+side].matrix.translation-(B['upperarm_'+side].matrix.translation+B['hand_'+side].matrix.translation)/2
-                point = point.normalized() if point.length > .01 else Vector((0, 0, 0))
-                off = Quaternion(axis, angle) @ base
-                row.append('%3d:%4d/f%+.1f/u%+.1f/(%.2f,%.2f,%.2f)' % (30*k, math.degrees(measured['twist '+side]), -m['elbow '+side]*10, point.z, off.x, off.y, off.z))
-            print('HEAVY_PROBE %.2f %s pole %s |' % (s, side, ' '.join('%.2f' % v for v in base)), ' '.join(row))
-    raise SystemExit
-
-if os.environ.get('HEAVY_PROBE'): probe()
 for name in WANTED:
     if name in AUTHORS: author(name, AUTHORS[name])
 

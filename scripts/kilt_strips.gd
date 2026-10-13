@@ -20,8 +20,18 @@ extends SkeletonModifier3D
 ## Every frame each piece, from the belt down, is laid where it swung, then
 ## turned out of the flesh about its crease (the deepest of its middle and
 ## end, and its edges near the flesh, pushed out along the flesh's normal)
-## and, where a leg lies close under its face, laid down onto it, so the
-## strips rest on his thighs instead of standing off them or passing through.
+## and, where a leg lies close under its face, drawn down onto it as it
+## swings (DRAPE) and turned to lie flat on it, so the strips rest on his
+## thighs instead of standing off them or passing through.
+## What the flesh does to a piece moves it but does not set it swinging: it
+## keeps only the flesh's own motion, and is put out of the flesh at once only
+## as far as the two came together (least_gap and the push: GIVE). So the
+## strips of a man standing still lie still, moving only as his body does.
+## (They did not: the flesh's outline, the way out of it and the gap at a
+## strip's edges each jumped as a strip moved a hair, and every push out of
+## the flesh, or draw onto it, was carried on as a swing; each kicked the
+## strip, which swung back and was kicked again, and in an idle the strips
+## flapped and shook, ten degrees and more a frame.)
 ## A thigh raised up through a strip's hinge carries the hinge up onto it (it
 ## rides up off the belt, under the tab), so a strip in front of a rising
 ## knee is lifted and lies along the top of the thigh.
@@ -51,13 +61,21 @@ const INWARD = .25
 # piece_sag.)
 const THICKNESS = .0055
 const CLEAR = .004
-# A leg within this far under a piece's face draws it down onto it, this
-# share of the way each frame, and turns it (twisting along its length, at
-# most TWIST) to lie flat on it.
+# How fast a piece is put back out of flesh it has come into without
+# either of them moving (metres a second): all the way out at once only as
+# far as they came together.
+const GIVE = .1
+# A leg within this far under a piece's face draws it down onto it (per
+# second squared, for each metre it is off it: its weight, laying it on the
+# thigh), and turns it (twisting along its length, at most TWIST) to lie flat
+# on it; the less, the further off it is (lies_on).
 const SETTLE_REACH = .05
-const SETTLE = .5
+const DRAPE = 600.0
+const DRAPE_DAMPING = 30.0
 const TWIST = .6
 const CREASE_TWIST = .25
+# How fast a piece turns so (radians a second).
+const TWIST_RATE = 4.0
 # The furthest a hinge rides up off the belt.
 const RIDE_MOST = .09
 # The tubes' outlines: this far apart along them, this many round them.
@@ -94,6 +112,10 @@ var velocity := PackedVector3Array()
 # The way each piece's face looks (s*3+k): out from the hips, or turned
 # to lie flat on a leg under it.
 var faces := PackedVector3Array()
+# How each piece is drawn down onto the leg under it (an acceleration), and
+# the way it is drawn (as long as how fully: its swing that way is damped).
+var drape := PackedVector3Array()
+var drape_way := PackedVector3Array()
 # The tubes each strip may meet (s*TUBES_MOST+m; -1: none). (A leg steps
 # across under the strips of the other side, so: every tube.)
 var candidates := PackedInt32Array()
@@ -133,8 +155,11 @@ var tube_first := PackedInt32Array()
 var tube_count := PackedInt32Array()
 var sections := PackedFloat32Array()
 # This frame: each tube's way into its frame and out of it, and a sphere
-# round it.
+# round it; and where its frame was the frame before (how fast its flesh
+# moves).
 var tube_in: Array[Transform3D] = []
+var tube_was: Array[Transform3D] = []
+var tube_pose: Array[Transform3D] = []
 var tube_out: Array[Basis] = []
 var tube_start := PackedVector3Array()
 var tube_end := PackedVector3Array()
@@ -144,9 +169,9 @@ var station_widest := PackedFloat32Array()
 var tube_widest := PackedFloat32Array()
 # Of the last point tested: the way out of the flesh.
 var normal = Vector3.ZERO
-# (And the tube it was nearest, -1: none.)
+# (And the tube it was nearest, -1: none, and the gap at the point itself.)
 var nearest_tube = -1
-var one := PackedInt32Array([0])
+var raw_gap = 1e9
 
 static var fitted: Dictionary = {}
 
@@ -209,6 +234,8 @@ func setup(skeleton: Skeleton3D, body: MeshInstance3D = null) -> void:
 		for k in 3: velocity.append(Vector3.ZERO)
 		for k in 3:
 			faces.append(Vector3.ZERO)
+			drape.append(Vector3.ZERO)
+			drape_way.append(Vector3.ZERO)
 			clearance.append(0.0)
 			tested_at.append(Vector3.ZERO)
 		ride.append(Vector3.ZERO)
@@ -229,7 +256,8 @@ func setup(skeleton: Skeleton3D, body: MeshInstance3D = null) -> void:
 				m += 1
 		for r in TUBES_MOST-m: candidates.append(-1)
 	for n in tube_bone.size():
-		tube_in.append(Transform3D()); tube_out.append(Basis()); tube_start.append(Vector3.ZERO); tube_end.append(Vector3.ZERO); tube_axis.append(Vector3.ZERO)
+		tube_gap.append(0.0); tube_normal.append(Vector3.ZERO)
+		tube_in.append(Transform3D()); tube_was.append(Transform3D()); tube_pose.append(Transform3D()); tube_out.append(Basis()); tube_start.append(Vector3.ZERO); tube_end.append(Vector3.ZERO); tube_axis.append(Vector3.ZERO)
 		var widest = 0.0
 		for k in tube_count[n]*ANGLES: widest = maxf(widest,sections[tube_first[n]*ANGLES+k])
 		tube_widest.append(widest)
@@ -414,41 +442,86 @@ func gap_at(p: Vector3, n: int) -> float:
 	return r-flesh
 
 # The least gap of `p` to the tubes in `near` (its normal in `normal`): as
-# gap_at, each tube's nearest outline only, written out for speed.
-func least_gap(p: Vector3, near: PackedInt32Array, count: int) -> float:
+# gap_at, written out for speed, and so that the gap and the way out change
+# smoothly as `p` moves (were either to jump, a strip lying still on a leg
+# would be thrown out of it, or drawn into it, over and over):
+# - each outline blended from the two either side along the tube as well as
+#   round it (from the nearest alone, the flesh under a strip stepped by up
+#   to a couple of centimetres as it moved a few millimetres along a leg);
+# - beside a direction with no flesh (between the legs, past the end of the
+#   flesh a tube holds) the flesh tapers away into it, across the 1/ANGLES of
+#   a turn or the STATION between them (cut off square, it came and went
+#   whole as a point crossed that line by a hair);
+# - the slope round the tube blended from each direction's (from the stretch
+#   between two directions alone, the way out turned by up to half a right
+#   angle as a point crossed a ridge of the flesh);
+# - the way out of tubes nearly as near (within BLEND) blended in, more the
+#   nearer (a strip between both thighs' creases was pushed out of each in
+#   turn as the nearest changed, toward the other).
+const BLEND = .01
+var tube_gap := PackedFloat32Array()
+var tube_normal := PackedVector3Array()
+func least_gap(p: Vector3, near: PackedInt32Array, count: int, across := Vector3.ZERO, half := 0.0, sag := 0.0) -> float:
 	var best = 1e9
 	nearest_tube = -1
-	var bx = 0.0; var by = 0.0; var bflesh = 0.0; var bslope = 0.0
 	for m in count:
 		var n: int = near[m]
+		tube_gap[m] = 1e9
 		var q: Vector3 = tube_in[n]*p-tube_a[n]
 		var h: float = q.dot(tube_dir[n])
 		if h < 0.0 or h > tube_length[n]: continue
 		var x: float = q.dot(tube_e1[n])
 		var y: float = q.dot(tube_e2[n])
+		var f: float = h/STATION
+		var k: int = mini(int(f),tube_count[n]-2)
+		var r: float = maxf(sqrt(x*x+y*y),1e-5)
+		# (A tube that cannot be the nearest, nor nearly: no more of it.)
+		if r-station_widest[tube_first[n]+k]-half-sag >= best+BLEND: continue
 		var g: float = (atan2(y,x)+PI)*ANGLES/TAU
 		var j: int = int(g)
 		var w: float = g-j
-		var i0: int = (tube_first[n]+int(h/STATION+.5))*ANGLES
-		var r0: float = sections[i0+j % ANGLES]
-		var r1: float = sections[i0+(j+1) % ANGLES]
-		if r0 <= 0.0 or r1 <= 0.0:
-			if (r0 if w < .5 else r1) <= 0.0: continue
-			r0 = maxf(r0,r1); r1 = r0
+		var u: float = f-k
+		var i0: int = (tube_first[n]+k)*ANGLES
+		var j0: int = j % ANGLES
+		var j1: int = (j+1) % ANGLES
+		var a0: float = sections[i0+j0]
+		var a1: float = sections[i0+j1]
+		var r0: float = a0+(sections[i0+ANGLES+j0]-a0)*u
+		var r1: float = a1+(sections[i0+ANGLES+j1]-a1)*u
+		if r0 <= 0.0 and r1 <= 0.0: continue
 		var flesh: float = r0+(r1-r0)*w
-		var gap: float = sqrt(x*x+y*y)-flesh
-		if gap >= best: continue
-		best = gap
-		nearest_tube = n
-		bx = x; by = y; bflesh = flesh; bslope = r1-r0
-	if nearest_tube >= 0:
+		var gap: float = r-flesh
+		var raw: float = gap
+		if gap-half-sag >= best+BLEND: continue
 		# (Out square to the outline: radially, less its slope round the
 		# tube.)
-		var n: int = nearest_tube
-		var r: float = maxf(sqrt(bx*bx+by*by),1e-5)
+		var jb: int = (j+ANGLES-1) % ANGLES
+		var ja: int = (j+2) % ANGLES
+		var c0: float = sections[i0+jb]
+		var c1: float = sections[i0+ja]
+		var before: float = (r1-c0-(sections[i0+ANGLES+jb]-c0)*u)*.5
+		var after: float = (c1+(sections[i0+ANGLES+ja]-c1)*u-r0)*.5
+		var slope: float = before+(after-before)*w
 		var e1: Vector3 = tube_e1[n]
 		var e2: Vector3 = tube_e2[n]
-		normal = (tube_out[n]*((e1*bx+e2*by)*(bflesh/r)-(e2*bx-e1*by)*(bslope*ANGLES/TAU/r))).normalized()
+		var way: Vector3 = (tube_out[n]*((e1*x+e2*y)*(flesh/r)-(e2*x-e1*y)*(slope*ANGLES/TAU/r))).normalized()
+		tube_normal[m] = way
+		# (The gap at the edges of a piece `half` wide across, curled `sag`
+		# back: off its tangent plane, the flesh rising toward one edge as
+		# its normal leans across. Each tube's own: from the nearest tube's
+		# gap and a way out blended between tubes, it jumped as the blend
+		# turned, between the facing creases of the two thighs.)
+		if half > 0.0: gap -= half*absf(way.dot(across))+sag
+		tube_gap[m] = gap
+		if gap < best:
+			best = gap
+			raw_gap = raw
+			nearest_tube = n
+	if nearest_tube < 0: return best
+	var way = Vector3.ZERO
+	for m in count:
+		if tube_gap[m] < best+BLEND: way += tube_normal[m]*(1.0-(tube_gap[m]-best)/BLEND)
+	normal = way.normalized() if way.length_squared() > 1e-6 else tube_normal[near.find(nearest_tube)]
 	return best
 
 # --- Every frame ---------------------------------------------------------------
@@ -467,6 +540,8 @@ func _process_modification_with_delta(delta: float) -> void:
 		var pose: Transform3D = skeleton.get_bone_global_pose(tube_bone[n])
 		if tube_with[n] >= 0: pose = skeleton.get_bone_global_pose(tube_with[n]).interpolate_with(pose,.5)
 		pose = Transform3D(pose.basis.orthonormalized(),pose.origin)
+		tube_was[n] = tube_pose[n] if settled else pose
+		tube_pose[n] = pose
 		tube_in[n] = pose.affine_inverse()
 		tube_out[n] = pose.basis
 		tube_start[n] = pose*tube_a[n]
@@ -497,7 +572,9 @@ func _process_modification_with_delta(delta: float) -> void:
 			if closest[0].distance_to(closest[1]) < tube_widest[n]+SETTLE_REACH+.06:
 				near[count] = n
 				count += 1
-		if not settled or points[s*4].distance_to(hinge+ride[s]) > .2:
+		# (Hung afresh: put out of the flesh at once, wherever it is.)
+		var fresh: bool = not settled or points[s*4].distance_to(hinge+ride[s]) > .2
+		if fresh:
 			points[s*4] = hinge
 			for k in 3:
 				points[s*4+k+1] = points[s*4+k]+hang(s,k,hips,down,level)*piece_length[s*3+k]
@@ -524,6 +601,10 @@ func _process_modification_with_delta(delta: float) -> void:
 		points[s*4] = start
 		var before = Vector3.ZERO
 		var face_above = Vector3.ZERO
+		# How far the flesh has moved the pieces above, beyond their swing;
+		# and the way across the strip, carried down it from the belt.
+		var shifted = Vector3.ZERO
+		var side: Vector3 = down.cross(level).normalized()
 		for k in 3:
 			var i: int = s*3+k
 			var piece: float = piece_length[i]
@@ -531,9 +612,9 @@ func _process_modification_with_delta(delta: float) -> void:
 			if k == 0: before = aim
 			var end: Vector3 = points[s*4+k+1]
 			var was: Vector3 = end
+			var v: Vector3 = velocity[i]
 			if dt > 0.0:
-				var v: Vector3 = velocity[i]
-				v += ((start+aim*piece-end)*SPRING+air-v*DAMPING)*dt
+				v += ((start+aim*piece-end)*SPRING+air+drape[i]-drape_way[i]*(v.dot(drape_way[i])*DRAPE_DAMPING)-v*DAMPING)*dt
 				end += v*dt
 			var along: Vector3 = (end-start).normalized()
 			# Not in past the way it hangs, toward his hips; not swung, nor
@@ -543,6 +624,9 @@ func _process_modification_with_delta(delta: float) -> void:
 			var limit: float = MAX_SWING if k == 0 else MAX_BEND
 			var bent: float = along.angle_to(before)
 			if bent > limit: along = before.slerp(along,limit/bent).normalized()
+			# Where its swing takes it: what the flesh does to it from here on
+			# moves it but does not set it swinging.
+			var swung: Vector3 = start+along*piece
 			# The flesh it may touch, then out of it, then down onto it.
 			var middle: Vector3 = start+along*piece*.5
 			var reach: float = piece*.5+SETTLE_REACH+.02
@@ -554,33 +638,54 @@ func _process_modification_with_delta(delta: float) -> void:
 			closer = count_here
 			# (The edges' gaps from the tip's: off its tangent plane, the
 			# flesh rising toward one edge as its normal leans across.)
+			var face_was: Vector3 = faces[i]
 			var face_now = Vector3.ZERO if not skip else faces[i]
 			var pushed_from = -1
+			var pushed_way = Vector3.ZERO
+			var may_push = -1.0
+			drape[i] = Vector3.ZERO
+			drape_way[i] = Vector3.ZERO
 			if not skip: clearance[i] = 1e9
 			for pass_ in 2:
 				if closer == 0: break
-				var across: Vector3 = along.cross(level)
-				if across.length_squared() < 1e-6: across = level.cross(Vector3.UP)
-				across = across.normalized()
-				var face: Vector3 = across.cross(along)
-				if face.dot(level) < 0.0: face = -face
-				# (Checked again after a push: against the flesh it was
-				# pushed out of.)
-				var tip_gap: float
-				if pass_ == 0 or pushed_from < 0:
-					tip_gap = least_gap(start+along*piece-face*THICKNESS,near,closer)
-				else:
-					one[0] = pushed_from
-					tip_gap = least_gap(start+along*piece-face*THICKNESS,one,1)
+				# (Across it as across the piece above, square to it. Taken
+				# square to it and to the hips' outward way, it swung round
+				# wildly as a piece lifted out toward that way, and with it
+				# the gap at its edges, by a centimetre and more a frame.)
+				var plain_across: Vector3 = side-along*side.dot(along)
+				if plain_across.length_squared() < 1e-6: plain_across = along.cross(level)
+				plain_across = plain_across.normalized()
+				var plain: Vector3 = plain_across.cross(along)
+				if plain.dot(level) < 0.0:
+					plain = -plain
+					plain_across = -plain_across
+				# (Tested as it lay last, turned on a leg or not.)
+				var face: Vector3 = plain
+				var across: Vector3 = plain_across
+				var was_flat: Vector3 = face_was-along*face_was.dot(along)
+				if was_flat.length_squared() > 1e-6:
+					was_flat = was_flat.normalized()
+					face = was_flat
+					across = along.cross(face).normalized()
+				else: was_flat = plain
+				# (Checked again after a push as before it, against all the
+				# flesh near: against the flesh it was pushed out of alone,
+				# the way out of it, and the gap at its edges, differed from
+				# the first test's, and it was pushed again, unchecked, by a
+				# couple of centimetres.)
+				var edge_gap: float = least_gap(start+along*piece-face*THICKNESS,near,closer,across,piece_half[i],piece_sag[i])
+				var tip_gap: float = raw_gap
 				var tip_normal: Vector3 = normal
 				var tip_tube: int = nearest_tube
-				if tip_gap < SETTLE_REACH and tip_normal.dot(face) > .3:
+				var lying: float = lies_on(tip_gap,tip_normal.dot(face))
+				var flat: Vector3 = plain
+				if lying > 0.0:
 					# Turned to lie flat on the leg under it.
-					var flat: Vector3 = tip_normal-along*tip_normal.dot(along)
-					if flat.length_squared() > 1e-6:
-						flat = flat.normalized()
-						var turn_by: float = face.angle_to(flat)
-						if turn_by > TWIST: flat = face.slerp(flat,TWIST/turn_by).normalized()
+					var on_leg: Vector3 = tip_normal-along*tip_normal.dot(along)
+					if on_leg.length_squared() > 1e-6:
+						on_leg = on_leg.normalized()
+						var turn_by: float = plain.angle_to(on_leg)
+						flat = plain.slerp(on_leg,TWIST*lying/turn_by).normalized() if turn_by > TWIST*lying else on_leg
 						# (Nor much more than the piece above it: a strip
 						# twists gradually, its creases do not shear.)
 						if k > 0 and face_above != Vector3.ZERO:
@@ -589,41 +694,87 @@ func _process_modification_with_delta(delta: float) -> void:
 								above = above.normalized()
 								var off: float = above.angle_to(flat)
 								if off > CREASE_TWIST: flat = above.slerp(flat,CREASE_TWIST/off).normalized()
-						face = flat
-						across = along.cross(face).normalized()
-						face_now = face
-				var worst: float = CLEAR-(tip_gap-piece_half[i]*absf(tip_normal.dot(across))-piece_sag[i])
+				# (Turned, or turned back, from the way it lay, at
+				# TWIST_RATE: turned at once to whatever way the flesh
+				# under it faced, a strip between the legs, under which
+				# that way swings round, swung its edges into one thigh
+				# then the other.)
+				var turned: float = was_flat.angle_to(flat)
+				if turned > TWIST_RATE*dt: flat = was_flat.slerp(flat,TWIST_RATE*dt/turned).normalized()
+				face_now = Vector3.ZERO
+				face = plain
+				across = plain_across
+				if flat.angle_to(plain) > 1e-3:
+					face = flat
+					across = along.cross(face).normalized()
+					face_now = face
+				var worst: float = CLEAR-edge_gap
 				var push: Vector3 = tip_normal*worst
 				# (Its middle, which may lie over a bulge between its ends.)
-				var mid_gap = 1e9
-				if k == 0 and pass_ == 0:
-					mid_gap = least_gap(start+along*piece*.5-face*THICKNESS,near,closer)
-				elif tip_tube >= 0 and (k == 0 or tip_gap < SETTLE_REACH):
-					# (Below, the flesh under its tip is the flesh under it.)
-					one[0] = tip_tube
-					mid_gap = least_gap(start+along*piece*.5-face*THICKNESS,one,1)
-				if mid_gap < 1e8: mid_gap -= piece_half[i]*absf(normal.dot(across))+piece_sag[i]
-				clearance[i] = minf(tip_gap,mid_gap)
+				# (Every piece's, whether or not its tip is near the flesh:
+				# a lower piece's tip clear of the knee may lie with its
+				# middle deep in it, found only when the tip came near, and
+				# thrown out by several centimetres at once.)
+				var mid_gap: float = least_gap(start+along*piece*.5-face*THICKNESS,near,closer,across,piece_half[i],piece_sag[i])
+				clearance[i] = minf(edge_gap,mid_gap)
 				tested_at[i] = start+along*piece
 				if (CLEAR-mid_gap)*2.0 > worst:
 					worst = (CLEAR-mid_gap)*2.0
 					push = normal*worst
 				if worst > 0.0:
 					pushed_from = nearest_tube if (CLEAR-mid_gap)*2.0 >= worst-1e-9 and mid_gap < 1e8 else tip_tube
+					# (Out of it at once as far as it and the flesh came
+					# together this frame, and any deeper only at GIVE: where
+					# the flesh it is held off turns steeply, between the
+					# legs, a piece moving a few millimetres along it was
+					# found centimetres deep, thrown well clear, swung back,
+					# and thrown again, several times a second.)
+					if may_push < 0.0:
+						var tip: Vector3 = start+along*piece
+						may_push = ((v-(tip-tube_was[pushed_from]*(tube_in[pushed_from]*tip))/dt).length()+GIVE)*dt if dt > 0.0 and not fresh else 1e9
+					var by: float = minf(worst,may_push)
+					may_push -= by
+					if by <= 0.0: break
+					push *= by/worst
+					pushed_way += push
 					# (Turned out about its crease: the end moved the depth
-					# along the flesh's normal, a little over, as the turn
-					# carries it round.)
-					along = (along*piece+push*1.15).normalized()
+					# along the flesh's normal.)
+					along = (along*piece+push).normalized()
 					continue
-				# Down onto a leg close under its face.
-				var edge_gap: float = tip_gap-piece_half[i]*absf(tip_normal.dot(across))-piece_sag[i]
-				if edge_gap < SETTLE_REACH and tip_normal.dot(face) > .3:
-					along = (along*piece-tip_normal*(edge_gap-CLEAR)*SETTLE).normalized()
+				# Down onto a leg close under its face, as it swings on.
+				# (It was laid half the way down onto it each frame: on into
+				# the flesh, to be thrown out the next, or held there while
+				# its swing back out gathered, to fly off when let go.)
+				# (Nor drawn further about its crease once its middle lies on
+				# the flesh: it rests there, not drawn in to be pushed out
+				# again each frame.)
+				var resting: float = clampf((mid_gap-CLEAR)/(SETTLE_REACH*.2),0.0,1.0)
+				var drawn: float = lies_on(edge_gap,tip_normal.dot(face))*resting
+				drape[i] = -tip_normal*(maxf(edge_gap-CLEAR,0.0)*DRAPE*drawn)
+				drape_way[i] = tip_normal*sqrt(drawn)
 				break
 			end = start+along*piece
 			faces[i] = face_now
 			face_above = face_now
-			if dt > 0.0: velocity[i] = (end-was)/dt
+			var across_now: Vector3 = along.cross(face_now) if face_now != Vector3.ZERO else side-along*side.dot(along)
+			if across_now.length_squared() > 1e-6: side = across_now.normalized()
+			# (Its last test cut short by the push: tested again next frame.)
+			if pushed_from >= 0: clearance[i] = 0.0
+			# It swings on as it swung, less what of that went into the
+			# flesh (unless the flesh itself moves that way as fast): neither
+			# a push out of the flesh nor a draw down onto it, nor those of
+			# the pieces above it, is carried on as a swing. (They were, and
+			# so each kicked it: a strip drawn onto a leg came on into it, was
+			# thrown out, and was drawn back, and the strips of a man standing
+			# still flapped and shook.)
+			if dt > 0.0:
+				var going: Vector3 = (swung-shifted-was)/dt
+				if pushed_way != Vector3.ZERO:
+					var out_of: Vector3 = pushed_way.normalized()
+					var flesh: float = (end-tube_was[pushed_from]*(tube_in[pushed_from]*end)).dot(out_of)/dt
+					going += out_of*(maxf(v.dot(out_of),flesh)-going.dot(out_of))
+				velocity[i] = going
+			shifted += end-swung
 			points[s*4+k+1] = end
 			before = along
 			start = end
@@ -634,9 +785,10 @@ func _process_modification_with_delta(delta: float) -> void:
 		var across_was: Vector3 = out.cross(Vector3.UP)
 		for k in 3:
 			var now: Vector3 = (points[s*4+k+1]-points[s*4+k]).normalized()
+			# (Turned flat on a leg, as it lies; else across as the piece
+			# above, as in the swing.)
 			var looks: Vector3 = faces[s*3+k]
-			if looks == Vector3.ZERO: looks = out
-			var across: Vector3 = now.cross(looks)
+			var across: Vector3 = now.cross(looks) if looks != Vector3.ZERO else across_was-now*across_was.dot(now)
 			if across.length_squared() < 1e-4: across = across_was
 			across = across.normalized()
 			across_was = across
@@ -656,6 +808,13 @@ func _process_modification_with_delta(delta: float) -> void:
 		skeleton.set_bone_pose_position(tab_bone[t],hips_in*(hips*tab_hinge[t]+(ride[a]+ride[b])*.5))
 		skeleton.set_bone_pose_rotation(tab_bone[t],(hips.basis.inverse()*global).get_rotation_quaternion())
 	settled = true
+
+# How fully a piece `gap` off the flesh under it, its face turned `facing`
+# (the cosine) toward it, is laid down onto it: wholly within half
+# SETTLE_REACH and turned well toward it, not at all at SETTLE_REACH or turned
+# away, and smoothly between.
+static func lies_on(gap: float, facing: float) -> float:
+	return clampf((SETTLE_REACH-gap)/(SETTLE_REACH*.5),0.0,1.0)*clampf((facing-.3)/.2,0.0,1.0)
 
 # The way piece `k` of strip `s` hangs: partly with the hips' lean, partly
 # straight down, flared out as it was cut.
