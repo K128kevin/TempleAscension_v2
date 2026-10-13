@@ -496,7 +496,11 @@ hollow of the fist, the fingers wrapped round it, and a two-handed haft is kept 
 square across each forearm, the fists never turned about it further than a wrist
 allows. With a second one-handed weapon in the left hand, the sword's swings and skills are
 played with the left arm hanging at his side as in the dual idle, so the second
-weapon never crosses into his body. With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):
+weapon never crosses into his body. With a shield in the left hand, or nothing, every
+one-handed swing and skill holds the left arm as the town's gate guards hold theirs: the
+forearm level across the front of the body, the shield upright before him, raised into
+that guard as the swing begins and lowered as he recovers, and carried aside just
+enough wherever the sword would pass through it. With the sword, every warrior skill has a swing of its own (`tools/import_skills.py`):
 a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for
 Vampiric and Shadow Strike, the shield shoved out behind a step for Shield Bash, the
 blade wound far back and brought down with the whole body for Execute, wound up

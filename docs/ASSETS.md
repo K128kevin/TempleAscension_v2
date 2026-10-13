@@ -603,10 +603,29 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   elbow leading, and the blade, left lying back over the shoulder, is whipped over
   the top into the cut. Each clip ends with a recovery to the stance
   (stepping back into it if the swing left the right foot forward) that plays only
-  if he swings no more. The script checks every frame that the blade and sword arm
-  keep clear of the body, the shield arm and the shield (`SWING_CHECK` in its
-  output), and holds the wrist's bend within reach. The library's SwordSwing remains
-  the Crowned Statue's swing.
+  if he swings no more. Through every swing and skill of a one-handed weapon the
+  shield arm is held in the town guards' guard (their SpearShieldIdle and
+  ScutumSwordIdle, `tools/import_combat.py` `shield_arm`): the left forearm level
+  across the front of the body, the fist before the belly (a little higher than
+  theirs, and through a swing raised or lowered to the elbow's height, so the
+  forearm stays level and the board strapped across it stands upright), the
+  elbow forward and out, the board's face turned the way his chest faces but
+  kept level. It is kept in the chest's frame, so it turns with him;
+  it is raised out of the stance's hanging arm as a swing begins and lowered as
+  he recovers, more gently than the rest of him moves; and with an empty left
+  hand the arm is held the same. Where the sword (blade or forearm) would pass
+  through the board (loading the backhand, drawing the thrust back), or his head
+  bowed over a blow would, the board yields: carried out, down, up or forward,
+  whichever needs least, just far enough, found at every moment and eased over
+  the moments around it so it never jerks (`YIELD`; each skill's `SHIELD_CHECK`
+  line gives the most it yields and how close the sword or head comes).
+  Shield Bash and Shield Charge start and end in the same guard. The script
+  checks every frame that the blade and sword arm keep clear of the body, the
+  shield arm and the shield (`SWING_CHECK` in its output), and holds the
+  wrist's bend within reach. `HERO_GLB` names another model to read and write;
+  like `tools/import_pike.py` it sends every clip it does not author out with
+  the timing it came in with, rather than a frame late. The library's SwordSwing
+  remains the Crowned Statue's swing.
 - The ranger's own clips (DaggerStab, DaggerSlash, SkillFlurry2/3/4,
   SkillTripleSlash, SkillAmbush, SkillSandR/L, SkillHide, SneakIdle, SkillVolley)
   are authored by `tools/import_ranger.py`, run after `tools/import_skills.py`:
@@ -622,8 +641,9 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   authored by `tools/import_skills.py` from the sword-and-shield stance, frame by
   frame: the hips, spine and head turned and bent along smooth curves, the sword arm
   carried by two-bone IK with the fist turned outright so the blade runs where the
-  swing sends it, the shield arm held in its guard (moved as the swing needs), both
-  feet kept planted by leg IK (the charge borrows the sprint's legs), and each eased
+  swing sends it, the shield arm held in the guards' guard (moved as the swing
+  needs, as above), both feet kept planted by leg IK (the charge borrows the
+  sprint's legs), and each eased
   out of the stance and back into it so nothing leaps between frames. Thunder
   Slam's arm (and both of the dual swing's) is set by `tools/blender_arm.py`,
   which the two-handed clips share: the fist is set on the weapon with the wrist
@@ -687,7 +707,9 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   left hand the game plays a `Dual` variant of each sword swing and skill, derived
   at load (scripts/visual.gd derive_dual_swings): the clip with the left arm's
   tracks replaced by the dual idle's hanging arm, so the second weapon never
-  crosses into the body; Thunder Slam alone has its own authored dual clip.
+  crosses into the body; Thunder Slam alone has its own authored dual clip. The
+  left hand's own cut (OffCut) is mirrored from the dual first cut, so the right
+  hand's weapon is carried at his side meanwhile, not across the belly.
 - A two-handed sword, axe or maul has its own clips (HeavyIdle, HeavySwing1,
   the one normal attack: a full-bodied cut that steps the rear foot through,
   HeavyCleave, HeavyStrike, HeavyExecute, HeavySlam, HeavyShockwave,
@@ -713,7 +735,8 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   run and walk with a second weapon (`Visual.derive_duals`: the sword's, with the
   left arm carried as the right is rather than in a shield's guard).
   `tools/preview_clip.gd` renders any clip as a sheet of poses, seen from the side
-  and the front, with a weapon in hand as the game holds it.
+  and the front, with a weapon in hand as the game holds it (and with `--shield`,
+  a shield strapped across the left forearm as the game straps it).
 - The wizard's stance (WizardIdle) is authored by `tools/import_wizard.py` from the
   library's relaxed Idle: the rear foot brought in under him so his robe's back
   hangs clear of it, the staff's foot planted ahead of his right foot (clear of

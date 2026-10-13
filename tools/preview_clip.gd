@@ -12,7 +12,9 @@ extends SceneTree
 ##     [--offhand=-.2]   marks where the left hand should hold the haft: this
 ##         many metres along the weapon from the right fist (negative: toward
 ##         the butt); the worst gap between it and the left palm is printed
-##     [--shield=1]      the round shield on the left forearm
+##     [--shield=1]      the round shield on the left forearm, strapped
+##         across it as the game straps a hero's board (scripts/visual.gd
+##         arm); or [--shield=tower_shield] that item's board
 ##     [--phases=0,.2,.4,.52,.7,1]  or  [--frames=8]
 ##     [--out=name]      test-results/clip-<name>.png
 const Art = preload("res://scripts/assets.gd")
@@ -118,10 +120,12 @@ func capture():
 		var fore = BoneAttachment3D.new()
 		fore.bone_name = "lowerarm_l"
 		skeleton.add_child(fore)
-		var shield = Art.model("shield",Vector3(.66,.66,.12),Art.gladiator_shield())
+		var items: Dictionary = load("res://scripts/items.gd").ALL
+		var look: Dictionary = items[arg("shield","")].look if items.has(arg("shield","")) else items.gladiators_round_shield.look
+		var shield = Art.weapon_model(look)
 		fore.add_child(shield)
-		shield.rotation.y = PI
-		shield.position = Vector3(0,.14,-.135)-shield.basis*Vector3(0,.5,0)
+		shield.basis = Basis(Vector3.UP,PI)*Basis(Vector3.BACK,-PI/2)*Basis.from_scale(look.size)
+		shield.position = Vector3(0,.14,-.135)-shield.basis*Vector3(0,.5+float(look.get("drop",0.0)),0)
 	var phases: Array = []
 	if arg("phases","") != "":
 		for p in arg("phases","").split(","): phases.append(float(p))

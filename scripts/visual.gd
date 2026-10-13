@@ -367,8 +367,8 @@ func setup(stone: bool, _tint: Color, weapon: String, stature: float = 1.0, enem
 		return
 	derive_walks()
 	derive_carries()
-	derive_mirrors()
 	derive_duals()
+	derive_mirrors()
 	derive_staff_run()
 	lower_roll()
 	# The fists that close on a grip, from the stance clips that hold one: the
@@ -731,8 +731,12 @@ func derive_carries() -> void:
 			clips[made_name] = (library_name+"/" if library_name != "" else "")+made_name
 
 # A blow of the left hand is a right-hand clip seen in a mirror: for a weapon
-# in each hand (the off hand's cut, stab and slash), and bare fists.
-const MIRRORED = {"OffCut":"SwordOpen","OffStab":"DaggerStab","OffSlash":"DaggerSlash"}
+# in each hand (the off hand's cut, stab and slash), and bare fists. The
+# off hand's cut is the sword's first cut as it is played with a weapon in
+# each hand (DualSwordOpen, derive_duals, made first), so the right arm,
+# the mirror of that clip's left, carries its sword at his side as in the
+# dual idle, not across the belly in a shield's guard.
+const MIRRORED = {"OffCut":"DualSwordOpen","OffStab":"DaggerStab","OffSlash":"DaggerSlash"}
 func derive_mirrors() -> void:
 	if hero_class.is_empty(): return
 	for made_name in MIRRORED:
@@ -749,9 +753,11 @@ func derive_mirrors() -> void:
 const DUALS = {"DualIdle":"SwordIdle","DualRun":"SwordRun","DualWalk":"SwordWalk"}
 # With a second weapon in the left hand, the sword's swings and skills are
 # played with the left arm hanging at his side as it does in the dual idle
-# (not held across the chest in the shield's guard, which drove the second
-# weapon into his body): each is the clip with the left arm's tracks
-# replaced by the dual idle's. Thunder Slam has a dual swing of its own.
+# (not held across the belly in the shield's guard, which the swings hold
+# it in, with or without a shield, tools/import_skills.py, and which would
+# drive the second weapon into his body): each is the clip with the left
+# arm's tracks replaced by the dual idle's. Thunder Slam has a dual swing of
+# its own.
 const DUAL_SWINGS = ["SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillShockwave","SkillCry","SkillCharge","SkillLeap"]
 const LEFT_ARM = ["clavicle_l","upperarm_l","lowerarm_l","hand_l"]
 func derive_duals() -> void:
