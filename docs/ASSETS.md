@@ -634,7 +634,21 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   forearm turns (measured from the elbow's pit: at the middle the thumb points at
   it; and never, given the chest's front, to where the elbow points at it, which
   reads as an elbow bent the wrong way), and the forearm is rolled after the
-  fist. Both exporters take `SKILLS_DRY`
+  fist. In the two-handed clips (but Thunder Slam, whose poses say outright
+  where each elbow points) the elbows are planned over the whole clip
+  rather than searched afresh at each frame (`import_heavy.py` `elbows()`):
+  each frame is posed to measure what every way round each arm's line would
+  cost there (`fist`'s `profile`, 48 ways; twice, the second time as first
+  planned, since each arm's costs hang on the other's), the ways that cost least
+  over the whole clip are chosen together with each turn of an elbow round
+  its arm counted against it, so an elbow sets off early and never leaps,
+  and the clip is keyed with the elbows set those ways (`force`); the left
+  thumb keeps its way along the haft unless the other wrings the forearm
+  clearly less. (Searched frame by frame, an elbow was thrown from one side
+  of its arm to the other wherever two ways were near enough as good: half
+  round and back from frame to frame through the normal attack, and to and
+  fro between two steps of the search with each breath of the stance.) Both
+  exporters take `SKILLS_DRY`
   / `HEAVY_DRY` (author and check, write nothing) and `SHEET_DIR` (render each
   clip authored as a contact sheet in Blender itself, `tools/blender_sheet.py`,
   laid out by `tools/sheet_compose.py`: his right side, the front, and the
@@ -686,8 +700,9 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   (0.55 m ahead of it on the spear), and `scripts/two_hand_grip.gd` keeps it there
   as one clip fades into another. Each script reads the model from `HERO_GLB` (by
   default the game's own) and can author a few clips alone (`HEAVY_ONLY`,
-  `PIKE_ONLY`). Run `import_pike.py` last: it re-seats every other clip's strip so
-  none is exported a frame late.
+  `PIKE_ONLY`); each sets every clip it did not author back to begin where it
+  began in the file, so none is exported a frame late. Run `import_pike.py`
+  last.
   `HEAVY_CHECK=2` prints every frame's wrist bends and fist turns, the weapon's
   clearances from the body and the ground and the hands' reach.
   Their run and walk are made when the figure is set up (`Visual.derive_carries`):

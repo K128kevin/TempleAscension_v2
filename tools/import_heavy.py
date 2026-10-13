@@ -57,7 +57,7 @@ hand's X; the left palm, hand_l's (0, .075, 0), sits at hand_r's
                                   HEAVY_DRY), at the moments SHEET_PHASES lists
 """
 from pathlib import Path
-import math, os, sys
+import json, math, os, struct, sys
 import bpy
 from mathutils import Vector, Matrix, Quaternion
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +78,15 @@ CONTACT = {'HeavySwing1': .50, 'HeavyCleave': .52, 'HeavyStrike': .55, 'HeavyExe
 ONLY = [n for n in os.environ.get('HEAVY_ONLY', '').split(',') if n]
 CHECK = int(os.environ.get('HEAVY_CHECK') or 0)
 WANTED = [n for n in CLIPS if not ONLY or n in ONLY]
+def clip_starts(path):
+    """When each clip in a GLB file has its first key (seconds)."""
+    with open(path, 'rb') as f:
+        f.read(12)
+        size, kind = struct.unpack('<II', f.read(8))
+        document = json.loads(f.read(size))
+    return {a.get('name', ''): min(document['accessors'][s['input']]['min'][0] for s in a['samplers']) for a in document.get('animations', [])}
+
+BEGAN = clip_starts(GLB)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.context.scene.render.fps = 30
 bpy.ops.import_scene.gltf(filepath=str(GLB))
@@ -332,6 +341,25 @@ measured = {}
 # (The stand-in for the sheets: a maul's haft and head, and a greatsword's point.)
 if SHEET_DIR: sheet.prop(rig, 'hand_r', (-PALM_IN, PALM), [(-BUTT, HEAD, .014), (HEAD-.1, HEAD+.04, .07), (HEAD+.04, POINT, .006)])
 
+# Where the elbows go is planned over the whole clip (author(), elbows()):
+# each frame is posed (first as the search finds it, then as first planned)
+# and what each way round each arm's line would cost there is measured
+# (RECORD); the ways are then chosen for every frame together, so that each elbow goes where its fist
+# needs it while turning round its arm no faster than it must, setting off
+# before it has to; and the clip is keyed with the elbows set those ways
+# (PLAN, in the chest's own frame). Searched afresh at each frame, an elbow
+# was thrown from one side of its arm to the other wherever two ways were
+# near enough as good: half round and back from frame to frame through the
+# normal attack, and to and fro between two steps of the search with each
+# breath of the stance.
+RECORD = {}
+PLAN = {}
+# (How dear an elbow's turn round its arm is: this much for TURNING in a frame.)
+TURNING = math.radians(15)
+TURN_COST = .15
+# (Clips whose elbows are keyed outright, each pose saying where they point.)
+KEYED_ELBOWS = {'HeavySlam'}
+
 def hold(at, haft, fingers, elbow_r, elbow_l, free=0.0, swing=math.radians(150), ease=.003):
     """Both hands on the weapon: the right fist's grip at `at`, the haft
     running along `haft` toward the weapon's head, the right hand turned
@@ -340,7 +368,8 @@ def hold(at, haft, fingers, elbow_r, elbow_l, free=0.0, swing=math.radians(150),
     `fingers`), or, `free`, along its own forearm. The left hand takes the
     haft below it, turned about it as its forearm carries it. The elbows
     bend toward `elbow_r` and `elbow_l` (from the shoulders), or swung round
-    from there to where the forearms need not be wrung (tools/blender_arm.py)."""
+    from there to where the forearms need not be wrung (tools/blender_arm.py);
+    or, planned (PLAN), set the ways the plan has them."""
     z = Vector(haft).normalized()
     at = Vector(at)
     y = Vector(fingers)
@@ -389,25 +418,53 @@ def hold(at, haft, fingers, elbow_r, elbow_l, free=0.0, swing=math.radians(150),
     # the head, or toward the butt where that wrings it less (the hand is
     # too small to tell in the game; the forearm's turn is not).
     facing = (B['neck_01'].matrix.translation-B['spine_02'].matrix.translation).cross(shoulders['r']-shoulders['l']).normalized()
+    chest = B['spine_03'].matrix.to_quaternion()
+    force = {s: chest @ PLAN[s] for s in 'lr' if s in PLAN}
     def wrist_l2(ly): return at-z*HANDS-ly*PALM+ly.cross(z)*PALM_IN
+    def right(z, y, deviation=True):
+        measure = {}
+        y, z, turn = grip.fist(B, 'r', wrist_r, z, y, shoulders['r']+Vector(elbow_r), swing=swing, hold=1.0-free, deviation=deviation, avoid=facing,
+            smooth=True, force=force.get('r'), profile=measure if RECORD.get('on') else None)
+        if measure: RECORD['r'] = measure
+        return y, z, turn
+    # (The left thumb lies along the haft toward the head unless the other
+    # way wrings the forearm clearly less; and once it lies one way it is
+    # kept so unless the other is clearly better (by 15 degrees). The plan
+    # keeps the way it was found at each frame.)
+    thumb = PLAN.get('thumb') or RECORD.get('thumb', 'head')
+    margin = math.radians(15) if 'thumb' in RECORD else 0.0
     def left(haft, deviation=True):
+        def take(way):
+            measure = {}
+            if way == 'head': ly, zl, tl = grip.fist(B, 'l', wrist_l, haft, None, shoulders['l']+Vector(elbow_l), swing=swing, deviation=deviation, avoid=facing,
+                smooth=True, force=force.get('l'), profile=measure if RECORD.get('on') else None)
+            else:
+                ly, zl, tl = grip.fist(B, 'l', wrist_l2, -haft, None, shoulders['l']+Vector(elbow_l), swing=swing, deviation=deviation, avoid=facing,
+                    smooth=True, force=force.get('l'), profile=measure if RECORD.get('on') else None)
+                zl = -zl
+            return (ly, zl, tl), way, measure
+        def chosen(result):
+            (ly, zl, tl), way, measure = result
+            if measure: RECORD['l'] = measure
+            RECORD['now'] = way
+            return ly, zl, tl
         pose_a = {b.name: b.matrix_basis.copy() for b in B}
-        ly, za, ta = grip.fist(B, 'l', wrist_l, haft, None, shoulders['l']+Vector(elbow_l), swing=swing, deviation=deviation, avoid=facing)
-        if abs(ta) <= math.radians(60): return ly, za, ta
+        first = take(thumb)
+        if 'thumb' in PLAN or abs(first[0][2]) <= math.radians(60): return chosen(first)
         pose_b = {b.name: b.matrix_basis.copy() for b in B}
         for b in B: b.matrix_basis = pose_a[b.name]
         update()
-        ly2, zb, tb = grip.fist(B, 'l', wrist_l2, -haft, None, shoulders['l']+Vector(elbow_l), swing=swing, deviation=deviation, avoid=facing)
-        if abs(tb) < abs(ta): return ly2, -zb, tb
+        second = take('butt' if thumb == 'head' else 'head')
+        if abs(second[0][2]) < abs(first[0][2])-margin: return chosen(second)
         for b in B: b.matrix_basis = pose_b[b.name]
         update()
-        return ly, za, ta
-    y, z1, measured['twist r'] = grip.fist(B, 'r', wrist_r, z, y, shoulders['r']+Vector(elbow_r), swing=swing, hold=1.0-free, avoid=facing)
+        return chosen(first)
+    y, z1, measured['twist r'] = right(z, y)
     ly, z2, measured['twist l'] = left(z1)
     if (z2-z1).length > 1e-4:
         z = z1.slerp(z2, .5).normalized()
         y = (y-z*y.dot(z)).normalized()
-        y, z, measured['twist r'] = grip.fist(B, 'r', wrist_r, z, y, shoulders['r']+Vector(elbow_r), swing=swing, hold=1.0-free, deviation=False, avoid=facing)
+        y, z, measured['twist r'] = right(z, y, deviation=False)
         ly, z, measured['twist l'] = left(z, deviation=False)
     else: z = z1
 
@@ -553,15 +610,74 @@ def report(name, frames, log):
         top, (speeds.index(top)-.5)/frames, (fast[0]-1)/frames, fast[-1]/frames, off))
     print('HEAVY_CHECK', name, 'speeds', ' '.join('%.0f' % v for v in speeds))
 
+def elbows(records):
+    """Each elbow's way off its arm's line at every frame (in the chest's own
+    frame), from what each way cost at each (RECORD): the ways that cost
+    least over the whole clip, a turn round the arm counted TURN_COST for
+    every TURNING it makes in a frame (squared), by dynamic programming; the
+    ways then eased a little from frame to frame (the plan's steps are
+    7.5 degrees). Also the left thumb's way at each frame."""
+    plan = [{'thumb': r['thumb']} for r in records]
+    for side in 'lr':
+        ways = [[r['chest'] @ w for w in r[side]['ways']] for r in records]
+        costs = [r[side]['costs'] for r in records]
+        n = len(ways[0])
+        total = list(costs[0])
+        back = []
+        for f in range(1, len(records)):
+            step, now = [], []
+            for j in range(n):
+                best, at = None, 0
+                for i in range(n):
+                    turn = ways[f-1][i].angle(ways[f][j], 0.0)
+                    c = total[i]+TURN_COST*(turn/TURNING)**2
+                    if best is None or c < best: best, at = c, i
+                step.append(at)
+                now.append(best+costs[f][j])
+            back.append(step)
+            total = now
+        k = min(range(n), key=lambda j: total[j])
+        path = [k]
+        for step in reversed(back):
+            k = step[k]
+            path.append(k)
+        path.reverse()
+        chosen = [ways[f][k] for f, k in enumerate(path)]
+        for f in range(len(records)):
+            eased = chosen[max(0, f-1)]+2*chosen[f]+chosen[min(len(records)-1, f+1)]
+            plan[f][side] = eased.normalized() if eased.length > 1e-6 else chosen[f]
+    return plan
+
 def author(name, clip):
     length = CLIPS[name]
     a = bpy.data.actions.new(name)
     rig.animation_data.action = a
     frames = int(round(length*30))
     log = []
+    # The elbows planned over the whole clip first (elbows()), and planned
+    # again from the clip posed as first planned (what each way costs
+    # depends on the other arm, and the weapon on both).
+    # (Thunder Slam keys its elbows outright, smooth already: it is not planned.)
+    plan = None if name not in KEYED_ELBOWS else [{} for f in range(frames+1)]
+    RECORD.clear()
+    for planning in range(0 if plan else 2):
+        records = []
+        for f in range(frames+1):
+            reset()
+            short['legs'] = 0.0
+            PLAN.clear()
+            if plan: PLAN.update(plan[f])
+            RECORD['on'] = True
+            clip(f/frames)
+            RECORD['thumb'] = RECORD.get('now', 'head')
+            records.append({'chest': B['spine_03'].matrix.to_quaternion().inverted(), 'r': RECORD['r'], 'l': RECORD['l'], 'thumb': RECORD['thumb']})
+        plan = elbows(records)
+    RECORD.clear()
     for f in range(frames+1):
         reset()
         short['legs'] = 0.0
+        PLAN.clear()
+        PLAN.update(plan[f])
         clip(f/frames)
         if CHECK:
             log.append(measure())
@@ -572,12 +688,16 @@ def author(name, clip):
                     math.degrees(measured['twist r']), math.degrees(measured['twist l']), short['arms'], short['legs'], m['ground'], m['ground axe'], part, m[part],
                     ' '.join('%.2f' % v for v in m['shoulders at'][0]), ' '.join('%.2f' % v for v in m['shoulders at'][1]), ' '.join('%.2f' % v for v in B['hand_r'].matrix @ V(0, PALM, 0))))
         keys(f)
+    PLAN.clear()
     finish(name, a, length)
     if CHECK: report(name, frames, log)
     if SHEET_DIR:
         def at(t):
             reset()
             short['legs'] = 0.0
+            # (The elbows as planned at the nearest frame.)
+            PLAN.clear()
+            PLAN.update(plan[max(0, min(frames, round(t*frames)))])
             clip(t)
         sheet.render(rig, name, SHEET_PHASES, SHEET_DIR, at)
 
@@ -933,6 +1053,21 @@ for name in WANTED:
     if name in AUTHORS: author(name, AUTHORS[name])
 
 rig.animation_data.action = None
+# The clips that were there already all come in with their strips from frame
+# 1, where these begin at 0, and the export begins every clip at 0: left so,
+# each would go out a frame later and longer than it came in (as
+# tools/import_pike.py has it). Those that began at once in the file (BEGAN)
+# are set back to begin at 0, so authoring a few clips (HEAVY_ONLY) leaves
+# every other clip's timing as it was.
+for track in rig.animation_data.nla_tracks:
+    if track.name in WANTED or BEGAN.get(track.name, 1.0) > 1/60: continue
+    for strip in list(track.strips):
+        if strip.frame_start != 1: continue
+        action, first, last, name = strip.action, strip.action_frame_start, strip.action_frame_end, strip.name
+        track.strips.remove(strip)
+        strip = track.strips.new(name, 0, action)
+        strip.action_frame_start = first
+        strip.action_frame_end = last
 for track in rig.animation_data.nla_tracks: track.mute = False
 used = {s.action for t in rig.animation_data.nla_tracks for s in t.strips}
 for a in list(bpy.data.actions):
