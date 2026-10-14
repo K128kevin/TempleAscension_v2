@@ -97,7 +97,10 @@ sabaton of the foot's own size with a rounded toe and overlapping toe lames
 (drawn by the shader), two lames over the ankle, and a greave following the
 shin and calf to a rolled rim, level all round at mid-shin. `HeroCuisses`,
 Plated Leg Armor, covers what long trousers would, from under the belt to the
-ankles (cuisse lames, a domed knee cop, greaves, mail between the legs); worn
+ankles (cuisse lames, a domed knee cop, greaves, mail between the legs), close
+over the skin (5 mm off the shins, 7 over the thighs, more about the knee, so
+none shows through as it bends: `tools/warrior_kit.py` LEG_STAND), so the legs
+are not thickened; worn
 with the boots, it is cut off inside them (plate.gdshader `cut_below`). Both are hammered steel by
 `assets/shaders/plate.gdshader` on their rest pose. `HeroKilt` is pteruges: 18
 separate strips of stiff leather, each three rigid pieces creased 10 and 21 cm
@@ -682,7 +685,8 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   his right leg and back behind him as the arms drop and swing back with the
   chest turned to it, up behind him, over the head, and down before him to meet
   the ground level, as a hammer meets a nail, a stride ahead of a deep kneel.
-  The two-handed clip (HeavySlam, `tools/import_heavy.py`) is keyed as a man
+  The two-handed clip (HeavySlam, `tools/import_heavy.py`; 1.4 s against the
+  sword's 1.6, `scripts/skills.gd` OWN_SECONDS, so it is wound up faster) is keyed as a man
   swings it rather than as the weapon's path: the hands as a direction and
   reach from the middle of the shoulders in the chest's own frame, the right
   elbow's direction in that frame, and the right wrist's cock and turn on its

@@ -1923,7 +1923,7 @@ const SKILL_WAKE = [.25,.05]
 const SKILL_WAKES = {"SkillCleave":[.16,.12]}
 # (A two-handed Thunder Slam's weapon leaves its wake from the moment it is
 # hauled down off the top of the swing, while it is still gathering speed.)
-const SKILL_WAKE_SPEEDS = {"HeavySlam":9.0}
+const SKILL_WAKE_SPEEDS = {"HeavySlam":10.0}
 var blade_tip_was = null
 # Thunder Slam's charge on the blade (scripts/blade_charge.gd): how strong it
 # is over the swing, as shares of the clip (forming as he raises the sword,

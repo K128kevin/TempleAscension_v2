@@ -523,7 +523,7 @@ and for Leap a deep crouch, the spring, the body stretched in the air with the b
 over the head, and the landing driven down with everything behind it. Leap's
 landing, Thunder Slam and Shockwave put everything into the ground at once
 (`scripts/shockwave.gd`): a flash where the blow lands, the floor cracked about it
-(dark splits lit along their lips, dying away), a column of dust thrown up, and a
+(dark splits lit along their lips, the glow dying away and the cracks lasting a second), a column of dust thrown up, and a
 single front racing out across the whole area the blow reaches, like a sonic boom
 (a hard pale edge with a fainter one after it and a low wall of haze standing on
 it; all round the warrior under the leap, across the arc ahead for the slam),

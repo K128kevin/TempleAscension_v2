@@ -100,11 +100,11 @@ const BASES = {
 		"look":{"model":"bow","size":Vector3(.25,1.3,.10),"grip":.55,"finish":"bow"}},
 	# --- The warrior: his gladiator's kit, a shortsword and a buckler.
 	"gladiators_helmet":{"name":"Gladiator's Helmet","rarity":"starting","slot":"head","weight":"heavy","armor":15.0,"look":{"mesh":"gladiators_helmet"}},
-	# (The warrior's starting gauntlets are a common item too: they drop,
-	# and take affixes, as the doc lists them among the heavy armor.)
+	# (The warrior's starting gauntlets and war kilt are common items too:
+	# they drop, and take affixes, among the heavy armor.)
 	"steel_plated_gauntlets":{"name":"Steel Plated Gauntlets","rarity":"common","slot":"hands","weight":"heavy","armor":15.0},
 	"steel_plated_boots":{"name":"Steel Plated Boots","rarity":"starting","slot":"feet","weight":"heavy","armor":15.0},
-	"studded_war_kilt":{"name":"Studded War Kilt","rarity":"starting","slot":"legs","weight":"heavy","armor":23.0},
+	"studded_war_kilt":{"name":"Studded War Kilt","rarity":"common","slot":"legs","weight":"heavy","armor":23.0},
 	"simple_shortsword":{"name":"Simple Shortsword","rarity":"starting","slot":"weapon","kind":"sword","hands":1,"damage":[17.0,25.0],"speed":1.3,
 		"look":{"model":"sword","size":Vector3(.17,.92,.08),"grip":.16,"finish":"sword","blade":Color(.64,.65,.68),"fittings":Color(.46,.46,.48),"wrap":Color(.14,.09,.05)}},
 	"lions_buckler":{"name":"Lion's Buckler","rarity":"starting","slot":"shield","kind":"shield","armor":17.0,"block":25.0,"mitigation":30.0,

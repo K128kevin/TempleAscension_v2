@@ -61,6 +61,16 @@ LAME_STEP = .0035
 # The leg plates, from under the belt to the ankles.
 LEG_TOP = 1.0
 LEG_LOW = .105
+# How far they stand off the skin (over the shins; a little more above the
+# knee), how far each is laid on a rigid plate's outline rather than the
+# muscle under it (the outline bridges every hollow, and so thickens the
+# leg), and the steel's thickness.
+LEG_STAND = .005
+LEG_RIGID = .35
+LEG_PLATE = .005
+# (About the knee, this much further off, fading out this far above and below.)
+KNEE_STAND = .012
+KNEE_SPAN = .1
 # The gauntlets' cuff ends here, halfway up the forearm (out from the middle,
 # at rest), and flares this far off the arm at its opening.
 CUFF_END = .595
@@ -697,14 +707,17 @@ def leg_plates():
     piece = body_copy('HeroCuisses', keep)
     names = group_names(piece)
     piece.data.update()
-    # Off the skin: a little more over the thighs and hips than the shins.
+    # Close off the skin, so the legs are not thickened: a little more over
+    # the thighs and hips than the shins, and more about the knee, which
+    # the skin would show through as it bends.
     for v in piece.data.vertices:
         up = max(0.0, min(1.0, (v.co.z-(knee-.08))/.16))
-        v.co += v.normal*(.013+.007*up)
+        at_knee = max(0.0, 1.0-abs(v.co.z-knee)/KNEE_SPAN)
+        v.co += v.normal*(LEG_STAND+.002*up+KNEE_STAND*at_knee*at_knee*(3-2*at_knee))
     for sign in (1.0, -1.0):
         def amount(v):
             if v.co.x*sign <= 0: return 0.0
-            return share(v, names, ('thigh', 'calf', 'foot'))
+            return LEG_RIGID*share(v, names, ('thigh', 'calf', 'foot'))
         rigidify(piece, amount, Vector((0, 0, 1)), Vector((1, 0, 0)), slab=.03, step=.01)
     # A domed cop over each knee.
     for sign in (1.0, -1.0):
@@ -719,7 +732,7 @@ def leg_plates():
                 v.co.y -= .014*(1-d*d)**1.5*max(0.0, min(1.0, (front+.05-v.co.y)/.04))
     cut(piece, LEG_TOP, keep_above=False)
     cut(piece, LEG_LOW, keep_above=True)
-    solid(piece, .008)
+    solid(piece, LEG_PLATE)
     finish(piece, 'LegSteel')
     return piece
 

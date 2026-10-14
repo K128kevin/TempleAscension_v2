@@ -140,7 +140,7 @@ func test():
 		thing.free()
 		check(Items.WIELDS.keys().any(func(c): return Items.usable(c,id)),"Some class can use the item: "+id)
 		if item.get("rarity","") == "common": commons += 1
-	check(commons == 29,"Twenty-nine common items drop and take affixes, the warrior's starting gauntlets among them (%d)" % commons)
+	check(commons == 30,"Thirty common items drop and take affixes, the warrior's starting gauntlets and war kilt among them (%d)" % commons)
 	for class_id in Data.CLASSES:
 		var pool: Array = Items.loot(class_id)
 		check(pool.size() >= 6 and pool.all(func(id): return Items.usable(class_id,id) and Items.BASES[id].rarity == "common"),"Every class has its own drops, all of them usable: %s (%d)" % [class_id,pool.size()])

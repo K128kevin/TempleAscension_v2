@@ -154,7 +154,7 @@ func test():
 	var cracks_then: float = ring.get_shader_parameter("crack_strength")
 	wait(.2)
 	check(float(ring.get_shader_parameter("front"))>front_then+.2 and wave.wall.scale.x>2.0,"One front races out across the slam's arc, a wall of haze standing on it")
-	check(cracks_then>.6 and float(ring.get_shader_parameter("crack_strength"))<cracks_then and Vector3(ring.get_shader_parameter("crack_glow")).z>.9,"The ground is cracked where it struck, the cracks glowing blue with the blade's charge and dying away")
+	check(cracks_then>.6 and is_equal_approx(float(ring.get_shader_parameter("crack_strength")),cracks_then) and float(ring.get_shader_parameter("crack_lit"))<1.0 and Vector3(ring.get_shader_parameter("crack_glow")).z>.9,"The ground is cracked where it struck, the cracks glowing blue with the blade's charge, the glow dying away while the cracks stay a second")
 	wait(3.0)
 	check(game.skills.waves.is_empty(),"The shockwave and its arcs pass within a couple of seconds")
 	clear()

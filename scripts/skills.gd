@@ -242,6 +242,10 @@ const SWINGS = ["cleave","slam","strike","bash","vampiric","shadow","execute","c
 const WARRIOR_CLIPS = {"cleave":["SkillCleave",1.0,.52],"strike":["SkillStrike",1.0,.55],
 	"bash":["SkillBash",.9,.5],"execute":["SkillExecute",1.3,.58],"slam":["SkillSlam",1.6,.66],"shockwave":["SkillShockwave",1.2,.56],
 	"cry":["SkillCry",1.0,.3],"charge":["SkillCharge",1.0,.82],"leap":["SkillLeap",1.0,.56]}
+# A weapon's own swing of a skill that plays quicker than the sword's (seconds;
+# its blow lands at the same share of it): the two-handed Thunder Slam is
+# wound up faster.
+const OWN_SECONDS = {"HeavySlam":1.4}
 # Vampiric and Shadow Strike are struck with the normal attack's swings, run
 # on from (and into) them as they are (Game.swing_sword), the blade glowing
 # as they land: blood red and shadowy purple.
@@ -481,7 +485,7 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 		if WARRIOR_CLIPS.has(s.effect) and game.player.visual.clips.has(own_clip):
 			var own: Array = WARRIOR_CLIPS[s.effect]
 			clip = own_clip
-			duration = maxf(Data.MELEE_MINIMUM,own[1]/haste)
+			duration = maxf(Data.MELEE_MINIMUM,OWN_SECONDS.get(own_clip,own[1])/haste)
 			contact = duration*own[2]
 		elif SWORD_CHAIN_SKILLS.has(s.effect):
 			# (The swing's time and its blow's moment are the normal attack's.)

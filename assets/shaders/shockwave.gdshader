@@ -20,6 +20,8 @@ uniform vec4 tint : source_color = vec4(.95,.93,.88,.8);
 uniform float crack_reach = .3;
 uniform float crack_strength = 0.0;
 uniform vec3 crack_glow : source_color = vec3(.45,.72,1.0);
+// How lit the cracks' lips still are (they cool before the cracks close).
+uniform float crack_lit = 1.0;
 uniform float crack_size = .55;
 // The blow's reach (metres) and the angle of its arc (radians).
 uniform float reach = 5.0;
@@ -103,7 +105,7 @@ void fragment() {
 		float split = (1.0-smoothstep(.004*width,.014*width,near))*shown;
 		float lips = (1.0-smoothstep(.01*width,.06*width,near))*shown*(.55+.45*fading);
 		vec3 colour = mix(tint.rgb,vec3(1.0),edge*.6);
-		colour = mix(colour,crack_glow*1.5,clamp(lips*1.4,0.0,1.0));
+		colour = mix(colour,crack_glow*1.5,clamp(lips*1.4*crack_lit,0.0,1.0));
 		colour = mix(colour,vec3(0.03,0.035,0.05),clamp(split*1.6,0.0,1.0));
 		ALBEDO = colour;
 		ALPHA = clamp(tint.a*wave+lips*.85+split,0.0,1.0);

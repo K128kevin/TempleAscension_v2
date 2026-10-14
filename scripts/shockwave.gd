@@ -9,9 +9,13 @@ extends Node3D
 ## and across the arc ahead for the slam, quick at first and slowing as it
 ## thins to nothing at the blow's reach (assets/shaders/shockwave.gdshader).
 const Vfx = preload("res://scripts/vfx.gd")
-# How long the front takes to cross the area, and the cracks to die.
+# How long the front takes to cross the area; how long the cracks stay, as
+# they were made, and then take to die away.
 const SWEEP = .55
-const CRACKS = 1.3
+const CRACKS_HELD = 1.0
+const CRACKS_FADE = .4
+# (Their glow dies sooner, over this long.)
+const CRACKS_GLOW = 1.3
 # The front's wall of haze: how high it stands as it sets out.
 const WALL = 1.1
 const DUST = Color(.93,.9,.84,.85)
@@ -35,7 +39,7 @@ static func make(at: Vector3, reach: float, direction: Vector3 = Vector3.ZERO, d
 	node.position = at+Vector3.UP*.04
 	node.reach = reach
 	node.plasma = plasma
-	node.life = maxf(SWEEP,CRACKS)
+	node.life = maxf(SWEEP,CRACKS_HELD+CRACKS_FADE)
 	var way: Vector3 = direction.normalized() if direction.length() > .01 else Vector3.FORWARD
 	# (The slice is built about +Z and turned to face the blow's way.)
 	node.rotation.y = atan2(way.x,way.z)
@@ -131,9 +135,10 @@ func show_front() -> void:
 	var strength = (1.0-smoothstep(.55,1.0,u))*smoothstep(0.0,.06,u)
 	ground.material_override.set_shader_parameter("front",out)
 	ground.material_override.set_shader_parameter("strength",strength)
-	# The cracks flare as the blow lands and die away after it.
-	var cracked = clampf(age/CRACKS,0.0,1.0)
-	ground.material_override.set_shader_parameter("crack_strength",(1.0 if plasma else .55)*pow(1.0-cracked,1.6))
+	# The cracks open as the blow lands, stay a second, and die away after.
+	var cracked = smoothstep(CRACKS_HELD,CRACKS_HELD+CRACKS_FADE,age)
+	ground.material_override.set_shader_parameter("crack_strength",(1.0 if plasma else .55)*(1.0-cracked))
+	ground.material_override.set_shader_parameter("crack_lit",pow(1.0-clampf(age/CRACKS_GLOW,0.0,1.0),1.6))
 	wall.scale = Vector3(maxf(.05,out*reach),WALL*(1.0-.6*u),maxf(.05,out*reach))
 	wall.material_override.set_shader_parameter("strength",strength)
 	flash.light_energy = (5.0 if plasma else 3.5)*pow(maxf(0.0,1.0-age/.22),2.0)

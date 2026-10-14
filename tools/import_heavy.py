@@ -71,7 +71,7 @@ GLB = Path(os.environ.get('HERO_GLB') or ROOT/'assets/models/character/warrior.g
 if not GLB.is_absolute(): GLB = ROOT/GLB
 # name: seconds
 CLIPS = {'HeavyIdle': 2.0, 'HeavySwing1': 1.1, 'HeavyCleave': 1.0, 'HeavyStrike': 1.0, 'HeavyExecute': 1.3,
-    'HeavySlam': 1.6, 'HeavyShockwave': 1.2, 'HeavyCry': 1.0, 'HeavyLeap': 1.0}
+    'HeavySlam': 1.4, 'HeavyShockwave': 1.2, 'HeavyCry': 1.0, 'HeavyLeap': 1.0}
 # name: the share of the clip at which the blow lands (the game's own figures).
 CONTACT = {'HeavySwing1': .50, 'HeavyCleave': .52, 'HeavyStrike': .55, 'HeavyExecute': .58, 'HeavySlam': .66,
     'HeavyShockwave': .56, 'HeavyCry': .30, 'HeavyLeap': .56}
