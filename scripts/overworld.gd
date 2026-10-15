@@ -94,6 +94,9 @@ const RIVER_BEND = Vector2(-336,232)
 const RIVER_TURN = 42.0
 const RIVER_Z = 274.0
 const RIVER_HALF = 7.0
+# Where, east along the desert's south, the river turns north-east round the
+# mountains' southern end and up behind them.
+const RIVER_EAST_TURN = -10.0
 # The mountains' foot on the east, behind the temple and running down to the
 # river: `MOUNTAIN_EAST` its line behind the temple, from where it turns
 # south-west at `MOUNTAIN_TURN` (z) along `MOUNTAIN_SLANT` (metres west for
@@ -438,7 +441,8 @@ func river_side(x: float, z: float) -> float:
 	# Round the bend.
 	var round = RIVER_TURN-Vector2(x,z).distance_to(RIVER_BEND) if x <= RIVER_BEND.x and z >= RIVER_BEND.y else INF
 	# And along the desert's south.
-	var along = river_z(x)-z if x >= RIVER_BEND.x else INF
+	var rise = river_z(x+1.0)-river_z(x)
+	var along = (river_z(x)-z)/sqrt(1.0+rise*rise) if x >= RIVER_BEND.x else INF
 	var best = down
 	for side in [round,along]:
 		if absf(side) < absf(best): best = side
@@ -466,7 +470,11 @@ func river_x(z: float) -> float:
 
 func river_z(x: float) -> float:
 	var run = x-RIVER_BEND.x
-	return RIVER_BEND.y+RIVER_TURN+(7.0*sin(run*.013)+2.0*sin(run*.041+.7))*smoothstep(0.0,50.0,run)
+	# Past the mountains' southern end it turns away north-east, up behind
+	# them, winding a little.
+	var past = x-RIVER_EAST_TURN
+	var away = (sqrt(past*past+900.0)+past)*.5
+	return RIVER_BEND.y+RIVER_TURN+(7.0*sin(run*.013)+2.0*sin(run*.041+.7))*smoothstep(0.0,50.0,run)-away*.85+6.0*sin(away*.05)*smoothstep(0.0,40.0,away)
 
 # How far inside the open ground a point is; negative among the rim's rocks
 # and the mountains. (The river and what lies across it count as open: they
@@ -493,6 +501,9 @@ func margin(x: float, z: float, side: float = NAN) -> float:
 		# runs up to the mountains' foot, out of reach.
 		open = maxf(open,z-north_front(x)-2.0)
 	elif z < WALL_NORTH-4.0: open = maxf(open,RIVER_HALF+4.0-absf(side))
+	# (The bank on the near side ends at the mountains' foot; across the water
+	# it runs on, out of reach, beside them.)
+	elif side < 0.0: open = maxf(open,RIVER_HALF+4.0-side)
 	elif side < RIVER_HALF+4.0: open = maxf(open,minf(RIVER_HALF+4.0-side,(east_edge(z)-x)*.87))
 	return open
 
@@ -518,8 +529,11 @@ func mountain_depth(x: float, z: float) -> float:
 	if z > CAVE.z-6.0:
 		var across = x-CAVE.x
 		depth = minf(depth,(across-10.0)*1.1 if across > 0.0 else (-across-10.0)*.35)
-	# The river's gorge.
-	depth = minf(depth,(absf(river_side(x,z))-RIVER_HALF-3.0)*1.3)
+	# The river's gorge, north of the town; in the south the range ends at
+	# its near bank, rising gently from it, and none stands across it.
+	var side = river_side(x,z)
+	if z > WALL_SOUTH: depth = minf(depth,(side-RIVER_HALF-4.0)*.6)
+	depth = minf(depth,(absf(side)-RIVER_HALF-3.0)*1.3)
 	return depth
 
 func margin_at(p: Vector3) -> float:
@@ -545,7 +559,7 @@ func shape_ground() -> void:
 			if m<1.0: cells[i] = SOLID
 			# The river, and all across it, is out of reach; north of the
 			# town, west of the palace's ground, its land is too.
-			elif side < RIVER_HALF-.4 or (z < WALL_NORTH-1.0 and x < HILL.x-HILL_REACH.x-1.0): cells[i] = LOW
+			elif side < RIVER_HALF-.4 or (z < WALL_NORTH-.5 and x < HILL.x-HILL_REACH.x-1.0): cells[i] = LOW
 			paint[i*4+SHADE] = int(clampf(1.0-m/4.0,0.0,1.0)*150.0) if m>0 else 150
 	for x in range(int(TOWN_GATE.x)-2,int(TEMPLE_DOOR.x)+1):
 		var middle = track_z(x)

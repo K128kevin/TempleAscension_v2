@@ -360,7 +360,7 @@ func test():
 		var x: float = world.river_x(z)
 		if world.cells[world.index(roundi(x),z)]==Overworld.LOW and world.paint[world.index(roundi(x),z)*4+Overworld.WATER]>200 and world.fits(Vector3(x+Overworld.RIVER_HALF+2.5,0,z)): water += 1
 	var south_water = world.cells[world.index(-200,roundi(world.river_z(-200)))]==Overworld.LOW and world.fits(Vector3(-200,0,world.river_z(-200)-Overworld.RIVER_HALF-2.5))
-	check(water==int(Overworld.WALL_SOUTH-Overworld.WALL_NORTH)-4 and south_water and world.mountain_depth(40,world.river_z(40)+20.0)>0.0,"A river is the town's west border, and runs round the desert's south into the mountains")
+	check(water==int(Overworld.WALL_SOUTH-Overworld.WALL_NORTH)-4 and south_water and world.mountain_depth(40,world.river_z(40)-30.0)>0.0 and world.mountain_depth(40,world.river_z(40)+25.0)<0.0,"A river is the town's west border, and runs round the desert's south and round the mountains' end, behind them")
 	var mountains: Node3D = world.get_node_or_null("Mountains")
 	var baked = mountains != null and mountains.get_child_count()>50
 	if baked:
@@ -369,7 +369,7 @@ func test():
 		for tile in mountains.get_children().slice(0,mountains.get_child_count(),17):
 			var vertices: PackedVector3Array = tile.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 			var v: Vector3 = vertices[vertices.size()/2]
-			baked = baked and absf(v.y-preload("res://scripts/world_mountains.gd").height(world,noise[0],noise[1],v.x,v.z))<.01
+			baked = baked and absf(v.y-preload("res://scripts/world_mountains.gd").height(world,noise,v.x,v.z))<.01
 	check(baked and world.mountain_depth(0,-120)>30.0 and world.mountain_depth(Overworld.TEMPLE_DOOR.x+90.0,0)>10.0 and world.mountain_depth(Overworld.TEMPLE_DOOR.x+30.0,0)<0.0,"Mountains close the desert in on the north and east, round the temple (rebake with tools/bake_mountains.gd if their shape changed)")
 	game.route = PackedVector3Array([Overworld.START+Vector3(0,0,3)])
 	play(func(): return not game.player.visual.resting,2.0)
@@ -438,6 +438,8 @@ func test():
 			# (Nor the mountains' foot, where the sand runs gently up into them
 			# among a few scattered rocks.)
 			if world.mountain_depth(x,z) > -8.0: continue
+			# (Nor the river's banks, which no rock stands in or over.)
+			if absf(world.river_side(x,z)) < Overworld.RIVER_HALF+14.0: continue
 			edges += 1
 			var covered = false
 			var square = Vector2i(floori(x/10.0),floori(z/10.0))
@@ -446,7 +448,7 @@ func test():
 					for stone in stones.get(square+Vector2i(dx,dz),[]):
 						if stone.distance_to(Vector2(x,z))<9.0: covered = true
 			if not covered: bare += 1
-	check(edges>8 and bare==0,"Rock stands along the whole edge of the open ground (%d of %d stretches bare)" % [bare,edges])
+	check(edges>5 and bare==0,"Rock stands along the whole edge of the open ground (%d of %d stretches bare)" % [bare,edges])
 	# The town is walled instead: no rim rock stands round it, wall runs
 	# along its straight edges and round the palace hill's ground, towered at
 	# the corners, and the hero is stopped at the wall on every side.
@@ -720,7 +722,8 @@ func test():
 	var t: float = Daylight.SUNSET+20.0
 	world.set_time(t)
 	folk.tick(.1,Overworld.START)
-	check(everyone.all(func(w): return not w.state in folk.ABED and w.body.visible),"Before the evening all are up")
+	# (One home with his shopping is in, and up.)
+	check(everyone.all(func(w): return not w.state in folk.ABED and (w.body.visible or w.state == "home")),"Before the evening all are up")
 	var climbed = false
 	while t < Daylight.NIGHT+260.0:
 		t += .1
@@ -818,7 +821,8 @@ func test():
 		folk.tick(.1,Overworld.START)
 		if shopper.state=="buying" and folk.keepers.any(func(k): return is_same(k.stall,shopper.stall) and k.body.state in ["Talk","Reach"]): sold = true
 		if shopper.state=="laden" and shopper.basket != null and shopper.body.state=="Carry": carried = true
-		if shopper.state=="home" and not shopper.body.visible: reached = true
+		# (Home, or, his day over meanwhile, in for the night.)
+		if shopper.state in ["home","indoors"] and not shopper.body.visible and shopper.at.distance_to(shopper.bed.at)<.1: reached = true
 	check(sold,"The stall's keeper serves him, talking and handing over his goods")
 	check(carried,"He carries a crate of them home in both hands")
 	check(reached,"And goes in at his door with it")

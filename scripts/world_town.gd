@@ -268,12 +268,22 @@ static func walls_between(world, corners: Array, openings: Array, material: Mate
 			# its full height, its top crumbled wherever it is lower.)
 			var along_x: bool = yaw == 0.0
 			var length_way = Vector3(cos(yaw),0,-sin(yaw))
-			var profile = func(offset: float) -> float: return wall_top(middle+length_way*offset,along_x)
-			var whole = true
-			for k in 5:
-				if profile.call(bay*(k/4.0-.5)) < WALL_FULL-.04: whole = false
+			# (Its wear eases off toward the towers and the gates' walls,
+			# which stand whole, so it rises to meet them.)
+			var profile = func(offset: float) -> float:
+				var p: Vector3 = middle+length_way*offset
+				var near = minf(p.distance_to(a),p.distance_to(b))
+				for opening in openings:
+					var box: Rect2 = opening
+					near = minf(near,Vector2(maxf(maxf(box.position.x-p.x,p.x-box.end.x),0.0),maxf(maxf(box.position.y-p.z,p.z-box.end.y),0.0)).length())
+				return WALL_FULL-(WALL_FULL-wall_top(p,along_x))*smoothstep(1.5,14.0,near)
+			var lowest = WALL_FULL
+			for k in 9: lowest = minf(lowest,profile.call(bay*(k/8.0-.5)))
 			var piece: Node3D
-			if whole: piece = world.place("wall",middle,Vector3(bay,WALL_FULL,1.4),material,yaw)
+			if lowest >= WALL_FULL-.01: piece = world.place("wall",middle,Vector3(bay,WALL_FULL,1.4),material,yaw)
+			# Worn a little, the wall's own courses are worn down with the line
+			# (its cap chipped, then gone); further down, it is crumbled stone.
+			elif lowest > WALL_FULL-WORN_DEPTH: piece = worn_wall(world,middle,bay,yaw,profile,material)
 			else: piece = ruin(world,middle,bay,yaw,profile,material)
 			world.wall(Rect2(middle.x-(bay*.5 if yaw == 0.0 else .7),middle.z-(.7 if yaw == 0.0 else bay*.5),bay if yaw == 0.0 else 1.4,1.4 if yaw == 0.0 else bay))
 			world.screen([piece])
@@ -286,18 +296,52 @@ const WALL_FULL = 6.0
 static var wear_noise: Array = []
 static func wall_top(at: Vector3, along_x: bool) -> float:
 	if wear_noise.is_empty():
-		for k in 3:
+		for k in 4:
 			var n = FastNoiseLite.new()
 			n.seed = 300+k
-			n.frequency = [.022,.017,.15][k]
-			n.fractal_octaves = [2,1,2][k]
+			n.frequency = [.018,.013,.15,.06][k]
+			n.fractal_octaves = [2,1,2,1][k]
 			wear_noise.append(n)
 	var s: float = (at.x if along_x else at.z)+(at.z if along_x else at.x)*3.7
 	var wear = smoothstep(-.1,.7,wear_noise[0].get_noise_1d(s))
-	var breach = smoothstep(.35,.8,wear_noise[1].get_noise_1d(s+500.0))
+	var breach = smoothstep(.3,.95,wear_noise[1].get_noise_1d(s+500.0))
 	var rough = wear_noise[2].get_noise_1d(s)
 	var loss = wear*2.1+breach*breach*3.2+rough*.35*clampf(wear*2.5+breach,0.0,1.0)
-	return clampf(WALL_FULL-maxf(loss,0.0),1.3,WALL_FULL)
+	# Here and there along the whole wall its cap is chipped.
+	var chipped = smoothstep(.25,.7,wear_noise[3].get_noise_1d(s+90.0))*(.25+.2*(wear_noise[2].get_noise_1d(s*3.0)*.5+.5))
+	return clampf(WALL_FULL-maxf(loss,chipped),1.3,WALL_FULL)
+
+# How far down a bay's line may run and its own courses still be worn to it
+# (worn_wall), rather than crumbled (ruin).
+const WORN_DEPTH = 1.1
+
+# A bay of the town wall worn down to `profile` (as ruin's): the wall
+# module itself, every point of it above the line brought down to it, a
+# little unevenly, so its cap is chipped where the line dips under it and
+# gone where it runs lower, and the courses go on unbroken into the crumbled
+# bays beside it.
+static var wall_arrays: Array = []
+static func worn_wall(world, middle: Vector3, bay: float, yaw: float, profile: Callable, material: Material) -> Node3D:
+	if wall_arrays.is_empty(): wall_arrays = Kit.mesh_of("wall").surface_get_arrays(0)
+	var arrays: Array = wall_arrays.duplicate()
+	var source: PackedVector3Array = wall_arrays[Mesh.ARRAY_VERTEX]
+	var vertices = PackedVector3Array()
+	vertices.resize(source.size())
+	for i in source.size():
+		var v: Vector3 = source[i]*Vector3(bay,WALL_FULL,1.4)
+		var top: float = profile.call(v.x)+.05*sin(v.x*7.3+v.z*11.0)
+		if v.y > top: v.y = top
+		vertices[i] = v
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	var mesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	var node = MeshInstance3D.new()
+	node.mesh = mesh
+	node.material_override = material
+	world.add_child(node)
+	node.position = middle+Vector3.UP*world.lift(middle)
+	node.rotation.y = yaw
+	return node
 
 # A crumbled bay of the town wall, `bay` long and 1.4 thick, centred on
 # `middle` at its foot and turned by `yaw` as a wall module is. Its top is
@@ -310,7 +354,7 @@ const RUIN_SINK = .3
 # Texels of the wall kit's palette that are plain stone, light to dark (the
 # masonry shader reads the palette's light and dark stones faintly).
 const RUIN_STONES = [Vector2(.627,.004),Vector2(.107,.004),Vector2(.002,.04)]
-static func ruin(world, middle: Vector3, bay: float, yaw: float, profile: Callable, material: Material) -> Node3D:
+static func ruin(world, middle: Vector3, bay: float, yaw: float, profile: Callable, material: Material, lowest: float = 1.2, highest: float = WALL_FULL-.03) -> Node3D:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = hash(Vector2i(roundi(middle.x*10.0),roundi(middle.z*10.0)))
 	var tool = SurfaceTool.new()
@@ -336,11 +380,11 @@ static func ruin(world, middle: Vector3, bay: float, yaw: float, profile: Callab
 		# (Its ends hold to the line exactly, to meet the next bay's.)
 		var edge = i == 0 or i == count
 		if edge: dip = 0.0
-		var f = clampf(line-dip-(0.0 if edge else rng.randf_range(0.0,.1)),1.2,WALL_FULL-.03)
-		var k = clampf(line-dip*.6-(0.0 if edge else rng.randf_range(0.0,.16)),1.2,WALL_FULL-.03)
+		var f = clampf(line-dip-(0.0 if edge else rng.randf_range(0.0,.1)),lowest,highest)
+		var k = clampf(line-dip*.6-(0.0 if edge else rng.randf_range(0.0,.16)),lowest,highest)
 		front.append(f)
 		back.append(k)
-		core.append(minf(f,k)-(.06 if edge else rng.randf_range(.04,.14)))
+		core.append(maxf(minf(f,k)-(.06 if edge else rng.randf_range(.04,.14)),lowest*.5))
 		low = minf(low,minf(f,k))
 	var stone: Vector2 = RUIN_STONES[rng.randi()%2]
 	tool.set_uv(stone)
@@ -910,7 +954,7 @@ static func face(world, bays: int, door: bool, wear: float) -> String:
 
 # A house: `door` is the face its door is in ("south" or "west"), `storeys`
 # its height, `wear` how far it has gone. A `ruin` has lost its roof.
-static func house(world, corner: Vector3, bays: Vector2i, door: String, storeys: int, wear: float, ruin: bool = false) -> void:
+static func house(world, corner: Vector3, bays: Vector2i, door: String, storeys: int, wear: float, ruin: bool = false) -> Array:
 	var rng: RandomNumberGenerator = world.rng
 	# The better-kept houses still have their limewash; the rest are bare.
 	var tint: Color = [LIMEWASH,CREAM][rng.randi_range(0,1)] if wear<.6 else [MUD,DUN,OCHRE,LIMEWASH*Color(.9,.88,.84)][rng.randi_range(0,3)]
@@ -940,6 +984,7 @@ static func house(world, corner: Vector3, bays: Vector2i, door: String, storeys:
 		# The roof lies inside where it fell.
 		var middle = corner+Vector3(bays.x*BAY*.5,0,bays.y*BAY*.5)
 		for i in 3: world.place("rubble",middle+Vector3(rng.randf_range(-1.6,1.6),0,rng.randf_range(-1.6,1.6)),Vector3(rng.randf_range(2.2,3.4),rng.randf_range(.6,1.2),rng.randf_range(1.4,2.2)),Kit.masonry(tint,wood,.4,1.0),rng.randf_range(0,TAU))
+	return [tint,wood]
 
 # Houses line the alleys, both sides, and fill the gaps along the ring
 # street; out west they line the river's quay and the lane behind, and in the
@@ -993,13 +1038,81 @@ static func houses(world) -> void:
 		var plan = plans[i]
 		# One house in four is kept up; the rest run from shabby to derelict.
 		var wear = rng.randf_range(.3,.45) if i%4==1 else rng.randf_range(.65,1.0)
-		house(world,plan[0],plan[1],plan[2],plan[3],wear)
+		# A few have come down: to their foundations, or half fallen in.
+		if plan[0] in FOUNDATIONS: foundation(world,plan[0],plan[1])
+		elif plan[0] in COLLAPSED: collapsed(world,plan[0],plan[1],plan[2],plan[3],maxf(wear,.75))
+		else: house(world,plan[0],plan[1],plan[2],plan[3],wear)
 	# Out at the town's edges, houses have fallen in and been left.
 	house(world,Vector3(-324,0,-38),Vector2i(2,2),"south",1,1.0,true)
 	house(world,Vector3(-192,0,-56),Vector2i(2,2),"south",1,1.0,true)
 	house(world,Vector3(-322,0,26),Vector2i(2,2),"south",1,1.0,true)
 	house(world,Vector3(-350,0,-8),Vector2i(2,1),"south",1,1.0,true)
 	house(world,Vector3(-336,0,46),Vector2i(2,2),"south",1,1.0,true)
+
+# The houses that have come down: to their foundations (FOUNDATIONS), or
+# half fallen in (COLLAPSED), by their north-west corners.
+const FOUNDATIONS = [Vector3(-362,0,38),Vector3(-322,0,94),Vector3(-290,0,78),Vector3(-208,0,-64)]
+const COLLAPSED = [Vector3(-350,0,30),Vector3(-262,0,78),Vector3(-224,0,-62),Vector3(-362,0,62)]
+
+# A house gone to its foundations: the stumps of its walls all round, knee
+# high and broken, rubble heaped within and its dressed blocks scattered.
+static func foundation(world, corner: Vector3, bays: Vector2i) -> void:
+	var rng: RandomNumberGenerator = world.rng
+	var tint: Color = [MUD,DUN,OCHRE][rng.randi_range(0,2)]
+	var material = Kit.masonry(tint,BROWN,.4,1.0,world.lift(corner))
+	var size = Vector2(bays.x*BAY,bays.y*BAY)
+	var phase = rng.randf_range(0.0,10.0)
+	var stump = func(offset: float) -> float: return .45+.3*sin(offset*1.1+phase)+.15*sin(offset*2.9+phase*2.0)
+	for side in [[Vector3(size.x*.5,0,size.y-.7),size.x,0.0],[Vector3(size.x*.5,0,.7),size.x,0.0],[Vector3(.7,0,size.y*.5),size.y,-PI/2],[Vector3(size.x-.7,0,size.y*.5),size.y,-PI/2]]:
+		var middle: Vector3 = corner+side[0]
+		var node = ruin(world,middle,side[1],side[2],stump,material,.2,1.3)
+		world.screen([node])
+		var along_x = side[2] == 0.0
+		world.block_rect(Rect2(middle.x-(side[1]*.5 if along_x else .7),middle.z-(.7 if along_x else side[1]*.5),side[1] if along_x else 1.4,1.4 if along_x else side[1]),world.LOW)
+	var middle = corner+Vector3(size.x*.5,0,size.y*.5)
+	for i in 3:
+		var heap = world.place("rubble",middle+Vector3(rng.randf_range(-size.x*.25,size.x*.25),0,rng.randf_range(-size.y*.25,size.y*.25)),Vector3(rng.randf_range(2.0,3.2),rng.randf_range(.5,1.0),rng.randf_range(1.4,2.2)),material,rng.randf_range(0,TAU))
+		world.block_disc(heap.position,1.0,world.LOW)
+	# (Heaped full of its own rubble, it cannot be walked into.)
+	world.block_rect(Rect2(corner.x,corner.z,size.x,size.y),world.LOW,false)
+	world.add_place("fallen house","house",corner+Vector3(-1.6,0,size.y*.5),size.length()*.5)
+
+# A house half fallen in: its west part stands, roofed, walled off where the
+# rest came down; the east bay is a shell, its walls breaking away from the
+# standing part's height down to little at the far corner, its roof fallen in
+# and lying in the rubble.
+static func collapsed(world, corner: Vector3, bays: Vector2i, door: String, storeys: int, wear: float) -> void:
+	var rng: RandomNumberGenerator = world.rng
+	var standing = Vector2i(bays.x-1,bays.y)
+	var colours: Array = house(world,corner,standing,door,storeys,wear)
+	var ground: float = world.lift(corner)
+	var material = Kit.masonry(colours[0],colours[1],.4,snappedf(wear,.05),ground)
+	var size = Vector2(bays.x*BAY,bays.y*BAY)
+	var x0 = corner.x+standing.x*BAY
+	var height = storeys*BAY
+	# The standing part's own east wall, where it was open to the rest.
+	var inner: Array = []
+	for storey in storeys:
+		for i in bays.y:
+			inner.append(world.place("wall",Vector3(x0-.5,storey*BAY,corner.z+BAY*.5+i*BAY),Vector3(BAY,BAY,1),material,PI/2))
+	world.screen(inner)
+	# Its fallen bay's walls: high against the standing part, low far from it.
+	var falling = func(offset: float) -> float:
+		var t = clampf((offset+BAY*.5)/BAY,0.0,1.0)
+		return lerpf(height-.6,1.0,smoothstep(0.0,1.0,t))+.25*sin(offset*2.3)
+	var corner_low = func(offset: float) -> float: return 1.1+.35*sin(offset*1.7+1.0)+.4*clampf(-offset/(size.y*.5),0.0,1.0)
+	var walls: Array = []
+	walls.append(ruin(world,Vector3(x0+BAY*.5,0,corner.z+size.y-.7),BAY,0.0,falling,material,.6,height))
+	walls.append(ruin(world,Vector3(x0+BAY*.5,0,corner.z+.7),BAY,0.0,falling,material,.6,height))
+	walls.append(ruin(world,Vector3(corner.x+size.x-.7,0,corner.z+size.y*.5),size.y,-PI/2,corner_low,material,.6,height))
+	world.screen(walls)
+	world.block_rect(Rect2(x0,corner.z,BAY,size.y))
+	# The roof that fell, broken and tilted on its rubble.
+	var middle = Vector3(x0+BAY*.5,0,corner.z+size.y*.5)
+	var slab = world.place("floor",middle+Vector3(rng.randf_range(-.4,.4),.7,rng.randf_range(-.6,.6)),Vector3(BAY*.8,.3,size.y*.45),Kit.masonry(colours[0]*Color(.9,.87,.82),colours[1],.4,snappedf(wear,.05),ground))
+	slab.rotation = Vector3(rng.randf_range(-.25,.25),rng.randf_range(-.3,.3),rng.randf_range(.18,.35))
+	for i in 3:
+		world.place("rubble",middle+Vector3(rng.randf_range(-1.2,1.2),0,rng.randf_range(-size.y*.3,size.y*.3)),Vector3(rng.randf_range(2.0,3.0),rng.randf_range(.6,1.2),rng.randf_range(1.4,2.2)),material,rng.randf_range(0,TAU))
 
 # Palms along the ring street, and dry grass, stones and litter wherever the
 # ground is bare.

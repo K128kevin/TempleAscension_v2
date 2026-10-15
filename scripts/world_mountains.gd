@@ -39,17 +39,22 @@ static func rock() -> ShaderMaterial:
 	material.set_shader_parameter("sand_map",load("res://assets/textures/sand_fine.jpg"))
 	return material
 
-static func noises() -> Array[FastNoiseLite]:
+static func noises() -> Array:
 	var ridges = FastNoiseLite.new()
 	ridges.seed = 71
-	ridges.frequency = 1.0/170.0
+	ridges.frequency = 1.0/210.0
 	ridges.fractal_type = FastNoiseLite.FRACTAL_RIDGED
-	ridges.fractal_octaves = 5
+	ridges.fractal_octaves = 3
 	var crags = FastNoiseLite.new()
 	crags.seed = 72
-	crags.frequency = 1.0/22.0
-	crags.fractal_octaves = 3
-	return [ridges,crags]
+	crags.frequency = 1.0/30.0
+	crags.fractal_octaves = 2
+	# Broad, rounded swells, for the summits.
+	var swells = FastNoiseLite.new()
+	swells.seed = 73
+	swells.frequency = 1.0/150.0
+	swells.fractal_octaves = 3
+	return [ridges,crags,swells]
 
 # Every tile of the range, as a node of MeshInstance3Ds.
 static func generate(world) -> Node3D:
@@ -66,7 +71,7 @@ static func generate(world) -> Node3D:
 			var any = false
 			for j in cells+3:
 				for i in cells+3:
-					var h = height(world,noise[0],noise[1],tx+(i-1)*STEP,tz+(j-1)*STEP)
+					var h = height(world,noise,tx+(i-1)*STEP,tz+(j-1)*STEP)
 					heights[j*(cells+3)+i] = h
 					if h > 0.0: any = true
 			if any:
@@ -78,17 +83,22 @@ static func generate(world) -> Node3D:
 	return range
 
 # The mountains' height at a point: below the ground short of their foot.
-static func height(world, ridges: FastNoiseLite, crags: FastNoiseLite, x: float, z: float) -> float:
+static func height(world, noise: Array, x: float, z: float) -> float:
+	var ridges: FastNoiseLite = noise[0]
+	var crags: FastNoiseLite = noise[1]
 	var depth: float = world.mountain_depth(x,z)
 	# The field sinks away at its edges, behind the crests.
 	var edge = minf(minf(x-REACH.position.x,REACH.end.x-x),minf(z-REACH.position.y,REACH.end.y-z))
 	var fade = smoothstep(0.0,120.0,edge)
 	if depth <= 0.0: return -2.0+depth*.2
-	# Ridges climb to sharp crests and fall away into valleys between them.
+	# Long ridges and broad swells, their crests weathered round, with
+	# valleys between them.
 	var ridge = clampf(ridges.get_noise_2d(x,z)*.5+.5,0.0,1.0)
-	var rise = PEAK*(1.0-exp(-depth/CLIMB))*(.3+1.25*ridge*ridge)
+	var swell = clampf((noise[2] as FastNoiseLite).get_noise_2d(x,z)*.5+.5,0.0,1.0)
+	var shape = smoothstep(0.0,1.0,ridge*.35+swell*.65)
+	var rise = PEAK*(1.0-exp(-depth/CLIMB))*(.35+1.05*shape)
 	var cliff = CLIFF*smoothstep(0.0,5.0,depth)*(.75+.5*(crags.get_noise_2d(x*.4,z*.4)*.5+.5))
-	var rough = crags.get_noise_2d(x,z)*4.5*smoothstep(0.0,10.0,depth)
+	var rough = crags.get_noise_2d(x,z)*2.2*smoothstep(0.0,10.0,depth)
 	# They rise out of the desert gently, steepening as they climb.
 	var ease = smoothstep(0.0,40.0,depth)
 	return (cliff+rise*(.15+.85*ease)+rough*ease)*fade-20.0*(1.0-fade)

@@ -11,7 +11,7 @@ const VIEWS = {
 	"quay":Vector3(-366,0,-20),"quay-south":Vector3(-364,0,96),"south-street":Vector3(-290,0,88),
 	"bend":Vector3(-350,0,250),"river-south":Vector3(-200,0,262),"river-mouth":Vector3(-70,0,262),
 	"slope":Vector3(-10,0,180),"north":Vector3(-40,0,-48),"temple":Vector3(55,0,0),"temple-south":Vector3(70,0,60),
-	"cave":Vector3(20,0,-62),"gorge":Vector3(-355,0,-74),"town-gate":Vector3(-176,0,96),"se-foot":Vector3(18,0,150),"e-foot":Vector3(70,0,52),"n-foot":Vector3(-60,0,-50),"se-corner":Vector3(-172,0,112),"ne-corner":Vector3(-172,0,-70),"palace-sw":Vector3(-306,0,-72),"palace-nw":Vector3(-306,0,-150),"palace-ne":Vector3(-202,0,-150),"palace-se":Vector3(-202,0,-72),"wall-south":Vector3(-300,0,104),"wall-south2":Vector3(-200,0,104),"nw-river":Vector3(-372,0,-60)}
+	"cave":Vector3(20,0,-62),"gorge":Vector3(-355,0,-74),"town-gate":Vector3(-176,0,96),"se-foot":Vector3(18,0,150),"e-foot":Vector3(70,0,52),"n-foot":Vector3(-60,0,-50),"se-corner":Vector3(-172,0,112),"ne-corner":Vector3(-172,0,-70),"palace-sw":Vector3(-306,0,-72),"palace-nw":Vector3(-306,0,-150),"palace-ne":Vector3(-202,0,-150),"palace-se":Vector3(-202,0,-72),"wall-south":Vector3(-300,0,104),"wall-south2":Vector3(-200,0,104),"nw-river":Vector3(-372,0,-60),"found-1":Vector3(-366,0,46),"found-2":Vector3(-286,0,90),"fallen-1":Vector3(-258,0,92),"fallen-2":Vector3(-220,0,-50),"river-tip":Vector3(-30,0,262)}
 
 func _initialize(): call_deferred("capture")
 func arg(key: String, fallback: String) -> String:

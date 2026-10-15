@@ -76,6 +76,8 @@ static func rim(world) -> void:
 				# The far walls are faced with runs of cliff, laid along the edge.
 				size = Vector3(width*rng.randf_range(2.0,2.8),height*rng.randf_range(.9,1.2),width*rng.randf_range(.9,1.2))
 				at.y = -size.y*.1
+			# None stands in or over the river.
+			if absf(world.river_side(at.x,at.z)) < world.RIVER_HALF+maxf(size.x,size.z)*.55+1.0: continue
 			# No rock reaches into a wall: one too near it is made smaller to
 			# clear it, or left out.
 			var reach: float = maxf(size.x,size.z)*.55
