@@ -2,9 +2,9 @@ extends RefCounted
 ## The mountains that close the outdoor world (scripts/overworld.gd) in on
 ## the north, behind the desert the track crosses, and on the east, round the
 ## temple and down to the river in the south. Their foot stands a few metres
-## back from the open ground's edge (Overworld.mountain_depth), where the
-## rim's rocks lie piled against it; from there they rise in a short cliff,
-## then climb in ridges to peaks some ninety metres up.
+## back from the open ground's edge (Overworld.mountain_depth), where a few
+## of the rim's rocks lie at it; from there they rise gently out of the sand,
+## steepening as they climb in ridges to peaks some sixty metres up.
 ##
 ## They are a height field, built in square tiles of two-metre cells (the
 ## tiles nowhere near them are left out), drawn by the photographed cliff
@@ -14,9 +14,9 @@ const STEP = 2.0
 # How far the field reaches: well past the map, under the horizon's crests.
 const REACH = Rect2(-640,-560,1160,1060)
 # How tall the range grows, and over what depth into it it gets there.
-const PEAK = 92.0
-const CLIMB = 60.0
-const CLIFF = 8.0
+const PEAK = 60.0
+const CLIMB = 110.0
+const CLIFF = 2.5
 
 # The tiles, baked by tools/bake_mountains.gd from `generate` (they take
 # seconds to build); tests/overworld.gd checks they still match it.
@@ -89,7 +89,9 @@ static func height(world, ridges: FastNoiseLite, crags: FastNoiseLite, x: float,
 	var rise = PEAK*(1.0-exp(-depth/CLIMB))*(.3+1.25*ridge*ridge)
 	var cliff = CLIFF*smoothstep(0.0,5.0,depth)*(.75+.5*(crags.get_noise_2d(x*.4,z*.4)*.5+.5))
 	var rough = crags.get_noise_2d(x,z)*4.5*smoothstep(0.0,10.0,depth)
-	return (cliff+rise+rough)*fade-20.0*(1.0-fade)
+	# They rise out of the desert gently, steepening as they climb.
+	var ease = smoothstep(0.0,40.0,depth)
+	return (cliff+rise*(.15+.85*ease)+rough*ease)*fade-20.0*(1.0-fade)
 
 static func tile(heights: PackedFloat32Array, cells: int, tx: float, tz: float) -> MeshInstance3D:
 	var tool = SurfaceTool.new()

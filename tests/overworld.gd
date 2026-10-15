@@ -343,6 +343,11 @@ func test():
 	check(not camp.is_empty() and camp.kind=="camp","The camp is a place on the dune's crown")
 	var down = world.path(Overworld.START,gate+Vector3(-6,0,0))
 	check(not down.is_empty() and world.region(Overworld.START)=="desert" and world.margin_at(Vector3(Overworld.DUNE.x,0,Overworld.WALL_SOUTH-2.0))>0.0 and world.margin_at(Vector3(Overworld.DUNE.x,0,Overworld.WALL_SOUTH+1.0))<0.0,"The town's south wall stands between it and the dune's desert, but for the gate at an alley's end")
+	# The south gate can be walked through, straight out onto the sand.
+	var inside_gate: Vector3 = Town.SOUTH_GATE+Vector3(0,0,-6)
+	var outside_gate: Vector3 = Town.SOUTH_GATE+Vector3(0,0,8)
+	var through = world.path(inside_gate,outside_gate)
+	check(not through.is_empty() and length_of(through,inside_gate)<16.0,"The south gate is open: straight through it from the alley to the sand")
 	# The dune's desert lies open to the one the track crosses: no rock
 	# between them, and the way from the camp to the caravan goes round the
 	# town, not through it.
@@ -420,7 +425,7 @@ func test():
 		var square = Vector2i(floori(at.x/10.0),floori(at.z/10.0))
 		if not stones.has(square): stones[square] = []
 		stones[square].append(Vector2(at.x,at.z))
-	check(rocks>=600 and near_rim==rocks,"The rim is built of rock, and only the rim (%d rocks)" % rocks)
+	check(rocks>=100 and near_rim==rocks,"The rim is built of rock, and only the rim (%d rocks)" % rocks)
 	# Along the rim, every stretch of the edge has rock standing on it.
 	var bare = 0
 	var edges = 0
@@ -430,6 +435,9 @@ func test():
 			if m>1.0 or m<-1.0 or world.keep_clear[0].grow(8.0).has_point(Vector2(x,z)): continue
 			# (The town's edge is walled, not rimmed with rock.)
 			if world.walled(Vector3(x,0,z)): continue
+			# (Nor the mountains' foot, where the sand runs gently up into them
+			# among a few scattered rocks.)
+			if world.mountain_depth(x,z) > -8.0: continue
 			edges += 1
 			var covered = false
 			var square = Vector2i(floori(x/10.0),floori(z/10.0))
@@ -438,7 +446,7 @@ func test():
 					for stone in stones.get(square+Vector2i(dx,dz),[]):
 						if stone.distance_to(Vector2(x,z))<9.0: covered = true
 			if not covered: bare += 1
-	check(edges>150 and bare==0,"Rock stands along the whole edge of the open ground (%d of %d stretches bare)" % [bare,edges])
+	check(edges>8 and bare==0,"Rock stands along the whole edge of the open ground (%d of %d stretches bare)" % [bare,edges])
 	# The town is walled instead: no rim rock stands round it, wall runs
 	# along its straight edges and round the palace hill's ground, towered at
 	# the corners, and the hero is stopped at the wall on every side.

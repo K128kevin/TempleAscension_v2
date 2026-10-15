@@ -59,20 +59,33 @@ static func rim(world) -> void:
 				height = lerpf(6.5,18.0,clampf(depth/16.0,0,1))*rng.randf_range(.75,1.25)
 			# Bigger rocks stand further apart.
 			if rng.randf()>step*step/(width*width*.42): continue
-			if mountain > -6.0: height = minf(height,9.0)
+			# (At the mountains' foot, only scattered smaller ones.)
+			if mountain > -6.0:
+				if rng.randf() < .7: continue
+				height = minf(height,4.5)
+				width = minf(width,6.0)
 			# A rock at the very edge is pushed back until it only just overhangs.
 			var short = width*.4-depth
 			if short>0: at -= Vector3(inward.x,0,inward.y)*short
 			var size = Vector3(width,height,width*rng.randf_range(.8,1.2))
 			at.y = -height*.14
-			world.rim_rocks.append(at)
 			var tint: Color = ROCK_TINTS[rng.randi_range(0,1)]
-			if not near and depth<16.0 and rng.randf()<.55:
+			var crag = not near and depth<16.0 and rng.randf()<.55
+			var along = Vector2(-inward.y,inward.x)*(1.0 if rng.randf()<.5 else -1.0)
+			if crag:
 				# The far walls are faced with runs of cliff, laid along the edge.
-				var along = Vector2(-inward.y,inward.x)*(1.0 if rng.randf()<.5 else -1.0)
 				size = Vector3(width*rng.randf_range(2.0,2.8),height*rng.randf_range(.9,1.2),width*rng.randf_range(.9,1.2))
 				at.y = -size.y*.1
-				world.batch("crag",world.stance(at,size,atan2(-along.y,along.x)),Kit.rock("crag",tint))
+			# No rock reaches into a wall: one too near it is made smaller to
+			# clear it, or left out.
+			var reach: float = maxf(size.x,size.z)*.55
+			var clear: float = world.wall_distance(at,reach+1.0)-.5
+			if reach > clear:
+				if clear < 1.2: continue
+				size *= clear/reach
+				at.y *= clear/reach
+			world.rim_rocks.append(at)
+			if crag: world.batch("crag",world.stance(at,size,atan2(-along.y,along.x)),Kit.rock("crag",tint))
 			else:
 				var id: String = ROCKS[rng.randi_range(0,3)]
 				world.batch(id,world.stance(at,size,rng.randf_range(0,TAU),rng.randf_range(-.12,.12)),Kit.rock(id,tint))

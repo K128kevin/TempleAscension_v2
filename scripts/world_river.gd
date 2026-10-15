@@ -50,12 +50,16 @@ static func banks(world) -> void:
 		var side: float = world.river_sides[cell]
 		var far = -side-half
 		var near = side-half
-		if far > 46.0 or near > 14.0 or absf(side) < half-.6: continue
+		# (West of the palace's ground, north of the town, the land on the
+		# near side is out of reach like the far bank, and grows the same.)
+		var pocket: bool = at.z < world.WALL_NORTH-2.0 and at.x < world.HILL.x-world.HILL_REACH.x-2.0 and near > -1.0
+		if pocket: far = near
+		if far > 46.0 or (near > 14.0 and not pocket) or absf(side) < half-.6: continue
 		# Not among the mountains' or the rim's rocks.
-		if world.margins[cell] < 3.0 or (at.z < world.WALL_NORTH-2.0 and near > -1.0): continue
+		if world.margins[cell] < 3.0: continue
 		if far > -1.0 and world.mountain_depth(at.x,at.z) > -4.0: continue
 		var town: bool = at.z > world.WALL_NORTH-2.0 and at.z < world.WALL_SOUTH+3.0 and side > 0.0
-		if near > -1.0:
+		if near > -1.0 and not pocket:
 			# The near bank: the desert's side keeps its own scrub higher up,
 			# and the town's is paved and kept clear but for a few reeds.
 			if world.cells[cell] != world.OPEN or world.paint[cell*4+world.PAVING] > 60: continue

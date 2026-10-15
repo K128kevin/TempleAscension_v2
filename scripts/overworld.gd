@@ -79,7 +79,8 @@ const HILL_REACH = Vector2(58,-158)
 const WALL_NORTH = -78.0
 const WALL_SOUTH = 108.0
 func walled(at: Vector3) -> bool:
-	if at.x >= TOWN_GATE.x-2.0 or at.z >= WALL_SOUTH+12.0: return false
+	# (Its east end takes in the gate wall's own corner.)
+	if at.x >= TOWN_GATE.x+1.5 or at.z >= WALL_SOUTH+12.0: return false
 	# (North of the town, west of the palace hill's ground, the river runs
 	# down between rocks.)
 	return at.z > WALL_NORTH-3.0 or at.x > HILL.x-HILL_REACH.x-3.0
@@ -429,8 +430,10 @@ func east_edge(z: float) -> float:
 # How far a point lies from the river's middle, signed: positive on the
 # town's and desert's side (east of it, then north), negative across it.
 func river_side(x: float, z: float) -> float:
-	# Down the town's side, wandering a little.
-	var down = x-river_x(z)
+	# Down the town's side, wandering a little (measured square to its
+	# course, where it runs aslant).
+	var slant = river_x(z+1.0)-river_x(z)
+	var down = (x-river_x(z))/sqrt(1.0+slant*slant)
 	if z > RIVER_BEND.y: down = INF if x > RIVER_BEND.x else -INF
 	# Round the bend.
 	var round = RIVER_TURN-Vector2(x,z).distance_to(RIVER_BEND) if x <= RIVER_BEND.x and z >= RIVER_BEND.y else INF
@@ -455,7 +458,11 @@ func river_flow(x: float, z: float) -> Vector2:
 func river_x(z: float) -> float:
 	# (Along the town, between its quays, it runs straighter.)
 	var calm = 1.0-.7*smoothstep(WALL_NORTH-50.0,WALL_NORTH-10.0,z)*(1.0-smoothstep(WALL_SOUTH+10.0,WALL_SOUTH+50.0,z))
-	return RIVER_X+(2.5*sin(z*.021)+1.5*sin(z*.057+1.3))*calm*(1.0-smoothstep(RIVER_BEND.y-60.0,RIVER_BEND.y,z))
+	# North of the town it bends away north-west, winding, into the
+	# mountains.
+	var past = WALL_NORTH-12.0-z
+	var away = (sqrt(past*past+400.0)+past)*.5
+	return RIVER_X+(2.5*sin(z*.021)+1.5*sin(z*.057+1.3))*calm*(1.0-smoothstep(RIVER_BEND.y-60.0,RIVER_BEND.y,z))-away*.5-9.0*sin(away*.045)
 
 func river_z(x: float) -> float:
 	var run = x-RIVER_BEND.x
@@ -474,22 +481,32 @@ func margin(x: float, z: float, side: float = NAN) -> float:
 	# the town's south wall) down to the river, and west of the mountains.
 	var north = z+half_width(x) if x > TOWN_GATE.x else z-WALL_SOUTH-2.0
 	var desert = minf(north,(east_edge(z)-x)*.87)
+	# (The way through the south gate joins the town to it.)
+	desert = maxf(desert,minf(9.0-absf(x-SOUTH_GAP.x),minf(z-SOUTH_GAP.z,WALL_SOUTH+8.0-z)))
 	# A defile in the northern mountains leads to the cave's mouth.
 	var defile = minf(7.5+1.5*noise.get_noise_1d(z*6.0+37000.0)-absf(x-CAVE.x),minf(z-CAVE.z,-40.0-z))
 	var open = maxf(maxf(town,round_hill),maxf(desert,defile))
 	# The river, and its far bank: north of the town it runs between rocks.
 	if is_nan(side): side = river_side(x,z)
-	if z < WALL_NORTH-4.0: open = maxf(open,RIVER_HALF+4.0-absf(side))
+	if z < WALL_NORTH-2.0 and x < HILL.x-HILL_REACH.x-2.0:
+		# West of the palace's ground, north of the town, the river's land
+		# runs up to the mountains' foot, out of reach.
+		open = maxf(open,z-north_front(x)-2.0)
+	elif z < WALL_NORTH-4.0: open = maxf(open,RIVER_HALF+4.0-absf(side))
 	elif side < RIVER_HALF+4.0: open = maxf(open,minf(RIVER_HALF+4.0-side,(east_edge(z)-x)*.87))
 	return open
+
+# Where the mountains' foot runs north of the town and the desert: a few
+# metres back from the track's desert, and behind the palace hill.
+func north_front(x: float) -> float:
+	return lerpf(-168.0+6.0*noise.get_noise_1d(x*3.0+41000.0),-half_width(x)-3.0,smoothstep(-235.0,-145.0,x))
 
 # How far into the mountains a point lies (negative short of their foot). Their
 # foot keeps a little way back from the open ground's edge; they stand back
 # from the temple, the cave's defile and the river's course through them.
 func mountain_depth(x: float, z: float) -> float:
 	# North of the track; at the town's end they turn away north.
-	var front = lerpf(-420.0,-half_width(x)-3.0,smoothstep(-235.0,-145.0,x))
-	var north = front-z
+	var north = north_front(x)-z
 	var east = (x-east_edge(z))*.87-3.0
 	var k = 14.0
 	var h = clampf(.5+.5*(east-north)/k,0.0,1.0)
@@ -527,8 +544,8 @@ func shape_ground() -> void:
 			river_sides[i] = side
 			if m<1.0: cells[i] = SOLID
 			# The river, and all across it, is out of reach; north of the
-			# town, between the rocks, its banks are too.
-			elif side < RIVER_HALF-.4 or (z < WALL_NORTH-1.0 and side < RIVER_HALF+5.0): cells[i] = LOW
+			# town, west of the palace's ground, its land is too.
+			elif side < RIVER_HALF-.4 or (z < WALL_NORTH-1.0 and x < HILL.x-HILL_REACH.x-1.0): cells[i] = LOW
 			paint[i*4+SHADE] = int(clampf(1.0-m/4.0,0.0,1.0)*150.0) if m>0 else 150
 	for x in range(int(TOWN_GATE.x)-2,int(TEMPLE_DOOR.x)+1):
 		var middle = track_z(x)
@@ -736,6 +753,23 @@ func block_rect(area: Rect2, kind: int = SOLID, shade: bool = true) -> void:
 		for x in range(floori(area.position.x)-1,ceili(area.end.x)+2):
 			var outside = Vector2(maxf(maxf(area.position.x-x,x-area.end.x),0.0),maxf(maxf(area.position.y-z,z-area.end.y),0.0)).length()
 			dab(SHADE,x,z,.8*clampf(1.0-outside/1.6,0.0,1.0))
+
+# The town's and the palace's walls and towers, as blocked: the rim's rocks
+# keep clear of them (scripts/world_desert.gd rim).
+var walls: Array[Rect2] = []
+func wall(area: Rect2) -> void:
+	block_rect(area)
+	walls.append(area)
+
+# How far a point is from the nearest wall (INF with none within `reach`).
+func wall_distance(at: Vector3, reach: float) -> float:
+	var nearest = INF
+	var p = Vector2(at.x,at.z)
+	for area in walls:
+		if not area.grow(reach).has_point(p): continue
+		var outside = Vector2(maxf(maxf(area.position.x-p.x,p.x-area.end.x),0.0),maxf(maxf(area.position.y-p.y,p.y-area.end.y),0.0))
+		nearest = minf(nearest,outside.length())
+	return nearest
 
 func block_disc(at: Vector3, radius: float, kind: int = SOLID, shade: bool = true) -> void:
 	var reach = ceili(radius)

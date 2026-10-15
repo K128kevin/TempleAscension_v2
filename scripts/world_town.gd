@@ -188,14 +188,14 @@ static func gate_wall(world) -> void:
 		z += bay
 		if absf(middle)<5.0 or world.margin_at(Vector3(x,0,middle))<-9.0: continue
 		var piece = world.place("wall",Vector3(x,0,middle),Vector3(bay,5.6,1.4),material,-PI/2)
-		world.block_rect(Rect2(x-.7,middle-bay*.5,1.4,bay))
+		world.wall(Rect2(x-.7,middle-bay*.5,1.4,bay))
 		world.screen([piece])
 	# Two towers flank the gateway, joined by a lintel over the road.
 	var towers: Array = []
 	for side in [-1.0,1.0]:
 		var at = Vector3(x,0,side*6.2)
 		towers.append(world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material,-PI/2))
-		world.block_rect(Rect2(x-1.7,at.z-1.8,3.4,3.6))
+		world.wall(Rect2(x-1.7,at.z-1.8,3.4,3.6))
 		world.brazier(at+Vector3(-2.8,0,side*.2),1.0,1.1)
 		hanging(world,"cloth_red",Vector3(x-1.85,2.6,side*6.2),4.4,-PI/2,Color(.44,.14,.10))
 		# A guard before each tower, on the town side, watching the way through.
@@ -207,9 +207,9 @@ static func gate_wall(world) -> void:
 # The wall round the town, where the rim's rocks would stand (the world's
 # `walled`): built of the gate wall's modules, a tower at every corner. It
 # runs along the north and south sides from the gate wall west to the river,
-# where each ends in a tower at the water, and from the north side out round
-# the palace hill's ground; the south gate (south_gate) fills a gap left in
-# the south side.
+# where each ends in a tower at the water, but for the palace hill's ground,
+# which the elders' white wall closes (Palace.precinct); the south gate
+# (south_gate) fills a gap left in the south side.
 # It is old: its stone far more worn than the gate's, its top uneven, and
 # here and there a stretch fallen into a ragged breach (ruin).
 static func town_wall(world) -> void:
@@ -221,8 +221,11 @@ static func town_wall(world) -> void:
 	var hill_east: float = world.HILL.x+world.HILL_REACH.x
 	var hill_north: float = world.HILL_REACH.y
 	# Each side runs out to the river and ends in a tower at the water.
+	# (Round the palace hill's ground the elders' own white wall stands
+	# instead: Palace.precinct.)
 	var runs: Array = [
-		[Vector3(east,0,north),Vector3(hill_east,0,north),Vector3(hill_east,0,hill_north),Vector3(hill_west,0,hill_north),Vector3(hill_west,0,north),Vector3(river_end(world,north),0,north)],
+		[Vector3(east,0,north),Vector3(hill_east,0,north)],
+		[Vector3(hill_west,0,north),Vector3(river_end(world,north),0,north)],
 		[Vector3(river_end(world,south),0,south),Vector3(east,0,south)]]
 	# The south gate's own wall and towers take its stretch of the south side.
 	var openings: Array = [Rect2(SOUTH_GATE.x-20.0,south-2.0,40.0,4.0)]
@@ -232,10 +235,11 @@ static func town_wall(world) -> void:
 		# A tower at every corner but the gate wall's north end, among the
 		# rocks.
 		for i in corners.size():
-			if corners[i] != Vector3(east,0,north): towers.append(corners[i])
+			var corner: Vector3 = corners[i]
+			if corner != Vector3(east,0,north) and not (corner.z == north and absf(absf(corner.x-world.HILL.x)-world.HILL_REACH.x) < .1): towers.append(corner)
 	for at in towers:
 		var tower = world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material)
-		world.block_rect(Rect2(at.x-1.8,at.z-1.7,3.6,3.4))
+		world.wall(Rect2(at.x-1.8,at.z-1.7,3.6,3.4))
 		world.screen([tower])
 
 # Where a wall along `z` ends at the river: a little way into the water.
@@ -259,87 +263,107 @@ static func walls_between(world, corners: Array, openings: Array, material: Mate
 			for opening in openings:
 				if opening.has_point(Vector2(middle.x,middle.z)): skipped = true
 			if skipped: continue
-			# (Its own place in the ring decides a bay's state, the same every
-			# time: most stand, worn, at an uneven height; a few have fallen.)
-			var lot: float = wall_lot(middle)
+			# (The wall's worn line along its length decides a bay's state,
+			# the same every time: whole and capped where it still stands to
+			# its full height, its top crumbled wherever it is lower.)
+			var along_x: bool = yaw == 0.0
+			var length_way = Vector3(cos(yaw),0,-sin(yaw))
+			var profile = func(offset: float) -> float: return wall_top(middle+length_way*offset,along_x)
+			var whole = true
+			for k in 5:
+				if profile.call(bay*(k/4.0-.5)) < WALL_FULL-.04: whole = false
 			var piece: Node3D
-			if lot < CRUMBLED:
-				# Fallen: its top broken away to a ragged line, low in the
-				# middle of the breach and rising to meet the standing wall
-				# either side (a tower, the gate's wall or a bay still whole).
-				var edges: Array = []
-				for end in [-1.0,1.0]:
-					var next: Vector3 = middle+along*end*(bay*.5+BAY*.5)
-					var inside: bool = (run-bay > .1 if end < 0.0 else run < length-.1)
-					for opening in openings:
-						if opening.has_point(Vector2(next.x,next.z)): inside = false
-					var other: float = wall_lot(next)
-					edges.append((breach_low(middle,lot)+breach_low(next,other))*.5 if inside and other < CRUMBLED else (wall_height(other) if inside else 5.6)-.35)
-				piece = ruin(world,middle,bay,yaw,edges[0],breach_low(middle,lot),edges[1],material)
-			else:
-				piece = world.place("wall",middle,Vector3(bay,wall_height(lot),1.4),material,yaw)
-			world.block_rect(Rect2(middle.x-(bay*.5 if yaw == 0.0 else .7),middle.z-(.7 if yaw == 0.0 else bay*.5),bay if yaw == 0.0 else 1.4,1.4 if yaw == 0.0 else bay))
+			if whole: piece = world.place("wall",middle,Vector3(bay,WALL_FULL,1.4),material,yaw)
+			else: piece = ruin(world,middle,bay,yaw,profile,material)
+			world.wall(Rect2(middle.x-(bay*.5 if yaw == 0.0 else .7),middle.z-(.7 if yaw == 0.0 else bay*.5),bay if yaw == 0.0 else 1.4,1.4 if yaw == 0.0 else bay))
 			world.screen([piece])
 
-# A bay of the town wall: its lot (from its place in the ring, the same every
-# time), whether it has fallen (lot under CRUMBLED), the height it stands to
-# if not, and how low it has fallen at its middle if so (from 1.6 to 3.8 m:
-# breaches differ, and so do the bays of one breach).
-const CRUMBLED = 1.7
-static func wall_lot(middle: Vector3) -> float:
-	return fposmod(middle.x*7.31+middle.z*3.17,13.0)
-static func wall_height(lot: float) -> float:
-	return 5.1+fposmod(lot*2.9,1.0)*.9
-static func breach_low(middle: Vector3, lot: float) -> float:
-	return 1.6+fposmod(sin(middle.x*12.9898+middle.z*78.233+lot)*43758.5453,1.0)*2.2
+# The town wall's height along its length: its full height (WALL_FULL)
+# where it still stands whole, worn down over long stretches, here and there
+# broken into a deep breach, and uneven everywhere it has crumbled. A wall
+# along x reads its line by x, one along z by z (each line its own).
+const WALL_FULL = 6.0
+static var wear_noise: Array = []
+static func wall_top(at: Vector3, along_x: bool) -> float:
+	if wear_noise.is_empty():
+		for k in 3:
+			var n = FastNoiseLite.new()
+			n.seed = 300+k
+			n.frequency = [.022,.017,.15][k]
+			n.fractal_octaves = [2,1,2][k]
+			wear_noise.append(n)
+	var s: float = (at.x if along_x else at.z)+(at.z if along_x else at.x)*3.7
+	var wear = smoothstep(-.1,.7,wear_noise[0].get_noise_1d(s))
+	var breach = smoothstep(.35,.8,wear_noise[1].get_noise_1d(s+500.0))
+	var rough = wear_noise[2].get_noise_1d(s)
+	var loss = wear*2.1+breach*breach*3.2+rough*.35*clampf(wear*2.5+breach,0.0,1.0)
+	return clampf(WALL_FULL-maxf(loss,0.0),1.3,WALL_FULL)
 
-# A fallen bay of the town wall, `bay` long and 1.4 thick, centred on
+# A crumbled bay of the town wall, `bay` long and 1.4 thick, centred on
 # `middle` at its foot and turned by `yaw` as a wall module is. Its top is
-# what is left of its courses: the stones of each column standing at their
-# own height and the wall's two faces broken unevenly, tops tilted and
-# chipped. The line they follow drops from `left` (its start's height,
-# meeting the next bay) to `low` at its middle and climbs to `right` at its
-# end: steeply where it meets standing wall, which it breaks off, and
-# straight on into a neighbouring breach. The stones it shed lie at its foot.
-const RUIN_COURSE = .16
+# what is left of its courses, following `profile` (its height at an offset
+# along it from its middle), one piece with no seams: its two faces each
+# broken to their own line just off it, the rubble core between them lower,
+# here and there a stretch chipped further down. The stones it shed lie at its
+# foot, the more the lower it has fallen.
 const RUIN_SINK = .3
 # Texels of the wall kit's palette that are plain stone, light to dark (the
 # masonry shader reads the palette's light and dark stones faintly).
 const RUIN_STONES = [Vector2(.627,.004),Vector2(.107,.004),Vector2(.002,.04)]
-static func ruin(world, middle: Vector3, bay: float, yaw: float, left: float, low: float, right: float, material: Material) -> Node3D:
+static func ruin(world, middle: Vector3, bay: float, yaw: float, profile: Callable, material: Material) -> Node3D:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = hash(Vector2i(roundi(middle.x*10.0),roundi(middle.z*10.0)))
-	var standing = func(edge: float, t: float) -> float:
-		# (t from 0 at the edge to 1 at the middle.)
-		return lerpf(edge,low,t) if edge < 4.0 else low+(edge-low)*pow(1.0-t,2.4)
 	var tool = SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var at = -bay*.5
-	while at < bay*.5-.05:
-		var width = minf(rng.randf_range(.5,1.1),bay*.5-at)
-		if bay*.5-at-width < .4: width = bay*.5-at
-		var centre = at+width*.5
-		var t = (centre+bay*.5)/bay
-		var line: float = standing.call(left,t*2.0) if t < .5 else standing.call(right,(1.0-t)*2.0)
-		var top = snappedf(line+rng.randf_range(-.3,.25),RUIN_COURSE)
-		# Near a standing edge the stones hold to it.
-		if t*bay < .5: top = left+rng.randf_range(-.25,0.0)
-		elif (1.0-t)*bay < .5: top = right+rng.randf_range(-.25,0.0)
-		top = maxf(top,1.2)
-		# The two faces, each broken to its own height; the core between
-		# them rubble-filled, between the two.
-		var front = top+rng.randf_range(-.5,.1)
-		var back = top+rng.randf_range(-.5,.1)
-		var core = minf(front,back)+rng.randf_range(-.1,.15)
-		var stone: Vector2 = RUIN_STONES[rng.randi()%RUIN_STONES.size()]
-		for slab in [[-.7,-.3,back],[-.3,.3,core],[.3,.7,front]]:
-			var inset = rng.randf_range(0.0,.025) if slab[0] < -.5 or slab[1] > .5 else 0.0
-			var z0 = slab[0]+(inset if slab[0] < -.5 else 0.0)
-			var z1 = slab[1]-(inset if slab[1] > .5 else 0.0)
-			var tops: Array = []
-			for k in 4: tops.append(slab[2]+rng.randf_range(-.12,.05))
-			ruin_block(tool,Vector3(at,-RUIN_SINK,z0),Vector3(at+width,0,z1),tops,stone)
-		at += width
+	# Its top, sampled along it: the front and back faces each broken to
+	# their own line a little off the wall's, the rubble core between them a
+	# little lower, and here and there a stretch chipped further down.
+	var count: int = maxi(2,ceili(bay/.3))
+	var front: Array = []
+	var back: Array = []
+	var core: Array = []
+	var chip = 0.0
+	var chip_left = 0
+	var low = WALL_FULL
+	for i in count+1:
+		var x = -bay*.5+bay*i/count
+		var line: float = profile.call(x)
+		if chip_left <= 0 and rng.randf() < .07:
+			chip = rng.randf_range(.12,.4)
+			chip_left = rng.randi_range(2,4)
+		var dip = chip if chip_left > 0 else 0.0
+		chip_left -= 1
+		# (Its ends hold to the line exactly, to meet the next bay's.)
+		var edge = i == 0 or i == count
+		if edge: dip = 0.0
+		var f = clampf(line-dip-(0.0 if edge else rng.randf_range(0.0,.1)),1.2,WALL_FULL-.03)
+		var k = clampf(line-dip*.6-(0.0 if edge else rng.randf_range(0.0,.16)),1.2,WALL_FULL-.03)
+		front.append(f)
+		back.append(k)
+		core.append(minf(f,k)-(.06 if edge else rng.randf_range(.04,.14)))
+		low = minf(low,minf(f,k))
+	var stone: Vector2 = RUIN_STONES[rng.randi()%2]
+	tool.set_uv(stone)
+	var quad = func(a: Vector3, b: Vector3, c: Vector3, d: Vector3, out: Vector3) -> void:
+		for tri in [[a,b,c],[a,c,d]]:
+			var p: Array = tri
+			if (p[1]-p[0]).cross(p[2]-p[0]).dot(out) > 0.0: p = [p[0],p[2],p[1]]
+			for v in p: tool.add_vertex(v)
+	for i in count:
+		var x0 = -bay*.5+bay*i/count
+		var x1 = -bay*.5+bay*(i+1)/count
+		# The faces.
+		quad.call(Vector3(x0,-RUIN_SINK,.7),Vector3(x1,-RUIN_SINK,.7),Vector3(x1,front[i+1],.7),Vector3(x0,front[i],.7),Vector3(0,0,1))
+		quad.call(Vector3(x0,-RUIN_SINK,-.7),Vector3(x1,-RUIN_SINK,-.7),Vector3(x1,back[i+1],-.7),Vector3(x0,back[i],-.7),Vector3(0,0,-1))
+		# The broken top, front edge to core to back edge.
+		quad.call(Vector3(x0,front[i],.7),Vector3(x1,front[i+1],.7),Vector3(x1,core[i+1],0),Vector3(x0,core[i],0),Vector3(0,1,0))
+		quad.call(Vector3(x0,core[i],0),Vector3(x1,core[i+1],0),Vector3(x1,back[i+1],-.7),Vector3(x0,back[i],-.7),Vector3(0,1,0))
+	# Its ends, against what stands either side.
+	for end in [[0,-1.0],[count,1.0]]:
+		var x = bay*.5*end[1]
+		var j: int = end[0]
+		quad.call(Vector3(x,-RUIN_SINK,.7),Vector3(x,front[j],.7),Vector3(x,core[j],0),Vector3(x,-RUIN_SINK,0),Vector3(end[1],0,0))
+		quad.call(Vector3(x,-RUIN_SINK,0),Vector3(x,core[j],0),Vector3(x,back[j],-.7),Vector3(x,-RUIN_SINK,-.7),Vector3(end[1],0,0))
 	tool.generate_normals()
 	var node = MeshInstance3D.new()
 	node.mesh = tool.commit()
@@ -353,7 +377,8 @@ static func ruin(world, middle: Vector3, bay: float, yaw: float, left: float, lo
 	# lying where they rolled.
 	var along = Vector3(cos(yaw),0,-sin(yaw))
 	var across = Vector3(sin(yaw),0,cos(yaw))
-	var shed = clampf((4.2-low)/2.2,.3,1.0)
+	var shed = clampf((WALL_FULL-.4-low)/3.0,0.0,1.0)
+	if shed < .08: return node
 	for side in [-1.0,1.0]:
 		var heap = middle+along*rng.randf_range(-bay*.25,bay*.25)+across*side*rng.randf_range(1.0,1.4)
 		world.place("rubble",heap,Vector3(rng.randf_range(2.2,3.2),rng.randf_range(.4,.8)*shed+.15,rng.randf_range(1.0,1.5)),material,yaw+rng.randf_range(-.3,.3))
@@ -366,19 +391,6 @@ static func ruin(world, middle: Vector3, bay: float, yaw: float, left: float, lo
 			block.position = spot+Vector3.UP*(world.lift(spot)-.06)
 			block.rotation = Vector3(rng.randf_range(-.25,.25),rng.randf_range(0,TAU),rng.randf_range(-.25,.25))
 	return node
-
-# One block of a ruin: from `lo` (its base corner) to `hi`'s x and z, its
-# four top corners at `tops` (-x-z, +x-z, +x+z, -x+z). Every face drawn but
-# the base.
-static func ruin_block(tool: SurfaceTool, lo: Vector3, hi: Vector3, tops: Array, stone: Vector2) -> void:
-	var b = [Vector3(lo.x,lo.y,lo.z),Vector3(hi.x,lo.y,lo.z),Vector3(hi.x,lo.y,hi.z),Vector3(lo.x,lo.y,hi.z)]
-	var u = []
-	for k in 4: u.append(Vector3(b[k].x,tops[k],b[k].z))
-	var quads = [[u[0],u[1],u[2],u[3]],[b[0],b[1],u[1],u[0]],[b[1],b[2],u[2],u[1]],[b[2],b[3],u[3],u[2]],[b[3],b[0],u[0],u[3]]]
-	for q in quads:
-		for k in [0,1,2,0,2,3]:
-			tool.set_uv(stone)
-			tool.add_vertex(q[k])
 
 # The gate in the town's south wall at the end of the southern alley, built
 # as the town gate is: a stretch of wall, two towers flanking the way
@@ -393,13 +405,13 @@ static func south_gate(world) -> void:
 		x += BAY
 		if absf(middle-g.x)<5.0 or world.margin_at(Vector3(middle,0,g.z))<-9.0: continue
 		var piece = world.place("wall",Vector3(middle,0,g.z),Vector3(BAY,5.6,1.4),material)
-		world.block_rect(Rect2(middle-BAY*.5,g.z-.7,BAY,1.4))
+		world.wall(Rect2(middle-BAY*.5,g.z-.7,BAY,1.4))
 		world.screen([piece])
 	var towers: Array = []
 	for side in [-1.0,1.0]:
 		var at = Vector3(g.x+side*6.2,0,g.z)
 		towers.append(world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material))
-		world.block_rect(Rect2(at.x-1.8,g.z-1.7,3.6,3.4))
+		world.wall(Rect2(at.x-1.8,g.z-1.7,3.6,3.4))
 		world.brazier(at+Vector3(side*.2,0,2.8),1.0,1.1)
 		hanging(world,"cloth_red",Vector3(at.x,2.6,g.z+1.85),4.4,0.0,Color(.44,.14,.10))
 		guard(world,Vector3(g.x+side*4.75,0,g.z+2.3),Vector3(-side*.5,0,1),.6+side*.2)

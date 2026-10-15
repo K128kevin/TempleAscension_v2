@@ -83,13 +83,13 @@ static func precinct(world) -> void:
 			var middle = from+side*bay*(i+.5)
 			var piece = world.place("wall",Vector3(middle,0,WALL_Z),Vector3(bay,6.4,1.4),material)
 			var coping = world.place("floor",Vector3(middle,6.4,WALL_Z),Vector3(bay+.05,.3,1.8),Kit.marble())
-			world.block_rect(Rect2(middle-bay*.5,WALL_Z-.7,bay,1.4))
+			world.wall(Rect2(middle-bay*.5,WALL_Z-.7,bay,1.4))
 			world.screen([piece,coping])
 	var towers: Array = []
 	for side in [-1.0,1.0]:
 		var tower = Vector3(x+side*7.6,0,WALL_Z)
 		towers.append(world.place("pillar_decorated",tower,Vector3(3.8,10.0,3.6),material))
-		world.block_rect(Rect2(tower.x-1.9,WALL_Z-1.8,3.8,3.6))
+		world.wall(Rect2(tower.x-1.9,WALL_Z-1.8,3.8,3.6))
 		towers.append(fire(world,tower+Vector3.UP*10.0,1.4,0.0))
 		towers.append(Town.hanging(world,"cloth_red",Vector3(tower.x,3.2,WALL_Z+1.86),5.2,0.0,Town.CRIMSON))
 		# Marble centurions stand guard outside, facing the town; and before
@@ -101,6 +101,38 @@ static func precinct(world) -> void:
 	towers.append(world.place("floor",Vector3(x,9.4,WALL_Z),Vector3(11.8,.25,1.8),gold))
 	world.screen(towers)
 	world.add_place("palace gate","gate",Vector3(x,0,WALL_Z),7.0)
+	grounds(world,material)
+
+# The same white wall round the rest of the hill's ground, east, north and
+# west, kept as the front is (never fallen, its coping whole), and a white
+# tower at each of its four corners.
+static func grounds(world, material: Material) -> void:
+	var west: float = world.HILL.x-world.HILL_REACH.x
+	var east: float = world.HILL.x+world.HILL_REACH.x
+	var north: float = world.HILL_REACH.y
+	var south: float = world.WALL_NORTH
+	var corners = [Vector3(east,0,south),Vector3(east,0,north),Vector3(west,0,north),Vector3(west,0,south)]
+	for i in corners.size()-1:
+		var a: Vector3 = corners[i]
+		var b: Vector3 = corners[i+1]
+		var along: Vector3 = (b-a).normalized()
+		var across_x = absf(along.x) > .5
+		var yaw: float = 0.0 if across_x else -PI/2
+		# (From tower to tower.)
+		var length: float = a.distance_to(b)-CORNER_TOWER*2.0
+		var bays: int = maxi(1,roundi(length/4.0))
+		var bay: float = length/bays
+		for k in bays:
+			var middle: Vector3 = a+along*(CORNER_TOWER+bay*(k+.5))
+			var piece = world.place("wall",middle,Vector3(bay,6.4,1.4),material,yaw)
+			var coping = world.place("floor",middle+Vector3.UP*6.4,Vector3(bay+.05,.3,1.8) if across_x else Vector3(1.8,.3,bay+.05),Kit.marble())
+			world.wall(Rect2(middle.x-(bay*.5 if across_x else .7),middle.z-(.7 if across_x else bay*.5),bay if across_x else 1.4,1.4 if across_x else bay))
+			world.screen([piece,coping])
+	for at in corners:
+		var tower = world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material)
+		var cap = world.place("floor",at+Vector3.UP*8.6,Vector3(3.9,.3,3.7),Kit.marble())
+		world.wall(Rect2(at.x-1.8,at.z-1.7,3.6,3.4))
+		world.screen([tower,cap])
 
 # Up the slope the road runs between marble lions and fires.
 static func approach(world) -> void:
