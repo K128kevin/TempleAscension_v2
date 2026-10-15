@@ -43,7 +43,8 @@ above the torch cup. Particles stop simulating while a torch is out of sight. No
 image asset or mesh geometry is added. Light range and the nearby-shadow budget
 are preserved.
 Hallways are five tiles wide and rooms 8–15 tiles across. Torches are spaced
-along the walls, then added wherever the estimated floor light (the omni falloff
+along the walls (in the temple about half as many as in the dungeons, eight metres
+apart, each reaching 16 m with a gentler falloff), then added wherever the estimated floor light (the omni falloff
 and floor incidence of every torch) would fall below a dim but readable level.
 Every torch is mounted on a wall, its fixture turned so the back plate lies flat
 against it; there are no freestanding torches. Room centers beyond a wall torch's
@@ -1036,7 +1037,11 @@ external output folder. The icon reuses the generated seal.
    > Use case: stylized-concept. Asset type: landscape background matte for an ancient temple game, viewed from an elevated outdoor terrace. Input image: reference for the landscape, architectural motifs and composition, not an edit target. Generate a new wide 3:2 landscape inspired by this reference: an expansive desert valley far below, scattered ancient classical temple ruins and worn colonnades on rocky outcrops, rolling dunes, distant rugged mountains, a winding river catching moonlight, sparse dark vegetation, a full moon and scattered clouds in a starry night sky. Keep the elevated panorama and convincing sense of great distance. Make the entire scene substantially darker than the reference: deep near-black navy and charcoal shadows, very subdued sand-brown tones, only a dim cool silver-blue moonlight glow along dune ridges, ruined columns and thin river reflections. This is late night, not sunset; no golden daylight, no brightly lit sand, no artificial illumination. The moon may glow softly but must not blow out or dominate. Compose useful landscape details across both sides because the game's terrace covers part of the image. Place the horizon in the upper fifth and retain a narrow strip of sky. Polished atmospheric painterly game art, believable scale and depth, restrained fine detail. No foreground terrace, player, characters, interface, text, borders or watermark. Output 2304x1536 landscape if possible.
 
 8. `assets/textures/desert_moonlit_ruins_v2.png`
-   Active fourth- and fifth-floor backdrop, edited from image 7 with the built-in
+   No longer used (2026-10-14): the terraces and summit now look down on real
+   ground (`scripts/temple_desert.gd`), three storeys below, in the outdoor
+   sand shader and strewn with the desert's own scanned grass, stones, shrubs,
+   agaves, boulders and dead trees by moonlight. Formerly the
+   fourth- and fifth-floor backdrop, edited from image 7 with the built-in
    imagegen tool. The viewpoint looks more steeply down from roughly four or five
    stories above nearby dunes and ruins. Larger foreground stones, column tops
    and exposed foundations establish the height, with the distant horizon at

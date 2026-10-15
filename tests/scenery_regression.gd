@@ -73,7 +73,7 @@ func test():
 				if index==1 and world.layout.court.grow(1).has_point(cell): continue
 				var lit = 0.0
 				for at in world.torch_lights: lit += world.torch_light(at,world.layout.to_world(cell))
-				if lit<world.LIT_LEVEL and not world.ambient_only.has(cell): dark += 1
+				if lit<world.lit_level and not world.ambient_only.has(cell): dark += 1
 			check(dark==0,"Wall torches light every tile they can reach (%d)" % (index+1))
 			var near_wall = 0
 			for cell in world.ambient_only:
@@ -153,7 +153,7 @@ func test():
 			await frames()
 			check(not is_instance_valid(loop),"Floor changes release the fountain audio player")
 		if index==2:
-			check(world.desert_backdrop.global_position.y< -10 and world.desert_backdrop.texture.get_width()>=1024,"Generated desert is placed far below the terrace")
+			check(is_equal_approx(world.desert_backdrop.global_position.y,-24.0) and world.desert_backdrop.get_node("Sand") != null and world.desert_backdrop.find_children("*","MultiMeshInstance3D",false,false).size()>=6,"The desert floor lies three storeys below the terrace, strewn with grass, stones and shrubs")
 			check(not world.desert_backdrop.visible and not world.terrace_moonlight.visible,"Interior spawn hides panorama and moonlight on floor %d" % (index+1))
 			var interior_batch = false
 			var terrace_batch = false
@@ -191,17 +191,19 @@ func test():
 					world.zoom = zoom
 					world.follow(game.player.position,1)
 					var visible_size = root.get_visible_rect().size
-					var height: float = world.camera.size
-					var width: float = height*visible_size.x/visible_size.y
-					var image_size: Vector2 = world.desert_backdrop.texture.get_size()*world.desert_backdrop.pixel_size
-					var image_center: Vector2 = Vector2(world.desert_backdrop.position.x,world.desert_backdrop.position.y)
-					check(Rect2(image_center-image_size*.5,image_size).encloses(Rect2(-Vector2(width,height)*.5,Vector2(width,height))),"Panorama covers terrace view at zoom %s / %s" % [zoom,viewport_size])
+					# Every corner of the view looks down onto the desert floor.
+					var covered = true
+					var sand_reach: float = preload("res://scripts/temple_desert.gd").REACH
+					for corner in [Vector2.ZERO,Vector2(visible_size.x,0),Vector2(0,visible_size.y),visible_size]:
+						var hit = Plane(Vector3.UP,world.desert_backdrop.global_position.y).intersects_ray(world.camera.project_ray_origin(corner),world.camera.project_ray_normal(corner))
+						covered = covered and hit != null and absf(hit.x-world.desert_backdrop.global_position.x)<sand_reach and absf(hit.z-world.desert_backdrop.global_position.z)<sand_reach and world.camera.project_ray_origin(corner).distance_to(hit)<world.camera.far
+					check(covered,"The desert floor fills the terrace view at zoom %s / %s" % [zoom,viewport_size])
 			root.size = Vector2i(1280,800)
 			world.zoom = 24
 			var north: Rect2i = world.layout.terrace[1]
 			game.player.position = world.layout.to_world(world.layout.center(north))
 			world.follow(game.player.position,1)
-			check(world.desert_backdrop.visible,"Panorama also appears on north gallery, floor %d" % (index+1))
+			check(world.desert_backdrop.visible,"The desert floor also shows from the north gallery, floor %d" % (index+1))
 			await capture("desert-north-terrace-%d" % (index+1))
 			game.player.position = world.spawn
 			world.follow(game.player.position,1)

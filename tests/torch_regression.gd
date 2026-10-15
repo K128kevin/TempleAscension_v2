@@ -71,7 +71,7 @@ func test():
 	check(first.flame.process_mode==Node.PROCESS_MODE_DISABLED,"Hidden torches stop simulating their flames")
 	first.visible=true
 	check(first.flame.process_mode==Node.PROCESS_MODE_INHERIT,"Visible torches resume their flames")
-	check(first.light.omni_range==9.0 and first.light.shadow_caster_mask==2,"Flicker preserves the existing light reach and shadow mask")
+	check(first.light.omni_range==world.torch_range and world.torch_range==world.TEMPLE_TORCH_RANGE and first.light.shadow_caster_mask==2,"Flicker preserves the existing light reach and shadow mask")
 	if rendered:
 		fires.sort_custom(func(a,b): return a.position.distance_squared_to(world.spawn)<b.position.distance_squared_to(world.spawn))
 		var target = fires[0]

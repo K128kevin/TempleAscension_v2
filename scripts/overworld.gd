@@ -1,8 +1,10 @@
 extends Node3D
 ## The outdoor world the temple stands in: a town at the western end, the
 ## open desert, and the temple's front at the eastern end, on one continuous
-## map ringed by rock. X runs east and Z south. Game drives it through the
-## same interface as a temple floor (scripts/temple.gd).
+## map. X runs east and Z south. A river runs down the town's west side and
+## round the desert's south, and mountains close it in on the north and east;
+## rock rims the rest. Game drives it through the same interface as a temple
+## floor (scripts/temple.gd).
 ##
 ## Playable ground is mostly flat, with the palace hill and the camp dune.
 ## What stands there is raised to its height (`lift`), as are the hero and
@@ -16,6 +18,8 @@ const Town = preload("res://scripts/world_town.gd")
 const Palace = preload("res://scripts/world_palace.gd")
 const Front = preload("res://scripts/world_temple_front.gd")
 const Wilds = preload("res://scripts/world_wilds.gd")
+const Mountains = preload("res://scripts/world_mountains.gd")
+const River = preload("res://scripts/world_river.gd")
 const Townsfolk = preload("res://scripts/townsfolk.gd")
 const Watch = preload("res://scripts/town_watch.gd")
 const Daylight = preload("res://scripts/daylight.gd")
@@ -24,10 +28,10 @@ const GLOW_COLOUR = Front.GLOW
 # `level` of the outdoor world, where a temple floor has its index.
 const OUTDOORS = -2
 # The map's extent in metres.
-const WEST = -396
+const WEST = -452
 const EAST = 148
 const NORTH = -204
-const SOUTH = 300
+const SOUTH = 340
 const WIDTH = EAST-WEST
 const DEPTH = SOUTH-NORTH
 # The town's gate in its east wall, and the temple's door in its west front:
@@ -37,13 +41,11 @@ const TEMPLE_DOOR = Vector3(76,0,0)
 # The lost caravan, on the track in the middle of the desert.
 const CARAVAN = Vector3(-52,0,-15)
 # South of the town's wall, through the south gate at the end of an alley,
-# lies a second desert, apart from the one the track crosses: `SOUTH_REACH`
-# is how far it runs east and west of the dune's middle, and how far south.
-# A great dune stands in it and looks down on the town: its middle, its
-# half-size (east-west, north-south) and its height. (`SOUTH_GAP`: the
+# lies the desert a new character wakes in, open to the one the track
+# crosses. A great dune stands in it and looks down on the town: its middle,
+# its half-size (east-west, north-south) and its height. (`SOUTH_GAP`: the
 # alley's end, inside the gate.)
-const SOUTH_GAP = Vector3(-226,0,70)
-const SOUTH_REACH = Vector2(120,262)
+const SOUTH_GAP = Vector3(-226,0,100)
 const DUNE = Vector3(-262,0,175)
 const DUNE_RADII = Vector2(110,75)
 const DUNE_HEIGHT = 22.0
@@ -71,15 +73,33 @@ const HILL_HEIGHT = 5.5
 # middle, and this far north.
 const HILL_REACH = Vector2(58,-158)
 # The town is closed by a wall, not the rim's rocks (scripts/world_town.gd
-# town_wall): along its north and south edges, `WALL_SOUTH` either side of
-# the middle, its west end, and round the palace hill's ground. Within
-# `walled` no rim rock is raised: what lies beyond the wall is open sand,
-# and south of it the southern desert.
-const WALL_SOUTH = 78.0
-const WALL_WEST = -346.0
+# town_wall): along its north side at `WALL_NORTH` and its south side at
+# `WALL_SOUTH`, and round the palace hill's ground; on the west the river
+# bounds it. Within `walled` no rim rock is raised.
+const WALL_NORTH = -78.0
+const WALL_SOUTH = 108.0
 func walled(at: Vector3) -> bool:
-	return at.x < TOWN_GATE.x-2.0 and at.z < WALL_SOUTH+12.0
+	if at.x >= TOWN_GATE.x-2.0 or at.z >= WALL_SOUTH+12.0: return false
+	# (North of the town, west of the palace hill's ground, the river runs
+	# down between rocks.)
+	return at.z > WALL_NORTH-3.0 or at.x > HILL.x-HILL_REACH.x-3.0
 
+# The river (scripts/world_river.gd): its middle runs down the town's west
+# side at about RIVER_X, bends round at RIVER_BEND (the middle of the bend,
+# RIVER_TURN across), and runs east along the desert's south at about
+# RIVER_Z, into the mountains. It is RIVER_HALF*2 wide.
+const RIVER_X = -378.0
+const RIVER_BEND = Vector2(-336,232)
+const RIVER_TURN = 42.0
+const RIVER_Z = 274.0
+const RIVER_HALF = 7.0
+# The mountains' foot on the east, behind the temple and running down to the
+# river: `MOUNTAIN_EAST` its line behind the temple, from where it turns
+# south-west at `MOUNTAIN_TURN` (z) along `MOUNTAIN_SLANT` (metres west for
+# each metre south).
+const MOUNTAIN_EAST = 86.0
+const MOUNTAIN_TURN = 48.0
+const MOUNTAIN_SLANT = .56
 # How far the rocks reach beyond the edge of the open ground: past anything
 # the camera can see from inside.
 const RIM = 44.0
@@ -90,12 +110,17 @@ const LOW = 2 # Blocks movement only: water, low walls, furniture.
 var cells = PackedByteArray()
 # How far inside the open ground each cell is (negative: among the rocks).
 var margins = PackedFloat32Array()
+# How far each cell is from the river's middle (river_side).
+var river_sides = PackedFloat32Array()
 # The ground shader's control map, a byte per channel and cell.
 var paint = PackedByteArray()
 const PAVING = 0
 const TRACK = 1
 const SHADE = 2
 const WATER = 3
+# Which way the water flows at each cell, two bytes (east, south) from 0 to
+# 255 about 128 (still): the river's current (scripts/world_river.gd).
+var flow = PackedByteArray()
 var nav = AStarGrid2D.new()
 var noise = FastNoiseLite.new()
 var rng = RandomNumberGenerator.new()
@@ -185,12 +210,10 @@ var batches: Dictionary = {}
 const BATCH_SPAN = 28.0
 
 func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
-	# The world is the same for every character.
-	noise.seed = 20
-	noise.frequency = .01
-	rng.seed = 4177
+	seed_noise()
 	cells.resize(WIDTH*DEPTH)
 	margins.resize(WIDTH*DEPTH)
+	river_sides.resize(WIDTH*DEPTH)
 	paint.resize(WIDTH*DEPTH*4)
 	setup_sky()
 	camera = Camera3D.new()
@@ -208,6 +231,8 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 	Front.build(self)
 	Desert.build(self)
 	Wilds.build(self)
+	River.build(self)
+	Mountains.build(self)
 	flush_batches()
 	lay_ground()
 	nav.region = Rect2i(WEST,NORTH,WIDTH,DEPTH)
@@ -227,6 +252,12 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 	watch.setup(self)
 	fixtures = get_child_count()
 	follow(spawn,1)
+
+# The world is the same for every character.
+func seed_noise() -> void:
+	noise.seed = 20
+	noise.frequency = .01
+	rng.seed = 4177
 
 # The height of the ground at a point: zero everywhere but on the palace hill,
 # which rises smoothly over its slope to a level top, and on a floor above
@@ -380,33 +411,99 @@ func on_map(x: int, z: int) -> bool:
 func to_cell(p: Vector3) -> Vector2i:
 	return Vector2i(floori(p.x+.5),floori(p.z+.5))
 
-# Half the width of the open ground at `x`: the basin wanders in and out, and
-# closes in on the temple's front.
+# How far north of the track the open desert reaches at `x`: its edge
+# wanders in and out, and closes in on the temple's front. (At the town's
+# gate it runs straight, for the gate wall to stand on.)
 func half_width(x: float) -> float:
 	var half = 60.0+9.0*noise.get_noise_1d(x*1.3)+4.0*noise.get_noise_1d(x*5.0+4000.0)
-	# It opens out round the town, whose streets ring the arena, straight
-	# there (the town's wall stands on its edge).
-	half = lerpf(WALL_SOUTH,half,smoothstep(TOWN_GATE.x-22.0,TOWN_GATE.x+6.0,x))
+	half = lerpf(-WALL_NORTH,half,smoothstep(TOWN_GATE.x-22.0,TOWN_GATE.x+6.0,x))
 	return lerpf(half,46.0,smoothstep(TEMPLE_DOOR.x-46.0,TEMPLE_DOOR.x,x))
 
-# How far inside the open ground a point is; negative among the rim's rocks.
-func margin(x: float, z: float) -> float:
-	# (The town's own bounds run straight, for its wall to stand on.)
-	var town: bool = x < TOWN_GATE.x-2.0 and z < WALL_SOUTH+12.0
-	var west = -346.0+(0.0 if town else 5.0*noise.get_noise_1d(z*3.0+9000.0))
-	var east = TEMPLE_DOOR.x+5.0+2.5*noise.get_noise_1d(z*4.0+13000.0)
-	var basin = minf(half_width(x)-absf(z),minf(x-west,east-x))
+# The mountains' foot on the east at `z` (see MOUNTAIN_EAST): straight
+# behind the temple, turning in a broad curve to slant south-west.
+func east_edge(z: float) -> float:
+	var past = z-MOUNTAIN_TURN
+	var turned = (sqrt(past*past+900.0)+past)*.5
+	return MOUNTAIN_EAST-MOUNTAIN_SLANT*turned+3.0*noise.get_noise_1d(z*4.0+13000.0)
+
+# How far a point lies from the river's middle, signed: positive on the
+# town's and desert's side (east of it, then north), negative across it.
+func river_side(x: float, z: float) -> float:
+	# Down the town's side, wandering a little.
+	var down = x-river_x(z)
+	if z > RIVER_BEND.y: down = INF if x > RIVER_BEND.x else -INF
+	# Round the bend.
+	var round = RIVER_TURN-Vector2(x,z).distance_to(RIVER_BEND) if x <= RIVER_BEND.x and z >= RIVER_BEND.y else INF
+	# And along the desert's south.
+	var along = river_z(x)-z if x >= RIVER_BEND.x else INF
+	var best = down
+	for side in [round,along]:
+		if absf(side) < absf(best): best = side
+	return best
+
+# The way the river flows past a point near it: down the town's side,
+# round the bend and east.
+func river_flow(x: float, z: float) -> Vector2:
+	if z <= RIVER_BEND.y and (x < RIVER_BEND.x or absf(x-river_x(z)) < absf(river_z(x)-z)):
+		return Vector2(river_x(z+1.0)-river_x(z),1.0).normalized()
+	if x <= RIVER_BEND.x:
+		var out = Vector2(x,z)-RIVER_BEND
+		return Vector2(out.y,-out.x).normalized()
+	return Vector2(1.0,river_z(x+1.0)-river_z(x)).normalized()
+
+# (Its wandering eases off into the bend, to meet it.)
+func river_x(z: float) -> float:
+	# (Along the town, between its quays, it runs straighter.)
+	var calm = 1.0-.7*smoothstep(WALL_NORTH-50.0,WALL_NORTH-10.0,z)*(1.0-smoothstep(WALL_SOUTH+10.0,WALL_SOUTH+50.0,z))
+	return RIVER_X+(2.5*sin(z*.021)+1.5*sin(z*.057+1.3))*calm*(1.0-smoothstep(RIVER_BEND.y-60.0,RIVER_BEND.y,z))
+
+func river_z(x: float) -> float:
+	var run = x-RIVER_BEND.x
+	return RIVER_BEND.y+RIVER_TURN+(7.0*sin(run*.013)+2.0*sin(run*.041+.7))*smoothstep(0.0,50.0,run)
+
+# How far inside the open ground a point is; negative among the rim's rocks
+# and the mountains. (The river and what lies across it count as open: they
+# are kept from the hero as water, not rock: shape_ground.)
+func margin(x: float, z: float, side: float = NAN) -> float:
+	# The town, between its walls and from its gate to the river. (Its bounds
+	# run straight, for its wall to stand on.)
+	var town = minf(minf(z-WALL_NORTH,WALL_SOUTH-z),TOWN_GATE.x+2.0-x)
 	# North of the town the ground runs on, round the palace hill.
 	var round_hill = minf(HILL_REACH.x-absf(x-HILL.x),minf(z-HILL_REACH.y,-60.0-z))
-	# South of the town's wall the southern desert runs right up to it (the
-	# south gate opens straight onto the sand).
-	var south = minf(SOUTH_REACH.x+4.0*noise.get_noise_1d(z*4.0+29000.0)-absf(x-DUNE.x),minf(z-WALL_SOUTH-2.0,SOUTH_REACH.y+4.0*noise.get_noise_1d(x*4.0+33000.0)-z))
-	# (The way through the south gate joins the two.)
-	var gateway = minf(9.0-absf(x-SOUTH_GAP.x),minf(z-SOUTH_GAP.z,WALL_SOUTH+8.0-z))
-	south = maxf(south,gateway)
-	# And a defile in the northern rocks leads to the cave's mouth.
+	# The desert, from the track's north edge (or, west of the town's gate,
+	# the town's south wall) down to the river, and west of the mountains.
+	var north = z+half_width(x) if x > TOWN_GATE.x else z-WALL_SOUTH-2.0
+	var desert = minf(north,(east_edge(z)-x)*.87)
+	# A defile in the northern mountains leads to the cave's mouth.
 	var defile = minf(7.5+1.5*noise.get_noise_1d(z*6.0+37000.0)-absf(x-CAVE.x),minf(z-CAVE.z,-40.0-z))
-	return maxf(maxf(basin,round_hill),maxf(south,defile))
+	var open = maxf(maxf(town,round_hill),maxf(desert,defile))
+	# The river, and its far bank: north of the town it runs between rocks.
+	if is_nan(side): side = river_side(x,z)
+	if z < WALL_NORTH-4.0: open = maxf(open,RIVER_HALF+4.0-absf(side))
+	elif side < RIVER_HALF+4.0: open = maxf(open,minf(RIVER_HALF+4.0-side,(east_edge(z)-x)*.87))
+	return open
+
+# How far into the mountains a point lies (negative short of their foot). Their
+# foot keeps a little way back from the open ground's edge; they stand back
+# from the temple, the cave's defile and the river's course through them.
+func mountain_depth(x: float, z: float) -> float:
+	# North of the track; at the town's end they turn away north.
+	var front = lerpf(-420.0,-half_width(x)-3.0,smoothstep(-235.0,-145.0,x))
+	var north = front-z
+	var east = (x-east_edge(z))*.87-3.0
+	var k = 14.0
+	var h = clampf(.5+.5*(east-north)/k,0.0,1.0)
+	var depth = lerpf(north,east,h)+k*h*(1.0-h)
+	# The temple stands in a cove of them.
+	var temple = Vector2(maxf(maxf(TEMPLE_DOOR.x-x,x-TEMPLE_DOOR.x-66.0),0.0),maxf(absf(z)-36.0,0.0)).length()
+	depth = minf(depth,temple-9.0)
+	# The defile's west wall (on the camera's side) climbs gently.
+	if z > CAVE.z-6.0:
+		var across = x-CAVE.x
+		depth = minf(depth,(across-10.0)*1.1 if across > 0.0 else (-across-10.0)*.35)
+	# The river's gorge.
+	depth = minf(depth,(absf(river_side(x,z))-RIVER_HALF-3.0)*1.3)
+	return depth
 
 func margin_at(p: Vector3) -> float:
 	var c = to_cell(p)
@@ -418,14 +515,20 @@ func track_z(x: float) -> float:
 	var free = smoothstep(TOWN_GATE.x+4.0,TOWN_GATE.x+70.0,x)*(1.0-smoothstep(TEMPLE_DOOR.x-80.0,TEMPLE_DOOR.x-22.0,x))
 	return free*(11.0*sin(x*.021)+5.0*sin(x*.047+1.1))
 
-# The basin's outline, the track across it, and the shade under its rim.
+# The open ground's outline, the river's course, the track across the
+# desert, and the shade under the rim.
 func shape_ground() -> void:
 	for z in range(NORTH,SOUTH):
 		for x in range(WEST,EAST):
-			var m = margin(x,z)
+			var side = river_side(x,z)
+			var m = margin(x,z,side)
 			var i = index(x,z)
 			margins[i] = m
+			river_sides[i] = side
 			if m<1.0: cells[i] = SOLID
+			# The river, and all across it, is out of reach; north of the
+			# town, between the rocks, its banks are too.
+			elif side < RIVER_HALF-.4 or (z < WALL_NORTH-1.0 and side < RIVER_HALF+5.0): cells[i] = LOW
 			paint[i*4+SHADE] = int(clampf(1.0-m/4.0,0.0,1.0)*150.0) if m>0 else 150
 	for x in range(int(TOWN_GATE.x)-2,int(TEMPLE_DOOR.x)+1):
 		var middle = track_z(x)
@@ -463,6 +566,7 @@ func lay_ground() -> void:
 	material.set_shader_parameter("control",ImageTexture.create_from_image(image))
 	material.set_shader_parameter("map_origin",Vector2(WEST,NORTH))
 	material.set_shader_parameter("map_size",Vector2(WIDTH,DEPTH))
+	if not flow.is_empty(): material.set_shader_parameter("flow_map",ImageTexture.create_from_image(Image.create_from_data(WIDTH,DEPTH,false,Image.FORMAT_RG8,flow)))
 	material.set_shader_parameter("stone",load("res://assets/textures/limestone.png"))
 	for sheet in ["sand_fine","sand_fine_normal","sand_gravel","sand_gravel_normal"]:
 		material.set_shader_parameter(sheet,load("res://assets/textures/%s.jpg" % sheet))

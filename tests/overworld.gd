@@ -261,7 +261,10 @@ func town_checks():
 			var across = (p.x-lane.get_center().x) if along_z else (p.y-lane.get_center().y)
 			var along = (p.y-lane.get_center().y) if along_z else (p.x-lane.get_center().x)
 			if absf(along)<=(lane.size.y if along_z else lane.size.x)*.5+4.0 and absf(across)<16.0: sides[1 if across>0 else -1] += 1
-		if sides[-1]>=2 and sides[1]>=2: lined += 1
+		# (The quay and the lanes inside the south wall, at the town's edge,
+		# have houses on their town side only.)
+		var edge = lane.position.x < -365.0 or lane.position.y > Overworld.WALL_SOUTH-8.0
+		if (sides[-1]>=2 or edge) and (sides[1]>=2 or edge) and sides[-1]+sides[1]>=2: lined += 1
 		var middle = Vector3(lane.get_center().x,0,lane.get_center().y)
 		var toward = Vector2(middle.x-Town.ARENA.x,middle.z-Town.ARENA.z).angle()
 		var on_ring = Town.ARENA+Vector3(cos(toward)*ring.x,0,sin(toward)*ring.y)
@@ -339,7 +342,30 @@ func test():
 	var camp: Dictionary = world.place_at(Overworld.START)
 	check(not camp.is_empty() and camp.kind=="camp","The camp is a place on the dune's crown")
 	var down = world.path(Overworld.START,gate+Vector3(-6,0,0))
-	check(not down.is_empty() and world.region(Overworld.START)=="desert" and world.margin_at(Vector3(Overworld.DUNE.x,0,Town.ARENA.z+Town.ARENA_RADII.y+Town.RING+26.0))<0.0,"The southern desert is walled off from the town by rock, but for the way through at an alley's end")
+	check(not down.is_empty() and world.region(Overworld.START)=="desert" and world.margin_at(Vector3(Overworld.DUNE.x,0,Overworld.WALL_SOUTH-2.0))>0.0 and world.margin_at(Vector3(Overworld.DUNE.x,0,Overworld.WALL_SOUTH+1.0))<0.0,"The town's south wall stands between it and the dune's desert, but for the gate at an alley's end")
+	# The dune's desert lies open to the one the track crosses: no rock
+	# between them, and the way from the camp to the caravan goes round the
+	# town, not through it.
+	var across = world.path(Overworld.START,Overworld.CARAVAN)
+	check(not across.is_empty() and Array(across).all(func(p): return not (p.x<gate.x and p.z<Overworld.WALL_SOUTH)) and world.margin_at(Vector3(-120,0,120))>10.0,"The dune's desert is open to the track's, round the town")
+	# A river runs the length of the town's west side and round the desert's
+	# south into the mountains, and no one crosses it.
+	var water = 0
+	for z in range(int(Overworld.WALL_NORTH)+2,int(Overworld.WALL_SOUTH)-2):
+		var x: float = world.river_x(z)
+		if world.cells[world.index(roundi(x),z)]==Overworld.LOW and world.paint[world.index(roundi(x),z)*4+Overworld.WATER]>200 and world.fits(Vector3(x+Overworld.RIVER_HALF+2.5,0,z)): water += 1
+	var south_water = world.cells[world.index(-200,roundi(world.river_z(-200)))]==Overworld.LOW and world.fits(Vector3(-200,0,world.river_z(-200)-Overworld.RIVER_HALF-2.5))
+	check(water==int(Overworld.WALL_SOUTH-Overworld.WALL_NORTH)-4 and south_water and world.mountain_depth(40,world.river_z(40)+20.0)>0.0,"A river is the town's west border, and runs round the desert's south into the mountains")
+	var mountains: Node3D = world.get_node_or_null("Mountains")
+	var baked = mountains != null and mountains.get_child_count()>50
+	if baked:
+		# The baked tiles still match their shape.
+		var noise = preload("res://scripts/world_mountains.gd").noises()
+		for tile in mountains.get_children().slice(0,mountains.get_child_count(),17):
+			var vertices: PackedVector3Array = tile.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+			var v: Vector3 = vertices[vertices.size()/2]
+			baked = baked and absf(v.y-preload("res://scripts/world_mountains.gd").height(world,noise[0],noise[1],v.x,v.z))<.01
+	check(baked and world.mountain_depth(0,-120)>30.0 and world.mountain_depth(Overworld.TEMPLE_DOOR.x+90.0,0)>10.0 and world.mountain_depth(Overworld.TEMPLE_DOOR.x+30.0,0)<0.0,"Mountains close the desert in on the north and east, round the temple (rebake with tools/bake_mountains.gd if their shape changed)")
 	game.route = PackedVector3Array([Overworld.START+Vector3(0,0,3)])
 	play(func(): return not game.player.visual.resting,2.0)
 	check(not game.player.visual.resting and not game.run.has("resting"),"He gets up the moment he moves")
@@ -381,7 +407,7 @@ func test():
 			if world.cells[world.index(x,z)]==Overworld.OPEN: open_cells += 1
 	check(seen.size()>=open_cells-40,"The open ground is one connected basin (%d of %d cells)" % [seen.size(),open_cells])
 	var blocked_all_round = true
-	for probe in [Vector3(0,0,-200),Vector3(0,0,200),Vector3(-400,0,0),Vector3(300,0,30),Vector3(120,0,-150),Vector3(-250,0,160)]:
+	for probe in [Vector3(0,0,-200),Vector3(80,0,260),Vector3(-400,0,0),Vector3(300,0,30),Vector3(120,0,-150),Vector3(-250,0,420),Vector3(-520,0,200)]:
 		var reached: Vector3 = world.move(Overworld.CARAVAN,probe-Overworld.CARAVAN)
 		blocked_all_round = blocked_all_round and world.margin_at(reached)>=.5 and reached.distance_to(probe)>20.0
 	check(blocked_all_round,"Running at the rim from the start stops at it on every side")
@@ -412,20 +438,20 @@ func test():
 					for stone in stones.get(square+Vector2i(dx,dz),[]):
 						if stone.distance_to(Vector2(x,z))<9.0: covered = true
 			if not covered: bare += 1
-	check(edges>200 and bare==0,"Rock stands along the whole edge of the open ground (%d of %d stretches bare)" % [bare,edges])
+	check(edges>150 and bare==0,"Rock stands along the whole edge of the open ground (%d of %d stretches bare)" % [bare,edges])
 	# The town is walled instead: no rim rock stands round it, wall runs
 	# along its straight edges and round the palace hill's ground, towered at
 	# the corners, and the hero is stopped at the wall on every side.
 	var town_rocks: int = 0
 	for at in world.rim_rocks: if world.walled(at): town_rocks += 1
 	var walls: Array = world.find_children("*","Node3D",true,false).filter(func(n): return n.has_meta("model") and n.get_meta("model") == "wall") if world.get_child_count() > 0 else []
-	check(town_rocks==0 and world.walled(Vector3(-300,0,-Overworld.WALL_SOUTH)) and world.walled(Vector3(Overworld.WALL_WEST,0,0)) and not world.walled(Vector3(-100,0,-60)) and not world.walled(Overworld.START),"No rim rock stands round the town, which is walled (%d rocks in its ring)" % town_rocks)
+	check(town_rocks==0 and world.walled(Vector3(-300,0,Overworld.WALL_NORTH)) and world.walled(Vector3(-360,0,0)) and not world.walled(Vector3(-100,0,-60)) and not world.walled(Overworld.START),"No rim rock stands round the town, which is walled (%d rocks in its ring)" % town_rocks)
 	var stopped = true
-	for probe in [Vector3(Overworld.WALL_WEST-30.0,0,0),Vector3(Town.ARENA.x,0,-Overworld.WALL_SOUTH-30.0),Vector3(Town.ARENA.x-60.0,0,Overworld.WALL_SOUTH+30.0),Vector3(Overworld.HILL.x,0,Overworld.HILL_REACH.y-30.0)]:
+	for probe in [Vector3(Overworld.RIVER_X-30.0,0,0),Vector3(Town.ARENA.x,0,Overworld.WALL_NORTH-30.0),Vector3(Town.ARENA.x-60.0,0,Overworld.WALL_SOUTH+30.0),Vector3(Overworld.HILL.x,0,Overworld.HILL_REACH.y-30.0)]:
 		var reached: Vector3 = world.move(Town.ARENA+Vector3(0,0,Town.ARENA_RADII.y+Town.RING*.5),probe-Town.ARENA)
 		stopped = stopped and reached.distance_to(probe)>25.0 and world.margin_at(reached)>=-.5
 	check(stopped,"The hero is stopped at the town's wall on every side")
-	check(world.margin_at(Vector3(-330,0,-Overworld.WALL_SOUTH+2.0))>0.0 and world.margin_at(Vector3(-330,0,-Overworld.WALL_SOUTH-2.0))<0.0 and world.margin_at(Vector3(Overworld.WALL_WEST+2.0,0,0))>0.0 and world.margin_at(Vector3(Overworld.WALL_WEST-2.0,0,0))<0.0,"The town's edges run straight along its wall")
+	check(world.margin_at(Vector3(-330,0,Overworld.WALL_NORTH+2.0))>0.0 and world.margin_at(Vector3(-330,0,Overworld.WALL_NORTH-2.0))<0.0 and world.margin_at(Vector3(-330,0,Overworld.WALL_SOUTH-2.0))>0.0 and world.margin_at(Vector3(-330,0,Overworld.WALL_SOUTH+1.0))<0.0,"The town's edges run straight along its wall")
 
 	# The town: an inn, two shops, houses and the arena, west of the gate.
 	var kinds = {}
@@ -466,7 +492,8 @@ func test():
 		else: sides["south" if offset.z>0 else "north"] += 1
 	var middle_of_town = (low+high)*.5
 	check(sides.north>=2 and sides.south>=2 and sides.east>=2 and sides.west>=2 and clear_of_arena,"Buildings stand on every side of the arena %s" % [sides])
-	check(absf(middle_of_town.x-Town.ARENA.x)<12.0 and absf(middle_of_town.z-Town.ARENA.z)<12.0,"The arena is at the centre of the town")
+	# (Since the town grew out west to the river and south, a little off it.)
+	check(absf(middle_of_town.x-Town.ARENA.x)<24.0 and absf(middle_of_town.z-Town.ARENA.z)<20.0,"The arena is near the centre of the town")
 	# A street runs all the way round it, and each of its four gates leads in.
 	var lap = true
 	var reach: Vector2 = Town.ARENA_RADII+Vector2(Town.RING*.5,Town.RING*.5)
@@ -776,7 +803,7 @@ func test():
 	var reached = false
 	var hour = Daylight.MORNING+400.0
 	var shopping = 0.0
-	while shopping < 300.0 and not reached:
+	while shopping < 600.0 and not reached:
 		shopping += .1
 		hour += .1
 		world.set_time(hour)

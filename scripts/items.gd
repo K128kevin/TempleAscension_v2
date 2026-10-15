@@ -112,10 +112,10 @@ const BASES = {
 
 	# --- Common: what drops, and what the prefixes and suffixes are put on.
 	# Light armor.
-	"silk_gloves":{"name":"Silk Gloves","rarity":"common","slot":"hands","weight":"light","armor":5.0,"bonus":{"intelligence":2},"look":{"tint":Color(.36,.14,.5)}},
-	"silk_robe":{"name":"Silk Robe","rarity":"common","slot":"chest","weight":"light","armor":8.0,"bonus":{"intelligence":3},"look":{"tint":Color(.2,.05,.3)}},
-	"silk_pants":{"name":"Silk Pants","rarity":"common","slot":"legs","weight":"light","armor":8.0,"bonus":{"intelligence":2},"look":{"tint":Color(.18,.05,.27)}},
-	"silk_hood":{"name":"Silk Hood","rarity":"common","slot":"head","weight":"light","armor":5.0,"bonus":{"willpower":2},"look":{"tint":Color(.22,.06,.33)}},
+	"silk_gloves":{"name":"Silk Gloves","rarity":"common","slot":"hands","weight":"light","armor":5.0,"bonus":{"intelligence":2},"look":{"tint":Color(.6,.07,.06)}},
+	"silk_robe":{"name":"Silk Robe","rarity":"common","slot":"chest","weight":"light","armor":8.0,"bonus":{"intelligence":3},"look":{"tint":Color(.3,.04,.04)}},
+	"silk_pants":{"name":"Silk Pants","rarity":"common","slot":"legs","weight":"light","armor":8.0,"bonus":{"intelligence":2},"look":{"tint":Color(.42,.05,.045)}},
+	"silk_hood":{"name":"Silk Hood","rarity":"common","slot":"head","weight":"light","armor":5.0,"bonus":{"willpower":2},"look":{"tint":Color(.33,.05,.045)}},
 	"wizard_hat":{"name":"Wizard Hat","rarity":"common","slot":"head","weight":"light","armor":4.0,"bonus":{"intelligence":2},"look":{"mesh":"wizard_hat","tint":Color(.12,.13,.2)}},
 	"sandals":{"name":"Sandals","rarity":"common","slot":"feet","weight":"light","armor":5.0},
 	# Medium armor.

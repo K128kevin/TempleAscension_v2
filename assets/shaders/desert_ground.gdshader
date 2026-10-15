@@ -34,6 +34,9 @@ uniform vec3 paving_tint : source_color = vec3(.74,.68,.60);
 // out each of red, green and blue from the light through it, a metre's worth.
 uniform vec3 water_deep : source_color = vec3(.14,.33,.34);
 uniform vec3 absorption = vec3(.95,.42,.40);
+// Which way the water flows (the river's current), east and south about .5:
+// its ripples are carried along it.
+uniform sampler2D flow_map : filter_linear, repeat_disable;
 // The sky the water reflects (scripts/overworld.gd set_time).
 uniform vec3 sky_colour = vec3(.62,.70,.82);
 varying vec3 world;
@@ -80,6 +83,20 @@ float ripples(vec2 q) {
 	return value_noise(q*1.15+wind*TIME*.42)*.55
 		+value_noise(vec2(q.x*.6-q.y*.8,q.x*.8+q.y*.6)*2.3-wind.yx*TIME*.63)*.3
 		+value_noise(q*6.1+vec2(TIME*.9,-TIME*.7))*.15;
+}
+
+// The surface of flowing water: the wind's ripples carried downstream, read
+// at two phases half a cycle apart and blended, so they never stretch out.
+float current(vec2 q, vec2 flow) {
+	float speed = length(flow);
+	if (speed < .05) return ripples(q);
+	float cycle = TIME*.35;
+	float a = fract(cycle);
+	float b = fract(cycle+.5);
+	vec2 along = flow*2.6;
+	float one = ripples(q-along*a);
+	float two = ripples(q-along*b+vec2(13.7,5.1));
+	return mix(one,two,abs(2.0*a-1.0));
 }
 
 void vertex() {
@@ -147,8 +164,9 @@ void fragment() {
 		// The surface, tilted by how its ripples rise across it; rougher in
 		// the gusts that cross it.
 		float d = .07;
-		float h0 = ripples(p);
-		vec2 rise = vec2(ripples(p+vec2(d,0.0))-h0,ripples(p+vec2(0.0,d))-h0)/d;
+		vec2 flow = texture(flow_map,(p-map_origin+.5)/map_size).rg*2.0-1.0;
+		float h0 = current(p,flow);
+		vec2 rise = vec2(current(p+vec2(d,0.0),flow)-h0,current(p+vec2(0.0,d),flow)-h0)/d;
 		float rough_water = .35+.65*smoothstep(.2,.8,value_noise(p*.21+vec2(TIME*.05,0.0)));
 		surface = normalize(vec3(-rise.x*.09*rough_water,1.0,-rise.y*.09*rough_water));
 		// The bed through the water, shifted a little by the ripples

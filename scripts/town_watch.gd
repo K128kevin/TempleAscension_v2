@@ -240,7 +240,7 @@ func arrive(patrol: Dictionary) -> void:
 # over the town and the palace's grounds (GROUND), but never through the
 # arena (its oval, ARENA_MARGIN out past its outer wall), which they walk
 # round.
-const GROUND = Rect2i(-350,-125,190,220)
+const GROUND = Rect2i(-376,-125,196,240)
 const ARENA_MARGIN = 1.04
 var grid = AStarGrid2D.new()
 func lay_grid() -> void:

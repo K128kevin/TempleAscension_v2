@@ -1,7 +1,7 @@
 extends RefCounted
 ## The desert of the outdoor world (scripts/overworld.gd): the rock rim that
-## walls the whole basin in, and what lies on the sand between the town and
-## the temple.
+## edges the open ground (piled at the mountains' foot), and what lies on the
+## sand between the town and the temple and south to the river.
 const Kit = preload("res://scripts/world_art.gd")
 # Scanned desert boulders, and a twenty-metre run of scanned cliff.
 const ROCKS = ["boulder_a","boulder_b","boulder_c","boulder_d"]
@@ -36,6 +36,9 @@ static func rim(world) -> void:
 			if depth<-.3 or depth>world.RIM: continue
 			# (The town is walled, not rimmed with rock.)
 			if world.walled(at): continue
+			# Against the mountains only their foot is heaped with rock.
+			var mountain: float = world.mountain_depth(at.x,at.z)
+			if mountain > 6.0: continue
 			var reserved = false
 			for area in world.keep_clear:
 				if area.grow(5.0).has_point(Vector2(at.x,at.z)): reserved = true
@@ -56,6 +59,7 @@ static func rim(world) -> void:
 				height = lerpf(6.5,18.0,clampf(depth/16.0,0,1))*rng.randf_range(.75,1.25)
 			# Bigger rocks stand further apart.
 			if rng.randf()>step*step/(width*width*.42): continue
+			if mountain > -6.0: height = minf(height,9.0)
 			# A rock at the very edge is pushed back until it only just overhangs.
 			var short = width*.4-depth
 			if short>0: at -= Vector3(inward.x,0,inward.y)*short
@@ -96,9 +100,9 @@ static func clear_site(world, at: Vector3, radius: float) -> bool:
 static func outcrops(world) -> void:
 	var rng: RandomNumberGenerator = world.rng
 	var made = 0
-	for attempt in 400:
-		if made>=11: break
-		var at = Vector3(rng.randf_range(world.TOWN_GATE.x+25.0,world.TEMPLE_DOOR.x-60.0),0,rng.randf_range(-60.0,60.0))
+	for attempt in 900:
+		if made>=22: break
+		var at = Vector3(rng.randf_range(world.TOWN_GATE.x+25.0,world.TEMPLE_DOOR.x-60.0),0,rng.randf_range(-60.0,world.RIVER_Z-20.0))
 		if not clear_site(world,at,7.0): continue
 		made += 1
 		world.add_place("outcrop","outcrop",at,7.0)
@@ -220,13 +224,16 @@ static func waymarks(world) -> void:
 				world.block_disc(spot,.5)
 		x += 46.0
 
-# Dry grass, shrubs, agaves, loose stones and a few dead trees over the open sand.
+# Dry grass, shrubs, agaves, loose stones and a few dead trees over the open
+# sand, from the town's gate to the temple and south to the river (the
+# dune's own desert, south of the town, has its own: scripts/world_wilds.gd).
 static func scatter(world) -> void:
 	var rng: RandomNumberGenerator = world.rng
 	var noise: FastNoiseLite = world.noise
 	var leaves = Kit.shared("Leaves")
-	for i in 3700:
-		var at = Vector3(rng.randf_range(world.TOWN_GATE.x+3.0,world.TEMPLE_DOOR.x-6.0),0,rng.randf_range(-74.0,74.0))
+	for i in 13000:
+		var at = Vector3(rng.randf_range(world.TOWN_GATE.x+3.0,world.TEMPLE_DOOR.x-6.0),0,rng.randf_range(-74.0,world.RIVER_Z+8.0))
+		if at.x < world.DUNE.x+64.0 and at.z > world.WALL_SOUTH: continue
 		var c = world.to_cell(at)
 		var cell = world.index(c.x,c.y)
 		if world.cells[cell] != world.OPEN or world.margins[cell]<1.5: continue

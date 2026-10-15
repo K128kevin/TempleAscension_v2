@@ -197,7 +197,7 @@ var rng = RandomNumberGenerator.new()
 # The streets the townspeople keep to, as a grid of their own: the world's
 # open ground in the town, less the arena, the palace hill and the smithy.
 var grid = AStarGrid2D.new()
-var region = Rect2i(-346,-90,166,170)
+var region = Rect2i(-372,-90,192,200)
 var haunts: Array[Dictionary] = []
 var inn = Rect2()
 var seats: Array[Dictionary] = []

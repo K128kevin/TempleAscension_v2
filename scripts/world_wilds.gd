@@ -1,8 +1,8 @@
 extends RefCounted
 ## The wild places of the outdoor world (scripts/overworld.gd) that lie off
 ## the track: the desert south of the town, with the great dune and the camp
-## a new character wakes at, and the mouth of the bandits' cave in the
-## northern rocks.
+## a new character wakes at, and the mouth of the bandits' cave at the
+## mountains' foot.
 const Art = preload("res://scripts/assets.gd")
 const Kit = preload("res://scripts/world_art.gd")
 const Desert = preload("res://scripts/world_desert.gd")
@@ -18,15 +18,15 @@ static func south_desert(world) -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 9133
 	var gap: Vector3 = world.SOUTH_GAP
-	var foot = Vector3(world.DUNE.x+14.0,0,world.DUNE.z-world.DUNE_RADII.y-2.0)
+	var foot = Vector3(world.DUNE.x+14.0,0,world.WALL_SOUTH+22.0)
 	for i in 60:
 		var t = i/59.0
-		var at = Vector3(gap.x,0,gap.z+4.0).lerp(Vector3(gap.x,0,100.0),minf(t*2.0,1.0)).lerp(foot,maxf(t*2.0-1.0,0.0))
+		var at = Vector3(gap.x,0,gap.z+4.0).lerp(Vector3(gap.x,0,world.WALL_SOUTH+8.0),minf(t*2.0,1.0)).lerp(foot,maxf(t*2.0-1.0,0.0))
 		world.dab_disc(world.TRACK,at+Vector3(sin(t*9.0)*1.2,0,0),1.6,2.0,.7*(1.0-t*.6))
 	world.add_place("southern desert","desert",world.DUNE,world.DUNE_RADII.x)
 	var leaves = Kit.shared("Leaves")
 	for i in 900:
-		var at = Vector3(world.DUNE.x+rng.randf_range(-62.0,62.0),0,rng.randf_range(world.WALL_SOUTH+14.0,world.SOUTH_REACH.y+4.0))
+		var at = Vector3(world.DUNE.x+rng.randf_range(-62.0,62.0),0,rng.randf_range(world.WALL_SOUTH+8.0,world.RIVER_Z-6.0))
 		var c = world.to_cell(at)
 		if not world.on_map(c.x,c.y): continue
 		var cell = world.index(c.x,c.y)

@@ -31,15 +31,31 @@ var braziers: Array[Node3D] = []
 # Room-center tiles no wall torch reaches; the ambient light keeps them readable.
 var ambient_only: Dictionary = {}
 var fountain
-var desert_backdrop: Sprite3D
+# The desert below the terraces and the summit (scripts/temple_desert.gd).
+var desert_backdrop: Node3D
 var terrace_moonlight: DirectionalLight3D
 var boss_moonlight: SpotLight3D
 const TERRACE_LIGHT_LAYER = 8
+# The desert below the terraces, lit by its own moonlight.
+const DESERT_LAYER = 16
 const VISION_RANGE = 16.0
 const WALL_HEIGHT = 3.2
 const TORCH_ENERGY = 2.4
 const TORCH_RANGE = 9.0
 const TORCH_DECAY = 1.6
+# The temple's own lights are fewer, further apart, and each throws its light
+# further, falling off more gently (torch_decay): its torch_energy,
+# torch_range, and how far apart the first even
+# row of them (TORCH_SPACING) and those added after (TORCH_FILL) stand.
+# (The dungeons keep the closer, shorter-reaching torches.)
+const TEMPLE_TORCH_ENERGY = 1.5
+const TEMPLE_TORCH_RANGE = 16.0
+const TEMPLE_TORCH_DECAY = .8
+var torch_energy = TORCH_ENERGY
+var torch_range = TORCH_RANGE
+var torch_decay = TORCH_DECAY
+var torch_spacing = 5.5
+var torch_fill = 3.0
 const TORCH_HEIGHT = 2.22
 # The low parapets' height, and the braziers that stand on them: the fire
 # bowl's size, and how far from the torch spot (inside the wall) to the
@@ -61,6 +77,9 @@ static func coal_material() -> ShaderMaterial:
 # Estimated floor light, with Godot's omni falloff and floor incidence, that
 # still reads clearly in the dark temple: one torch at about three metres.
 const LIT_LEVEL = .12
+# (The temple's own, gentler lights are counted lit a little lower down.)
+const TEMPLE_LIT_LEVEL = .09
+var lit_level = LIT_LEVEL
 # Floor cells occupied by solid props (stairs, standing braziers). They are
 # visible and let sight pass, but are not walkable.
 var solid_floor: Dictionary = {}
@@ -97,6 +116,13 @@ var fog_material: ShaderMaterial
 func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> void:
 	level = floor_index
 	layout.generate(run_seed,floor_index,place)
+	if place == "temple" and floor_index != Layout.PLAYGROUND:
+		torch_energy = TEMPLE_TORCH_ENERGY
+		torch_range = TEMPLE_TORCH_RANGE
+		torch_decay = TEMPLE_TORCH_DECAY
+		lit_level = TEMPLE_LIT_LEVEL
+		torch_spacing = 8.0
+		torch_fill = 5.0
 	spawn = layout.to_world(layout.start)
 	exit_point = layout.exit_position()
 	var env = WorldEnvironment.new()
@@ -300,8 +326,13 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 	batch_floors()
 	follow(spawn,1)
 
+# How far below the floor the desert lies: three storeys below the terrace,
+# or below the summit's lowest terrace (two storeys down).
+func desert_depth() -> float:
+	return 8.0*(FACADE_STOREYS+(2 if layout.summit else 0))
+
 func setup_desert(stone: Material) -> void:
-	# The image lies far beyond/below the gallery. A dark imported foundation under
+	# The desert lies far below the gallery. A dark imported foundation under
 	# the building keeps the desert out of interior gaps between generated rooms.
 	if not layout.summit:
 		var dark = StandardMaterial3D.new()
@@ -333,18 +364,30 @@ func setup_desert(stone: Material) -> void:
 		var corner: Vector3 = layout.to_world(strip.position)-Vector3(.5,0,.5)
 		place_scenery("wall",corner+Vector3(strip.size.x*.5,-7,strip.size.y*.5),Vector3(strip.size.x,6.84,strip.size.y),masonry)
 	if not layout.summit: setup_terrace_facades(facade_stone(stone))
-	desert_backdrop = Sprite3D.new()
-	desert_backdrop.name = "MoonlitDesertBelowTerrace"
-	desert_backdrop.texture = preload("res://assets/textures/desert_moonlit_ruins_v2.png")
-	desert_backdrop.position = Vector3(0,0,-140)
-	desert_backdrop.modulate = Color(.60,.64,.72)
+	# The desert floor itself, three storeys below the terrace (or the
+	# summit's lowest terrace), strewn like the desert outside.
+	var low: Vector3 = layout.to_world(Vector2i.ZERO)-Vector3(.5,0,.5)
+	var high: Vector3 = layout.to_world(Vector2i(layout.size-1,layout.size-1))+Vector3(.5,0,.5)
+	var footprint = Rect2(low.x,low.z,high.x-low.x,high.z-low.z)
+	for strip in layout.terrace:
+		var corner: Vector3 = layout.to_world(strip.position)-Vector3(.5,0,.5)
+		footprint = footprint.merge(Rect2(corner.x,corner.z,strip.size.x,strip.size.y))
+	if layout.summit: footprint = footprint.grow_individual(0,0,SUMMIT_ROOF_WIDTH+SUMMIT_TERRACE_WIDTH,SUMMIT_ROOF_WIDTH+SUMMIT_TERRACE_WIDTH)
+	var centre: Vector2 = footprint.get_center()
+	desert_backdrop = preload("res://scripts/temple_desert.gd").build(Vector3(centre.x,0,centre.y),desert_depth(),footprint,DESERT_LAYER)
 	desert_backdrop.visible = false
-	desert_backdrop.shaded = false
-	desert_backdrop.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-	desert_backdrop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# A distant camera-facing matte retains the image's dune detail, instead
-	# of magnifying a tiny portion of it across a giant horizontal plane.
-	camera.add_child(desert_backdrop)
+	add_child(desert_backdrop)
+	# The moon shows the dunes, their grass and stones plainly, if coldly.
+	var moon = DirectionalLight3D.new()
+	moon.name = "DesertMoonlight"
+	moon.rotation_degrees = Vector3(-38,-30,0)
+	moon.light_color = Color(.56,.66,.86)
+	moon.light_energy = .55
+	moon.light_cull_mask = DESERT_LAYER
+	moon.shadow_enabled = false
+	desert_backdrop.add_child(moon)
+	# (Far enough to see down to it.)
+	camera.far = 400
 	terrace_moonlight = DirectionalLight3D.new()
 	terrace_moonlight.name = "DimTerraceMoonlight"
 	terrace_moonlight.rotation_degrees = Vector3(-55,-30,0)
@@ -431,12 +474,11 @@ func setup_court_torches() -> void:
 	var first: Vector3 = layout.to_world(layout.court.position)
 	var last: Vector3 = layout.to_world(layout.court.end-Vector2i.ONE)
 	var center = (first+last)*.5
-	for offset in [-8.0,8.0]:
-		torch(Vector3(center.x+offset,0,first.z-.28),true,Vector3.FORWARD)
-		torch(Vector3(center.x+offset,0,last.z+.28),true,Vector3.BACK)
-	for offset in [-4.5,4.5]:
-		torch(Vector3(first.x-.28,0,center.z+offset),true,Vector3.LEFT)
-		torch(Vector3(last.x+.28,0,center.z+offset),true,Vector3.RIGHT)
+	# One to each side, the long sides' staggered.
+	torch(Vector3(center.x-7.0,0,first.z-.28),true,Vector3.FORWARD)
+	torch(Vector3(center.x+7.0,0,last.z+.28),true,Vector3.BACK)
+	torch(Vector3(first.x-.28,0,center.z),true,Vector3.LEFT)
+	torch(Vector3(last.x+.28,0,center.z),true,Vector3.RIGHT)
 
 # The summit crowns a stepped building. On its camera-facing south and east
 # sides, one storey below the boss floor, the stone roof of floor 5 wraps
@@ -1228,13 +1270,13 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 # light's falloff and the floor's angle to it.
 func torch_light(at: Vector3, point: Vector3) -> float:
 	var d = (at+Vector3.UP*TORCH_HEIGHT).distance_to(point)
-	if d>=TORCH_RANGE: return 0.0
-	var window = maxf(1.0-pow(d/TORCH_RANGE,4.0),0.0)
-	return TORCH_ENERGY*window*window*pow(d,-TORCH_DECAY)*TORCH_HEIGHT/d
+	if d>=torch_range: return 0.0
+	var window = maxf(1.0-pow(d/torch_range,4.0),0.0)
+	return torch_energy*window*window*pow(d,-torch_decay)*TORCH_HEIGHT/d
 
 func add_light(levels: Dictionary, at: Vector3) -> void:
 	var center = layout.to_cell(at)
-	var reach = ceili(TORCH_RANGE)
+	var reach = ceili(torch_range)
 	for x in range(center.x-reach,center.x+reach+1):
 		for y in range(center.y-reach,center.y+reach+1):
 			var cell = Vector2i(x,y)
@@ -1254,25 +1296,25 @@ func light_floor(candidates: Array[Vector3]) -> void:
 	for at in placed: add_light(levels,at)
 	for at in candidates:
 		if layout.court.has_area() and layout.court.grow(1).has_point(layout.to_cell(at)): continue
-		if nearest_torch(placed,at)<5.5: continue
+		if nearest_torch(placed,at)<torch_spacing: continue
 		torch(at,true,torch_walls[at])
 		placed.append(at)
 		add_light(levels,at)
 	var given_up: Dictionary = {}
 	while true:
 		var darkest = Vector2i.ZERO
-		var lowest = LIT_LEVEL
+		var lowest = lit_level
 		for cell in levels:
 			if levels[cell]<lowest and not given_up.has(cell):
 				lowest = levels[cell]
 				darkest = cell
-		if lowest>=LIT_LEVEL: break
+		if lowest>=lit_level: break
 		var target = layout.to_world(darkest)
 		var choice = Vector3.INF
-		var best = 3.0
+		var best = torch_fill
 		for at in candidates:
 			var d = at.distance_to(target)
-			if d<best and nearest_torch(placed,at)>=3.0: best = d; choice = at
+			if d<best and nearest_torch(placed,at)>=torch_fill: best = d; choice = at
 		if choice==Vector3.INF:
 			given_up[darkest] = true
 			continue
@@ -1348,9 +1390,9 @@ func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
 	light.position = flame_at+Vector3.UP*(BRAZIER_FIRE_LIFT if brazier else TORCH_HEIGHT-1.96)
 	light.light_color = Color(1,.60,.28)
 	torch_lights.append(at)
-	light.light_energy = TORCH_ENERGY
-	light.omni_range = TORCH_RANGE
-	light.omni_attenuation = TORCH_DECAY
+	light.light_energy = torch_energy
+	light.omni_range = torch_range
+	light.omni_attenuation = torch_decay
 	light.shadow_enabled = false
 	if cast_shadows: shadow_torches.append(light)
 	light.shadow_bias = .06
@@ -1663,7 +1705,6 @@ func follow(pos: Vector3, delta: float) -> void:
 	camera.position = camera.position.lerp(desired,minf(1,delta*8))
 	camera.look_at(camera.position-Vector3(12,21,19))
 	camera.size = lerpf(camera.size,zoom,minf(1,delta*8))
-	var viewport_size = get_viewport().get_visible_rect().size
 	if is_instance_valid(desert_backdrop):
 		var outdoors = layout.on_terrace(layout.to_cell(pos))
 		desert_backdrop.visible = outdoors or layout.summit
@@ -1671,14 +1712,6 @@ func follow(pos: Vector3, delta: float) -> void:
 		for n in outdoor_scenery: n.visible = desert_backdrop.visible
 		# The summit's lower roofs and terrace are always in view, in moonlight.
 		terrace_moonlight.visible = outdoors or layout.summit
-		var width = camera.size*viewport_size.x/viewport_size.y
-		var texture_size = desert_backdrop.texture.get_size()
-		desert_backdrop.pixel_size = maxf(width/texture_size.x,camera.size/texture_size.y)*1.08
-		# Keep the distant horizon at the top and nearby ground below. Overscan covers
-		# the small parallax movement at every supported aspect ratio and zoom.
-		var image_height = texture_size.y*desert_backdrop.pixel_size
-		desert_backdrop.position.x = -sin(pos.x*.012)*width*.025
-		desert_backdrop.position.y = (camera.size-image_height)*.5+camera.size*(.02-sin(pos.z*.012)*.01)
 	occlusion_tick -= delta
 	if occlusion_tick <= 0:
 		occlusion_tick = .1

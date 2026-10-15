@@ -69,8 +69,12 @@ const TABLE_HEIGHT = .78
 # The street that rings the arena: the buildings stand along its far side.
 const RING = 14.0
 const MARKET = Rect2(-205,38,21,24)
-# The alleys off the ring street: each lane's rectangle.
-const ALLEYS = [Rect2(-214,-76,4,36),Rect2(-298,-76,4,36),Rect2(-298,40,4,36),Rect2(-228,46,4,30),Rect2(-340,-2.5,28,5)]
+# The alleys off the ring street, each lane's rectangle: the four lanes north
+# and south of it, West Street out to the river, the quay along the river and
+# the lane behind its houses, South Street, and the lanes inside the south
+# wall either side of its gate.
+const ALLEYS = [Rect2(-214,-76,4,36),Rect2(-298,-76,4,36),Rect2(-298,40,4,46),Rect2(-228,46,4,58),Rect2(-366,-2.5,54,5),
+	Rect2(-370,-76,6,182),Rect2(-354,-76,4,162),Rect2(-366,86,180,5),Rect2(-366,102,128,4),Rect2(-218,102,32,4)]
 # The letters of a face: w wall, d door, s shuttered window, a arched recess,
 # o open arched window, p open portal, b a wall broken down.
 const MODULES = {"w":"wall","d":"wall_door","s":"wall_window","a":"wall_arched","o":"wall_archwindow","p":"arch","b":"wall_broken"}
@@ -177,13 +181,14 @@ static func gate_wall(world) -> void:
 	var material = Kit.masonry(CREAM,BROWN,.4,.65)
 	var x = world.TOWN_GATE.x
 	# (From corner to corner of the town's wall, no further.)
-	var z = -world.WALL_SOUTH
+	var z = world.WALL_NORTH
 	while z<world.WALL_SOUTH-.1:
-		var middle = z+BAY*.5
-		z += BAY
+		var bay = minf(BAY,world.WALL_SOUTH-z)
+		var middle = z+bay*.5
+		z += bay
 		if absf(middle)<5.0 or world.margin_at(Vector3(x,0,middle))<-9.0: continue
-		var piece = world.place("wall",Vector3(x,0,middle),Vector3(BAY,5.6,1.4),material,-PI/2)
-		world.block_rect(Rect2(x-.7,middle-BAY*.5,1.4,BAY))
+		var piece = world.place("wall",Vector3(x,0,middle),Vector3(bay,5.6,1.4),material,-PI/2)
+		world.block_rect(Rect2(x-.7,middle-bay*.5,1.4,bay))
 		world.screen([piece])
 	# Two towers flank the gateway, joined by a lintel over the road.
 	var towers: Array = []
@@ -201,22 +206,44 @@ static func gate_wall(world) -> void:
 
 # The wall round the town, where the rim's rocks would stand (the world's
 # `walled`): built of the gate wall's modules, a tower at every corner. It
-# runs along the north and south sides from the gate wall to the west end,
-# and from the north side out round the palace hill's ground; the south
-# gate (south_gate) fills a gap left in the south side.
+# runs along the north and south sides from the gate wall west to the river,
+# where each ends in a tower at the water, and from the north side out round
+# the palace hill's ground; the south gate (south_gate) fills a gap left in
+# the south side.
 # It is old: its stone far more worn than the gate's, its top uneven, and
 # here and there a stretch fallen into a ragged breach (ruin).
 static func town_wall(world) -> void:
 	var material = Kit.masonry(CREAM,BROWN,.4,.92)
+	var north: float = world.WALL_NORTH
 	var south: float = world.WALL_SOUTH
-	var west: float = world.WALL_WEST
 	var east: float = world.TOWN_GATE.x
 	var hill_west: float = world.HILL.x-world.HILL_REACH.x
 	var hill_east: float = world.HILL.x+world.HILL_REACH.x
 	var hill_north: float = world.HILL_REACH.y
-	var corners: Array = [Vector3(east,0,-south),Vector3(hill_east,0,-south),Vector3(hill_east,0,hill_north),Vector3(hill_west,0,hill_north),Vector3(hill_west,0,-south),Vector3(west,0,-south),Vector3(west,0,south),Vector3(east,0,south)]
+	# Each side runs out to the river and ends in a tower at the water.
+	var runs: Array = [
+		[Vector3(east,0,north),Vector3(hill_east,0,north),Vector3(hill_east,0,hill_north),Vector3(hill_west,0,hill_north),Vector3(hill_west,0,north),Vector3(river_end(world,north),0,north)],
+		[Vector3(river_end(world,south),0,south),Vector3(east,0,south)]]
 	# The south gate's own wall and towers take its stretch of the south side.
 	var openings: Array = [Rect2(SOUTH_GATE.x-20.0,south-2.0,40.0,4.0)]
+	var towers: Array = []
+	for corners in runs:
+		walls_between(world,corners,openings,material)
+		# A tower at every corner but the gate wall's north end, among the
+		# rocks.
+		for i in corners.size():
+			if corners[i] != Vector3(east,0,north): towers.append(corners[i])
+	for at in towers:
+		var tower = world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material)
+		world.block_rect(Rect2(at.x-1.8,at.z-1.7,3.6,3.4))
+		world.screen([tower])
+
+# Where a wall along `z` ends at the river: a little way into the water.
+static func river_end(world, z: float) -> float:
+	return roundf(world.river_x(z)+world.RIVER_HALF-1.0)
+
+# The wall from corner to corner of `corners`, bay by bay, leaving `openings`.
+static func walls_between(world, corners: Array, openings: Array, material: Material) -> void:
 	for i in corners.size()-1:
 		var a: Vector3 = corners[i]
 		var b: Vector3 = corners[i+1]
@@ -253,12 +280,6 @@ static func town_wall(world) -> void:
 				piece = world.place("wall",middle,Vector3(bay,wall_height(lot),1.4),material,yaw)
 			world.block_rect(Rect2(middle.x-(bay*.5 if yaw == 0.0 else .7),middle.z-(.7 if yaw == 0.0 else bay*.5),bay if yaw == 0.0 else 1.4,1.4 if yaw == 0.0 else bay))
 			world.screen([piece])
-	# A tower at every corner but the gate wall's own ends.
-	for i in range(1,corners.size()-1):
-		var at: Vector3 = corners[i]
-		var tower = world.place("pillar_decorated",at,Vector3(3.6,8.6,3.4),material)
-		world.block_rect(Rect2(at.x-1.8,at.z-1.7,3.6,3.4))
-		world.screen([tower])
 
 # A bay of the town wall: its lot (from its place in the ring, the same every
 # time), whether it has fallen (lot under CRUMBLED), the height it stands to
@@ -362,7 +383,7 @@ static func ruin_block(tool: SurfaceTool, lo: Vector3, hi: Vector3, tops: Array,
 # The gate in the town's south wall at the end of the southern alley, built
 # as the town gate is: a stretch of wall, two towers flanking the way
 # through, joined by a lintel. Its guards stand outside, facing the desert.
-const SOUTH_GATE = Vector3(-226,0,78)
+const SOUTH_GATE = Vector3(-226,0,108)
 static func south_gate(world) -> void:
 	var material = Kit.masonry(CREAM,BROWN,.4,.65)
 	var g: Vector3 = SOUTH_GATE
@@ -909,7 +930,8 @@ static func house(world, corner: Vector3, bays: Vector2i, door: String, storeys:
 		for i in 3: world.place("rubble",middle+Vector3(rng.randf_range(-1.6,1.6),0,rng.randf_range(-1.6,1.6)),Vector3(rng.randf_range(2.2,3.4),rng.randf_range(.6,1.2),rng.randf_range(1.4,2.2)),Kit.masonry(tint,wood,.4,1.0),rng.randf_range(0,TAU))
 
 # Houses line the alleys, both sides, and fill the gaps along the ring
-# street. Most are in a poor way; a few are kept up.
+# street; out west they line the river's quay and the lane behind, and in the
+# south both sides of South Street. Most are in a poor way; a few are kept up.
 static func houses(world) -> void:
 	var rng: RandomNumberGenerator = world.rng
 	world.upkeep["houses"] = []
@@ -932,7 +954,29 @@ static func houses(world) -> void:
 		[Vector3(-326,0,4),Vector2i(2,2),"west",1],[Vector3(-337,0,4),Vector2i(2,2),"south",1],
 		# Along the ring street and the main street.
 		[Vector3(-264,0,57),Vector2i(3,2),"south",1],[Vector3(-276,0,58),Vector2i(2,2),"south",2],
-		[Vector3(-195,0,-16),Vector2i(2,2),"west",1],[Vector3(-195,0,-30),Vector2i(2,2),"west",1],[Vector3(-196,0,24),Vector2i(2,2),"west",1]]
+		[Vector3(-195,0,-16),Vector2i(2,2),"west",1],[Vector3(-195,0,-30),Vector2i(2,2),"west",1],[Vector3(-196,0,24),Vector2i(2,2),"west",1],
+		# The river front, along the quay.
+		[Vector3(-362,0,-74),Vector2i(2,2),"west",1],[Vector3(-362,0,-64),Vector2i(2,3),"west",2],[Vector3(-362,0,-50),Vector2i(2,2),"west",1],
+		[Vector3(-362,0,-40),Vector2i(2,2),"west",2],[Vector3(-362,0,-30),Vector2i(2,3),"west",1],[Vector3(-362,0,-14),Vector2i(2,2),"west",1],
+		[Vector3(-362,0,4),Vector2i(2,2),"west",2],[Vector3(-362,0,14),Vector2i(2,3),"west",1],[Vector3(-362,0,28),Vector2i(2,2),"west",1],
+		[Vector3(-362,0,38),Vector2i(2,2),"west",1],[Vector3(-362,0,48),Vector2i(2,3),"west",2],[Vector3(-362,0,62),Vector2i(2,2),"west",1],
+		[Vector3(-362,0,72),Vector2i(2,3),"west",1],
+		# Behind them, along the back lane.
+		[Vector3(-350,0,-72),Vector2i(2,2),"west",1],[Vector3(-350,0,-60),Vector2i(2,2),"west",1],[Vector3(-350,0,-46),Vector2i(2,3),"west",2],
+		[Vector3(-350,0,-32),Vector2i(2,2),"west",1],[Vector3(-350,0,-20),Vector2i(2,2),"south",1],[Vector3(-350,0,6),Vector2i(2,2),"west",1],
+		[Vector3(-350,0,18),Vector2i(2,2),"west",2],[Vector3(-350,0,30),Vector2i(2,3),"west",1],[Vector3(-350,0,46),Vector2i(2,2),"west",1],
+		[Vector3(-350,0,58),Vector2i(2,2),"west",1],[Vector3(-350,0,70),Vector2i(2,2),"west",1],
+		# South Street, its north side.
+		[Vector3(-350,0,78),Vector2i(2,2),"south",1],[Vector3(-338,0,78),Vector2i(3,2),"south",2],[Vector3(-322,0,78),Vector2i(2,2),"south",1],
+		[Vector3(-310,0,78),Vector2i(2,2),"south",1],[Vector3(-290,0,78),Vector2i(2,2),"south",2],[Vector3(-278,0,78),Vector2i(3,2),"south",1],
+		[Vector3(-262,0,78),Vector2i(2,2),"south",1],[Vector3(-250,0,78),Vector2i(2,2),"south",1],[Vector3(-240,0,78),Vector2i(2,2),"south",2],
+		[Vector3(-220,0,78),Vector2i(2,2),"south",1],[Vector3(-208,0,78),Vector2i(2,2),"south",1],[Vector3(-196,0,78),Vector2i(2,2),"west",1],
+		# And its south side, against the wall, their doors on the lane inside it.
+		[Vector3(-362,0,94),Vector2i(2,2),"south",1],[Vector3(-350,0,94),Vector2i(3,2),"south",1],[Vector3(-334,0,94),Vector2i(2,2),"south",2],
+		[Vector3(-322,0,94),Vector2i(2,2),"south",1],[Vector3(-310,0,94),Vector2i(3,2),"south",1],[Vector3(-292,0,94),Vector2i(2,2),"south",1],
+		[Vector3(-280,0,94),Vector2i(2,2),"south",2],[Vector3(-268,0,94),Vector2i(3,2),"south",1],[Vector3(-252,0,94),Vector2i(2,2),"south",1],
+		[Vector3(-240,0,94),Vector2i(2,2),"south",1],[Vector3(-220,0,94),Vector2i(2,2),"south",1],[Vector3(-208,0,94),Vector2i(2,2),"south",2],
+		[Vector3(-196,0,94),Vector2i(2,2),"south",1]]
 	for i in plans.size():
 		var plan = plans[i]
 		# One house in four is kept up; the rest run from shabby to derelict.
@@ -942,6 +986,8 @@ static func houses(world) -> void:
 	house(world,Vector3(-324,0,-38),Vector2i(2,2),"south",1,1.0,true)
 	house(world,Vector3(-192,0,-56),Vector2i(2,2),"south",1,1.0,true)
 	house(world,Vector3(-322,0,26),Vector2i(2,2),"south",1,1.0,true)
+	house(world,Vector3(-350,0,-8),Vector2i(2,1),"south",1,1.0,true)
+	house(world,Vector3(-336,0,46),Vector2i(2,2),"south",1,1.0,true)
 
 # Palms along the ring street, and dry grass, stones and litter wherever the
 # ground is bare.
@@ -963,8 +1009,8 @@ static func greenery(world) -> void:
 		var tree = world.prop("dead_tree" if rng.randf()<.5 else "olive_a",spot,rng.randf_range(4.2,5.4),rng.randf_range(0,TAU))
 		world.block_disc(spot,.6)
 		world.screen([tree])
-	for i in 900:
-		var at = Vector3(rng.randf_range(-344.0,-183.0),0,rng.randf_range(-86.0,76.0))
+	for i in 1400:
+		var at = Vector3(rng.randf_range(-370.0,-183.0),0,rng.randf_range(-86.0,world.WALL_SOUTH-1.0))
 		var c = world.to_cell(at)
 		var cell = world.index(c.x,c.y)
 		if world.cells[cell] != world.OPEN or world.paint[cell*4+world.PAVING]>120: continue
