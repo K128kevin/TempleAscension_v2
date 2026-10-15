@@ -141,9 +141,9 @@ func test():
 	check(game.intro_left == 0 and cam.projection == Camera3D.PROJECTION_ORTHOGONAL and is_equal_approx(cam.size,game.world.zoom) and game.mode == "playing","Escape skips the opening into the game's own view, the game not paused")
 	game._process(.1)
 	check(game.intro_left == 0 and cam.projection == Camera3D.PROJECTION_ORTHOGONAL,"and it stays there")
-	# A new character wakes in the desert: the corner tells the way, not a floor.
+	# A new character wakes in the desert: the corner names no floor, and points no way.
 	game.run.difficulty=1; hud.tick(0)
-	check(hud.objective.text=="" and "Hard" in hud.difficulty.text and "Temple" in hud.direction.text,"Outdoors the corner shows the difficulty and the way to the temple")
+	check(hud.objective.text=="" and "Hard" in hud.difficulty.text and hud.direction.text=="","Outdoors the corner shows the difficulty, and no way pointed out")
 	await capture("hud-unlocked")
 	game._process(.1)
 	check(not game.run.has("seconds"),"Gameplay does not accumulate elapsed run time")

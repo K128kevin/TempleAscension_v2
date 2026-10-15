@@ -403,13 +403,12 @@ func tick(dt: float) -> void:
 func tile_slot(tile: int) -> int:
 	return Data.LEFT_SLOT if tile==0 else tile-1
 
-# Outside the temple the corner of the screen says which way the town and the
-# temple lie. (No place is named.)
+# Outside the temple the corner of the screen says nothing: no place is
+# named, and no way pointed out.
 func show_outdoors() -> void:
-	var region: String = game.world.region(game.player.position)
 	objective.text = ""
 	status.text = ""
-	direction.text = {"town":"The temple lies east, across the desert","desert":"Temple: east · Town: west","temple":"The town lies west, across the desert"}[region]
+	direction.text = ""
 
 # What the hero is standing in front of, outdoors.
 func outdoor_prompt() -> String:

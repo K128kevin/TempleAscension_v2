@@ -541,7 +541,7 @@ func test():
 	world.follow(Overworld.START,1)
 	check(world.camera.position.x<Overworld.START.x and world.camera.position.z>Overworld.START.z,"The camera looks from the south-west, at the temple's front")
 	game.hud.tick(0)
-	check(game.hud.objective.text=="" and game.hud.status.text=="" and "east" in game.hud.direction.text and game.hud.prompt.text=="","Outdoors the HUD names no place, and points to the temple and the town")
+	check(game.hud.objective.text=="" and game.hud.status.text=="" and game.hud.direction.text=="" and game.hud.prompt.text=="","Outdoors the HUD names no place, and points no way")
 	game.player.position = Vector3(Town.MARKET.get_center().x,0,Town.MARKET.get_center().y+5.0)
 	game.hud.tick(0)
 	check(game.hud.objective.text=="" and game.hud.status.text=="","Nor is the town named")

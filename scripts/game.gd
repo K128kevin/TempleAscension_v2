@@ -360,7 +360,6 @@ func leave_to_world() -> void:
 	load_floor()
 	player.rotation.y = outside.facing
 	save_run()
-	if from=="temple": toast("The town lies west, across the desert.")
 
 # Whether the floor the hero is on has a way on from it: the temple's stair up
 # (not on the summit), a dungeon's stair down (not on its lowest level).
