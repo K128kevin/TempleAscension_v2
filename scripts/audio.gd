@@ -10,9 +10,10 @@ const TOGETHER = 4
 const TOGETHER_MS = 80
 # Every sound is pitched a little differently each time it plays (PITCH);
 # these vary more, in pitch and in loudness (dB), so that heard over and over
-# they never sound like one recording: [pitch, loudness].
+# they never sound like one recording: [pitch, loudness]. (An item picked up
+# always rings the same note.)
 const PITCH = .06
-const VARIED = {"sword-hit-flesh":[.12,2.0]}
+const VARIED = {"sword-hit-flesh":[.12,2.0],"gem-pickup":[0.0,0.0]}
 # The latest sounds asked for, last last, heard or not (headless, muted):
 # what tests listen for.
 var heard: Array = []

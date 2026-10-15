@@ -4,13 +4,14 @@ extends Node3D
 ## map ringed by rock. X runs east and Z south. Game drives it through the
 ## same interface as a temple floor (scripts/temple.gd).
 ##
-## Everything is walked on one flat plane; the palace hill north of the town
-## is the one place the ground rises. There, what stands on the ground is
-## raised to its height (`lift`), and so are the hero's figure and the camera,
-## while positions, paths and collision stay on the plane.
+## Playable ground is mostly flat, with the palace hill and the camp dune.
+## What stands there is raised to its height (`lift`), as are the hero and
+## camera, while paths and collision stay on the plane. Beyond the map's
+## rock rim, distant terrain extends the ground and forms the horizon.
 const Art = preload("res://scripts/assets.gd")
 const Kit = preload("res://scripts/world_art.gd")
 const Desert = preload("res://scripts/world_desert.gd")
+const Horizon = preload("res://scripts/world_horizon.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Palace = preload("res://scripts/world_palace.gd")
 const Front = preload("res://scripts/world_temple_front.gd")
@@ -195,7 +196,8 @@ func setup(_floor_index: int = OUTDOORS, _run_seed: int = 0) -> void:
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = zoom
-	camera.far = 400
+	# Keep the complete distant dune mesh within the opening's view distance.
+	camera.far = 3000
 	add_child(camera)
 	shape_ground()
 	spawn = START
@@ -262,13 +264,11 @@ func setup_sky() -> void:
 	e.tonemap_white = 1.3
 	e.fog_enabled = false
 	e.fog_sky_affect = 0.0
-	# By night the sky is a painted panorama, stars, the Milky Way and a low
-	# moon (tools/make_night_sky.py), shown whenever the camera looks toward
-	# the horizon; by day, a plain colour (set_time). What metal and polish
-	# reflect is a photographed desert sky by day, the painted one by night
-	# (scripts/reflections.gd).
+	# The image is sky only. The distant ground mesh supplies the horizon;
+	# the sky shader concentrates the stars and moon into the opening view.
+	# The same panorama supplies the night reflections.
 	reflection_sky = Reflections.apply(e,"desert")
-	reflection_sky.set_shader_parameter("night_panorama",load("res://assets/textures/night_sky.png"))
+	reflection_sky.set_shader_parameter("night_panorama",load("res://assets/textures/desert_sky_only.png"))
 	e.background_energy_multiplier = 1.0
 	env.environment = e
 	environment = e
@@ -305,7 +305,8 @@ func set_time(clock: float) -> void:
 	environment.background_mode = Environment.BG_SKY if sky.night >= .999 else Environment.BG_COLOR
 	# The water reflects the sky overhead: bluer than the dust at the horizon,
 	# and as bright as the light it sheds.
-	if ground_material != null: ground_material.set_shader_parameter("sky_colour",sky.sky.lerp(sky.ambient,.65)*clampf(sky.ambient_energy*2.2,.15,1.0))
+	if ground_material != null:
+		ground_material.set_shader_parameter("sky_colour",sky.sky.lerp(sky.ambient,.65)*clampf(sky.ambient_energy*2.2,.15,1.0))
 	environment.ambient_light_color = sky.ambient
 	environment.ambient_light_energy = sky.ambient_energy
 	Reflections.daylight(reflection_sky,sky)
@@ -451,7 +452,7 @@ func dab_disc(channel: int, at: Vector3, radius: float, soft: float = 1.5, amoun
 			var d = Vector2(x-at.x,z-at.z).length()
 			dab(channel,x,z,amount*clampf(1.0-(d-radius)/maxf(soft,.01),0.0,1.0))
 
-# The single slab everything stands on (the paving mesh, as under the temple),
+# One continuous mesh, flat under the map and rolling into distant hills,
 # drawn by the desert ground shader from the control map.
 func lay_ground() -> void:
 	var image = Image.create_from_data(WIDTH,DEPTH,false,Image.FORMAT_RGBA8,paint)
@@ -473,14 +474,8 @@ func lay_ground() -> void:
 	var image_noise = grain.get_seamless_image(512,512)
 	image_noise.generate_mipmaps()
 	material.set_shader_parameter("noise_map",ImageTexture.create_from_image(image_noise))
-	ground = Art.model("floor",Vector3(WIDTH+240.0,.4,DEPTH+240.0),material)
-	ground.name = "DesertGround"
-	ground.position = Vector3((WEST+EAST)*.5,-.4,(NORTH+SOUTH)*.5)
-	for mesh in ground.find_children("*","MeshInstance3D",true,false):
-		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mesh.layers = GROUND_LAYER
-	add_child(ground)
-	# The palace hill's ground lies over the slab, a finger's width proud of
+	ground = Horizon.build(self,material)
+	# The palace hill lies over the flat ground, a finger's width proud of
 	# it where the two are level.
 	var sloping: ShaderMaterial = material.duplicate()
 	sloping.set_shader_parameter("sloped",1.0)

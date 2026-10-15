@@ -19,18 +19,20 @@ hand's X; the left palm, hand_l's (0, .075, 0), sits at hand_r's
 
   HeavyIdle       the stance: the weapon held up before the right shoulder
                   in both hands, left foot forward, breathing (2 s, loops)
-  HeavySwing1     normal attack: the weapon hauled far back over the right
-                  shoulder, then the whole body hurled round and down behind
-                  a diagonal cut to the lower left, the rear foot driven
-                  through a long step forward as it lands (the game carries
-                  him on by Visual.ROOT_ADVANCE); the lead foot comes up after
+  HeavySwing1     normal attack: the weapon carried up and back over the
+                  right shoulder, the hands by the right ear and the haft
+                  behind the head, then the whole body hurled round to the
+                  left behind a cut down before him and on to the lower
+                  left, the rear foot driven through a long step forward as
+                  it lands (the game carries him on by Visual.ROOT_ADVANCE);
+                  the lead foot comes up after
   HeavyCleave     a level sweep through the half-circle before him, coiled
                   round to the right and unwound, behind a step
   HeavyStrike     Powerful Strike: a full chop from over the right shoulder
                   straight down before him
   HeavyExecute    the weapon hauled far back over the head, the body arched,
                   then brought down with everything, down to the knee
-  HeavySlam       Thunder Slam, one circle on his right: the weapon swung out
+  HeavySlam       Thundering Strike, one circle on his right: the weapon swung out
                   and down past his right hip and round behind him as the
                   chest turns away to it, the hands carried before the chest,
                   then all the way up behind him, over the head, and down
@@ -52,6 +54,9 @@ hand's X; the left palm, hand_l's (0, .075, 0), sits at hand_r's
   HEAVY_CHECK=1                   print each clip's measurements: reach, wrist
                                   bend, clearances, the weapon head's speed
   HEAVY_DRY=1                     author and check, but write nothing back
+  HEAVY_QUICK=1                   the elbows searched afresh at each frame
+                                  rather than planned over the clip (a
+                                  rough look in a fraction of the time)
   SHEET_DIR=/path                 render each clip authored as a contact sheet
                                   there (tools/blender_sheet.py; implies
                                   HEAVY_DRY), at the moments SHEET_PHASES lists
@@ -77,6 +82,9 @@ CONTACT = {'HeavySwing1': .50, 'HeavyCleave': .52, 'HeavyStrike': .55, 'HeavyExe
     'HeavyShockwave': .56, 'HeavyCry': .30, 'HeavyLeap': .56}
 ONLY = [n for n in os.environ.get('HEAVY_ONLY', '').split(',') if n]
 CHECK = int(os.environ.get('HEAVY_CHECK') or 0)
+# (HEAVY_QUICK: the elbows searched afresh at each frame, not planned: a
+# rough look at a blow's path in a fraction of the time.)
+QUICK = bool(os.environ.get('HEAVY_QUICK'))
 WANTED = [n for n in CLIPS if not ONLY or n in ONLY]
 def clip_starts(path):
     """When each clip in a GLB file has its first key (seconds)."""
@@ -101,6 +109,14 @@ for a in list(bpy.data.actions):
     if a.name in WANTED or a.name in STALE: bpy.data.actions.remove(a)
 for track in rig.animation_data.nla_tracks: track.mute = True
 B = rig.pose.bones
+# (The meshes are hidden while the clips are posed: each bone set would
+# otherwise deform every shell of the model again, which took two thirds of
+# the time. They are shown for the sheets and the export.)
+HIDDEN = {o.name for o in bpy.data.objects if o.hide_viewport}
+def shells(shown):
+    for o in bpy.data.objects:
+        if o.type == 'MESH' and o.name not in HIDDEN: o.hide_viewport = not shown
+shells(False)
 
 def V(x, y, z):
     return Vector((x, y, z))
@@ -358,7 +374,7 @@ PLAN = {}
 TURNING = math.radians(15)
 TURN_COST = .15
 # (Clips whose elbows are keyed outright, each pose saying where they point.)
-KEYED_ELBOWS = {'HeavySlam'}
+KEYED_ELBOWS = {'HeavySlam', 'HeavySwing1'}
 
 def hold(at, haft, fingers, elbow_r, elbow_l, free=0.0, swing=math.radians(150), ease=.003):
     """Both hands on the weapon: the right fist's grip at `at`, the haft
@@ -548,7 +564,10 @@ def measure():
     haft = (hand @ V(0, PALM, -BUTT), hand @ V(0, PALM, POINT))
     bits = (hand @ V(-BITS[1], PALM, BITS[0]), hand @ V(BITS[1], PALM, BITS[0]))
     top = head('Head')+(B['Head'].matrix.to_quaternion() @ V(0, 1, 0))*.13
-    parts = [('head', top, top, .14), ('neck', head('neck_01'), head('Head'), .07), ('chest', head('spine_02'), head('neck_01'), .15),
+    # (The face before it, brow to chin, which the sphere of the skull misses.)
+    hq = B['Head'].matrix.to_quaternion()
+    brow, chin = head('Head')+hq @ V(0, .13, .08), head('Head')+hq @ V(0, .0, .07)
+    parts = [('head', top, top, .14), ('face', brow, chin, .07), ('neck', head('neck_01'), head('Head'), .07), ('chest', head('spine_02'), head('neck_01'), .15),
         ('shoulders', head('upperarm_l'), head('upperarm_r'), .09), ('belly', head('pelvis'), head('spine_02'), .15)]
     for s in 'lr':
         parts += [('thigh '+s, head('thigh_'+s), head('calf_'+s), .085), ('shin '+s, head('calf_'+s), head('foot_'+s), .06),
@@ -559,7 +578,7 @@ def measure():
     # (Neither arm through the trunk: each arm's bones against the chest and belly.)
     for s in 'lr':
         for bone, a, b in (('upper arm', head('upperarm_'+s), head('lowerarm_'+s)), ('forearm', head('lowerarm_'+s), head('hand_'+s))):
-            for name, c, d, r in parts[2:5]:
+            for name, c, d, r in parts[3:6]:
                 if name == 'shoulders': continue
                 out['%s %s / %s' % (bone, s, name)] = between(a, b, c, d)-r-.045
     out['ground'] = min(haft[0].z, (hand @ V(0, PALM, HEAD)).z, haft[1].z)
@@ -657,8 +676,9 @@ def author(name, clip):
     # The elbows planned over the whole clip first (elbows()), and planned
     # again from the clip posed as first planned (what each way costs
     # depends on the other arm, and the weapon on both).
-    # (Thunder Slam keys its elbows outright, smooth already: it is not planned.)
-    plan = None if name not in KEYED_ELBOWS else [{} for f in range(frames+1)]
+    # (Thundering Strike and the swing key their elbows outright, smooth
+    # already: they are not planned.)
+    plan = None if name not in KEYED_ELBOWS and not QUICK else [{} for f in range(frames+1)]
     RECORD.clear()
     for planning in range(0 if plan else 2):
         records = []
@@ -699,7 +719,9 @@ def author(name, clip):
             PLAN.clear()
             PLAN.update(plan[max(0, min(frames, round(t*frames)))])
             clip(t)
+        shells(True)
         sheet.render(rig, name, SHEET_PHASES, SHEET_DIR, at)
+        shells(False)
 
 # ---- The clips ----
 
@@ -721,42 +743,6 @@ def idle(t):
 # landing, 3 followed through (or held, where it is stopped), 4 the stance
 # again; its clock says when it is where along that.
 FORWARD = (0, -1, 0)
-
-# The swing: the weapon hauled far up and back over the right shoulder until
-# its head hangs behind him, the body wound away after it and leaning back,
-# the weight on the rear foot; then the rear (right) foot driven through a
-# long step forward and the whole body hurled round and down behind the
-# blow, which lands before him as the foot does and runs on down to the lower
-# left and round behind him; and the left foot is brought up after as the
-# weapon comes back to the shoulder. The game carries him over the ground as
-# he steps (ROOT_ADVANCE, with these keys); here each foot is kept where it
-# is on the ground while he is carried past it.
-CUT = (.62, .1, .78)
-SWING1_ADVANCE = [(0, 0), (.3, 0), (.5, .44), (.64, .5), (.9, .62), (1, .62)]
-SWING1_CLOCK = [(0, 0, 0), (.14, .5, 2.6), (.27, .92, 1.5), (.37, 1, .6), (.50, 2, 12, 8), (.65, 3, 1.0), (1, 4, 0)]
-SWING1 = [K(0),
-    # (Wound up as a batter loads: the hands drawn back past the right
-    # shoulder, the right elbow pulled behind him and the arms stretched
-    # back, the weapon's head hanging behind.)
-    K(.5, down=.06, fwd=-.08, side=-.02, turn=-.3, twist=-.55, lean=-.08, bend=-.05, g=(-.42, .36, 1.52), z=plane(CUT, FORWARD, 150), n=CUT,
-        er=(-.6, .6, -.15), el=(.35, -.3, -.45), lh=.2),
-    K(1, down=.09, fwd=-.14, side=-.04, turn=-.42, tilt=-.04, twist=-.8, lean=-.16, bend=-.08, g=(-.46, .56, 1.48), z=plane(CUT, FORWARD, 158), n=CUT,
-        er=(-.45, .85, -.2), el=(.4, -.05, -.5), lh=.3),
-    K(1.5, down=.12, fwd=.1, side=-.02, turn=-.12, twist=-.25, lean=.14, bend=-.02, g=(-.22, -.36, 1.56), z=plane(CUT, FORWARD, 96), n=CUT,
-        er=(-.7, .1, -.3), el=(.4, -.4, -.6), lh=.1, rf=(.3, .14, 0)),
-    K(2, down=.17, fwd=.38, side=.04, turn=.3, tilt=.05, twist=.5, lean=.38, bend=.06, g=(.1, -.6, .94), z=plane(CUT, FORWARD, -12), n=CUT,
-        er=(-.7, -.3, -.2), el=(.7, -.1, -.5), rf=(.62, 0, 0), lh=.5, lp=.25),
-    K(2.5, down=.21, fwd=.44, side=.05, turn=.4, tilt=.07, twist=.66, lean=.44, bend=.1, g=(.28, -.5, .78), z=plane(CUT, FORWARD, -64), n=(.6, .0, .8),
-        er=(-.6, -.5, -.1), el=(.75, .25, -.35), rf=(.62, 0, 0), lh=.6, lp=.3),
-    K(3, down=.21, fwd=.46, side=.05, turn=.42, tilt=.07, twist=.72, lean=.44, bend=.12, g=(.4, -.32, .78), z=plane(CUT, FORWARD, -104), n=(.55, .15, .8),
-        er=(-.5, -.6, -.1), el=(.75, .45, -.25), rf=(.62, 0, 0), lh=.6, lp=.3),
-    K(3.33, down=.16, fwd=.5, turn=.3, twist=.5, lean=.32, g=(.2, -.44, .96), z=(.6, -.2, .75), n=(.5, .2, .8), rf=(.62, 0, 0), lf=(.3, .1, 0)),
-    K(3.66, down=.1, fwd=.56, turn=.1, twist=.1, lean=.2, g=(.02, -.44, 1.12), z=(.05, -.3, .95), n=(.4, -.8, .4), rf=(.62, 0, 0), lf=(.56, .03, 0)),
-    K(3.86, down=.05, fwd=.6, turn=-.04, twist=-.2, lean=.1, g=(-.15, -.34, 1.14), z=(-.42, .05, .9), n=(.6, -.6, .5), rf=(.62, 0, 0), lf=(.62, 0, 0)),
-    K(4, fwd=.62, lf=(.62, 0, 0), rf=(.62, 0, 0))]
-
-def swing1(t):
-    play(t, SWING1_CLOCK, SWING1, SWING1_ADVANCE)
 
 # Cleave: the weapon drawn back level at the right side, the body coiled far
 # round after it; then the left foot driven forward and everything unwound,
@@ -833,7 +819,7 @@ EXECUTE = [K(0),
 def execute(t):
     play(t, EXECUTE_CLOCK, EXECUTE)
 
-# Thunder Slam, after film of the swing made with a stick in both hands, and
+# Thundering Strike, after film of the swing made with a stick in both hands, and
 # the user's drawing of the head's path: one circle on his right. From the
 # stance the chest turns away to his right, carrying the hands down before it
 # as he sinks and leans into it, and the weapon's head swings out and down to
@@ -947,32 +933,65 @@ SLAM = [K(0, **HOME),
     K(.94, down=.05, fwd=.04, twist=-.22, lean=.1, a=toward('a', (.9, -.05, -.43), .2), o=.38, pr=toward('pr', (0, -.3, -.95), .15), k=118, tw=56, lf=(.06, 0, 0), rh=.05, **dict(ARMS, w=.6)),
     K(1, **HOME)]
 
-def carried(channel, s):
-    """One of Thunder Slam's own channels (which the stance has not) carried
-    through its keys as value() carries the stance's."""
-    kind = 'down' if isinstance(SLAM[0][1][channel], float) else 'g'
-    return value([(r[0], {kind: r[1][channel]}, r[2]) for r in SLAM], kind, s)
+def carried(channel, s, rows=None):
+    """One of the chest's own channels (which the stance has not) carried
+    through a clip's keys (Thundering Strike's, unless `rows`) as value()
+    carries the stance's."""
+    rows = SLAM if rows is None else rows
+    kind = 'down' if isinstance(rows[0][1][channel], float) else 'g'
+    return value([(r[0], {kind: r[1][channel]}, r[2]) for r in rows], kind, s)
 
-def slam_pose(c, s):
-    """Thunder Slam's figure from its channels `c` (at `s` along it)."""
-    body(**{k: c[k] for k in BODY+BACK})
+def chest_pose(c, a, o, pr, pl, k, tw, w, advance=0.0):
+    """The figure from the stance's channels `c` and the chest's own: the
+    grip `o` out along `a`, the right elbow toward `pr` and the left toward
+    `pl`, the right wrist's cock `k` and turn `tw` (wrist()), all in the
+    chest's ways; `w`, how far all this has taken over from the stance's
+    weapon. `advance`: how far the game has carried him (ROOT_ADVANCE)."""
+    body(**{n: c[n] for n in BODY+BACK}|{'fwd': c['fwd']-advance})
     for side in 'lr':
         at = c[side+'f']
-        foot(side, forward=at[0], lift=at[1], aside=at[2], heel=c[side+'h'], pivot=c[side+'p'], knee=c[side+'k'])
+        foot(side, forward=at[0]-advance, lift=at[1], aside=at[2], heel=c[side+'h'], pivot=c[side+'p'], knee=c[side+'k'])
     frame = chest()
-    g = frame[0]+in_chest(carried('a', s), frame).normalized()*carried('o', s)
-    er = in_chest(carried('pr', s), frame)
-    w = carried('w', s)
+    g = frame[0]+in_chest(a, frame).normalized()*o
+    er = in_chest(pr, frame)
     z = Vector(c['z']).normalized()
     if w > 0:
         grip.arm(B, 'r', g, B['upperarm_r'].matrix.translation+er)
         fore = (B['hand_r'].matrix.translation-B['lowerarm_r'].matrix.translation).normalized()
-        z = z.lerp(wrist(fore, er, carried('k', s), carried('tw', s)), w).normalized()
-    el = in_chest(carried('pl', s), frame).normalized()
+        # (The elbow's pit is found from the upper arm as it lies wherever
+        # the arm is bent: folded tight, with the fist up by the shoulder,
+        # the forearm runs back nearly along the way the elbow was asked to
+        # point, and the pit read off that turned over from one frame to
+        # the next, and the weapon with it.)
+        upper = (B['lowerarm_r'].matrix.translation-B['upperarm_r'].matrix.translation).normalized()
+        bent = upper-fore*upper.dot(fore)
+        pole = er.normalized()
+        pole = pole-fore*pole.dot(fore)
+        share = min(1.0, bent.length/.25)
+        if bent.length > 1e-6 and pole.length > 1e-6: pole = bent.normalized()*share+pole.normalized()*(1-share)
+        z = z.lerp(wrist(fore, pole, k, tw), w).normalized()
+    el = in_chest(pl, frame).normalized()
     d = ((g-z*HANDS)-B['upperarm_l'].matrix.translation).normalized()
     away = z-d*z.dot(d)
     if away.length > 1e-3: el = el.lerp(-away.normalized(), w)
     hold(g, z, c['n'], er, el, free=c['nf'], swing=0.0, ease=c['ea'])
+
+def slam_pose(c, s, rows=None, advance=0.0):
+    """Thundering Strike's figure (or that of the clip whose keys are `rows`)
+    from its channels `c` (at `s` along it)."""
+    chest_pose(c, *(carried(k, s, rows) for k in ('a', 'o', 'pr', 'pl', 'k', 'tw', 'w')), advance=advance)
+
+def settle(w):
+    """The whole figure eased back to the stance as `w` (the share the
+    chest's keys hold) falls."""
+    rest = 1-w
+    if rest <= 0: return
+    for b in B:
+        m = b.matrix_basis
+        loc, rot, scale = m.decompose()
+        l0, r0, s0 = IDLE[b.name].decompose()
+        b.matrix_basis = Matrix.LocRotScale(loc.lerp(l0, rest), rot.slerp(r0, rest), scale.lerp(s0, rest))
+    update()
 
 def slam(t):
     # (The body leads the arms but for the blow itself, which the hands
@@ -981,14 +1000,63 @@ def slam(t):
     s = clock(SLAM_CLOCK, t)
     ahead = {k: clock(SLAM_CLOCK, t+LEAD[0]*window) for k in BODY}|{k: clock(SLAM_CLOCK, t+LEAD[1]*window) for k in BACK}
     slam_pose({k: value(SLAM, k, ahead.get(k, s)) for k in STANCE}, s)
-    rest = 1-carried('w', s)
-    if rest > 0:
-        for b in B:
-            m = b.matrix_basis
-            loc, rot, scale = m.decompose()
-            l0, r0, s0 = IDLE[b.name].decompose()
-            b.matrix_basis = Matrix.LocRotScale(loc.lerp(l0, rest), rot.slerp(r0, rest), scale.lerp(s0, rest))
-        update()
+    settle(carried('w', s))
+
+# The swing (the normal attack), keyed as Thundering Strike is, about the
+# chest: from the stance the weapon is carried up and back over the right
+# shoulder as a batter loads, the hands by the right ear and a span out from
+# it, the haft rising behind the head, the chest wound away to the right and
+# the weight back; then the rear (right) foot is driven through a long step
+# forward and the whole body hurled round to the left behind the blow, the
+# weapon's head brought over and down before him and cut on through to the
+# lower left, the arms thrown out after it, the chest turning on round; and
+# it is swung up before him and back onto the shoulder as the left foot comes
+# up. The game carries him over the ground as he steps (ROOT_ADVANCE, with
+# these keys); here each foot is kept where it is on the ground while he is
+# carried past it.
+# (Keyed by the weapon's path in the world, as it was, the wind-up turned
+# the chest so far round that the grip asked for behind him came out before
+# the face, the haft level through the head; the follow-through asked the
+# arms for more than they reach, and drew the weapon in through the chest;
+# and the elbows, planned over the clip, turned round between frames, the
+# head jerking with them. Here every pose was found where both wrists and
+# forearms can give it, the weapon keeps clear of the head and the
+# face, the weapon and the arms keep off the trunk, and the wrists' cock and
+# turn run on through the blow without turning back, so the head goes round
+# on one path, at its fastest as it lands: the clock reaches the pose keyed
+# at .5 a little after the blow does, the head still coming down.)
+SWING1_ADVANCE = [(0, 0), (.3, 0), (.5, .44), (.64, .5), (.9, .62), (1, .62)]
+SWING1_CLOCK = [(0, 0, 0), (.28, .30, .9), (.37, .335, .2), (.50, .46, 1.5), (.64, .66, 1.0), (1, 1, 0)]
+def arms(a, o, pr, k, tw, pl=(0, 0, -1), **rest):
+    """A pose's arms, about the chest (chest_pose()); the arms a shade short
+    of straight wherever they reach out."""
+    return dict(ARMS, a=a, o=o, pr=pr, k=k, tw=tw, pl=pl)|rest
+# (Through the blow the right fingers are turned toward the cut's own
+# plane, so the weapon's edge leads it rather than its flat.)
+EDGE = dict(nf=.2, n=(.8, 0, .6))
+SWING1 = [K(0, **HOME),
+    # (Lifted, and wound up: the hands up by the right ear, the haft back.)
+    K(.16, down=.05, fwd=-.04, side=-.01, turn=-.18, twist=-.45, bend=-.03, lh=.1, **arms((.93, .37, -.03), .285, (-.28, .84, -.47), 85, 61)),
+    K(.33, down=.06, fwd=-.08, side=-.02, turn=-.3, twist=-.62, lean=-.06, bend=-.05, lh=.2, **arms((.83, .53, .16), .252, (-.07, .97, -.25), 95, 64)),
+    # (Launched: the hands coming forward past the shoulder, the head up
+    # over it; it lands; and runs on down to the lower left.)
+    K(.43, down=.12, fwd=.1, side=-.02, turn=-.12, twist=-.25, lean=.14, bend=-.02, rf=(.3, .14, 0), lh=.1, **arms((.88, .47, .09), .41, (-.54, .37, -.76), 59, 68, **EDGE)),
+    K(.5, down=.17, fwd=.38, side=.04, turn=.12, tilt=.05, twist=.22, lean=.38, bend=.06, rf=(.62, 0, 0), lh=.5, lp=.25, **arms((.98, .19, -.09), .51, (-.64, .56, -.53), 66, 64, **EDGE)),
+    K(.61, down=.19, fwd=.42, side=.045, turn=.28, tilt=.06, twist=.45, lean=.41, bend=.09, rf=(.62, 0, 0), lh=.55, lp=.28, **arms((.81, -.1, -.57), .582, (-.57, .62, -.54), 72, 74, **EDGE)),
+    K(.69, down=.21, fwd=.46, side=.05, turn=.42, tilt=.07, twist=.72, lean=.44, bend=.12, rf=(.62, 0, 0), lh=.6, lp=.3, **arms((.85, -.02, -.47), .6, (-.49, .3, -.82), 64, 69)),
+    # (Swung up before him and back onto the shoulder.)
+    K(.8, down=.16, fwd=.5, turn=.3, twist=.5, lean=.32, rf=(.62, 0, 0), lf=(.3, .1, 0), **arms((.99, 0, -.15), .421, (-.18, .74, -.64), 83, 61)),
+    K(.9, down=.07, fwd=.58, turn=.03, twist=-.05, lean=.15, rf=(.62, 0, 0), lf=(.6, .02, 0), **arms((.95, .21, -.24), .301, (-.26, .9, -.34), 99, 63)),
+    K(1, fwd=.62, lf=(.62, 0, 0), rf=(.62, 0, 0), **HOME)]
+
+def swing1(t):
+    # (The figure is eased in from the stance and back to it as `w` comes
+    # and goes, as Thundering Strike's is.)
+    window = ease(t/.12)*ease((1-t)/.12)
+    s = clock(SWING1_CLOCK, t)
+    ahead = {k: clock(SWING1_CLOCK, t+LEAD[0]*window) for k in BODY}|{k: clock(SWING1_CLOCK, t+LEAD[1]*window) for k in BACK}
+    slam_pose({k: value(SWING1, k, ahead.get(k, s)) for k in STANCE}, s, SWING1, sample(SWING1_ADVANCE, t))
+    settle(carried('w', s, SWING1))
 
 # Shockwave: the weapon is swung over before him, its head round to the left
 # and down, and hoisted in both hands as he draws himself up, the lead knee
@@ -1074,6 +1142,7 @@ for track in rig.animation_data.nla_tracks: track.mute = False
 used = {s.action for t in rig.animation_data.nla_tracks for s in t.strips}
 for a in list(bpy.data.actions):
     if a not in used: bpy.data.actions.remove(a)
+shells(True)
 bpy.context.scene.frame_set(0)
 if DRY: raise SystemExit(print('HEAVY_DRY: nothing written'))
 bpy.ops.export_scene.gltf(filepath=str(GLB), export_format='GLB', export_animations=True, export_animation_mode='NLA_TRACKS', export_force_sampling=True)

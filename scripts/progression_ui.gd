@@ -13,19 +13,16 @@ static func open(game, title: String, subtitle: String) -> void:
 	game.hud.dialog(title,subtitle)
 
 # The character window, on the right side of the screen, at its attributes
-# tab, its skills tab, or its inventory.
+# tab, its skills tab, or its inventory. The game plays on while it is open.
 static func character(game) -> void:
-	pause(game)
 	game.hud.close_dialog()
 	game.hud.panels.open_stats()
 
 static func skills(game) -> void:
-	pause(game)
 	game.hud.close_dialog()
 	game.hud.panels.open_skills()
 
 static func equipment(game) -> void:
-	pause(game)
 	game.hud.close_dialog()
 	game.hud.panels.open_inventory()
 

@@ -95,7 +95,7 @@ func playtest() -> void:
 	game.player.busy=0; game.combat_age=10
 	game.run.bag[0] = Items.make("rangers_bow")
 	await key(KEY_I,true); await key(KEY_I,false)
-	check(game.mode=="character" and game.hud.panels.inventory_open(),"I opens the inventory and pauses combat")
+	check(game.mode=="playing" and game.hud.panels.inventory_open() and game.world.process_mode!=Node.PROCESS_MODE_DISABLED,"I opens the inventory and the game plays on")
 	# (A right click on the bow in the bag takes it in hand.)
 	game.hud.panels.quick_move("bag:0")
 	await key(KEY_ESCAPE,true); await key(KEY_ESCAPE,false)

@@ -756,7 +756,7 @@ const DUALS = {"DualIdle":"SwordIdle","DualRun":"SwordRun","DualWalk":"SwordWalk
 # (not held across the belly in the shield's guard, which the swings hold
 # it in, with or without a shield, tools/import_skills.py, and which would
 # drive the second weapon into his body): each is the clip with the left
-# arm's tracks replaced by the dual idle's. Thunder Slam has a dual swing of
+# arm's tracks replaced by the dual idle's. Thundering Strike has a dual swing of
 # its own.
 const DUAL_SWINGS = ["SwordOpen","SwordCut1R","SwordCut1L","SwordCut2R","SwordCut2L","SwordThrustR","SwordThrustL","SkillCleave","SkillStrike","SkillStab","SkillBash","SkillExecute","SkillShockwave","SkillCry","SkillCharge","SkillLeap"]
 const LEFT_ARM = ["clavicle_l","upperarm_l","lowerarm_l","hand_l"]
@@ -919,7 +919,7 @@ func arm(weapon: String, swung: String = "") -> void:
 	if is_instance_valid(blade_glow): blade_glow.queue_free()
 	blade_glow = null
 	if two_hands != null: two_hands.weight = 0.0
-	# The hero's hard cuts leave a wake behind the blade, and Thunder Slam
+	# The hero's hard cuts leave a wake behind the blade, and Thundering Strike
 	# charges it.
 	if weapon in ["sword","dagger","heavy","pike"] and not is_stone:
 		sword_trail = SwordTrail.new()
@@ -1921,11 +1921,11 @@ const SKILL_WAKE_SPEED = 15.0
 const SKILL_WAKE = [.25,.05]
 # (Cleave's sweep is followed far round after the blow, its wake with it.)
 const SKILL_WAKES = {"SkillCleave":[.16,.12]}
-# (A two-handed Thunder Slam's weapon leaves its wake from the moment it is
+# (A two-handed Thundering Strike's weapon leaves its wake from the moment it is
 # hauled down off the top of the swing, while it is still gathering speed.)
 const SKILL_WAKE_SPEEDS = {"HeavySlam":10.0}
 var blade_tip_was = null
-# Thunder Slam's charge on the blade (scripts/blade_charge.gd): how strong it
+# Thundering Strike's charge on the blade (scripts/blade_charge.gd): how strong it
 # is over the swing, as shares of the clip (forming as he raises the sword,
 # surging as he drives it down, breaking off it as it meets the ground,
 # fading after the blow).
@@ -1990,7 +1990,7 @@ static func cry_glow(u: float, contact: float) -> float:
 	if u <= contact: return smoothstep(CRY_GATHER[0],CRY_GATHER[1],u)
 	return 1.0-smoothstep(contact,CRY_SPENT,u)
 
-# How charged the blade is `u` of the way through Thunder Slam's swing.
+# How charged the blade is `u` of the way through Thundering Strike's swing.
 static func slam_charge(u: float) -> float:
 	if u < 0.0: return 0.0
 	if u < SLAM_RAISED: return .55*smoothstep(0.0,SLAM_RAISED,u)

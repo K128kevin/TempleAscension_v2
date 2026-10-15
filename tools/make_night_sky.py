@@ -1,7 +1,7 @@
-"""Paints the night sky: assets/textures/night_sky.png, an equirectangular
-panorama the outdoor world shows behind the night (scripts/overworld.gd
-setup_sky: a PanoramaSkyMaterial), seen whenever the camera looks toward
-the horizon, as a new character's opening shot does.
+"""Rebuilds the legacy night sky: assets/textures/night_sky.png.
+The outdoor world now uses the generated desert_sky_only.png image;
+see docs/OPENING_SKY.md for its prompts and placement. This generator is
+retained for the old asset and does not overwrite the active opening sky.
 
 A deep blue-black that pales a little toward the horizon; a few thousand
 stars of every size and brightness, a few of them tinted blue or warm, with

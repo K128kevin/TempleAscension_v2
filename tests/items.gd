@@ -140,7 +140,7 @@ func test():
 		thing.free()
 		check(Items.WIELDS.keys().any(func(c): return Items.usable(c,id)),"Some class can use the item: "+id)
 		if item.get("rarity","") == "common": commons += 1
-	check(commons == 30,"Thirty common items drop and take affixes, the warrior's starting gauntlets and war kilt among them (%d)" % commons)
+	check(commons == 31,"Thirty-one common items drop and take affixes, the warrior's starting gauntlets, boots and war kilt among them (%d)" % commons)
 	for class_id in Data.CLASSES:
 		var pool: Array = Items.loot(class_id)
 		check(pool.size() >= 6 and pool.all(func(id): return Items.usable(class_id,id) and Items.BASES[id].rarity == "common"),"Every class has its own drops, all of them usable: %s (%d)" % [class_id,pool.size()])
@@ -225,6 +225,12 @@ func test():
 		var found: Dictionary = Items.roll_drop("wizard","boss",rng)
 		boss_rare = boss_rare and not found.is_empty() and Items.rarity(found) in ["rare","unique"] and Items.usable("wizard",found)
 	check(boss_rare,"The Crowned Statue always drops, rare or unique")
+	var locked = true
+	var unlocked_unique = false
+	for i in 300:
+		locked = locked and Items.rarity(Items.roll_drop("warrior","boss",rng,[])) != "unique" and Items.rarity(Items.roll_drop("warrior","boss",rng,["uncommon"])) != "unique" and Items.rarity(Items.roll_drop("warrior","boss",rng,["rare","common"])) != "unique"
+		unlocked_unique = unlocked_unique or Items.rarity(Items.roll_drop("warrior","boss",rng,["uncommon","rare"])) == "unique"
+	check(locked and unlocked_unique,"No unique drops until a green item and a blue one have dropped")
 	var bandit_rng = RandomNumberGenerator.new(); bandit_rng.seed = 1
 	var bandit_fell = 0
 	for i in 2000:
@@ -613,7 +619,7 @@ func test():
 	var left_track = cleave_dual.find_track(cleave_dual.track_get_path(0).get_concatenated_names().get_slice(":",0)+":lowerarm_l",Animation.TYPE_ROTATION_3D)
 	check(left_track >= 0 and cleave_dual.track_get_key_count(left_track) == 1 and cleave_one.track_get_key_count(cleave_one.find_track(cleave_dual.track_get_path(left_track),Animation.TYPE_ROTATION_3D)) > 1,"with the left arm held still at his side")
 	look2.play("SkillSlam",1.1)
-	check(look2.animator.current_animation.ends_with("DualSkillSlam"),"Thunder Slam with two weapons swings both (%s)" % look2.animator.current_animation)
+	check(look2.animator.current_animation.ends_with("DualSkillSlam"),"Thundering Strike with two weapons swings both (%s)" % look2.animator.current_animation)
 	look2.play("DualIdle")
 	victim = foe(1.5)
 	var hands: Array = []
@@ -803,7 +809,7 @@ func test():
 	game.run.bag[0] = it("steel_full_helm","tough"); game.run.bag[1] = it("greatsword"); game.run.bag[2] = it("wool_hood"); game.run.bag[3] = it("ancient_gladiators_helmet")
 	game._input(key(KEY_I))
 	game.hud.tick(0)
-	check(game.mode == "character" and panels.inventory_open() and not panels.stats_open() and not panels.skills_open(),"I opens the character window at the inventory, pausing the game")
+	check(game.mode == "playing" and panels.inventory_open() and not panels.stats_open() and not panels.skills_open(),"I opens the character window at the inventory, the game playing on")
 	check(panels.slots.size() == 17 and ["head","chest","legs","feet","hands","main","off"].all(func(s): return panels.slots.has(s)),"Seven equipment slots and ten bag places")
 	var bag_rects: Array = []
 	for i in Items.BAG_SIZE: bag_rects.append(panels.slots["bag:%d" % i].frame)
@@ -904,6 +910,16 @@ func with_the_mouse():
 		mouse(at,true); await frames(2)
 		mouse(at,false); await frames(3)
 		check(game.pickups.is_empty() and it("gladiators_helmet") in game.run.bag,"Clicked with the mouse, it is picked up again")
+	# Items lying on one another: every name readable, none over another.
+	for id in ["steel_full_helm","silk_robe","greatsword"]: game.drop_item(it(id),game.player.position+Vector3(1.2,0,0))
+	game.hud.tick(0)
+	await frames(2)
+	game.hud.tick(0)
+	var heap: Array = game.hud.item_labels.filter(func(b): return b.visible)
+	var apart = heap.size() == 3
+	for i in heap.size():
+		for j in range(i+1,heap.size()): apart = apart and not heap[i].get_global_rect().intersects(heap[j].get_global_rect())
+	check(apart,"Three items dropped on one spot each show their name, none over another (%d)" % heap.size())
 
 func frames(count: int):
 	for i in count: await process_frame

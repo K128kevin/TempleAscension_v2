@@ -74,7 +74,7 @@ func test():
 	check(hud.panels.stat_plus.visible and hud.panels.skill_plus.visible and stat_plus.end.x<200 and skill_plus.position.x>root.get_visible_rect().size.x-200 and stat_plus.end.y<=hud.health.get_global_rect().position.y and stat_plus.size.x<=30,"Leveling shows a small + above each orb: attributes left, skills right")
 	await capture("hud-plus-buttons")
 	await click(hud.panels.stat_plus)
-	check(game.mode=="character" and hud.panels.stats_open() and hud.panels.stats.get_global_rect().position.x>root.get_visible_rect().size.x*.6,"The left + opens the character window at its attributes, on the right")
+	check(game.mode=="playing" and hud.panels.stats_open() and hud.panels.stats.get_global_rect().position.x>root.get_visible_rect().size.x*.6,"The left + opens the character window at its attributes, on the right")
 	hud.tick(0); await frames(2)
 	await click(hud.panels.stat_buttons[3])
 	check(game.run.stats[3]==6 and game.run.points==34 and Data.max_health(game.run)==110,"A + in the panel spends an attribute point")

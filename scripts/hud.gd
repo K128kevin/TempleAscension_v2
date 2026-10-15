@@ -632,6 +632,40 @@ func show_item_labels() -> void:
 			for look in ["hover","pressed"]: b.add_theme_stylebox_override(look,item_label_styles[key][1])
 			b.reset_size()
 		b.position = camera.unproject_position(pickup.node.position+Vector3.UP*.45)-Vector2(b.size.x*.5,b.size.y)
+	stack_item_labels(shown.size())
+
+# No two names on the ground cover one another: taken from the bottom of the
+# screen up (the nearest first; level ones left to right, and items at one
+# spot by where they lie, so the order holds still frame to frame), each
+# name that would overlap one already placed is lifted to stand just above
+# it, again until it is clear.
+const ITEM_LABEL_GAP = 2.0
+func stack_item_labels(count: int) -> void:
+	var order: Array = []
+	for i in count: order.append(i)
+	var key = func(i: int) -> Array:
+		var b: Button = item_labels[i]
+		var at: Vector3 = b.get_meta("pickup").node.position
+		return [-roundf(b.position.y+b.size.y),roundf(b.position.x),at.x,at.z]
+	order.sort_custom(func(a, b):
+		var ka: Array = key.call(a)
+		var kb: Array = key.call(b)
+		for k in ka.size():
+			if ka[k] != kb[k]: return ka[k] < kb[k]
+		return a < b)
+	var placed: Array[Rect2] = []
+	for i in order:
+		var b: Button = item_labels[i]
+		var rect := Rect2(b.position,b.size)
+		var moved = true
+		while moved:
+			moved = false
+			for other in placed:
+				if rect.grow(ITEM_LABEL_GAP*.5).intersects(other.grow(ITEM_LABEL_GAP*.5)):
+					rect.position.y = other.position.y-rect.size.y-ITEM_LABEL_GAP
+					moved = true
+		b.position = rect.position
+		placed.append(rect)
 
 # The last floor's bars, taken down as a new one is entered.
 func clear_enemy_bars() -> void:

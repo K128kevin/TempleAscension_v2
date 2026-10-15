@@ -38,7 +38,7 @@ const TOPPLE = {"spine_03":.7,"Head":1.0}
 const TOPPLE_MOST = 2.5
 # How fast a man is thrown, in metres a second, the way the blow went
 # (StoneFragment.impact gives its direction): knocked back by an ordinary
-# blow; hurled by a blast (Leap, Thunder Slam, Shockwave, Power Shot: an
+# blow; hurled by a blast (Leap, Thundering Strike, Shockwave, Power Shot: an
 # impact faster than BLAST), to rebound from whatever wall he meets.
 const BLAST = 4.0
 const PUSH = 3.0

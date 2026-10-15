@@ -119,7 +119,7 @@ func test():
 		check(game.hud.panels.inventory_open() and game.hud.panels.slots.size()==Items.SLOTS.size()+Items.BAG_SIZE and game.hud.panels.figure.worn==game.run.equipment,"The inventory tab shows the hero's figure, his seven slots and his bag's ten places: "+class_id)
 		await snapshot(class_id+"-inventory")
 		await snapshot(class_id+"-skills")
-		check(game.mode=="character" and game.world.process_mode==Node.PROCESS_MODE_DISABLED,"Character and skill panels pause combat")
+		check(game.mode=="playing" and game.world.process_mode!=Node.PROCESS_MODE_DISABLED,"Character and skill panels leave the game playing")
 		game.resume_game()
 		check(game.mode=="playing" and not game.hud.panels.any_open(),"Resuming closes the panels: "+class_id)
 	game.run = Data.new_run("wizard"); game.load_floor()

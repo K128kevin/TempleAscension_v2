@@ -478,10 +478,11 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if event.physical_keycode==KEY_ESCAPE:
-			# Escape skips the opening, gives up an aimed Power Shot, and
-			# otherwise pauses the game.
+			# Escape skips the opening, gives up an aimed Power Shot, closes
+			# the character window, and otherwise pauses the game.
 			if mode=="playing" and intro_left>0: end_intro()
 			elif mode=="playing" and skills.abandon_aim(): pass
+			elif mode=="playing" and hud.panels.any_open(): hud.panels.close()
 			elif mode=="playing": pause_game()
 			elif mode in ["paused","character"] and not creating_character: resume_game()
 			get_viewport().set_input_as_handled()
@@ -489,7 +490,7 @@ func _input(event: InputEvent) -> void:
 			toggle_screen(event.physical_keycode)
 			get_viewport().set_input_as_handled()
 		# Pointing at a learned skill in the skill panel, 1 to 4 assign it.
-		if event.physical_keycode in [KEY_1,KEY_2,KEY_3,KEY_4] and mode=="character" and not hud.panels.hovered.is_empty():
+		if event.physical_keycode in [KEY_1,KEY_2,KEY_3,KEY_4] and mode in ["playing","character"] and hud.panels.skills_open() and not hud.panels.hovered.is_empty():
 			hud.panels.assign(hud.panels.hovered,event.physical_keycode-KEY_1+1)
 			get_viewport().set_input_as_handled()
 
@@ -506,8 +507,8 @@ func show_ui(on: bool) -> void:
 	if is_instance_valid(world) and is_instance_valid(world.camera): world.camera.set_cull_mask_value(20,on)
 
 # C, K and I open the character window at its attributes, its skills and its
-# inventory (or turn it to that tab), and close it from there. The game is
-# paused while it is open.
+# inventory (or turn it to that tab), and close it from there. The game plays
+# on while it is open.
 func toggle_screen(key: int) -> void:
 	if key==KEY_C:
 		if hud.panels.stats_open(): hud.panels.close()
@@ -1335,7 +1336,7 @@ func enemy_died(enemy) -> void:
 			float_text(player.position+Vector3.UP*2.2,"LEVEL %d" % run.level,Color(1,.86,.45))
 			toast("Level %d: %d attribute points and %d skill point%s to spend." % [run.level,run.points,run.skill_points,"" if run.skill_points==1 else "s"])
 		# It may drop an item (scripts/items.gd; never a second time on a retry).
-		var found: Dictionary = loot_forced if not loot_forced.is_empty() else ({} if loot_off else Items.roll_drop(run.class_id,enemy.kind,loot_rng))
+		var found: Dictionary = loot_forced if not loot_forced.is_empty() else ({} if loot_off else Items.roll_drop(run.class_id,enemy.kind,loot_rng,run.get("seen",[])))
 		loot_forced = {}
 		if not found.is_empty(): drop_item(found,enemy.position)
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
@@ -1379,6 +1380,10 @@ func drop_item(inst: Dictionary, at: Vector3) -> void:
 	var spot: Vector3 = world.move(at,Vector3(randf_range(-.5,.5),0,randf_range(-.5,.5)))
 	var drop = {"item":inst,"position":[spot.x,spot.z]}
 	run.drops.append(drop)
+	# (What rarities have fallen for him: no unique falls till a green and a
+	# blue have, Items.roll_drop.)
+	var rarity: String = Items.rarity(inst)
+	if not rarity in run.get("seen",[]): run["seen"] = run.get("seen",[])+[rarity]
 	create_pickup(drop)
 
 # An item lying on the ground: its own model, laid down, with its name over

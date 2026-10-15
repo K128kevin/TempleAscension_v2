@@ -1,4 +1,4 @@
-// The outdoor world's ground, drawn on one flat slab: photographed sand,
+// The outdoor world's continuous ground: photographed sand,
 // fine where the wind lays it and gravelly in patches, on the track and under
 // the rocks, shaded into low dunes and wind ripples; and, where the control
 // map says so, town paving, the worn track and water: the oasis, the palace's
@@ -22,8 +22,8 @@ uniform sampler2D sand_gravel_normal : filter_linear_mipmap_anisotropic, repeat_
 // Smooth tiling noise, one lattice cell every eight texels: far cheaper to
 // read than to compute for every pixel of the screen.
 uniform sampler2D noise_map : filter_linear_mipmap, repeat_enable;
-// Set on the hill's own mesh: its slope then tilts the shading. (The slab's
-// carved paving is shaded flat.)
+// Mesh slopes tilt the shading; the flat map's upward normals leave its
+// paving and sand unchanged.
 uniform float sloped = 0.0;
 // The photographs are of paler, greyer sand: these bring them to the basin's.
 uniform vec3 sand_light = vec3(1.33,1.24,1.12);
@@ -95,6 +95,10 @@ void fragment() {
 	// The map's hard cell edges are broken up with noise.
 	vec2 wobble = vec2(value_noise(p*.9),value_noise(p.yx*.9+31.7))-.5;
 	vec4 map = texture(control,(p+wobble*1.1-map_origin+.5)/map_size);
+	// Continue the same painted surface beyond the map, then ease it into
+	// plain sand. Never switch control textures at a terrain boundary.
+	vec2 outside = max(max(map_origin-p,p-map_origin-map_size),vec2(0.0));
+	map *= 1.0-smoothstep(0.0,48.0,length(outside));
 	float paved = smoothstep(.42,.6,map.r+(value_noise(p*1.1)-.5)*.5);
 	float track = smoothstep(.2,.75,map.g+(value_noise(p*.8+9.0)-.5)*.45);
 	float water = smoothstep(.45,.6,map.a);

@@ -21,7 +21,7 @@ with no shield on it the arm is held so all the same.
   SkillBash       Shield Bash: a backhand blow of the shield behind a step
   SkillExecute    the blade raised far behind the head and brought down
                   with the whole body, to the knees
-  SkillSlam       Thunder Slam, one circle on his right: the blade held
+  SkillSlam       Thundering Strike, one circle on his right: the blade held
                   before the belly pointed ahead, swung down past the outside
                   of his right leg and back behind him as the arm drops and
                   swings back with the chest turned to it, up behind him, over
@@ -479,7 +479,7 @@ def author(name, pose, keep=()):
         to_stance(settle(t), arm_settle(t), keep)
         if held_guard[0] is not None: least = min(least, (board_gap()[0], t))
         # SLAM_CHECK=1: how high the blade is over the ground (its two ends)
-        # through Thunder Slam and Leap, and how near the body it comes.
+        # through Thundering Strike and Leap, and how near the body it comes.
         if name in ('SkillSlam', 'DualSkillSlam', 'SkillLeap') and os.environ.get('SLAM_CHECK') and (f % 3 == 0):
             c = clearances()
             hand = rig.pose.bones['hand_r'].matrix
@@ -636,7 +636,7 @@ def execute(t):
     guard(forward=.08*wind, out=.22*fall, up=.06*fall)
     plant()
 
-# Thunder Slam's and Leap's blow: the blade struck down along the ground
+# Thundering Strike's and Leap's blow: the blade struck down along the ground
 # rather than point-first into it. The hand (held with the grip the swing
 # gives it) comes down as low as the folded body lets it, a little ahead; the
 # blade points ahead, tipped just enough that it meets the ground along its
@@ -646,7 +646,7 @@ SLAM_AHEAD = .6
 FLAT_BLADE = V(0, -1, -.1)
 LEAP_BLADE = V(0, -1, -.25)
 
-# Thunder Slam's wind-up and blow, after film of the swing made with a stick
+# Thundering Strike's wind-up and blow, after film of the swing made with a stick
 # in one hand, shared by the one-handed and the dual swing. The weapon never
 # leaves his forehand side. First the hand stays before the belly and the
 # blade, held up, is tipped over to his right and let fall down his right
@@ -1162,7 +1162,7 @@ if os.environ.get('SWINGS_ONLY'):
     raise SystemExit
 
 def probe():
-    """SKILLS_PROBE=s,s,...: at those moments of Thunder Slam, the sword
+    """SKILLS_PROBE=s,s,...: at those moments of Thundering Strike, the sword
     elbow's pole swept right round the arm's line (no swing allowed the fist)
     and the fist's turn printed for each: where the elbow should be asked for."""
     for s in [float(v) for v in os.environ['SKILLS_PROBE'].split(',')]:

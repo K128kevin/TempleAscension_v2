@@ -598,7 +598,7 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   ground. The cuts trail a wake of air behind the blade (`scripts/sword_trail.gd`,
   `assets/shaders/sword_trail.gdshader`): a ribbon through the blade's last places,
   fading out. A skill's swing leaves the same wake where it cuts fast before
-  its blow (`scripts/visual.gd` SKILL_WAKE); a two-handed Thunder Slam's from
+  its blow (`scripts/visual.gd` SKILL_WAKE); a two-handed Thundering Strike's from
   the moment the weapon is hauled down off the top. He walks into his target as he swings: each
   swing is struck on a full stride of the rear foot past the front, so the feet
   alternate. Swinging on, one runs into the next (`scripts/combat_animation.gd`
@@ -641,7 +641,7 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   cut to its own pommel, grip and guard.
 - The warrior's skill swings (SkillCleave, SkillStrike, SkillStab, SkillBash,
   SkillExecute, SkillSlam, SkillShockwave, SkillCry, SkillCharge, SkillLeap, and
-  DualSkillSlam, Thunder Slam with a weapon in each hand, both swung over the
+  DualSkillSlam, Thundering Strike with a weapon in each hand, both swung over the
   head and slammed down) are
   authored by `tools/import_skills.py` from the sword-and-shield stance, frame by
   frame: the hips, spine and head turned and bent along smooth curves, the sword arm
@@ -659,8 +659,8 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   forearm turns (measured from the elbow's pit: at the middle the thumb points at
   it; and never, given the chest's front, to where the elbow points at it, which
   reads as an elbow bent the wrong way), and the forearm is rolled after the
-  fist. In the two-handed clips (but Thunder Slam, whose poses say outright
-  where each elbow points) the elbows are planned over the whole clip
+  fist. In the two-handed clips (but Thundering Strike and the normal attack,
+  whose poses say outright where each elbow points) the elbows are planned over the whole clip
   rather than searched afresh at each frame (`import_heavy.py` `elbows()`):
   each frame is posed to measure what every way round each arm's line would
   cost there (`fist`'s `profile`, 48 ways; twice, the second time as first
@@ -679,7 +679,7 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   laid out by `tools/sheet_compose.py`: his right side, the front, and the
   game's own 43° downward view from his front right and from behind his left,
   a stand-in weapon on the fist), which is how a swing is judged without the
-  eleven-minute export and reimport. Thunder Slam itself (all three clips) is
+  eleven-minute export and reimport. Thundering Strike itself (all three clips) is
   one circle on his right, after the user's drawing of the head's path: the
   weapon held before the belly pointed ahead is swung down past the outside of
   his right leg and back behind him as the arms drop and swing back with the
@@ -697,7 +697,27 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   between frames; the left elbow points away from the side of its arm the
   head lies on, so the left fist (thumb toward the head) is never wrung or
   flipped. Its head swings out and down past his right hip at belt height,
-  the lowest it goes, round behind him and up, with no second dip. The shockwave of a blow
+  the lowest it goes, round behind him and up, with no second dip. The
+  two-handed normal attack (HeavySwing1) is keyed the same way (`chest_pose()`):
+  the weapon carried up and back over the right shoulder as a batter loads,
+  the hands by the right ear a span out from it and the haft rising behind
+  the head, then brought over and down before him as the rear foot steps
+  through, and cut on to the lower left with the chest turning on round.
+  Keyed by the weapon's path in the world, as it was, its wind-up turned the
+  chest so far that the grip came out before the face, the haft level
+  through the head, and its follow-through drew the weapon in through the
+  chest; each of its poses was then found (by a search over the hands'
+  reach, the elbow's way and the wrist's cock and turn) where both wrists
+  and forearms can give it and the weapon, war hammer, axe or greatsword,
+  keeps clear of the head, face, neck, chest, belly and arms, with the
+  wrists' cock and turn running on through the blow so the head is fastest
+  as it lands. (The elbow's pit is read off the upper arm wherever the arm
+  is bent: folded tight, the forearm runs back almost along the way the
+  elbow is asked to point, and the pit read off that turned the weapon
+  over between frames.) The checks (`HEAVY_CHECK`) measure the face too, a
+  capsule from brow to chin before the skull's sphere, and the meshes are
+  hidden while clips are posed, which makes authoring some three times
+  faster. The shockwave of a blow
   on the ground is `scripts/shockwave.gd`: a disc laid on the floor over the blow's
   reach (a slice of one for the slam's arc) and a low wall standing on the front,
   both drawn by `assets/shaders/shockwave.gdshader` (the racing front, its haze,
@@ -713,7 +733,7 @@ Source directory: `/Users/ktabb/Documents/3dAssets/` (read only).
   left hand the game plays a `Dual` variant of each sword swing and skill, derived
   at load (scripts/visual.gd derive_dual_swings): the clip with the left arm's
   tracks replaced by the dual idle's hanging arm, so the second weapon never
-  crosses into the body; Thunder Slam alone has its own authored dual clip. The
+  crosses into the body; Thundering Strike alone has its own authored dual clip. The
   left hand's own cut (OffCut) is mirrored from the dual first cut, so the right
   hand's weapon is carried at his side meanwhile, not across the belly.
 - A two-handed sword, axe or maul has its own clips (HeavyIdle, HeavySwing1,
@@ -1026,6 +1046,17 @@ external output folder. The icon reuses the generated seal.
    Final prompt:
    > Use case: stylized-concept. Asset type: edited landscape background matte for a game. Input image 1 is the edit target: the existing dark moonlit desert with ancient ruins. Change the viewpoint and perspective: look downward from the fourth or fifth floor of a building, approximately 15 metres above the nearby desert floor, with a distinctly steeper downward camera angle. Bring the desert much closer to the viewer: nearby dunes, scattered rocks, ruined stone foundations and a few weathered columns should be larger, with clearly visible top surfaces below us. It must feel like looking down from an upper-story terrace at ground nearby, rather than looking straight out across a distant valley. Frame the ground across almost the entire image; push the distant mountain horizon into the uppermost 8 percent with only a very narrow sky strip, allowing the moon to be outside the frame. Preserve the same ancient desert setting, winding river farther back to the right, scattered colonnade ruins, restrained painterly realism, and very dark navy-charcoal and sand-brown palette. Preserve dim cool silver-blue moonlight along dunes and stone edges; no daylight or bright illumination. Keep a convincing natural transition from nearby ground at the bottom to distant mountains at the top. No foreground balcony, railing, building facade, people, interface, text, border or watermark. Landscape 3:2.
 
+9. `assets/textures/desert_sky_only.png`
+   The outdoor opening's sky-only night image, edited with the built-in imagegen
+   tool from `desert_opening_sky_v2.png`: sparse pinpoint stars and one cratered
+   moon, with all sand and land removed. The northern sector retains the sharp
+   native texture detail. Actual 3D sand dunes, built by `scripts/world_horizon.gd`
+   as one continuous surface from the flat town ground into distant rolling
+   hills, form the horizon in the game's own lighting. One shared material and
+   paint map avoid a texture seam. The sky image also supplies night
+   reflections. Earlier versions are retained. Full prompts and geometry notes:
+   [OPENING_SKY.md](OPENING_SKY.md).
+
 The hero's body texture, `assets/textures/hero_kit.png`, is baked by
 `tools/paint_hero.py` through the character's own UVs. Each vertex takes a region from
 its skin weights and rest-pose height: bronze scale armor over the chest, back,
@@ -1137,7 +1168,7 @@ instead of falling over, the statue crumbles as in the original game. The body
 collapses and disappears over 0.7 s, leaving thirty-six stone fragments (the imported
 rock mesh in statue stone), each a rigid body with a convex collision hull. There
 is no static rubble pile. They tumble, bounce against the paving and architecture, and settle
-with friction. Normal attacks push them away from the hit; Thunder Slam and Leap
+with friction. Normal attacks push them away from the hit; Thundering Strike and Leap
 throw them farther outward and upward. The body collapse and dust follow the combat
 clock; the chips use Godot's physics clock, pause with the world, and expire after
 eight seconds. Collision slabs and prop hulls are built when the first statue falls.
@@ -1171,7 +1202,7 @@ second impact to the blow that killed him.
 
 `assets/audio/rock-impact.mp3` is PMSFX's "Rock Crash, Designed Rock Impact Crash,
 Big Cinematic" (PMSFX_ROCKCrsh_Designed_Rock_Impact_Carsh_Big_Cinematic_41RI2_2442.mp3),
-unedited, supplied by the user: a 0.9 s crash of breaking rock. It plays as Thunder Slam's
+unedited, supplied by the user: a 0.9 s crash of breaking rock. It plays as Thundering Strike's
 and Shockwave's blows meet the ground. Its licence follows the user's PMSFX terms.
 
 `assets/audio/lightning-zap.wav` is a ZapSplat electric crackle supplied by the
@@ -1185,7 +1216,7 @@ www.zapsplat.com under ZapSplat's license, like the other effects.
 tones and filters; no recording) and is original to this project: the deep punch
 of Power Shot striking, a quick rush of air swelling into it that stops with the
 blow. The same punch is heard with every shockwave the warrior drives into the
-ground (Thunder Slam, Shockwave and Leap's landing), over its crash of rock or
+ground (Thundering Strike, Shockwave and Leap's landing), over its crash of rock or
 impact.
 
 `assets/audio/fountain-trickle.wav` is the original game's

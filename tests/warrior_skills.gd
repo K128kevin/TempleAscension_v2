@@ -110,7 +110,7 @@ func test():
 	game.set_process(false)
 	game.sound.muted = true
 	open_plane()
-	check(game.world.clear_line(origin,origin+forward*21.5) and game.world.fits(origin+forward*21.5),"The test plane has room for the longest Thunder Slam")
+	check(game.world.clear_line(origin,origin+forward*21.5) and game.world.fits(origin+forward*21.5),"The test plane has room for the longest Thundering Strike")
 
 	# Cleave: every enemy in the arc, for the listed damage and energy.
 	hero({"cleave":1})
@@ -127,17 +127,17 @@ func test():
 	check(game.attack_range(true,0)==game.skills.MELEE_REACH,"An ordered Cleave is walked into melee reach")
 	clear()
 
-	# Thunder Slam: an arc out to its listed distance.
+	# Thundering Strike: an arc out to its listed distance.
 	hero({"cleave":5,"ground_slam":1})
 	var near = dummy(4.5); var beyond = dummy(6.0); var off = dummy(4.5,45)
-	check(game.skills.cast("ground_slam",origin+forward*5) and game.run.energy==60,"Thunder Slam costs 40 energy")
+	check(game.skills.cast("ground_slam",origin+forward*5) and game.run.energy==60,"Thundering Strike costs 40 energy")
 	wait(1.15)
-	check(hits(near,100) and lost(beyond)==0 and lost(off)==0,"Thunder Slam rank 1: 100% damage in a 70° arc out to 5 metres")
+	check(hits(near,100) and lost(beyond)==0 and lost(off)==0,"Thundering Strike rank 1: 100% damage in a 70° arc out to 5 metres")
 	check(not game.effects.any(func(e): return not e.node is Label3D),"No coloured circles mark the ground it strikes")
 	hero({"cleave":5,"ground_slam":5})
 	var distant = dummy(8.5); var past_reach = dummy(10.5)
 	game.skills.cast("ground_slam",origin+forward*5); wait(1.15)
-	check(hits(distant,250) and lost(past_reach)==0 and lost(off)>0,"Thunder Slam rank 5: 250% damage in a 120° arc out to 9 metres")
+	check(hits(distant,250) and lost(past_reach)==0 and lost(off)>0,"Thundering Strike rank 5: 250% damage in a 120° arc out to 9 metres")
 	check(game.skills.waves.size()>=1 and game.shake_left>0 and game.player.visual.state=="SkillSlam","The slam sends out a shockwave of dust, shakes the screen, and has its own swing")
 	var sparks: Array = game.skills.waves.filter(func(w): return w is Crackle)
 	var spread_out = sparks.size()==1 and not sparks[0].arcs.is_empty() and is_equal_approx(sparks[0].reach,9.0)
@@ -675,7 +675,7 @@ func test():
 	var panels = game.hud.panels
 	check(game.run.points==25 and game.run.skill_points==5 and panels.stat_plus.visible and panels.skill_plus.visible,"Five levels: 25 attribute points, 5 skill points, and both + buttons")
 	panels.stat_plus.pressed.emit()
-	check(game.mode=="character" and panels.stats_open() and not panels.skills_open(),"The left + opens the attribute panel")
+	check(game.mode=="playing" and panels.stats_open() and not panels.skills_open(),"The left + opens the attribute panel")
 	panels.add_stat(0); panels.add_stat(3)
 	check(game.run.stats==[6,5,5,6,5] and game.run.points==23 and game.player.max_hp==110,"Its + buttons spend points on any attribute")
 	panels.skill_plus.pressed.emit()

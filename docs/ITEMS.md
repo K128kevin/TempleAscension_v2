@@ -30,8 +30,8 @@ two-handed. (No spear is made yet; the spear's own motions are kept for one.)
 ## Rarity
 
 - **Starting gear and common items** are white. The starting gear never
-  drops (but for the warrior's Steel Plated Gauntlets and Studded War Kilt,
-  common items too). The
+  drops (but for the warrior's Steel Plated Gauntlets, Steel Plated Boots and
+  Studded War Kilt, common items too). The
   common items drop, and are what every magic item is made of.
 - **Uncommon** (green): a common item with one **prefix** or one **suffix**.
 - **Rare** (blue): a common item with both a prefix and a suffix, or with
@@ -140,7 +140,9 @@ Staff of the Lost Emperor does.
 - What drops is made for the hero's class: its rarity is drawn by weight
   (common 58, uncommon 28, rare 11, unique 3; the Crowned Statue rare 75,
   unique 25), then a common item the class can use is drawn and given its
-  affixes, or one of the class's uniques is chosen.
+  affixes, or one of the class's uniques is chosen. No unique drops until a
+  green (uncommon) and a blue (rare) item have both dropped for the character;
+  until then a unique drawn is drawn again from the other rarities.
 - The centurions the Crowned Statue summons drop nothing, and an enemy killed
   again after a death and retry drops nothing a second time.
 - A dropped item lies on the ground as its own model, with its name over it
@@ -199,6 +201,7 @@ What drops, and what the prefixes and suffixes are put on.
 | Item | Kind | Used by | What it gives |
 |---|---|---|---|
 | Steel Plated Gauntlets | Heavy armor · Hands | Warrior | 15 armor |
+| Steel Plated Boots | Heavy armor · Feet | Warrior | 15 armor |
 | Studded War Kilt | Heavy armor · Legs | Warrior | 23 armor |
 | Silk Gloves | Light armor · Hands | Wizard | 5 armor; +2 Intelligence |
 | Silk Robe | Light armor · Chest | Wizard | 8 armor; +3 Intelligence |

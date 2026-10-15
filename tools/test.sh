@@ -32,6 +32,7 @@ run "$godot_bin" --headless --path . --script tests/wizard_skills.gd --log-file 
 run "$godot_bin" --headless --path . --script tests/items.gd --log-file "$PWD/test-results/items.log"
 run "$godot_bin" --headless --path . --script tests/overworld.gd --log-file "$PWD/test-results/overworld.log"
 run "$godot_bin" --headless --path . --script tests/daylight.gd --log-file "$PWD/test-results/daylight.log"
+run "$godot_bin" --headless --path . --script tests/desert_horizon.gd --log-file "$PWD/test-results/desert-horizon.log"
 run "$godot_bin" --headless --path . --script tests/dungeons.gd --log-file "$PWD/test-results/dungeons.log"
 run "$godot_bin" --headless --path . --script tests/wall_stuck.gd --log-file "$PWD/test-results/wall-stuck.log"
 run "$godot_bin" --headless --path . --script tests/basement_props.gd --log-file "$PWD/test-results/basement-props.log"

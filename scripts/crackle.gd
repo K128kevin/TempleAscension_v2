@@ -5,7 +5,7 @@ extends Node3D
 ## flickers, snaps out and strikes again somewhere else nearby, the last of
 ## them dying away as the sound fades. A flickering blue light goes with them.
 ##
-## Thunder Slam drives the same arcs outward (`outward`): they spark out
+## Thundering Strike drives the same arcs outward (`outward`): they spark out
 ## from the blow across the slam's arc, racing just behind its shockwave's
 ## front (scripts/shockwave.gd), and die as the front thins at its reach.
 ##
@@ -16,11 +16,11 @@ const ZAP = preload("res://assets/audio/lightning-zap.wav")
 # How long the sound's own fade is (tools/make_sounds.py ZAP_FADE): the arcs
 # thin out and die with it.
 const FADE = .6
-# Thunder Slam's arcs: how many at once, and how long they go on crackling
+# Thundering Strike's arcs: how many at once, and how long they go on crackling
 # at the edge after the front has reached it, the last of that fading.
 const OUTWARD_ARCS = 14
 const OUTWARD_LINGER = .3
-# Each of Thunder Slam's is short, and blinks out sooner than Lightning
+# Each of Thundering Strike's is short, and blinks out sooner than Lightning
 # Shot's, to pop up again somewhere else.
 const OUTWARD_LENGTH = Vector2(.25,.6)
 const OUTWARD_LIFE = Vector2(.035,.09)
@@ -36,7 +36,7 @@ var age = 0.0
 var lasting = 1.0
 var fade = FADE
 var count = ARCS
-# Thunder Slam's: the way the blow goes, the half-angle of its arc and how far
+# Thundering Strike's: the way the blow goes, the half-angle of its arc and how far
 # it reaches (zero reach: Lightning Shot's, about one spot).
 var way = Vector3.FORWARD
 var half = PI
@@ -54,7 +54,7 @@ static func make(at: Vector3) -> Node3D:
 	node.dress()
 	return node
 
-# Thunder Slam's arcs, out from `at` along `direction` across `degrees` of arc
+# Thundering Strike's arcs, out from `at` along `direction` across `degrees` of arc
 # to `reach` metres.
 static func outward(at: Vector3, direction: Vector3, degrees: float, reach: float) -> Node3D:
 	var node = new()
@@ -105,7 +105,7 @@ func spark() -> Dictionary:
 	b.y = maxf(b.y,.03)
 	return {"a":a,"b":b,"left":randf_range(LIFE.x,LIFE.y)}
 
-# One of Thunder Slam's: a short arc low over the ground somewhere the front
+# One of Thundering Strike's: a short arc low over the ground somewhere the front
 # has passed, most often near it, pointing out along the way the blow went
 # and hopping up off the floor or down onto it.
 func outward_spark() -> Dictionary:
@@ -133,7 +133,7 @@ func tick(dt: float) -> bool:
 		redraw = REDRAW
 		draw(power)
 	flash.light_energy = 1.8*power*randf_range(.4,1.0) if not arcs.is_empty() else 0.0
-	# (Thunder Slam's light runs out with its arcs.)
+	# (Thundering Strike's light runs out with its arcs.)
 	if reach > 0:
 		flash.position = way*Shockwave.spread(age)*reach*.75+Vector3.UP*.5
 		flash.omni_range = 5.0

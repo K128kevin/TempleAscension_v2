@@ -243,7 +243,7 @@ const WARRIOR_CLIPS = {"cleave":["SkillCleave",1.0,.52],"strike":["SkillStrike",
 	"bash":["SkillBash",.9,.5],"execute":["SkillExecute",1.3,.58],"slam":["SkillSlam",1.6,.66],"shockwave":["SkillShockwave",1.2,.56],
 	"cry":["SkillCry",1.0,.3],"charge":["SkillCharge",1.0,.82],"leap":["SkillLeap",1.0,.56]}
 # A weapon's own swing of a skill that plays quicker than the sword's (seconds;
-# its blow lands at the same share of it): the two-handed Thunder Slam is
+# its blow lands at the same share of it): the two-handed Thundering Strike is
 # wound up faster.
 const OWN_SECONDS = {"HeavySlam":1.4}
 # Vampiric and Shadow Strike are struck with the normal attack's swings, run
@@ -1187,7 +1187,7 @@ func ground_blow(at: Vector3, reach: float, shake: float, direction: Vector3 = V
 	game.world.add_child(wave)
 	waves.append(wave)
 	game.shake(shake)
-	# The blow meeting the ground: a crash of rock (Thunder Slam and
+	# The blow meeting the ground: a crash of rock (Thundering Strike and
 	# Shockwave), or the original game's Whirl impact as the warrior lands
 	# (Leap); and with it the force of the blow driving the air out, as
 	# Power Shot's is heard.

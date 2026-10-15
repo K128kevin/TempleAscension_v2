@@ -247,9 +247,10 @@ The temple stands in a larger world, one continuous outdoor map
   sloped and twenty-two metres high, looks down on the town from the south;
   on its crown is the camp a new character wakes at, seated on a log by his
   fire, with a sleeping pad and his supplies beside it. He gets up the moment
-  he moves. By night the sky above the horizon is a painted panorama of stars,
-  the Milky Way and a low moon (tools/make_night_sky.py), seen in the opening
-  shot; the night itself is dark, lit by the fires.
+  he moves. The opening's generated sky image has fine stars and a low moon.
+  One continuous desert surface extends beyond town into rolling 3D hills,
+  forming a gently uneven horizon in the world's lighting. The night itself is
+  dark, lit by the fires.
 - **The dungeons' entrances**: under the arena's stands runs a paved, shadowed
   undercroft (a doorway in each side of the east, south and west gateways lets
   into it; the seats overhead are lifted away while the hero is inside), with
@@ -461,7 +462,7 @@ Percentages of damage are of a normal attack.
 |---|---|---|---|---|
 | Area of Effect | 0 | Cleave | 25 | A 140° → 180° arc for 125% → 165% damage |
 | | 5 | Leap | 40 | Leap to a target in sight (up to 10 m): 125% → 300% to everyone around the landing (4.5 m) |
-| | 5 | Thunder Slam | 40 | 100% → 250% in a 70° → 120° arc, out to 5 → 9 m; a shockwave of dust and a shake of the screen |
+| | 5 | Thundering Strike | 40 | 100% → 250% in a 70° → 120° arc, out to 5 → 9 m; a shockwave of dust and a shake of the screen |
 | | 0 | War Cry | 30 | Every enemy within 6 → 10 m takes 20% → 100% more damage for 6 → 10 seconds |
 | | 10 | Shield Charge | 35 | Sword and shield only: a charge of 8 → 14 m behind the shield, 100% → 200% to everyone in the path, thrown aside; the first one hit stunned for 1 → 2 seconds |
 | | 10 | Shockwave | 40 | 180% → 360% to everyone within 4 → 7 m, thrown back; 10-second cooldown; a shockwave of dust and a shake of the screen |
@@ -504,7 +505,7 @@ enough wherever the sword would pass through it. With the sword, every warrior s
 a level sweep for Cleave, an overhead chop for Powerful Strike, a lunging thrust for
 Vampiric and Shadow Strike, the shield shoved out behind a step for Shield Bash, the
 blade wound far back and brought down with the whole body for Execute, wound up
-in one great circle on his right for Thunder Slam, after the user's drawing of
+in one great circle on his right for Thundering Strike, after the user's drawing of
 the head's path (the blade held before the belly pointed ahead is swung down
 past the outside of his right leg and back behind him as the arm drops and
 swings back with the chest turned to it, up behind him and over the head as he
@@ -521,14 +522,14 @@ crouch for Shockwave, the blade thrust at the sky for War Cry, a braced run behi
 the shield for Shield Charge (the sprint, the shield held straight out before him),
 and for Leap a deep crouch, the spring, the body stretched in the air with the blade
 over the head, and the landing driven down with everything behind it. Leap's
-landing, Thunder Slam and Shockwave put everything into the ground at once
+landing, Thundering Strike and Shockwave put everything into the ground at once
 (`scripts/shockwave.gd`): a flash where the blow lands, the floor cracked about it
 (dark splits lit along their lips, the glow dying away and the cracks lasting a second), a column of dust thrown up, and a
 single front racing out across the whole area the blow reaches, like a sonic boom
 (a hard pale edge with a fainter one after it and a low wall of haze standing on
 it; all round the warrior under the leap, across the arc ahead for the slam),
 quick at first and gone as it reaches the blow's edge; and the screen shakes. The
-charge on the blade in Thunder Slam does not shoot out: it is spent into the
+charge on the blade in Thundering Strike does not shoot out: it is spent into the
 ground (the cracks glow blue with it), and what is left on the blade drifts off it
 in wisps and fades.
 
@@ -536,7 +537,7 @@ Shield Bash is the one skill with a cooldown; energy is the others' only cost.
 Dexterity quickens every attack, melee or bow, skills included; Quick Strikes only the
 normal attack. No swing is faster than a fifth of a second. A right click (or
 1 to 4) on an enemy walks into reach before a melee skill, leaps from Leap's
-range, and slams from within Thunder Slam's.
+range, and slams from within Thundering Strike's.
 
 ### The ranger
 
@@ -750,7 +751,7 @@ inventory.
 - **The greatsword and the war hammer** are held in both hands in their own
   stance, run and walk. The normal attack is two heavy blows by turns (a cut
   down from the right shoulder, then the return from the low left), and
-  Cleave, Powerful Strike, Execute, Thunder Slam, Shockwave, War Cry and Leap
+  Cleave, Powerful Strike, Execute, Thundering Strike, Shockwave, War Cry and Leap
   each have their own two-handed motion (`tools/import_heavy.py`). The
   hammer's face leads the blow.
 - Vampiric and Shadow Strike are struck with the weapon's own normal swing,
@@ -837,8 +838,9 @@ outdoor world is built the same way: its buildings, arena and temple front are
 assembled from the wall kit's modules, weathered by a masonry shader; its rocks,
 stones and shrubs are photo scans; its palms are modelled for this game; and
 its sand (photographed), paving, track and pool are drawn by one ground shader
-on a single slab. There are no primitive-mesh
-stand-ins or runtime mesh construction.
+on one continuous ground mesh from town to the horizon, with a shaped overlay
+for the camp dune. There are no primitive-mesh stand-ins for props
+or architecture.
 Imported modular assets are placed by the scene builder; invisible collision and
 navigation calculations are separate from their rendered meshes. VFX use a generated
 transparent seal texture. See `docs/ASSETS.md` for provenance and image prompts.

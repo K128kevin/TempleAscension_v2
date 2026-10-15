@@ -29,7 +29,7 @@ every frame.
                  lunge through one enemy, the rear leg straight
   PikeExecute    the finisher: raised high, point down, and plunged into the
                  beaten enemy at his feet with his whole weight
-  PikeSlam       Thunder Slam: swung up and back over the head, then its
+  PikeSlam       Thundering Strike: swung up and back over the head, then its
                  head brought over and down onto the ground ahead
   PikeShockwave  Shockwave: stood upright, hauled up, and its butt hammered
                  straight down into the ground before his lead foot
@@ -716,7 +716,7 @@ def execute(t):
     feet(left={'heel': toes}, right={'heel': toes+.5*at([0, 0, 1, 1, 0], b)})
 
 def slam(t):
-    # Thunder Slam. The spear swung up and back over the head, the body
+    # Thundering Strike. The spear swung up and back over the head, the body
     # stretched up onto its toes and arched under it; then the whole length
     # of it hurled over and down as he drops, the lead foot stamped out, the
     # back folded, the head of the spear brought down on the ground ahead;

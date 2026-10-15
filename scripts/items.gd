@@ -100,10 +100,10 @@ const BASES = {
 		"look":{"model":"bow","size":Vector3(.25,1.3,.10),"grip":.55,"finish":"bow"}},
 	# --- The warrior: his gladiator's kit, a shortsword and a buckler.
 	"gladiators_helmet":{"name":"Gladiator's Helmet","rarity":"starting","slot":"head","weight":"heavy","armor":15.0,"look":{"mesh":"gladiators_helmet"}},
-	# (The warrior's starting gauntlets and war kilt are common items too:
-	# they drop, and take affixes, among the heavy armor.)
+	# (The warrior's starting gauntlets, boots and war kilt are common items
+	# too: they drop, and take affixes, among the heavy armor.)
 	"steel_plated_gauntlets":{"name":"Steel Plated Gauntlets","rarity":"common","slot":"hands","weight":"heavy","armor":15.0},
-	"steel_plated_boots":{"name":"Steel Plated Boots","rarity":"starting","slot":"feet","weight":"heavy","armor":15.0},
+	"steel_plated_boots":{"name":"Steel Plated Boots","rarity":"common","slot":"feet","weight":"heavy","armor":15.0},
 	"studded_war_kilt":{"name":"Studded War Kilt","rarity":"common","slot":"legs","weight":"heavy","armor":23.0},
 	"simple_shortsword":{"name":"Simple Shortsword","rarity":"starting","slot":"weapon","kind":"sword","hands":1,"damage":[17.0,25.0],"speed":1.3,
 		"look":{"model":"sword","size":Vector3(.17,.92,.08),"grip":.16,"finish":"sword","blade":Color(.64,.65,.68),"fittings":Color(.46,.46,.48),"wrap":Color(.14,.09,.05)}},
@@ -112,10 +112,10 @@ const BASES = {
 
 	# --- Common: what drops, and what the prefixes and suffixes are put on.
 	# Light armor.
-	"silk_gloves":{"name":"Silk Gloves","rarity":"common","slot":"hands","weight":"light","armor":5.0,"bonus":{"intelligence":2},"look":{"tint":Color(.9,.8,1.0)}},
-	"silk_robe":{"name":"Silk Robe","rarity":"common","slot":"chest","weight":"light","armor":8.0,"bonus":{"intelligence":3},"look":{"tint":Color(.5,.38,.68)}},
-	"silk_pants":{"name":"Silk Pants","rarity":"common","slot":"legs","weight":"light","armor":8.0,"bonus":{"intelligence":2},"look":{"tint":Color(.46,.36,.62)}},
-	"silk_hood":{"name":"Silk Hood","rarity":"common","slot":"head","weight":"light","armor":5.0,"bonus":{"willpower":2},"look":{"tint":Color(.56,.44,.74)}},
+	"silk_gloves":{"name":"Silk Gloves","rarity":"common","slot":"hands","weight":"light","armor":5.0,"bonus":{"intelligence":2},"look":{"tint":Color(.36,.14,.5)}},
+	"silk_robe":{"name":"Silk Robe","rarity":"common","slot":"chest","weight":"light","armor":8.0,"bonus":{"intelligence":3},"look":{"tint":Color(.2,.05,.3)}},
+	"silk_pants":{"name":"Silk Pants","rarity":"common","slot":"legs","weight":"light","armor":8.0,"bonus":{"intelligence":2},"look":{"tint":Color(.18,.05,.27)}},
+	"silk_hood":{"name":"Silk Hood","rarity":"common","slot":"head","weight":"light","armor":5.0,"bonus":{"willpower":2},"look":{"tint":Color(.22,.06,.33)}},
 	"wizard_hat":{"name":"Wizard Hat","rarity":"common","slot":"head","weight":"light","armor":4.0,"bonus":{"intelligence":2},"look":{"mesh":"wizard_hat","tint":Color(.12,.13,.2)}},
 	"sandals":{"name":"Sandals","rarity":"common","slot":"feet","weight":"light","armor":5.0},
 	# Medium armor.
@@ -452,9 +452,17 @@ static func generate(class_id: String, wanted: String, rng: RandomNumberGenerato
 	return enchant(pick(rng,pool),wanted,rng)
 
 # What an `enemy` of that kind drops for `class_id`: an item, or {} for nothing.
-static func roll_drop(class_id: String, enemy: String, rng: RandomNumberGenerator) -> Dictionary:
+# `seen`: the rarities that have dropped for the hero so far (a run's
+# "seen"). No unique drops until he has seen a green item and a blue one:
+# till then a unique drawn is drawn again from the rest.
+static func roll_drop(class_id: String, enemy: String, rng: RandomNumberGenerator, seen: Array = ["uncommon","rare"]) -> Dictionary:
 	if rng.randf()*100.0 >= DROP_CHANCE.get(enemy,0.0): return {}
-	return generate(class_id,weighted(rng,BOSS_WEIGHTS if enemy == "boss" else RARITY_WEIGHTS),rng)
+	var weights: Dictionary = (BOSS_WEIGHTS if enemy == "boss" else RARITY_WEIGHTS).duplicate()
+	if not uniques_open(seen): weights.erase("unique")
+	return generate(class_id,weighted(rng,weights),rng)
+
+static func uniques_open(seen: Array) -> bool:
+	return "uncommon" in seen and "rare" in seen
 
 # --- A run's equipment and bag ---------------------------------------------------
 
