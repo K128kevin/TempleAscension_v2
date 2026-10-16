@@ -1,4 +1,4 @@
-# HUD artwork options
+# Sandstone Shrine UI and HUD options
 
 Created 2026-10-16 with the built-in imagegen tool. Each new source asset is a 2172 × 724 RGBA PNG with transparent gauge holes and background. The four complete frames are used directly; they have no baked resource fills, numbers, labels or skill icons.
 
@@ -6,19 +6,19 @@ Created 2026-10-16 with the built-in imagegen tool. Each new source asset is a 2
 | --- | --- | --- |
 | Current · Classic | Existing HUD, no new frame | Original compact bronze-rimmed circles and skill tiles |
 | Imperial Bronze | [imperial_bronze.png](../assets/ui/hud/imperial_bronze.png) | Aged bronze, gold laurel and incised meander |
-| Sandstone Shrine | [sandstone_shrine.png](../assets/ui/hud/sandstone_shrine.png) | Weathered stone, fluting and gold inlay |
+| Sandstone Shrine · default | [sandstone_shrine_v2.png](../assets/ui/hud/sandstone_shrine_v2.png) | Integrated skill and utility sockets, weathered stone, fluting and gold inlay |
 | Obsidian Oracle | [obsidian_oracle.png](../assets/ui/hud/obsidian_oracle.png) | Black stone, silver crescents and dim teal insets |
 | Crimson Legion | [crimson_legion.png](../assets/ui/hud/crimson_legion.png) | Leather bindings, iron plates, bronze rivets and burgundy cloth |
 
 ## Select and compare
 
-Launch Debug Mode, show the debug panel with P if needed, and use its HUD artwork dropdown. F4 cycles forward; Shift+F4 cycles backward, including while paused or while the panel is hidden. The five choices wrap. Selection is kept in the debug directory's settings.cfg as hud_art; it does not modify a run or normal settings. Normal mode retains Current · Classic. Unknown saved choices fall back to Classic.
+Launch Debug Mode, show the debug panel with P if needed, and use its HUD artwork dropdown. F4 cycles forward; Shift+F4 cycles backward, including while paused or while the panel is hidden. The five choices wrap. Sandstone Shrine is now the default in normal and debug launches. Debug previews are remembered separately as hud_art_shrine in the debug directory's settings.cfg; old hud_art preview preferences no longer override the selected production theme. Unknown saved choices fall back to Sandstone. Other HUD previews remain available, while the rest of the interface consistently uses the chosen Sandstone Shrine theme.
 
 ## Integration
 
 The frame is a mouse-ignoring TextureRect behind the existing HUD controls. Every option keeps the same health and energy ColorRects and their circular liquid-fill shader, the same six live skill buttons, their hotkeys, cooldown labels, and the dash/heal widgets. The wizard retains blue mana; other classes retain green energy; health remains red. Style swaps preserve all resource values and game state.
 
-The registry is scripts/hud_art.gd. It records the measured transparent hole centres and opaque bounds of each generated asset, plus the palette. Frames display at 600 pixels wide; the circular gauges retain their original 112-pixel displayed diameter and are aligned with the art's openings. The six skills remain bottom-centred; utility tiles flank the new central carving. Gauge bezels, hotbar borders and key labels use a matching palette. Classic restores the original layout, colours, spacing and absence of a backplate. Source images use lossless import, generated mipmaps and bilinear mip filtering for clean downsampling. The debug action list scrolls to keep the selector visible on smaller windows.
+The registry is scripts/hud_art.gd. It records the measured transparent hole centres and opaque bounds of each generated asset, plus the palette. The integrated Sandstone frame displays at 660 pixels wide; other frames display at 600 pixels wide; the circular gauges retain their original 112-pixel displayed diameter and are aligned with the art's openings. The six skills remain bottom-centred; utility tiles flank the new central carving. Gauge bezels, hotbar borders and key labels use a matching palette. Classic restores its original HUD layout and absence of a backplate, with the shared theme on surrounding controls. Source images use lossless import, generated mipmaps and bilinear mip filtering for clean downsampling. The debug action list scrolls to keep the selector visible on smaller windows.
 
 ## Validation and captures
 
@@ -31,6 +31,16 @@ For native captures, run:
 ```
 
 The five screenshots are written to test-results/hud-art-<style-id>.png. Tests use isolated saves.
+
+## Game-wide theme and live sockets
+
+The revised Sandstone artwork has six empty carved skill recesses and two utility recesses. Hit targets contain transparent styles and subtle hover/active feedback, rather than opaque square buttons placed over the masonry. Icons, weapon art, skill names, key labels, disabled states and cooldowns remain live. Dash and heal are now clickable; a clicked evade moves forward from the hero, while the keyboard evade continues toward the world cursor. Wizard evade changes to teleport.
+
+`scripts/ui_theme.gd` owns the reusable carved panel, palette, typography and states. `assets/ui/shrine_panel.png` is the generated 1254 × 1254 source, imported losslessly at 192px with mipmaps for nine-slice borders. It supplies the character tabs, attributes, skills and inventory windows, menus (difficulty, class creation, pause, death, completion and conversations), item and skill details, native tooltips and dropdown popups, speech bubbles, debug panel/browser and playground. Compact inventory/skill sockets, buffs, resource/cast bars, ground-item labels, scrollbars and controls use matching stone/gold borders and dark recesses. Health, energy/mana, rarity, buffs/debuffs and comparison colours retain their meanings. Menus add a warm translucent backdrop and classical serif headings.
+
+`scripts/combat_bindings.gd` provides the four keyboard skill actions and dash/heal through InputMap, with the existing defaults (1–4, Space and Q). Captions, casting, skill-tree assignment and hints read the same current action events. Skills can be changed at any time using the existing skill panel; nothing is baked into the artwork. This supports runtime InputMap remaps; there is no new player-facing key-remapping screen or persistent key-remap preference in this change. Mouse attack/RMB interaction remains the existing input model.
+
+Run `tests/shrine_ui.gd` for production defaults, eight-socket artwork sampling, layout of all three character tabs for every class at three window sizes, real mouse dash/heal clicks, dynamic skill changes, runtime remapping through assignment and casting, and shared menu/tooltip styles. `-- --render-shrine` adds native captures of menus and inventory. The existing HUD-art, buff, item, class, progression, debug and hidden-UI checks remain relevant. Native rendering currently aborts on this workstation before engine output (exit 134); headless layout/input tests do not substitute for an in-game visual check.
 
 ## Exact generation prompts
 
@@ -76,3 +86,18 @@ Functional constraints: artwork only. NO painted health liquid, no red or green 
 
 Theme: CRIMSON LEGION. Burnished dark iron and aged bronze reinforced by rich oxblood leather, stitched straps and small bronze rivets, recalling a Roman legionary's shield and sword belt. Orb mounts formed from sturdy overlapping metal plates with restrained leather bindings. The narrow skill-bar surround is a practical dark leather and iron belt plate with bronze corner guards and embossed laurel details. A short burgundy cloth fold beneath the centre, modest and compact. Rugged and martial, tactile worn leather, strong readable trim; no skulls, no spikes, no modern buckles.
 Input image 1 is a composition reference. Preserve its exact canvas proportions, two circular hole centres, hole sizes, and central skill-bar recess position. Completely replace the golden foliage with stitched burgundy leather bindings, iron shield plates, small aged-bronze corner guards and rivets. A distinctly martial leather-and-iron silhouette, modest dark red cloth folds under the centre. Retain transparent gauge holes and transparent space outside the frame. No text.
+
+## Sandstone Shrine revision: exact prompts and sources
+
+Generated with the built-in imagegen tool on 2026-10-16. The original frame remains available as source reference. New project-bound assets:
+
+- `assets/ui/hud/sandstone_shrine_v2.png` — generated source `/Users/ktabb/.codex/generated_images/01a13a94-e5cf-74a3-8921-0a9cb12a4957/exec-4fbb2593-4b65-48eb-aa9d-bdb59ca8def6.png`.
+- `assets/ui/shrine_panel.png` — generated source `/Users/ktabb/.codex/generated_images/01a13a94-e5cf-74a3-8921-0a9cb12a4957/exec-ce3c9fd8-86cf-4055-bed8-63270c3e199e.png`.
+
+### Integrated HUD edit
+
+Use case: precise-object-edit. Asset type: transparent production game HUD chassis. Edit the referenced Sandstone Shrine artwork. Preserve the two circular orb mounts, pale weathered ivory sandstone, crisp antique gold inlay, fluted architecture, flat front view and 3:1 canvas. Keep orb holes completely transparent and empty, centered approximately (296,342) and (1876,342) on a 2172x724 coordinate grid. CHANGE the center bar: replace the continuous dark inset with exactly SIX equal square dark empty skill sockets integrated into the sandstone masonry, each thin gold beveled rim. Socket centers on that coordinate grid should be x=666,834,1002,1170,1338,1506, all y=444, with empty recess interiors 138x138 pixels; enlarge the central bar vertically just enough to accommodate them. Under this row integrate TWO smaller square empty utility sockets, centered (956,598) and (1216,598), each 96x96 dark interior with sandstone and gold surround, joined to the main chassis. Reduce the center palmette so it fits between the utility sockets without covering any socket. This is the actual artwork behind dynamic controls: ALL eight sockets must be entirely empty, without icons, letters, numbers, symbols, bindings, gems or fills. No baked text anywhere. Keep clean sharp edges and true transparent exterior. No scene or background, no drop-shadow rectangle. Match the original materials closely; detailed but readable at 600px overall display width.
+
+### Shared panel texture
+
+Use case: stylized-concept. Asset type: production 9-slice game UI panel texture, square, flat orthographic front face. Create a reusable Sandstone Shrine panel matching the referenced game's pale ivory sandstone and antique gold inlay HUD. A perfectly rectangular carved sandstone frame with subtly chamfered corners, fine gold inner bead and very restrained geometric temple engraving. The entire frame must stay within the outermost 8 percent of the square; preserve a vast completely empty opaque charcoal-brown matte stone interior for live readable text and widgets. Each edge is straight and uniform along its middle 80 percent so it can stretch in a nine-patch. Tiny sculpted corner details only, entirely confined to the outer 8 percent at each corner. Fine realistic sandstone pores, crisp shallow relief, subtle top-left illumination. This is one EMPTY panel only, no inset panels or buttons. Canvas entirely covered, no transparent margin, no drop shadow outside, no perspective, no scene, no letters, icons, symbols, glyphs, text or watermark. The screenshot reference is style only; DO NOT reproduce its circles or horizontal HUD silhouette. Square 1024x1024.

@@ -123,8 +123,7 @@ func hero_run(class_id: String) -> Dictionary:
 func build_panel() -> void:
 	var hud = game.hud
 	panel = PanelContainer.new()
-	var frame = hud.panel_style(Color(.035,.04,.045,.94),hud.gold)
-	frame.set_content_margin_all(8)
+	var frame = hud.Shrine.panel(16)
 	panel.add_theme_stylebox_override("panel",frame)
 	hud.root.add_child(panel)
 	hud.anchor(panel,Vector2(1,0),Vector2(-214,130),Vector2(190,0))
@@ -145,7 +144,7 @@ func build_panel() -> void:
 	body.add_child(leave)
 	var help = hud.label("Click a unit or Shift+click to attack. Statue: click ground to move, RMB attack, 1 special.",11,Color(.75,.72,.62),body)
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help.custom_minimum_size.x = 170
+	help.custom_minimum_size.x = 158
 
 # A small button: the HUD's button style with tight padding.
 func compact(b: Button, text: String) -> Button:

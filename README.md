@@ -360,11 +360,13 @@ The debug panel retains the original controls, with F9/F10 freeing K/C for chara
 | Shift + P | Open/leave the playground: an evenly lit plane with a hero of each class and one of every statue, including the boss. Select a unit with the panel or Tab. A selected hero uses the normal controls with every class skill learned and full energy; a selected statue walks with left click on the ground, attacks toward the cursor with right click, and uses its special (frost nova, gaze) with 1. Any unit attacks by left clicking another unit (hero or statue) or with Shift + left click, and every attack can hit any other unit. Hits play their reactions but deal no damage and nothing dies (Execute works on any target there, whatever its health); X (or the panel) kills the selected unit with its death animation, and again revives it. Nothing is saved while it is open. |
 
 The **HUD artwork** dropdown at the top of the debug panel selects any of the
-five looks directly. The new frames keep the existing circular health and
+five looks directly. Sandstone Shrine is the default throughout the game, with carved skill and
+utility sockets and matching menus, character panels and tooltips. All frames
+keep the existing circular health and
 energy/mana gauges and live skills at the bottom centre. Their decorative
 materials differ; resource values, skills and cooldowns continue unchanged.
-The selection is remembered in debug settings between launches. Normal mode
-uses the current UI. The action list scrolls on shorter windows while the
+The preview selection is remembered in debug settings between launches. Normal mode
+uses Sandstone Shrine. The action list scrolls on shorter windows while the
 artwork chooser stays visible. `HUD_ART.md` (under `docs/` in the source project)
 records the artwork and generation prompts.
 

@@ -41,18 +41,18 @@ func test() -> void:
 	if debug_mode:
 		Save.directory = base.path_join("debug")
 		Save.write(Data.new_run("warrior"))
-		Save.keep_setting("hud_art","invalid-old-style")
+		Save.keep_setting("hud_art_shrine","invalid-old-style")
 		Save.directory = base
 	var game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
 	game.test_mode = true; game.set_process(false); game.sound.muted = true
 	var hud = game.hud
-	check(hud.art_style==0 and not hud.art_backplate.visible,"The current UI remains the default, including with an invalid debug setting")
-	check(Art.STYLES.size()==5 and Art.index_of("not-a-style")==0,"Exactly five named choices include the current UI and a safe fallback")
+	check(hud.art_style==Art.DEFAULT and hud.art_backplate.visible,"Sandstone Shrine is the production default, including with an invalid debug setting")
+	check(Art.STYLES.size()==5 and Art.index_of("not-a-style")==Art.DEFAULT,"Exactly five named choices include the current UI and a safe fallback")
 	if not debug_mode:
 		check(not is_instance_valid(game.debug.hud_art_selector),"Normal mode has no debug artwork chooser")
 		press(game); press(game,true)
-		check(hud.art_style==0 and not hud.set_art_style(1),"F4 and alternate styles are gated outside debug mode")
+		check(hud.art_style==Art.DEFAULT and not hud.set_art_style(1),"F4 and alternate styles are gated outside debug mode")
 		check(FileAccess.get_file_as_bytes(base.path_join("settings.cfg"))==regular_settings,"Normal launch preserves its settings")
 	else:
 		var selector: OptionButton = game.debug.hud_art_selector
@@ -65,7 +65,7 @@ func test() -> void:
 		var bar_assignment: Array = game.run.hotbar.duplicate()
 		for index in Art.STYLES.size():
 			selector.item_selected.emit(index)
-			check(hud.art_style==index and selector.selected==index and Save.setting("hud_art","")==Art.STYLES[index].id,"Dropdown selects and remembers "+Art.STYLES[index].name)
+			check(hud.art_style==index and selector.selected==index and Save.setting("hud_art_shrine","")==Art.STYLES[index].id,"Dropdown selects and remembers "+Art.STYLES[index].name)
 			check(hud.health.get_instance_id()==original_health and hud.energy.get_instance_id()==original_energy and hud.weapon_slots.map(func(slot): return slot.get_instance_id())==buttons,"Changing artwork retains the live gauges and buttons: "+Art.STYLES[index].name)
 			check(game.run.hotbar==bar_assignment and game.skills.cooldowns.cleave==3.25,"Artwork changes preserve skill assignments and cooldowns")
 			if index>0:

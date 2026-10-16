@@ -59,7 +59,7 @@ func setup(owner_game) -> void:
 	browser = ItemBrowser.new()
 	browser.setup(game)
 	panel = PanelContainer.new()
-	panel.add_theme_stylebox_override("panel",hud.panel_style(Color(.035,.04,.045,.96),hud.gold))
+	panel.add_theme_stylebox_override("panel",hud.Shrine.panel(20))
 	hud.root.add_child(panel)
 	hud.anchor(panel,Vector2.ZERO,Vector2(24,96),Vector2(310,0))
 	var body = VBoxContainer.new()
@@ -83,7 +83,7 @@ func setup(owner_game) -> void:
 	# on shorter windows.
 	action_scroll = ScrollContainer.new()
 	action_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	action_scroll.custom_minimum_size.y = clampf(hud.root.get_viewport_rect().size.y-260,120,590)
+	action_scroll.custom_minimum_size.y = clampf(hud.root.get_viewport_rect().size.y-280,120,590)
 	body.add_child(action_scroll)
 	var actions = VBoxContainer.new()
 	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -106,7 +106,7 @@ func add_button(parent: Control, text: String, callback: Callable) -> Button:
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size",14)
 	for state in ["normal","hover","pressed","disabled"]:
-		var style = game.hud.panel_style(Color(.08,.09,.1) if state=="normal" else Color(.18,.18,.17),Color(.35,.32,.25))
+		var style = game.hud.Shrine.button(state,5)
 		style.set_content_margin_all(5)
 		button.add_theme_stylebox_override(state,style)
 	parent.add_child(button)
@@ -118,7 +118,7 @@ func refresh() -> void:
 	if is_instance_valid(toggle): toggle.text = "DEBUG · God %s · P %s" % ["ON" if invulnerable else "OFF","hide" if panel.visible else "show"]
 	buttons.god.text = "G · Invulnerable: %s" % ("ON" if invulnerable else "OFF")
 	if hud_art_selector.selected!=game.hud.art_style: hud_art_selector.select(game.hud.art_style)
-	action_scroll.custom_minimum_size.y = clampf(game.hud.root.get_viewport_rect().size.y-260,120,590)
+	action_scroll.custom_minimum_size.y = clampf(game.hud.root.get_viewport_rect().size.y-280,120,590)
 	browser.refresh()
 	for action in buttons: buttons[action].disabled = not available(action)
 	panel.reset_size()

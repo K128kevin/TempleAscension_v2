@@ -7,6 +7,7 @@ const Temple = preload("res://scripts/temple.gd")
 const Overworld = preload("res://scripts/overworld.gd")
 const Town = preload("res://scripts/world_town.gd")
 const Actor = preload("res://scripts/actor.gd")
+const CombatBindings = preload("res://scripts/combat_bindings.gd")
 const Hud = preload("res://scripts/hud.gd")
 const ProgressionUI = preload("res://scripts/progression_ui.gd")
 const Book = preload("res://scripts/skill_data.gd")
@@ -132,6 +133,7 @@ var arrow_struck = null
 var arriving_by_door = false
 
 func _ready() -> void:
+	CombatBindings.ensure()
 	get_tree().auto_accept_quit = false
 	test_mode = OS.has_feature("editor") and "--test" in OS.get_cmdline_user_args()
 	if test_mode: Save.directory = ProjectSettings.globalize_path("res://test-results/save")
@@ -488,9 +490,10 @@ func _input(event: InputEvent) -> void:
 		if event.physical_keycode in [KEY_C,KEY_K,KEY_I] and mode in ["playing","character"] and not creating_character and intro_left<=0:
 			toggle_screen(event.physical_keycode)
 			get_viewport().set_input_as_handled()
-		# Pointing at a learned skill in the skill panel, 1 to 4 assign it.
-		if event.physical_keycode in [KEY_1,KEY_2,KEY_3,KEY_4] and mode in ["playing","character"] and hud.panels.skills_open() and not hud.panels.hovered.is_empty():
-			hud.panels.assign(hud.panels.hovered,event.physical_keycode-KEY_1+1)
+		# Pointing at a learned skill, its current action key assigns the socket.
+		if mode in ["playing","character"] and hud.panels.skills_open() and not hud.panels.hovered.is_empty() and range(4).any(func(i): return CombatBindings.matches(event,i)):
+			for i in 4:
+				if CombatBindings.matches(event,i): hud.panels.assign(hud.panels.hovered,i+1)
 			get_viewport().set_input_as_handled()
 
 # Ctrl+Z hides the whole interface, and shows it again: the HUD and every
@@ -597,16 +600,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			right_press_cast = false
 			issue_click(true)
 	if event is InputEventKey and event.pressed and not event.echo:
+		for i in 4:
+			if CombatBindings.matches(event,i): cast_key(i+1); return
+		if CombatBindings.matches(event,4): dash(); return
+		if CombatBindings.matches(event,5): heal(); return
 		match event.physical_keycode:
-			KEY_SPACE: dash()
-			KEY_Q: heal()
 			KEY_E: interact()
 			KEY_R: toggle_walk()
 			KEY_X: swap_weapon()
-			KEY_1: cast_key(1)
-			KEY_2: cast_key(2)
-			KEY_3: cast_key(3)
-			KEY_4: cast_key(4)
 
 func fullscreen() -> bool:
 	return DisplayServer.window_get_mode() in [DisplayServer.WINDOW_MODE_FULLSCREEN,DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]
@@ -1767,7 +1768,7 @@ func pause_game() -> void:
 	left_held = false
 	right_held = false
 	save_run()
-	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + 1–4 skills · Space evade · Q healing spell\nC attributes · K skills · I inventory · X other weapon · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 or Alt+Enter fullscreen (Ctrl+Cmd+F on a Mac)")
+	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + %s skills · %s evade · %s healing spell\nC attributes · K skills · I inventory · X other weapon · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 or Alt+Enter fullscreen (Ctrl+Cmd+F on a Mac)" % [hud.panels.key_names(),CombatBindings.caption(4),CombatBindings.caption(5)])
 	hud.button("Resume",resume_game)
 	hud.button("Continue saved ascent",continue_run)
 	hud.button("New ascent / Difficulty",new_run_menu)

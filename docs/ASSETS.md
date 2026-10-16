@@ -1270,3 +1270,18 @@ the source models' licensing. The liquid orb shader in `assets/shaders/orb.gdsha
 adapts the original game's code-drawn circular HUD treatment, with glass highlights,
 a bronze rim and a level that follows current health/energy. No new world meshes
 are created for the UI.
+
+
+### Sandstone Shrine interface
+
+The selected production theme uses `assets/ui/hud/sandstone_shrine_v2.png`
+(2172 × 724, RGBA, real transparent orb holes and exterior) and
+`assets/ui/shrine_panel.png` (1254 × 1254, imported at 192px for nine-slice
+frames). Both were generated with the built-in imagegen tool on 2026-10-16,
+using the original Sandstone Shrine frame as the edit/style reference. The
+new frame contains empty recesses for six dynamic skill bindings and clickable
+dash/heal controls. All icons, key labels, names, cooldowns and resource fills
+remain live game controls. The shared panel and stone/gold palette supply the
+rest of the game UI. Original HUD previews remain available in debug mode.
+Exact prompts, source output paths and integration details are in
+[HUD_ART.md](HUD_ART.md).

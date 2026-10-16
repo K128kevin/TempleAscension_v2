@@ -59,6 +59,7 @@ run "$godot_bin" --headless --path . --script tests/enemy_hover.gd --log-file "$
 run "$godot_bin" --headless --path . --script tests/hide_ui.gd --log-file "$PWD/test-results/hide-ui.log"
 run "$godot_bin" --headless --path . --script tests/hud_art.gd --log-file "$PWD/test-results/hud-art-normal.log"
 run "$godot_bin" --headless --path . --script tests/hud_art.gd --log-file "$PWD/test-results/hud-art-debug.log" -- --debug-mode
+run "$godot_bin" --headless --path . --script tests/shrine_ui.gd --log-file "$PWD/test-results/shrine-ui.log"
 run "$godot_bin" --headless --path . --script tests/buff_bar.gd --log-file "$PWD/test-results/buff-bar.log"
 run "$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log" -- --test
 run "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"
@@ -85,6 +86,7 @@ if [ "${RENDER_TEST:-0}" = "1" ]; then
   run "$godot_bin" --path . --script tests/scenery_regression.gd --log-file "$PWD/test-results/scenery-render.log" -- --render-scenery
   run "$godot_bin" --path . --script tests/overworld.gd --log-file "$PWD/test-results/overworld-render.log" -- --render-world
   run "$godot_bin" --path . --script tests/debug_regression.gd --log-file "$PWD/test-results/debug-render.log" -- --debug-mode --render-debug-test
+  run "$godot_bin" --path . --script tests/shrine_ui.gd --log-file "$PWD/test-results/shrine-ui-render.log" -- --render-shrine
   run "$godot_bin" --path . --script tests/hud_regression.gd --log-file "$PWD/test-results/hud-regression.log"
   run "$godot_bin" --path . --script tests/attack_preview.gd --log-file "$PWD/test-results/attack-preview.log"
   run "$godot_bin" --path . --script tests/controls_regression.gd --log-file "$PWD/test-results/controls-regression.log"

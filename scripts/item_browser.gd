@@ -62,7 +62,7 @@ static func listed(which: String) -> Array:
 
 func build() -> void:
 	window = PanelContainer.new()
-	window.add_theme_stylebox_override("panel",hud.panel_style(Color(.035,.04,.045,.96),hud.gold))
+	window.add_theme_stylebox_override("panel",hud.Shrine.panel(20))
 	hud.root.add_child(window)
 	hud.anchor(window,Vector2.ZERO,Vector2(346,96),Vector2(400,0))
 	var body = VBoxContainer.new()
@@ -113,7 +113,7 @@ func row(id: String) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = Vector2(0,ICON+8)
 	for state in ["normal","hover","pressed"]:
-		var style = hud.panel_style(Color(.07,.075,.08) if state == "normal" else Color(.16,.15,.13),Items.color(id).darkened(.45))
+		var style = hud.Shrine.inset(Items.color(id).darkened(.25),state!="normal")
 		style.set_content_margin_all(4)
 		b.add_theme_stylebox_override(state,style)
 	var tip: Array = [about.kind]+about.stats

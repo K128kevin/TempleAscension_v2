@@ -12,10 +12,18 @@ const Visual = preload("res://scripts/visual.gd")
 const Art = preload("res://scripts/assets.gd")
 # A skill's square in the tree.
 const NODE = 44
-const SLOT_NAMES = ["RMB","1","2","3","4","LMB"]
+const Bindings = preload("res://scripts/combat_bindings.gd")
+
+static func slot_name(index: int) -> String:
+	if index==0: return "RMB"
+	if index==Data.LEFT_SLOT: return "LMB"
+	return Bindings.caption(index-1)
+
+static func key_names() -> String:
+	return "/".join(range(4).map(func(i): return Bindings.caption(i)))
 var hud
 var game
-var dim = Color(.62,.6,.53)
+var dim = preload("res://scripts/ui_theme.gd").MUTED
 var green = Color(.45,.92,.5)
 var clock = 0.0
 var stat_plus: Button
@@ -70,6 +78,7 @@ var stat_buttons: Array = []
 var stat_summary: Label
 var stat_reset: Button
 var tree: PanelContainer
+var tree_hint: Label
 var tree_points: Label
 var tree_totals: Dictionary = {}
 # Skill id to its square: {"button","icon","rank","slot","state"}.
@@ -93,8 +102,8 @@ func setup(owner_hud) -> void:
 	for state in ["locked","open","learned","maxed"]:
 		var border: Color = {"locked":Color(.2,.2,.19),"open":Color(.5,.46,.36),"learned":hud.gold,"maxed":hud.gold}[state]
 		for hover in [false,true]:
-			var s = StyleBoxFlat.new()
-			s.bg_color = Color(.16,.13,.07) if state=="maxed" else (Color(.09,.09,.085) if state!="locked" else Color(.05,.05,.05))
+			var s = hud.Shrine.inset(border,state=="maxed")
+			if state=="locked": s.bg_color = hud.Shrine.INSET.darkened(.25)
 			if hover: s.bg_color = s.bg_color.lightened(.08)
 			s.border_color = border
 			s.set_border_width_all(2 if state in ["learned","maxed"] else 1)
@@ -115,7 +124,7 @@ func small_button(value: String, font_size: int, callback: Callable) -> Button:
 	b.add_theme_font_size_override("font_size",font_size)
 	b.add_theme_color_override("font_disabled_color",Color(.4,.39,.36))
 	for state in ["normal","hover","pressed","disabled"]:
-		var style = hud.panel_style(Color(.2,.19,.16) if state in ["hover","pressed"] else Color(.09,.095,.1,.96),Color(.28,.27,.25) if state=="disabled" else Color(.5,.44,.3))
+		var style = hud.Shrine.button(state,3)
 		style.set_content_margin_all(3)
 		style.content_margin_left = 7; style.content_margin_right = 7
 		b.add_theme_stylebox_override(state,style)
@@ -127,9 +136,8 @@ func plus_button(right: bool, callback: Callable) -> Button:
 		if game.mode in ["playing","character"] and not game.creating_character: callback.call())
 	b.add_theme_color_override("font_color",hud.gold)
 	for state in ["normal","hover","pressed"]:
-		var style = hud.panel_style(Color(.3,.24,.12) if state!="normal" else Color(.13,.105,.06,.96),hud.gold)
+		var style = hud.Shrine.button(state,0)
 		style.set_content_margin_all(0)
-		style.set_corner_radius_all(4)
 		b.add_theme_stylebox_override(state,style)
 	hud.root.add_child(b)
 	hud.anchor(b,Vector2(1 if right else 0,1),Vector2(-54 if right else 24,-252),Vector2(30,30))
@@ -138,9 +146,7 @@ func plus_button(right: bool, callback: Callable) -> Button:
 
 func frame(width: float) -> PanelContainer:
 	var p = PanelContainer.new()
-	var style = hud.panel_style(Color(.03,.035,.04,.95),Color(.47,.4,.27))
-	style.set_content_margin_all(10)
-	style.set_corner_radius_all(4)
+	var style = hud.Shrine.panel(20)
 	p.add_theme_stylebox_override("panel",style)
 	p.custom_minimum_size.x = width
 	hud.root.add_child(p)
@@ -213,8 +219,7 @@ func build() -> void:
 	window.add_child(all)
 	if tab_styles.is_empty():
 		for look in [["on",Color(.16,.13,.07),hud.gold],["off",Color(.06,.062,.066),Color(.3,.27,.2)],["over",Color(.12,.11,.09),Color(.5,.44,.3)]]:
-			var style = hud.panel_style(look[1],look[2])
-			style.set_content_margin_all(4)
+			var style = hud.Shrine.button("hover" if look[0]=="on" else ("normal" if look[0]=="off" else "pressed"),4)
 			style.content_margin_left = 10; style.content_margin_right = 10
 			tab_styles[look[0]] = style
 	var row = HBoxContainer.new()
@@ -305,7 +310,7 @@ func build_skills(body: VBoxContainer) -> void:
 	for t in class_trees:
 		if t != class_trees[0]:
 			var rule = ColorRect.new()
-			rule.color = Color(.3,.27,.2)
+			rule.color = hud.Shrine.EDGE
 			rule.custom_minimum_size.x = 1
 			rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			columns.add_child(rule)
@@ -326,7 +331,8 @@ func build_skills(body: VBoxContainer) -> void:
 			column.add_child(row)
 			for s in class_skills:
 				if s.tree==t and gate(s)==g: row.add_child(square(s.id))
-	text("Click: learn · Right-click or 1–4: assign to that slot",10,dim,body).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tree_hint = text("",10,dim,body)
+	tree_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 # --- The inventory ---------------------------------------------------------------
 
@@ -337,7 +343,7 @@ func build_bag(body: VBoxContainer) -> void:
 	body.add_theme_constant_override("separation",8)
 	if slot_styles.is_empty():
 		for look in [["empty",Color(.3,.27,.2)],["common",Color(.5,.46,.36)],["uncommon",Items.RARITY_COLORS.uncommon.darkened(.25)],["rare",Items.RARITY_COLORS.rare.darkened(.15)],["unique",Items.RARITY_COLORS.unique.darkened(.15)],["quest",Items.RARITY_COLORS.quest.darkened(.15)],["no",Color(.75,.22,.16)],["yes",Color(.5,.85,.5)]]:
-			var style = hud.panel_style(Color(.055,.055,.06,.98),look[1])
+			var style = hud.Shrine.inset(look[1])
 			style.set_content_margin_all(0)
 			style.set_corner_radius_all(3)
 			if look[0] in ["no","yes"]: style.set_border_width_all(2)
@@ -712,6 +718,7 @@ func refresh() -> void:
 		stat_summary.text = Data.in_his_words(r,"Health %d · Energy %d · +%.1f energy/s\nArmor %s (%s%% less damage) · Critical strike %s%%\nAttack speed +%s%%%s") % [Data.max_health(r),Data.max_energy(r),Data.energy_regen(r),Items.figure(Data.armor_points(r)),Items.figure(Data.armor(r)),game.skills.figure(Data.crit_chance(r)),game.skills.figure(game.skills.basic_speed(Data.weapon(r)))," · %s attacks/s" % game.skills.figure(game.skills.attacks_a_second(Data.weapon(r))) if Data.weapon(r)!=4 else ""]
 		stat_reset.disabled = not game.safe_checkpoint()
 	if skills_open():
+		tree_hint.text = "Click: learn · RMB or %s: assign" % key_names()
 		tree_points.text = "%d point%s to spend" % [r.skill_points,"" if r.skill_points==1 else "s"]
 		tree_points.add_theme_color_override("font_color",hud.gold if r.skill_points>0 else dim)
 		for t in tree_totals:
@@ -726,7 +733,7 @@ func refresh() -> void:
 			n.rank.text = "%d/%d" % [rank,s.max_rank]
 			n.rank.add_theme_color_override("font_color",green if Book.can_learn(r,id) else (hud.gold if rank>0 else Color(.42,.41,.38)))
 			var slot: int = r.hotbar.find(id)
-			n.slot.text = SLOT_NAMES[slot] if slot>=0 else ""
+			n.slot.text = slot_name(slot) if slot>=0 else ""
 			if n.state != state:
 				n.state = state
 				for look in ["normal","hover","pressed"]: n.button.add_theme_stylebox_override(look,styles[state+("" if look=="normal" else "-hover")])
@@ -784,6 +791,7 @@ func skill_lines(id: String, on_hotbar: bool) -> Dictionary:
 	if active and rank>0 and Data.casts_left(r):
 		lines.hint += ("\n" if not lines.hint.is_empty() else "")+("Shift-click, right-click or 1–4: assign to LMB, RMB or that key" if Book.can_learn(r,id) else "Click, right-click or 1–4: assign to LMB, RMB or that key")
 	elif active and rank>0: lines.hint += ("\n" if not lines.hint.is_empty() else "")+"Right-click or 1–4: assign to RMB or that key"
+	lines.hint = lines.hint.replace("1–4",key_names())
 	if on_hotbar: lines.hint = ""
 	return lines
 

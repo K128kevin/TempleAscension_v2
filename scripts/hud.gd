@@ -4,6 +4,8 @@ const Panels = preload("res://scripts/panels.gd")
 const SkillIcon = preload("res://scripts/skill_icon.gd")
 const Items = preload("res://scripts/items.gd")
 const Art = preload("res://scripts/hud_art.gd")
+const Shrine = preload("res://scripts/ui_theme.gd")
+const Bindings = preload("res://scripts/combat_bindings.gd")
 const Save = preload("res://scripts/save.gd")
 var game
 # The attribute and skill panels and their + buttons.
@@ -70,6 +72,7 @@ var item_labels: Array[Button] = []
 var item_label_styles: Dictionary = {}
 # One amber cast bar over each Oracle while it casts a fireball.
 var cast_bars: Array = []
+var modal_veil: ColorRect
 var modal: PanelContainer
 var modal_body: VBoxContainer
 var weapon_slots: Array[Button] = []
@@ -81,8 +84,8 @@ var hovered_slot = -1
 var slot_glyphs: Array = []
 var slot_cooldowns: Array[Label] = []
 var notice_time = 0.0
-var gold = Color(.91,.75,.45)
-var cream = Color(.93,.91,.82)
+var gold = Shrine.GOLD
+var cream = Shrine.TEXT
 var selected_style: StyleBoxFlat
 var idle_style: StyleBoxFlat
 var art_style = 0
@@ -110,15 +113,7 @@ func setup(owner_game) -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	var theme = Theme.new()
-	theme.default_font_size = 18
-	theme.set_color("font_color","Label",cream)
-	theme.set_color("font_outline_color","Label",Color(.025,.02,.015))
-	theme.set_constant("outline_size","Label",4)
-	theme.set_color("font_color","Button",cream)
-	for state in ["normal","hover","pressed","focus"]:
-		theme.set_stylebox(state,"Button",panel_style(Color(.12,.13,.14,.96) if state=="normal" else Color(.24,.23,.20),gold))
-	root.theme = theme
+	root.theme = Shrine.make()
 	art_backplate = TextureRect.new()
 	art_backplate.name = "HudArtwork"
 	art_backplate.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -203,7 +198,8 @@ func setup(owner_game) -> void:
 		recharge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		slot_cooldowns.append(recharge)
 		var hotkey = label(["LMB","RMB","1","2","3","4"][i],12,gold,slot)
-		hotkey.position = Vector2(5,2)
+		hotkey.position = Vector2(5,2); hotkey.size = Vector2(46,13)
+		hotkey.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		hotkeys.append(hotkey)
 		var name_label = label("",10,cream,slot)
 		name_label.position = Vector2(2,39); name_label.size = Vector2(52,15)
@@ -240,7 +236,7 @@ func setup(owner_game) -> void:
 	boss_bar.visible = false; boss_name.visible = false
 	panels = Panels.new()
 	panels.setup(self)
-	var chosen = Art.index_of(Save.setting("hud_art","classic")) if game.debug.enabled else 0
+	var chosen = Art.index_of(Save.setting("hud_art_shrine","sandstone_shrine")) if game.debug.enabled else Art.DEFAULT
 	set_art_style(chosen,false)
 
 func make_orb(is_energy: bool) -> Dictionary:
@@ -270,10 +266,31 @@ func make_orb(is_energy: bool) -> Dictionary:
 	return {"orb":orb,"value":value,"title":title}
 
 # A live visual swap: retain the same gauge materials, skill buttons, inputs
-# and cooldown widgets. Preferences live in the isolated debug settings.
+# and cooldown widgets. Sandstone is the normal default; preview preferences use isolated debug settings.
+func fit_shrine_sockets(look: Dictionary) -> void:
+	var factor: float = look.width/Art.SOURCE.x
+	var top: float = -8-look.bottom*factor
+	# Measured centres of the empty recesses in sandstone_shrine_v2.png.
+	var centres = [686.5,844.0,1003.5,1166.0,1326.0,1484.5]
+	for i in weapon_slots.size():
+		weapon_slots[i].position.x = ((centres[i]-Art.SOURCE.x*.5)*factor+BAR_WIDTH*BAR_SCALE*.5)/BAR_SCALE-28
+	anchor(ready_row_control,Vector2(.5,1),Vector2(-look.width*.5,top),Art.SOURCE*factor)
+	for i in 2:
+		ready_tiles[i].frame.position = Vector2(960.5 if i==0 else 1210.0,557)*factor-Vector2.ONE*READY_ICON*.5
+
+func socket_style(active: bool) -> StyleBoxFlat:
+	var s = StyleBoxFlat.new()
+	# The recess and bevel already exist in the artwork. Only feedback is drawn.
+	s.bg_color = Color(1,.77,.37,.11) if active else Color.TRANSPARENT
+	s.border_color = Color(1,.85,.53,.65) if active else Color.TRANSPARENT
+	s.set_border_width_all(1 if active else 0)
+	s.set_corner_radius_all(3)
+	s.set_content_margin_all(0)
+	return s
+
 func set_art_style(index: int, remember: bool = true) -> bool:
 	if index<0 or index>=Art.STYLES.size(): return false
-	if index!=0 and not game.debug.enabled: return false
+	if index!=Art.DEFAULT and not game.debug.enabled: return false
 	art_style = index
 	var look: Dictionary = Art.STYLES[index]
 	hotbar_accent = look.accent
@@ -287,10 +304,11 @@ func set_art_style(index: int, remember: bool = true) -> bool:
 			orb_titles[i].position.y = 0
 	else:
 		art_backplate.texture = load(look.texture)
-		var factor = Art.WIDTH/Art.SOURCE.x
+		var width: float = look.get("width",Art.WIDTH)
+		var factor = width/Art.SOURCE.x
 		var top: float = -8.0-look.bottom*factor
 		row_middle = top+look.bar_y*factor
-		anchor(art_backplate,Vector2(.5,1),Vector2(-Art.WIDTH*.5,top),Art.SOURCE*factor)
+		anchor(art_backplate,Vector2(.5,1),Vector2(-width*.5,top),Art.SOURCE*factor)
 		for i in 2:
 			var at: Vector2 = look.left if i==0 else look.right
 			var offset = Vector2((at.x-Art.SOURCE.x*.5)*factor-90*BAR_SCALE,top+at.y*factor-ORB_MIDDLE*BAR_SCALE)
@@ -303,8 +321,13 @@ func set_art_style(index: int, remember: bool = true) -> bool:
 	var ready_gap = EFFECT_GAP+(40 if index!=0 else 0)
 	var across = READY_ICON*2+ready_gap
 	anchor(ready_row_control,Vector2(.5,1),Vector2(-across*.5,row_middle+28*BAR_SCALE+6),Vector2(across,READY_ICON))
-	for i in ready_tiles.size(): ready_tiles[i].frame.position.x = i*(READY_ICON+ready_gap)
+	for i in ready_tiles.size(): ready_tiles[i].frame.position = Vector2(i*(READY_ICON+ready_gap),0)
+	# Sandstone has real carved sockets; hit targets contain only live content.
+	for i in weapon_slots.size(): weapon_slots[i].position = Vector2(i*60,0)
+	if index==Art.DEFAULT: fit_shrine_sockets(look)
 	anchor(effect_row,Vector2(.5,1),Vector2(-200,row_middle-28*BAR_SCALE-6-(EFFECT_ICON+8)),Vector2(400,EFFECT_ICON+8))
+	var prompt_y = minf(-BAR_BOTTOM-ORB_HEIGHT*BAR_SCALE-36,row_middle-28*BAR_SCALE-6-(EFFECT_ICON+8)-34)
+	anchor(prompt,Vector2(.5,1),Vector2(-400,prompt_y),Vector2(800,28))
 	for orb in [health,energy]:
 		orb.material.set_shader_parameter("rim_dark",Vector3(look.rim_dark.r,look.rim_dark.g,look.rim_dark.b))
 		orb.material.set_shader_parameter("rim_light",Vector3(look.rim_light.r,look.rim_light.g,look.rim_light.b))
@@ -315,6 +338,9 @@ func set_art_style(index: int, remember: bool = true) -> bool:
 	selected_style.set_border_width_all(2)
 	selected_style.shadow_color = Color(.8,.49,.13,.24) if index==0 else Color(hotbar_accent,.20)
 	selected_style.shadow_size = 5
+	if index==Art.DEFAULT:
+		idle_style = socket_style(false)
+		selected_style = socket_style(true)
 	for i in weapon_slots.size():
 		var slot = weapon_slots[i]
 		slot.add_theme_stylebox_override("normal",selected_style if i==1 else idle_style)
@@ -324,10 +350,11 @@ func set_art_style(index: int, remember: bool = true) -> bool:
 			else: slot.add_theme_stylebox_override(state,selected_style)
 	for tile in ready_tiles:
 		for state in ["ready","waiting"]:
-			var style = panel_style(look.background,hotbar_accent if state=="ready" else look.edge)
+			var style = socket_style(false) if index==Art.DEFAULT else panel_style(look.background,hotbar_accent if state=="ready" else look.edge)
 			style.set_content_margin_all(0)
 			tile.styles[state] = style
-	if remember and game.debug.enabled: Save.keep_setting("hud_art",look.id)
+		for state in ["hover","pressed","focus"]: tile.frame.add_theme_stylebox_override(state,selected_style)
+	if remember and game.debug.enabled: Save.keep_setting("hud_art_shrine",look.id)
 	return true
 
 # The energy orb as the hero's class has it: the wizard's is mana, blue.
@@ -369,12 +396,13 @@ func show_speech(dt: float) -> void:
 
 func panel_style(bg: Color, border: Color) -> StyleBoxFlat:
 	var s = StyleBoxFlat.new()
-	s.bg_color = bg
-	s.border_color = border
+	s.bg_color = bg.lerp(Shrine.INSET,.5)
+	s.border_color = border.lerp(Shrine.STONE,.25)
 	s.set_border_width_all(1)
 	s.set_content_margin_all(16)
-	s.corner_radius_top_left = 4
-	s.corner_radius_bottom_right = 4
+	s.border_width_top = 2
+	s.border_width_left = 2
+	s.set_corner_radius_all(3)
 	return s
 
 func label(value: String, font_size: int, color: Color, parent: Node) -> Label:
@@ -391,7 +419,10 @@ func bar(color: Color, parent: Node) -> ProgressBar:
 	p.show_percentage = false
 	p.custom_minimum_size = Vector2(300,9)
 	var bg = StyleBoxFlat.new()
-	bg.bg_color = Color(.12,.16,.17)
+	bg.bg_color = Shrine.INSET
+	bg.border_color = Shrine.STONE
+	bg.set_border_width_all(1)
+	bg.set_corner_radius_all(2)
 	var fill = StyleBoxFlat.new()
 	fill.bg_color = color
 	p.add_theme_stylebox_override("background",bg)
@@ -408,6 +439,7 @@ func tick(dt: float) -> void:
 	show_speech(dt)
 	show_effects()
 	show_ready()
+	for i in range(2,6): hotkeys[i].text = Bindings.caption(i-2)
 	show_cast_bars()
 	var r: Dictionary = game.run
 	var maximum_health = Data.max_health(r)
@@ -516,8 +548,8 @@ func cast_bar() -> ProgressBar:
 	p.step = 0.0
 	p.z_index = 1
 	var background = StyleBoxFlat.new()
-	background.bg_color = Color(.05,.03,.015,.94)
-	background.border_color = Color(.34,.2,.08)
+	background.bg_color = Shrine.INSET
+	background.border_color = Shrine.EDGE
 	background.set_border_width_all(1)
 	background.set_corner_radius_all(2)
 	p.add_theme_stylebox_override("background",background)
@@ -560,7 +592,11 @@ func show_npc_name(who: Dictionary) -> void:
 	npc_name.position = game.world.camera.unproject_position(who.at)-Vector2(npc_name.size.x*.5,10)
 
 func ready_tile(row: Control, kind: String, tip: String, x: float) -> Dictionary:
-	var frame = Panel.new()
+	var frame = Button.new()
+	frame.focus_mode = Control.FOCUS_NONE
+	frame.pressed.connect(func():
+		if kind=="heal": game.heal()
+		else: game.dash(game.player.position+game.player.forward()*game.DASH_REACH))
 	frame.position = Vector2(x,0); frame.size = Vector2(READY_ICON,READY_ICON)
 	frame.tooltip_text = tip
 	row.add_child(frame)
@@ -570,7 +606,7 @@ func ready_tile(row: Control, kind: String, tip: String, x: float) -> Dictionary
 		style.set_content_margin_all(0)
 		styles[look[0]] = style
 	var glyph = SkillIcon.new()
-	glyph.position = Vector2(4,4); glyph.size = Vector2(READY_ICON-8,READY_ICON-8)
+	glyph.position = Vector2(5,1); glyph.size = Vector2(READY_ICON-10,READY_ICON-10)
 	frame.add_child(glyph)
 	# (The shade over it shrinks away as it recharges.)
 	var shade = ColorRect.new()
@@ -582,7 +618,11 @@ func ready_tile(row: Control, kind: String, tip: String, x: float) -> Dictionary
 	count.size = Vector2(READY_ICON,READY_ICON)
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	count.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	return {"kind":kind,"frame":frame,"glyph":glyph,"shade":shade,"count":count,"styles":styles}
+	var key = label("",8,gold,frame)
+	key.position = Vector2(0,18); key.size = Vector2(READY_ICON,8)
+	key.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	key.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	return {"kind":kind,"frame":frame,"glyph":glyph,"shade":shade,"count":count,"key":key,"styles":styles}
 
 func show_ready() -> void:
 	for tile in ready_tiles:
@@ -594,8 +634,10 @@ func show_ready() -> void:
 		# (The wizard's evade is a teleport.)
 		var blinks: bool = tile.kind=="dash" and game.run.get("class_id","")=="wizard"
 		tile.glyph.show_skill("teleport" if blinks else tile.kind,Color(.45,.44,.4) if waiting else cream)
-		if tile.kind=="dash": tile.frame.tooltip_text = "Teleport (Space)" if blinks else "Dash (Space)"
-		tile.frame.add_theme_stylebox_override("panel",tile.styles.waiting if waiting else tile.styles.ready)
+		tile.key.text = Bindings.caption(4 if tile.kind=="dash" else 5)
+		tile.frame.tooltip_text = "%s (%s)" % [("Teleport" if blinks else "Dash") if tile.kind=="dash" else "Healing spell · 60 "+Data.energy_word(game.run),tile.key.text]
+		tile.frame.disabled = waiting or game.player.dead or game.mode!="playing"
+		for state in ["normal","disabled"]: tile.frame.add_theme_stylebox_override(state,tile.styles.waiting if waiting else tile.styles.ready)
 
 func effect_slot() -> Dictionary:
 	var frame = Panel.new()
@@ -661,8 +703,8 @@ func enemy_bar() -> ProgressBar:
 	p.size = ENEMY_BAR
 	p.z_index = 1
 	var background = StyleBoxFlat.new()
-	background.bg_color = Color(.045,.015,.015,.96)
-	background.border_color = Color(.18,.08,.07)
+	background.bg_color = Shrine.INSET
+	background.border_color = Shrine.EDGE
 	background.set_border_width_all(1)
 	background.set_corner_radius_all(2)
 	p.add_theme_stylebox_override("background",background)
@@ -787,6 +829,10 @@ func close_modal() -> void:
 	panels.close()
 
 func close_dialog() -> void:
+	if is_instance_valid(modal_veil):
+		root.remove_child(modal_veil)
+		modal_veil.queue_free()
+	modal_veil = null
 	if is_instance_valid(modal):
 		root.remove_child(modal)
 		modal.queue_free()
@@ -794,9 +840,14 @@ func close_dialog() -> void:
 
 func dialog(title: String, subtitle: String) -> void:
 	close_modal()
+	modal_veil = ColorRect.new()
+	modal_veil.color = Color(.035,.025,.012,.64)
+	modal_veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	modal_veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(modal_veil)
 	modal = PanelContainer.new()
 	modal.custom_minimum_size = Vector2(660,560)
-	modal.add_theme_stylebox_override("panel",panel_style(Color(.035,.06,.07,.98),gold))
+	modal.add_theme_stylebox_override("panel",Shrine.panel(20))
 	root.add_child(modal)
 	anchor(modal,Vector2(.5,.5),Vector2(-330,-280),Vector2(660,560))
 	var scroll = ScrollContainer.new()
@@ -806,9 +857,11 @@ func dialog(title: String, subtitle: String) -> void:
 	modal_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	modal_body.add_theme_constant_override("separation",16)
 	scroll.add_child(modal_body)
-	label(title,30,gold,modal_body)
+	var heading = label(title,30,gold,modal_body)
+	heading.add_theme_font_override("font",Shrine.heading())
+	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var sub = label(subtitle,18,cream,modal_body)
-	sub.custom_minimum_size.x = 620
+	sub.custom_minimum_size.x = 600
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 func make_enemy_arrow() -> void:
