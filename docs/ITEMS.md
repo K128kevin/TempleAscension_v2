@@ -215,6 +215,7 @@ What drops, and what the prefixes and suffixes are put on.
 | Studded Leather Tunic | Medium armor · Chest | Ranger | 20 armor |
 | Leather Boots | Medium armor · Feet | Ranger | 12 armor |
 | Leather Hood | Medium armor · Head | Ranger | 10 armor |
+| Leather Trousers | Medium armor · Legs | Ranger | 13 armor; +2 Dexterity |
 | Steel Breastplate | Heavy armor · Chest | Warrior | 21 armor; +2 Strength |
 | Scale Cuirass | Heavy armor · Chest | Warrior | 23 armor |
 | Plated Leg Armor | Heavy armor · Legs | Warrior | 26 armor |

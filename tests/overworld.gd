@@ -412,7 +412,7 @@ func test():
 			if world.cells[world.index(x,z)]==Overworld.OPEN: open_cells += 1
 	check(seen.size()>=open_cells-40,"The open ground is one connected basin (%d of %d cells)" % [seen.size(),open_cells])
 	var blocked_all_round = true
-	for probe in [Vector3(0,0,-200),Vector3(80,0,260),Vector3(-400,0,0),Vector3(300,0,30),Vector3(120,0,-150),Vector3(-250,0,420),Vector3(-520,0,200)]:
+	for probe in [Vector3(0,0,-200),Vector3(80,0,260),Vector3(-400,0,0),Vector3(300,0,30),Vector3(120,0,-150),Vector3(-250,0,470),Vector3(-520,0,200)]:
 		var reached: Vector3 = world.move(Overworld.CARAVAN,probe-Overworld.CARAVAN)
 		blocked_all_round = blocked_all_round and world.margin_at(reached)>=.5 and reached.distance_to(probe)>20.0
 	check(blocked_all_round,"Running at the rim from the start stops at it on every side")

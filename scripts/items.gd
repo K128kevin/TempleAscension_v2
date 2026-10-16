@@ -125,6 +125,7 @@ const BASES = {
 	"studded_leather_tunic":{"name":"Studded Leather Tunic","rarity":"common","slot":"chest","weight":"medium","armor":20.0,"look":{"tint":Color(.3,.23,.18)}},
 	"leather_boots":{"name":"Leather Boots","rarity":"common","slot":"feet","weight":"medium","armor":12.0,"look":{"tint":Color(.4,.25,.13)}},
 	"leather_hood":{"name":"Leather Hood","rarity":"common","slot":"head","weight":"medium","armor":10.0,"look":{"tint":Color(.3,.19,.11)}},
+	"leather_trousers":{"name":"Leather Trousers","rarity":"common","slot":"legs","weight":"medium","armor":13.0,"bonus":{"dexterity":2},"look":{"tint":Color(.62,.4,.22)}},
 	# Heavy armor.
 	"steel_breastplate":{"name":"Steel Breastplate","rarity":"common","slot":"chest","weight":"heavy","armor":21.0,"bonus":{"strength":2},"look":{"tint":Color(.72,.74,.78)}},
 	"scale_cuirass":{"name":"Scale Cuirass","rarity":"common","slot":"chest","weight":"heavy","armor":23.0},

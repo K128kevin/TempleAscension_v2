@@ -94,6 +94,10 @@ const RIVER_BEND = Vector2(-336,362)
 const RIVER_TURN = 42.0
 const RIVER_Z = 404.0
 const RIVER_HALF = 7.0
+# North of the town it runs up the mountains' western end and bends east at
+# RIVER_NORTH (z) round a turn RIVER_NORTH_TURN across, behind them.
+const RIVER_NORTH = -200.0
+const RIVER_NORTH_TURN = 30.0
 # Where, east along the desert's south, the river turns north-east round the
 # mountains' southern end and up behind them.
 const RIVER_EAST_TURN = -60.0
@@ -437,20 +441,42 @@ func river_side(x: float, z: float) -> float:
 	# course, where it runs aslant).
 	var slant = river_x(z+1.0)-river_x(z)
 	var down = (x-river_x(z))/sqrt(1.0+slant*slant)
+	var top: Vector2 = north_bend()
 	if z > RIVER_BEND.y: down = INF if x > RIVER_BEND.x else -INF
+	elif z < top.y: down = INF if x > top.x else -INF
 	# Round the bend.
 	var round = RIVER_TURN-Vector2(x,z).distance_to(RIVER_BEND) if x <= RIVER_BEND.x and z >= RIVER_BEND.y else INF
 	# And along the desert's south.
 	var rise = river_z(x+1.0)-river_z(x)
 	var along = (river_z(x)-z)/sqrt(1.0+rise*rise) if x >= RIVER_BEND.x else INF
+	# Round the turn in the north, and east behind the mountains.
+	var round_north = RIVER_NORTH_TURN-Vector2(x,z).distance_to(top) if x <= top.x and z <= top.y else INF
+	var lean = north_z(x+1.0)-north_z(x)
+	var behind = (z-north_z(x))/sqrt(1.0+lean*lean) if x >= top.x else INF
 	var best = down
-	for side in [round,along]:
+	for side in [round,along,round_north,behind]:
 		if absf(side) < absf(best): best = side
 	return best
+
+# The middle of the turn in the north.
+func north_bend() -> Vector2:
+	return Vector2(RIVER_X+RIVER_NORTH_TURN,RIVER_NORTH)
+
+# The river's middle behind the mountains, east of the turn.
+func north_z(x: float) -> float:
+	var run = x-north_bend().x
+	return RIVER_NORTH-RIVER_NORTH_TURN+6.0*sin(run*.03)*smoothstep(0.0,40.0,run)
 
 # The way the river flows past a point near it: down the town's side,
 # round the bend and east.
 func river_flow(x: float, z: float) -> Vector2:
+	# (From behind the mountains, west and round the turn, and down.)
+	var top: Vector2 = north_bend()
+	if z < top.y:
+		if x <= top.x:
+			var out = Vector2(x,z)-top
+			return Vector2(out.y,-out.x).normalized()
+		return -Vector2(1.0,north_z(x+1.0)-north_z(x)).normalized()
 	if z <= RIVER_BEND.y and (x < RIVER_BEND.x or absf(x-river_x(z)) < absf(river_z(x)-z)):
 		return Vector2(river_x(z+1.0)-river_x(z),1.0).normalized()
 	if x <= RIVER_BEND.x:
@@ -460,19 +486,20 @@ func river_flow(x: float, z: float) -> Vector2:
 
 # (Its wandering eases off into the bend, to meet it.)
 func river_x(z: float) -> float:
-	# Along the town it bows gently out west, away from the quay, and runs
-	# back in at either end, where the walls come down to it.
+	# Along the town it sweeps out west, away from the quay, in a long uneven
+	# bend (never in over it), and runs back in at either end, where the
+	# walls come down to it.
 	var t = clampf((z-WALL_NORTH+30.0)/(WALL_SOUTH-WALL_NORTH+60.0),0.0,1.0)
-	var bow = -7.0*sin(PI*t)
+	var bow = -16.0*sin(PI*t)-6.0*sin(TAU*t)
 	# South of the town it winds, easing off into the bend.
 	var wind = (11.0*sin(z*.028+.4)+4.0*sin(z*.067+1.3))*smoothstep(WALL_SOUTH+10.0,WALL_SOUTH+60.0,z)
 	var ripple = 2.0*sin(z*.021)+1.0*sin(z*.057+1.3)
 	var bend = 1.0-smoothstep(RIVER_BEND.y-70.0,RIVER_BEND.y,z)
-	# North of the town it bends away north-west, winding, into the
-	# mountains.
-	var past = WALL_NORTH-12.0-z
-	var away = (sqrt(past*past+400.0)+past)*.5
-	return RIVER_X+bow+(wind+ripple)*bend-away*.5-9.0*sin(away*.045)
+	# North of the town it winds a little up the mountains' western end,
+	# straightening into the turn there.
+	var north = 7.0*sin(z*.035+1.0)*smoothstep(WALL_NORTH-10.0,WALL_NORTH-40.0,z)
+	var turn = smoothstep(RIVER_NORTH,RIVER_NORTH+50.0,z)
+	return RIVER_X+bow+((wind+ripple)*bend+north)*turn
 
 func river_z(x: float) -> float:
 	var run = x-RIVER_BEND.x
@@ -502,15 +529,17 @@ func margin(x: float, z: float, side: float = NAN) -> float:
 	var open = maxf(maxf(town,round_hill),maxf(desert,defile))
 	# The river, and its far bank: north of the town it runs between rocks.
 	if is_nan(side): side = river_side(x,z)
-	if z < WALL_NORTH-2.0 and x < HILL.x-HILL_REACH.x-2.0:
+	if z < WALL_NORTH-2.0 and side < 0.0:
+		# Across the river north of the town, open desert, out of reach.
+		open = maxf(open,RIVER_HALF+4.0-side)
+	elif z < WALL_NORTH-2.0 and x < HILL.x-HILL_REACH.x-2.0:
 		# West of the palace's ground, north of the town, the river's land
 		# runs up to the mountains' foot, out of reach.
 		open = maxf(open,z-north_front(x)-2.0)
-	elif z < WALL_NORTH-4.0: open = maxf(open,RIVER_HALF+4.0-absf(side))
 	# (The bank on the near side ends at the mountains' foot; across the water
 	# it runs on, out of reach, beside them.)
 	elif side < 0.0: open = maxf(open,RIVER_HALF+4.0-side)
-	elif side < RIVER_HALF+4.0: open = maxf(open,minf(RIVER_HALF+4.0-side,(east_edge(z)-x)*.87))
+	elif side < RIVER_HALF+4.0 and z > WALL_NORTH-2.0: open = maxf(open,minf(RIVER_HALF+4.0-side,(east_edge(z)-x)*.87))
 	return open
 
 # Where the mountains' foot runs north of the town and the desert: a few
@@ -541,9 +570,9 @@ func mountain_depth(x: float, z: float) -> float:
 	if z > WALL_SOUTH:
 		depth = minf(depth,(side-RIVER_HALF-4.0)*.6)
 		depth = minf(depth,(absf(side)-RIVER_HALF-3.0)*1.3)
-	# North of the town its valley runs only a little way in: further, the
-	# mountains close over it, and it goes on out of sight behind them.
-	else: depth = minf(depth,(absf(side)-RIVER_HALF-3.0)*1.3+maxf(depth-16.0,0.0)*1.6)
+	# North of the town they begin at its east bank, none across it; past
+	# the turn they close over it, and it runs on out of sight behind them.
+	else: depth = minf(depth,(x-river_x(maxf(z,RIVER_NORTH))-RIVER_HALF-4.0)*.6)
 	return depth
 
 func margin_at(p: Vector3) -> float:
