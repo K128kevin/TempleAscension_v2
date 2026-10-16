@@ -16,6 +16,7 @@ const Save = preload("res://scripts/save.gd")
 const RangerFx = preload("res://scripts/ranger_fx.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const Items = preload("res://scripts/items.gd")
+const AshDeath = preload("res://scripts/ash_death.gd")
 var run: Dictionary
 var world
 var player
@@ -186,7 +187,11 @@ func outdoors() -> bool:
 	return run.get("place","temple")=="world"
 
 # Loads wherever the run is: the outdoor world, or its floor of the temple.
+# How many times a floor has been loaded (a wait begun on one floor, the
+# death screen after burning, is not kept on another).
+var load_count = 0
 func load_floor() -> void:
+	load_count += 1
 	if test_mode: creating_character = false
 	run.erase("seconds") # Discard elapsed time from legacy saves.
 	run.erase("skill_cooldowns") # Ignore obsolete skill recharge timers in saved runs.
@@ -794,6 +799,8 @@ static func speech_cursor() -> ImageTexture:
 # The 1 to 4 keys: a skill used up close is walked to a unit under the cursor,
 # as a right click is; anything else is cast where the cursor points.
 func cast_key(slot: int) -> void:
+	# (He lets go of a boulder to fight.)
+	if puzzle() != null: puzzle().let_go()
 	if skills.reach(run.hotbar[slot])<RANGED_REACH and is_instance_valid(clicked_enemy()) and not Input.is_physical_key_pressed(KEY_SHIFT): issue_click(true,slot)
 	else: skills.cast_slot(slot,aim_point())
 
@@ -801,6 +808,14 @@ func issue_click(special: bool, slot: int = 0, held: bool = false) -> void:
 	# (A skill pressed again while Power Shot is aimed or loosed is let go: a
 	# double tap fires once.)
 	if special and skills.powering: return
+	# Holding a boulder, a click on the floor is where to roll it (held down,
+	# the order stands); a skill lets it go.
+	var stones = puzzle()
+	if stones != null and stones.holding():
+		if special: stones.let_go()
+		else:
+			if not held: stones.roll_to(world.pointer())
+			return
 	order_pending = false
 	pickup_goal = null
 	talk_goal = null
@@ -944,7 +959,7 @@ func player_control(dt: float) -> void:
 		elif not is_instance_valid(target):
 			var aim: Vector3 = world.pointer()
 			# (Sitting by his fire, he keeps looking at it.)
-			if player.position.distance_to(aim) > .6 and not player.visual.resting: player.face(aim)
+			if player.position.distance_to(aim) > .6 and not player.visual.resting and not gripping(): player.face(aim)
 	player.visual.walking = walking
 	# Hidden in the shadows, the ranger goes crouched.
 	player.visual.sneaking = skills.hidden
@@ -953,7 +968,8 @@ func player_control(dt: float) -> void:
 	if player.visual.resting and (moved or player.busy>0):
 		run.erase("resting")
 		player.visual.rest(false)
-	player.visual.locomotion(moved,player.busy>0 or (not moved and player.visual.swing_phase() >= 0.0),skills.hidden,1.0,pace)
+	# (Set against a boulder, he goes as it does: scripts/basement_puzzle.gd.)
+	if not gripping(): player.visual.locomotion(moved,player.busy>0 or (not moved and player.visual.swing_phase() >= 0.0),skills.hidden,1.0,pace)
 
 # How near the hero comes to strike: as far as the weapon in hand reaches
 # (a bow's or a staff's shot, a spear's length, a sword's).
@@ -1168,6 +1184,7 @@ func lean_into_dash(dt: float) -> void:
 # `toward`: where it is aimed (the cursor's point on the ground, if not given).
 func dash(toward = null) -> void:
 	if leap_left>0: return
+	if puzzle() != null: puzzle().let_go()
 	if mode!="playing" or player.dead or dash_cooldown>0: return
 	# Dash Attack makes the dash strike, and recharge sooner.
 	var attacks: bool = run.skills.has("dash_attack")
@@ -1352,17 +1369,29 @@ func kill_player(cause: String = "") -> void:
 	if player.dead or playground != null or invincible_test or (debug.enabled and debug.invulnerable): return
 	player.hp = 0
 	if cause == "laser":
+		# Burned to ash where he stands (scripts/ash_death.gd); the death
+		# screen waits until he has crumbled away.
 		sound.play("lightning-zap",-4)
-		float_text(player.position+Vector3.UP*1.8,"Burned through",Color(1,.3,.25))
+		sound.play("fire-whoosh",-6)
+		player_died(false)
+		AshDeath.burn(world,player)
+		var shown = load_count
+		get_tree().create_timer(AshDeath.DURATION).timeout.connect(func():
+			if shown == load_count and mode == "dead" and player.dead: death_screen())
+		return
 	player_died()
 
-func player_died() -> void:
+# (`fall`: he falls dead as a man does, not burned away.)
+func player_died(fall: bool = true) -> void:
 	player.dead = true
-	player.visual.play("Death")
+	if fall: player.visual.play("Death")
 	run.deaths += 1
 	mode = "dead"
 	left_held = false
 	right_held = false
+	if fall: death_screen()
+
+func death_screen() -> void:
 	hud.dialog("STONE CLAIMS ANOTHER", "Retry with your class, XP, learned skills and equipment intact. Previously rewarded enemies grant no additional XP.")
 	hud.button("Rise again",retry_floor)
 	hud.button("Save and quit",quit_game)
@@ -1371,6 +1400,7 @@ func player_died() -> void:
 # his head, his orders dropped.
 func stun_player(seconds: float) -> void:
 	if player.dead: return
+	if puzzle() != null: puzzle().let_go()
 	stun_left = maxf(stun_left,seconds)
 	route.clear()
 	target = null
@@ -1774,7 +1804,20 @@ func remaining() -> int:
 		if not e.dead and not e.dormant: count += 1
 	return count
 
+# The basement's boulders and plates (scripts/basement_puzzle.gd), on the
+# level that has them (else null).
+func puzzle():
+	return world.puzzle if world is Temple else null
+
 func interact() -> void:
+	# E takes hold of a boulder beside him, and lets it go again.
+	var stones = puzzle()
+	if stones != null and stones.holding():
+		stones.let_go()
+		return
+	if stones != null and not player.dead and not stones.near_boulder(player.position).is_empty():
+		stones.take_hold(stones.near_boulder(player.position))
+		return
 	if crown_available and player.position.distance_to(crown_position)<3:
 		ending()
 	elif at_locked_gate():
@@ -1885,6 +1928,9 @@ func leave_playground() -> void:
 	playground.queue_free()
 	playground = null
 	load_floor()
+
+func gripping() -> bool:
+	return puzzle() != null and puzzle().gripping()
 
 # The basement's boulders, as last saved (their top-left cells).
 func kept_boulders() -> Array:

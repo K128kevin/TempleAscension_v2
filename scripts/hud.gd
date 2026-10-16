@@ -506,10 +506,10 @@ func tick(dt: float) -> void:
 	if game.mode == "playing":
 		if outdoors: prompt.text = outdoor_prompt()
 		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
+		elif puzzle_prompt() != "": prompt.text = puzzle_prompt()
 		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked"
 		elif game.way_open() and game.has_way_on() and game.player.position.distance_to(game.world.exit_point)<4: prompt.text = "The stairs lead down" if r.place == "basement" else "E · %s" % ("Descend" if r.place in Data.DUNGEONS else "Ascend")
 		elif r.place in Data.DUNGEONS and game.world.layout.arrival.has_area() and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair" if r.floor>0 else "E · Up the stair to the arena"
-		elif puzzle_prompt() != "": prompt.text = puzzle_prompt()
 		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
@@ -526,9 +526,9 @@ func puzzle_prompt() -> String:
 	var puzzle = game.world.get("puzzle")
 	if puzzle == null: return ""
 	var at: Vector3 = game.player.position
+	if puzzle.holding(): return "Click where to roll the boulder  ·  E · Let go"
 	if puzzle.lit and puzzle.struck(at,at,3.0): return "The beams burn through anything: weigh down both plates to quench them"
-	for b in puzzle.boulders:
-		if Vector2(b.to.x-at.x,b.to.z-at.z).length() < puzzle.BOULDER_RADIUS+1.2: return "Walk into the boulder to roll it"
+	if not puzzle.near_boulder(at).is_empty(): return "E · Take hold of the boulder"
 	return ""
 
 # The hotbar slot (Data) a tile of the bar shows: LMB's is the wizard's

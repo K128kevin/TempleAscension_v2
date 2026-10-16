@@ -34,19 +34,13 @@ func play(done: Callable, seconds: float) -> bool:
 		game._process(.05)
 		left -= .05
 	return done.call()
-# Leans the hero into boulder `b` the way `dir` goes until it has rolled or
-# rebounded (or `seconds` pass); returns the cell it ends on.
-func lean(puzzle, b: Dictionary, dir: Vector2i, seconds: float = 2.0) -> Vector2i:
-	var was: Vector2i = b.cell
-	var way = Vector3(dir.x,0,dir.y)
-	game.player.position = b.to-way*(puzzle.BOULDER_RADIUS+.42)
+# Plays the game on until the boulder he holds has no moves left and lies
+# still (or `seconds` pass).
+func roll_on(puzzle, seconds: float = 30.0) -> void:
 	var left = seconds
-	while left > 0 and (b.cell == was or b.t < 1.0):
-		game.walk_intent = way
-		game.player.tick(.05)
-		puzzle.tick(.05)
+	while left > 0 and (not puzzle.moves.is_empty() or puzzle.held.t < 1.0 or not game.route.is_empty()):
+		game._process(.05)
 		left -= .05
-	return b.cell
 
 # The basement's last level: its boulders, plates and lasers, and the three
 # in the room beyond them.
@@ -60,22 +54,42 @@ func puzzle_and_elites() -> void:
 	check(puzzle != null and puzzle.boulders.size()==2 and puzzle.plates.size()==2 and puzzle.beams.size()==3 and puzzle.lit,"Below: two boulders, two plates, and the lasers lit")
 	for beam in puzzle.beams:
 		check(Vector2(beam.end.x-beam.from.x,beam.end.z-beam.from.z).length()>=layout.quiet[0].size.x-1.0,"A beam spans the hallway, wall to wall")
-	# Rolled: a tile at a time, the way he leans; into a wall, it rebounds.
+	# Held (E beside it), a boulder is rolled where he clicks: he goes round
+	# to push it from the side it must be pushed from.
+	# (The bandits stood aside: a boulder is not rolled into a man.)
+	var places: Array = game.enemies.map(func(e): return e.position)
+	for e in game.enemies:
+		e.dormant = true
+		e.position += Vector3(500,0,500)
 	var b: Dictionary = puzzle.boulders[0]
-	var from: Vector2i = b.cell
-	var to: Vector2i = lean(puzzle,b,Vector2i.RIGHT)
-	check(to == from+Vector2i.RIGHT and world.fits(puzzle.centre(from)+Vector3.LEFT*1.2) and not world.fits(b.to),"Leaned on, a boulder rolls a tile on, and stands in the way")
-	var hero_before: Vector3
-	var bounced = false
-	for i in 12:
-		var at: Vector2i = b.cell
-		hero_before = b.to-Vector3(0,0,-1)*(puzzle.BOULDER_RADIUS+.42)
-		var now: Vector2i = lean(puzzle,b,Vector2i.UP)
-		if now == at+Vector2i.DOWN:
-			bounced = true
-			break
-	check(bounced,"Rolled into a wall, it rebounds a tile")
-	for i in 40: game.player.tick(.05)
+	var room: Rect2i = layout.rooms.filter(func(r): return r.encloses(Rect2i(layout.boulders[0],Vector2i(2,2))))[0]
+	game.player.position = puzzle.stand_point(b.cell,Vector2i.DOWN,false)
+	game.hud.tick(0)
+	check("Take hold" in game.hud.prompt.text,"Beside a boulder the HUD offers to take hold of it")
+	game.interact()
+	check(puzzle.holding(),"E takes hold of it")
+	roll_on(puzzle,3.0)
+	check(puzzle.gripping() and game.hud.prompt.text != "" and not is_instance_valid(game.player.visual.weapon_item) or not game.player.visual.weapon_item.visible,"Set against it, his hands on it, his weapon put away")
+	var goal: Vector2i = b.cell+Vector2i(2,-2)
+	game.issue_click(false)
+	puzzle.roll_to(puzzle.centre(goal))
+	check(puzzle.moves.size()==4 and puzzle.moves.all(func(m): return not m.pull),"A click plans it there, pushing it four tiles")
+	roll_on(puzzle)
+	check(b.cell == goal and b.t >= 1.0 and not world.fits(b.to),"He goes round it as he must and rolls it there")
+	# Wedged in a corner, it is pulled out before it is pushed on.
+	b.cell = room.position; b.to = puzzle.centre(b.cell); b.from = b.to; b.node.position = b.to+Vector3.UP*puzzle.BOULDER_RADIUS
+	puzzle.nav_mark(goal); puzzle.nav_mark(b.cell)
+	game.player.position = puzzle.stand_point(b.cell,Vector2i.DOWN,true)
+	var out: Vector2i = b.cell+Vector2i(4,3)
+	puzzle.roll_to(puzzle.centre(out))
+	check(puzzle.moves.any(func(m): return m.pull) and not puzzle.moves.is_empty(),"Out of a corner, it is pulled clear first: %s" % [puzzle.moves])
+	roll_on(puzzle,60.0)
+	check(b.cell == out,"And rolled out of the corner to where he wanted it: %s vs %s, left %s, notice %s, hero %s" % [b.cell,out,puzzle.moves,game.hud.notice.text,game.player.position])
+	game.interact()
+	check(not puzzle.holding() and game.player.visual.weapon_item.visible,"E again lets it go, his weapon in hand again")
+	for i in game.enemies.size():
+		game.enemies[i].dormant = false
+		game.enemies[i].position = places[i]
 	# The plates: the hero on one, a boulder on the other.
 	game.player.position = puzzle.centre(layout.buttons[0])
 	puzzle.tick(.05)

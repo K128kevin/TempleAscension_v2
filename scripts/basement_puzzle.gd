@@ -8,24 +8,33 @@ extends Node3D
 ## standing on one, and light again the moment either lifts. A beam runs from
 ## its emitter until it meets a wall or a boulder; whoever walks into it dies.
 ##
-## A boulder is rolled a tile at a time on the floor's grid (it covers 2x2
-## tiles), the way the hero leans into it (walking into it for PUSH_LEAN
-## seconds). Rolled into a wall or the other boulder, it rebounds a tile back
-## toward him, shoving him back, so that it can never be wedged where it
-## cannot be got behind.
+## A boulder covers 2x2 tiles and is rolled a tile at a time on the floor's
+## grid. E beside one takes hold of it (and E again lets go): holding it, a
+## click on the floor is where to roll it, and he works out how (plan): he
+## goes round to the side he must push from, sets his hands to it and walks
+## it on, as many tiles as it takes, turning it at corners; where it lies
+## against a wall the way it must go, he pulls it back off first (stepping
+## backward with it), so that it is never wedged where it cannot be got
+## behind. Each step he takes with it, he leans into it (or back from it),
+## his hands flat on the stone (scripts/push_pose.gd).
 const Layout = preload("res://scripts/layout.gd")
 const Art = preload("res://scripts/assets.gd")
 const Kit = preload("res://scripts/world_art.gd")
 const Gaze = preload("res://scripts/boss_laser.gd")
 const BOULDER_RADIUS = .92
-const PUSH_LEAN = .18
-# Metres a second, rolling on and rebounding.
-const ROLL_SPEED = 2.2
-const REBOUND_SPEED = 1.2
-# How near the hero must be to lean into a boulder, beyond touching it, and
-# how squarely he must be walking into it.
-const LEAN_REACH = .14
-const LEAN_SQUARE = .55
+# Tiles a second, pushed and pulled: a heavy stone, walked on slowly.
+const PUSH_SPEED = 1.3
+const PULL_SPEED = .9
+# How near the hero must stand to take hold of a boulder (from its surface),
+# and how far from its middle he stands to push it.
+const GRIP_REACH = 1.3
+const STAND = BOULDER_RADIUS+.42
+# The planner: what a pull costs against a push (it is worked only where it
+# must be), and how many places it weighs before it settles for the nearest
+# it found; how far the hero looks to get round a boulder (tiles).
+const PULL_COST = 4
+const PLAN_LIMIT = 6000
+const ROUND_REACH = 9
 # The beams: their height, and how near a body must come to one to be struck.
 const BEAM_HEIGHT = .95
 const BEAM_TOUCH = .38
@@ -42,8 +51,14 @@ var lit = true
 var mesh: ImmediateMesh
 var materials: Array = []
 var clock = 0.0
-var lean_time = 0.0
 var last_hero = Vector3.INF
+# The boulder he has hold of ({} if none), the moves still to make with it
+# (each {"m": the way it goes, "pull": whether he pulls it}), and whether
+# he is set against it (his hands on it) or still going round to it.
+var held: Dictionary = {}
+var moves: Array = []
+var braced = false
+var pose = null
 
 # `kept`: boulders' top-left cells as saved, in place of where they start.
 func setup(owner_game, owner_world, kept: Array = []) -> void:
@@ -51,13 +66,17 @@ func setup(owner_game, owner_world, kept: Array = []) -> void:
 	world = owner_world
 	layout = world.layout
 	name = "BasementPuzzle"
-	var stone: Material = Kit.rock("boulder_a",Color(.86,.8,.72),0.0)
+	var stone = ShaderMaterial.new()
+	stone.shader = load("res://assets/shaders/stone_ball.gdshader")
+	stone.set_shader_parameter("albedo_map",load("res://assets/textures/scan_%s_diff.jpg" % Kit.SCANS["boulder_a"]))
+	stone.set_shader_parameter("detail_map",load("res://assets/textures/rock_detail.jpg"))
+	stone.set_shader_parameter("tint",Vector3(.95,.88,.8))
 	for i in layout.boulders.size():
 		var cell: Vector2i = layout.boulders[i]
 		if i < kept.size() and kept[i] is Vector2i and footprint_free(kept[i],i,true): cell = kept[i]
 		var node = boulder_model(i,stone)
 		add_child(node)
-		var b = {"cell":cell,"node":node,"from":centre(cell),"to":centre(cell),"t":1.0,"speed":ROLL_SPEED,"dir":Vector2i.ZERO}
+		var b = {"cell":cell,"node":node,"from":centre(cell),"to":centre(cell),"t":1.0,"speed":PUSH_SPEED,"dir":Vector2i.ZERO,"pull":false}
 		node.position = b.to+Vector3.UP*BOULDER_RADIUS
 		boulders.append(b)
 		world.visibility_nodes.append(node)
@@ -68,6 +87,7 @@ func setup(owner_game, owner_world, kept: Array = []) -> void:
 		plates.append({"cell":cell,"root":plate.root,"top":plate.top,"lamp":plate.lamp,"down":false,"sink":0.0})
 		world.visibility_nodes.append(plate.root)
 		world.visibility_cells[plate.root] = footprint(cell)
+	for b in boulders: nav_mark(b.cell)
 	materials = Gaze.pass_materials()
 	mesh = ImmediateMesh.new()
 	var drawn = MeshInstance3D.new()
@@ -89,27 +109,41 @@ func centre(cell: Vector2i) -> Vector3:
 static func footprint(cell: Vector2i) -> Array[Vector2i]:
 	return [cell,cell+Vector2i.RIGHT,cell+Vector2i.DOWN,cell+Vector2i.ONE]
 
-# A boulder: one of the cave's rocks, rounded and sized to a ball, its
-# middle at the node's origin so that it rolls about it.
+# A boulder: a great ball of stone, hewn round but knobbled and pitted
+# (its surface pushed in and out by noise, BOULDER_ROUGH of its radius), in
+# the cave's scanned rock; its middle at the node's origin, so that it rolls
+# about it. One shape for both, turned differently.
+const BOULDER_ROUGH = .07
+static var ball: ArrayMesh
 func boulder_model(index: int, stone: Material) -> Node3D:
 	var root = Node3D.new()
 	root.name = "Boulder%d" % index
-	var id: String = ["boulder_c","boulder_a"][index%2]
-	var rock: Node3D = Art.model(id,Vector3.ONE*BOULDER_RADIUS*2.0,stone)
+	if ball == null:
+		var sphere = SphereMesh.new()
+		sphere.radius = BOULDER_RADIUS
+		sphere.height = BOULDER_RADIUS*2.0
+		sphere.radial_segments = 56
+		sphere.rings = 28
+		var arrays: Array = sphere.get_mesh_arrays()
+		var lumps = FastNoiseLite.new()
+		lumps.seed = 7
+		lumps.frequency = 1.1
+		lumps.fractal_octaves = 4
+		var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		for k in points.size():
+			var p: Vector3 = points[k]
+			points[k] = p*(1.0+BOULDER_ROUGH*lumps.get_noise_3dv(p*2.0))
+		arrays[Mesh.ARRAY_VERTEX] = points
+		var tool = SurfaceTool.new()
+		tool.create_from_arrays(arrays)
+		tool.generate_normals()
+		tool.generate_tangents()
+		ball = tool.commit()
+	var rock = MeshInstance3D.new()
+	rock.mesh = ball
+	rock.material_override = stone
 	root.add_child(rock)
-	var box = AABB()
-	var first = true
-	for part in rock.find_children("*","MeshInstance3D",true,false):
-		# (Its place within the rock, the rock not yet in the tree.)
-		var into = Transform3D.IDENTITY
-		var node: Node = part
-		while node != rock:
-			into = node.transform*into
-			node = node.get_parent()
-		var local: AABB = into*part.get_aabb()
-		box = local if first else box.merge(local)
-		first = false
-	rock.position = -(rock.transform.basis*box.get_center())
+	root.rotation = Vector3(index*1.7,index*2.3,index*.9)
 	return root
 
 # A pressure plate: a worn slab sunk in a frame of darker stone, a dull ember
@@ -187,7 +221,9 @@ func tick(dt: float) -> void:
 	clock += dt
 	var hero = game.player
 	for b in boulders: roll(b,dt)
-	if not hero.dead: lean(dt)
+	if not held.is_empty():
+		if hero.dead: let_go()
+		else: work(dt)
 	settle_plates(hero if not hero.dead else null,dt)
 	var open: bool = all_down()
 	if open == lit:
@@ -202,56 +238,15 @@ func tick(dt: float) -> void:
 	if lit and not hero.dead and last_hero != Vector3.INF and struck(last_hero,hero.position): game.kill_player("laser")
 	last_hero = hero.position
 
-# The hero leaning into a boulder: walking into it, squarely, for PUSH_LEAN
-# seconds rolls it on a tile the way he leans.
-func lean(dt: float) -> void:
-	var hero: Vector3 = game.player.position
-	var intent: Vector3 = game.walk_intent
-	var pushing = null
-	var way = Vector2i.ZERO
-	if intent.length_squared() > .01:
-		for b in boulders:
-			if b.t < 1.0: continue
-			var gap: Vector3 = b.to-hero
-			gap.y = 0
-			if gap.length() > BOULDER_RADIUS+.4+LEAN_REACH: continue
-			var dir = Vector2i(signi(roundi(gap.x)),0) if absf(gap.x) >= absf(gap.z) else Vector2i(0,signi(roundi(gap.z)))
-			if dir == Vector2i.ZERO: continue
-			if intent.normalized().dot(Vector3(dir.x,0,dir.y)) < LEAN_SQUARE: continue
-			pushing = b
-			way = dir
-			break
-	if pushing == null:
-		lean_time = 0.0
-		return
-	lean_time += dt
-	if lean_time < PUSH_LEAN: return
-	lean_time = 0.0
-	push(pushing,way)
-
-func push(b: Dictionary, dir: Vector2i) -> void:
-	var index: int = boulders.find(b)
-	if footprint_free(b.cell+dir,index):
-		game.sound.play("rock-impact",-20)
-		start_roll(b,b.cell+dir,ROLL_SPEED)
-		return
-	# Into a wall or the other boulder: it knocks and rebounds a tile toward
-	# him, shoving him back, if he and it have the room.
-	game.sound.play("rock-impact",-10)
-	var back = Vector3(-dir.x,0,-dir.y)
-	var hero = game.player
-	var clear: Vector3 = world.move(hero.position,back*1.05)
-	if clear.distance_to(hero.position) < 1.0 or not footprint_free(b.cell-dir,index,false,true): return
-	hero.shove(back,1.0)
-	start_roll(b,b.cell-dir,REBOUND_SPEED)
-
-func start_roll(b: Dictionary, cell: Vector2i, speed: float) -> void:
+func start_roll(b: Dictionary, cell: Vector2i, speed: float, pull: bool = false) -> void:
+	nav_mark(b.cell)
 	b.dir = cell-b.cell
 	b.cell = cell
 	b.from = b.to
 	b.to = centre(cell)
 	b.t = 0.0
 	b.speed = speed
+	b.pull = pull
 
 func roll(b: Dictionary, dt: float) -> void:
 	if b.t >= 1.0: return
@@ -260,6 +255,9 @@ func roll(b: Dictionary, dt: float) -> void:
 	var after: Vector3 = here(b)
 	var node: Node3D = b.node
 	node.position = after+Vector3.UP*BOULDER_RADIUS
+	if b.t >= 1.0:
+		nav_mark(b.dir*-1+b.cell)
+		nav_mark(b.cell)
 	# Rolling: turned about the level line across its way, a radian for each
 	# radius it has gone.
 	var travel: Vector3 = after-before
@@ -270,13 +268,13 @@ func roll(b: Dictionary, dt: float) -> void:
 	world.visibility_cells[node] = footprint(b.cell)
 
 func here(b: Dictionary) -> Vector3:
-	return b.from.lerp(b.to,smoothstep(0.0,1.0,b.t))
+	return b.from.lerp(b.to,b.t)
 
 # Whether a boulder (`index`, not counted itself) may lie at `cell`: on floor,
 # clear of the other boulder and of the living. (`starting`: as it is set
-# down, before anyone stands about; `rebound`: the hero, being shoved back
-# out of the way, does not count.)
-func footprint_free(cell: Vector2i, index: int, starting: bool = false, rebound: bool = false) -> bool:
+# down, before anyone stands about; `pulled`: the hero, stepping back out of
+# its way as he pulls it, does not count.)
+func footprint_free(cell: Vector2i, index: int, starting: bool = false, pulled: bool = false) -> bool:
 	for c in footprint(cell):
 		if not layout.cells.has(c): return false
 	var mid: Vector3 = centre(cell)
@@ -286,7 +284,7 @@ func footprint_free(cell: Vector2i, index: int, starting: bool = false, rebound:
 	if starting: return true
 	for e in game.enemies:
 		if not e.dead and Vector2(e.position.x-mid.x,e.position.z-mid.z).length() < BOULDER_RADIUS+.45: return false
-	if not rebound and is_instance_valid(game.player):
+	if not pulled and is_instance_valid(game.player):
 		var p: Vector3 = game.player.position
 		if Vector2(p.x-mid.x,p.z-mid.z).length() < BOULDER_RADIUS+.35: return false
 	return true
@@ -373,3 +371,224 @@ func barred(a: Vector3, b: Vector3) -> bool:
 # The boulders' cells, to be saved.
 func kept() -> Array:
 	return boulders.map(func(b): return [b.cell.x,b.cell.y])
+
+# --- Holding a boulder -----------------------------------------------------------------
+
+# The boulder he stands close enough to take hold of ({} if none).
+func near_boulder(at: Vector3) -> Dictionary:
+	for b in boulders:
+		if b.t >= 1.0 and Vector2(b.to.x-at.x,b.to.z-at.z).length() < BOULDER_RADIUS+GRIP_REACH: return b
+	return {}
+
+func take_hold(b: Dictionary) -> void:
+	held = b
+	moves.clear()
+	braced = false
+	if pose == null: pose = preload("res://scripts/push_pose.gd").new(game.player.visual)
+	game.route.clear()
+	game.target = null
+	# Set against it from where he stands: a turn to face it squarely.
+	var gap: Vector3 = b.to-game.player.position
+	var way = Vector2i(signi(roundi(gap.x)),0) if absf(gap.x) >= absf(gap.z) else Vector2i(0,signi(roundi(gap.z)))
+	if way == Vector2i.ZERO: way = Vector2i.UP
+	var spot: Vector3 = b.to-Vector3(way.x,0,way.y)*STAND
+	if world.fits(spot): game.route = world.path(game.player.position,spot)
+	game.sound.play("rock-impact",-24)
+
+func let_go() -> void:
+	held = {}
+	moves.clear()
+	braced = false
+	if pose != null: pose.release()
+
+func holding() -> bool:
+	return not held.is_empty()
+
+# He is set against the stone, his hands on it: the puzzle, not his orders,
+# turns him and walks him.
+func gripping() -> bool:
+	return holding() and braced
+
+# A click on the floor while he holds the boulder: roll it there, or as near
+# as it will go.
+func roll_to(point: Vector3) -> void:
+	if not holding(): return
+	var goal: Vector2i = layout.to_cell(point-Vector3(.5,0,.5))
+	moves = plan(held,goal)
+	if moves.is_empty() and goal != held.cell: game.toast("The boulder cannot be rolled there.")
+
+# Where he stands for a move of `m` from `cell`: behind it, to push it on;
+# before it, to pull it back toward him.
+func stand_point(cell: Vector2i, m: Vector2i, pull: bool) -> Vector3:
+	return centre(cell)+Vector3(m.x,0,m.y)*(STAND if pull else -STAND)
+
+# The tiles he stands on to move a boulder at `cell` by `m`: the two along
+# its back (pushing) or its front (pulling).
+static func stand_cells(cell: Vector2i, m: Vector2i, pull: bool) -> Array[Vector2i]:
+	var foot: Array[Vector2i] = footprint(cell)
+	var out: Array[Vector2i] = []
+	for c in foot:
+		var s: Vector2i = c+(m if pull else -m)
+		if not s in foot: out.append(s)
+	return out
+
+func open_tile(c: Vector2i, index: int) -> bool:
+	if not layout.cells.has(c): return false
+	for i in boulders.size():
+		if i != index and Rect2i(boulders[i].cell,Vector2i(2,2)).has_point(c): return false
+	return true
+
+# Whether he can walk, with the boulder at `cell`, from `from` to any of
+# `goals`, keeping within ROUND_REACH tiles of it.
+func can_get_round(cell: Vector2i, index: int, from: Vector2i, goals: Array[Vector2i], memo: Dictionary) -> bool:
+	if from in goals: return true
+	var key = [cell,from,goals[0]]
+	if memo.has(key): return memo[key]
+	var block = Rect2i(cell,Vector2i(2,2))
+	var seen = {from:true}
+	var queue: Array[Vector2i] = [from]
+	var found = false
+	while not queue.is_empty() and not found:
+		var at: Vector2i = queue.pop_front()
+		for d in Layout.DIRS:
+			var next: Vector2i = at+d
+			if seen.has(next) or block.has_point(next) or not open_tile(next,index): continue
+			if absi(next.x-cell.x) > ROUND_REACH or absi(next.y-cell.y) > ROUND_REACH: continue
+			if next in goals:
+				found = true
+				break
+			seen[next] = true
+			queue.append(next)
+	memo[key] = found
+	return found
+
+# The moves that take boulder `b` to `goal` (or, if it cannot get there, as
+# near as it can), fewest first, pulls only where they must be made: an A*
+# search over where the boulder lies and the way it last went, the hero
+# going round it between moves where he can.
+func plan(b: Dictionary, goal: Vector2i) -> Array:
+	var index: int = boulders.find(b)
+	var hero: Vector2i = layout.to_cell(game.player.position)
+	if Rect2i(b.cell,Vector2i(2,2)).has_point(hero) or not layout.cells.has(hero):
+		for d in Layout.DIRS:
+			if open_tile(hero+d,index) and not Rect2i(b.cell,Vector2i(2,2)).has_point(hero+d): hero = hero+d; break
+	var far = func(c: Vector2i) -> int: return absi(c.x-goal.x)+absi(c.y-goal.y)
+	# A state: where the boulder lies and the move that put it there (-1 at
+	# first); for each, its cost, where the hero then stands, and whence.
+	var first = [b.cell,-1]
+	var cost = {first:0}
+	var stands = {first:hero}
+	var parent = {}
+	var buckets = {far.call(b.cell):[first]}
+	var lowest: int = far.call(b.cell)
+	var best = first
+	var memo = {}
+	var expanded = 0
+	var options: Array = []
+	for d in 4:
+		for pulling in [false,true]: options.append({"m":Layout.DIRS[d],"pull":pulling,"code":d*2+(1 if pulling else 0)})
+	while expanded < PLAN_LIMIT:
+		while not buckets.has(lowest) or buckets[lowest].is_empty():
+			buckets.erase(lowest)
+			if buckets.is_empty(): break
+			lowest = buckets.keys().min()
+		if buckets.is_empty(): break
+		var state: Array = buckets[lowest].pop_back()
+		var cell: Vector2i = state[0]
+		var g: int = cost[state]
+		if lowest > g+far.call(cell): continue
+		expanded += 1
+		if far.call(cell) < far.call(best[0]) or (far.call(cell) == far.call(best[0]) and g < cost[best]): best = state
+		if cell == goal: break
+		for o in options:
+			var m: Vector2i = o.m
+			var to: Vector2i = cell+m
+			var free = true
+			for c in footprint(to):
+				if not open_tile(c,index): free = false
+			if not free: continue
+			var spots: Array[Vector2i] = stand_cells(cell,m,o.pull)
+			if not spots.all(func(c): return open_tile(c,index)): continue
+			# (Pulling, he steps back a tile as it comes.)
+			if o.pull and not spots.all(func(c): return open_tile(c+m,index)): continue
+			if state[1] != o.code and not can_get_round(cell,index,stands[state],spots,memo): continue
+			var next = [to,o.code]
+			var step: int = g+(PULL_COST if o.pull else 1)
+			if cost.has(next) and cost[next] <= step: continue
+			cost[next] = step
+			stands[next] = spots[0]+m
+			parent[next] = [state,{"m":m,"pull":o.pull}]
+			var f: int = step+far.call(to)
+			if not buckets.has(f): buckets[f] = []
+			buckets[f].append(next)
+			lowest = mini(lowest,f)
+	var path: Array = []
+	var at = best
+	while parent.has(at):
+		path.push_front(parent[at][1])
+		at = parent[at][0]
+	return path
+
+# Each frame he holds a boulder: rolling it, he goes with it, leaning in;
+# between moves he goes round to where the next is made from, sets himself
+# and heaves it on.
+func work(dt: float) -> void:
+	var b: Dictionary = held
+	var hero = game.player
+	if b.t < 1.0:
+		var way = Vector3(b.dir.x,0,b.dir.y)
+		hero.position = here(b)+way*(STAND if b.pull else -STAND)
+		hero.face(hero.position-way if b.pull else hero.position+way)
+		braced = true
+		hero.visual.walking = true
+		pose.update(dt,true,here(b)+Vector3.UP*BOULDER_RADIUS,BOULDER_RADIUS,b.pull)
+		# (Pulling, he walks backward: the stride runs in reverse.)
+		hero.visual.locomotion(true,false,false,1.0,-PULL_SPEED if b.pull else PUSH_SPEED)
+		return
+	var near: bool = Vector2(b.to.x-hero.position.x,b.to.z-hero.position.z).length() < STAND+.25
+	if moves.is_empty():
+		# Standing by it, his hands on it, until he lets go or is told where.
+		braced = near and game.route.is_empty()
+		if braced:
+			hero.face(Vector3(b.to.x,0,b.to.z))
+			hero.visual.locomotion(false,false)
+		pose.update(dt,braced,b.to+Vector3.UP*BOULDER_RADIUS,BOULDER_RADIUS,false)
+		return
+	var move: Dictionary = moves[0]
+	var spot: Vector3 = stand_point(b.cell,move.m,move.pull)
+	if Vector2(spot.x-hero.position.x,spot.z-hero.position.z).length() > .15:
+		# Round to it: his hands off the stone as he goes.
+		braced = false
+		pose.update(dt,false,b.to+Vector3.UP*BOULDER_RADIUS,BOULDER_RADIUS,false)
+		if game.route.is_empty() or game.route[-1].distance_to(spot) > .05:
+			game.route = world.path(hero.position,spot)
+			if game.route.is_empty():
+				moves.clear()
+				game.toast("He cannot get round to that side of the boulder.")
+		return
+	if not game.route.is_empty(): return
+	var index: int = boulders.find(b)
+	var clear: bool = footprint_free(b.cell+move.m,index,false,move.pull)
+	if move.pull:
+		for c in stand_cells(b.cell,move.m,true):
+			if not open_tile(c+move.m,index): clear = false
+	if not clear:
+		moves.clear()
+		game.toast("Something is in the boulder's way.")
+		return
+	# Set against it, he heaves.
+	braced = true
+	hero.position = Vector3(spot.x,hero.position.y,spot.z)
+	moves.pop_front()
+	game.sound.play("rock-impact",-22)
+	start_roll(b,b.cell+move.m,PULL_SPEED if move.pull else PUSH_SPEED,move.pull)
+
+# Marks the tiles about a boulder at `cell` walkable or not on the floor's
+# navigation, as it lies now (Temple.bar_gate does so for the gate).
+func nav_mark(cell: Vector2i) -> void:
+	if not world.nav.region.has_area(): return
+	for y in range(cell.y-2,cell.y+4):
+		for x in range(cell.x-2,cell.x+4):
+			var at: Vector3 = layout.to_world(Vector2i(x,y))
+			var point = Vector2i(roundi(at.x),roundi(at.z))
+			if world.nav.is_in_boundsv(point): world.nav.set_point_solid(point,not world.fits(at,.4))
