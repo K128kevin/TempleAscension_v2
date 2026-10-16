@@ -139,7 +139,7 @@ static func new_character(class_id: String = "warrior") -> Dictionary:
 	var run = new_run(class_id)
 	run.place = "world"
 	# Overworld.START, by the camp on the dune; he sits there until he moves.
-	run.position = [-262,173]
+	run.position = [-262,303]
 	run["resting"] = true
 	# It is the end of the night (scripts/daylight.gd), the dawn near.
 	run["clock"] = preload("res://scripts/daylight.gd").START

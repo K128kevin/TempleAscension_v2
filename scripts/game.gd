@@ -47,7 +47,7 @@ var right_held = false
 const INTRO_HOLD = 4.0
 const INTRO_MOVE = 8.0
 const INTRO_BACK = 120.0
-const INTRO_HEIGHT = 24.0
+const INTRO_HEIGHT = 12.0
 var intro_left = 0.0
 var intro_enabled = true
 # A left hold that began on open ground is a move order: dragging it over a

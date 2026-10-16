@@ -30,8 +30,8 @@ const OUTDOORS = -2
 # The map's extent in metres.
 const WEST = -452
 const EAST = 148
-const NORTH = -204
-const SOUTH = 340
+const NORTH = -244
+const SOUTH = 480
 const WIDTH = EAST-WEST
 const DEPTH = SOUTH-NORTH
 # The town's gate in its east wall, and the temple's door in its west front:
@@ -46,12 +46,12 @@ const CARAVAN = Vector3(-52,0,-15)
 # its half-size (east-west, north-south) and its height. (`SOUTH_GAP`: the
 # alley's end, inside the gate.)
 const SOUTH_GAP = Vector3(-226,0,100)
-const DUNE = Vector3(-262,0,175)
-const DUNE_RADII = Vector2(110,75)
-const DUNE_HEIGHT = 22.0
+const DUNE = Vector3(-262,0,305)
+const DUNE_RADII = Vector2(100,90)
+const DUNE_HEIGHT = 32.0
 # Where a new character wakes: on top of the dune, by his campfire
 # (Data.new_character).
-const START = Vector3(-262,0,173)
+const START = Vector3(-262,0,303)
 # The mouth of the bandits' cave, at the head of a defile in the desert's
 # northern rocks, before the temple.
 const CAVE = Vector3(20,0,-80)
@@ -90,20 +90,20 @@ func walled(at: Vector3) -> bool:
 # RIVER_TURN across), and runs east along the desert's south at about
 # RIVER_Z, into the mountains. It is RIVER_HALF*2 wide.
 const RIVER_X = -378.0
-const RIVER_BEND = Vector2(-336,232)
+const RIVER_BEND = Vector2(-336,362)
 const RIVER_TURN = 42.0
-const RIVER_Z = 274.0
+const RIVER_Z = 404.0
 const RIVER_HALF = 7.0
 # Where, east along the desert's south, the river turns north-east round the
 # mountains' southern end and up behind them.
-const RIVER_EAST_TURN = -10.0
+const RIVER_EAST_TURN = -60.0
 # The mountains' foot on the east, behind the temple and running down to the
 # river: `MOUNTAIN_EAST` its line behind the temple, from where it turns
 # south-west at `MOUNTAIN_TURN` (z) along `MOUNTAIN_SLANT` (metres west for
 # each metre south).
 const MOUNTAIN_EAST = 86.0
 const MOUNTAIN_TURN = 48.0
-const MOUNTAIN_SLANT = .56
+const MOUNTAIN_SLANT = .35
 # How far the rocks reach beyond the edge of the open ground: past anything
 # the camera can see from inside.
 const RIM = 44.0
@@ -532,8 +532,12 @@ func mountain_depth(x: float, z: float) -> float:
 	# The river's gorge, north of the town; in the south the range ends at
 	# its near bank, rising gently from it, and none stands across it.
 	var side = river_side(x,z)
-	if z > WALL_SOUTH: depth = minf(depth,(side-RIVER_HALF-4.0)*.6)
-	depth = minf(depth,(absf(side)-RIVER_HALF-3.0)*1.3)
+	if z > WALL_SOUTH:
+		depth = minf(depth,(side-RIVER_HALF-4.0)*.6)
+		depth = minf(depth,(absf(side)-RIVER_HALF-3.0)*1.3)
+	# North of the town its valley runs only a little way in: further, the
+	# mountains close over it, and it goes on out of sight behind them.
+	else: depth = minf(depth,(absf(side)-RIVER_HALF-3.0)*1.3+maxf(depth-16.0,0.0)*1.6)
 	return depth
 
 func margin_at(p: Vector3) -> float:

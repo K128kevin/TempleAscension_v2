@@ -246,9 +246,9 @@ static func scatter(world) -> void:
 	var rng: RandomNumberGenerator = world.rng
 	var noise: FastNoiseLite = world.noise
 	var leaves = Kit.shared("Leaves")
-	for i in 13000:
+	for i in 17000:
 		var at = Vector3(rng.randf_range(world.TOWN_GATE.x+3.0,world.TEMPLE_DOOR.x-6.0),0,rng.randf_range(-74.0,world.RIVER_Z+8.0))
-		if at.x < world.DUNE.x+64.0 and at.z > world.WALL_SOUTH: continue
+		if at.x < world.DUNE.x+92.0 and at.z > world.WALL_SOUTH: continue
 		var c = world.to_cell(at)
 		var cell = world.index(c.x,c.y)
 		if world.cells[cell] != world.OPEN or world.margins[cell]<1.5: continue

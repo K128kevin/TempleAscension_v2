@@ -12,7 +12,7 @@ extends RefCounted
 const TILE = 64.0
 const STEP = 2.0
 # How far the field reaches: well past the map, under the horizon's crests.
-const REACH = Rect2(-640,-560,1160,1060)
+const REACH = Rect2(-920,-560,1440,1180)
 # How tall the range grows, and over what depth into it it gets there.
 const PEAK = 60.0
 const CLIMB = 110.0

@@ -19,7 +19,7 @@ func test():
 	var seconds = {"sunrise":0,"day":0,"sunset":0,"night":0}
 	for t in int(Daylight.CYCLE): seconds[Daylight.phase(t)] += 1
 	check(Daylight.CYCLE==1800.0 and seconds.night==600 and seconds.sunrise==180 and seconds.sunset==180 and seconds.day==840,"Thirty minutes: ten of night, three each of sunrise and sunset, the rest day")
-	check(Daylight.phase(Daylight.START)=="night" and Data.new_character().clock==Daylight.START and Daylight.CYCLE-Daylight.START>40.0 and Daylight.CYCLE-Daylight.START<50.0 and Daylight.phase(Daylight.START+50.0)=="sunrise","A new character wakes at the end of the night, the dawn three quarters of a minute off")
+	check(Daylight.phase(Daylight.START)=="night" and Data.new_character().clock==Daylight.START and Daylight.CYCLE-Daylight.START>15.0 and Daylight.CYCLE-Daylight.START<30.0 and Daylight.phase(Daylight.START+30.0)=="sunrise","A new character wakes at the end of the night, the dawn under half a minute off")
 	# The sun crosses from east (+X) to west, highest at noon.
 	var morning: Dictionary = Daylight.sky(200.0)
 	var noon: Dictionary = Daylight.sky(600.0)

@@ -6,10 +6,10 @@ const CYCLE = 1800.0
 const SUNRISE = 180.0
 const SUNSET = 1020.0
 const NIGHT = 1200.0
-# A new character wakes at the end of the night, the dawn three quarters of
-# a minute off; a character from before the clock was kept finds a clear
+# A new character wakes at the end of the night, the dawn less than half a
+# minute off; a character from before the clock was kept finds a clear
 # morning.
-const START = 1755.0
+const START = 1775.0
 const MORNING = 420.0
 # The one light in the sky is the moon until this long into the sunrise, and
 # again from this long before the night; its light passes through nothing as

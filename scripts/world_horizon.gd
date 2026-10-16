@@ -6,8 +6,8 @@ const RINGS = 64
 const OUTER_RADIUS = 1750.0
 const FLAT_MARGIN = 72.0
 # Match Overworld's fixed map; the horizon test checks these bounds.
-const CENTRE = Vector2(-152.0,68.0)
-const INNER_HALF = Vector2(300.0,272.0)+Vector2.ONE*FLAT_MARGIN
+const CENTRE = Vector2(-152.0,118.0)
+const INNER_HALF = Vector2(300.0,362.0)+Vector2.ONE*FLAT_MARGIN
 static var mesh_cache: ArrayMesh
 
 static func inner_radius(direction: Vector2) -> float:
