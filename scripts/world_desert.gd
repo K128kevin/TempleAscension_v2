@@ -93,6 +93,11 @@ static func rim(world) -> void:
 				world.batch(id,world.stance(at,size,rng.randf_range(0,TAU),rng.randf_range(-.12,.12)),Kit.rock(id,tint))
 		z += step
 
+# Whether a spot is one of every `n` kept (the same every time, by where it
+# is): growth is kept one spot in three, lone boulders one in four.
+static func one_in(at: Vector3, n: float, salt: float = 0.0) -> bool:
+	return fposmod(at.x*7.13+at.z*31.7+salt,n) < 1.0
+
 # A lone rock on the open sand, as a node, so a tall one can turn see-through.
 static func boulder(world, at: Vector3, width: float, height: float) -> Node3D:
 	var rng: RandomNumberGenerator = world.rng
@@ -116,7 +121,7 @@ static func outcrops(world) -> void:
 	var rng: RandomNumberGenerator = world.rng
 	var made = 0
 	for attempt in 900:
-		if made>=22: break
+		if made>=6: break
 		var at = Vector3(rng.randf_range(world.TOWN_GATE.x+25.0,world.TEMPLE_DOOR.x-60.0),0,rng.randf_range(-60.0,world.RIVER_Z-20.0))
 		if not clear_site(world,at,7.0): continue
 		made += 1
@@ -258,17 +263,20 @@ static func scatter(world) -> void:
 		# Growth gathers in patches and under the rim, and thins on the open dunes.
 		var patch = noise.get_noise_2d(at.x*4.0,at.z*4.0)+clampf(1.0-world.margins[cell]/14.0,0.0,1.0)*.5
 		var roll = rng.randf()
+		var grows = one_in(at,3.0)
 		if roll<.5:
-			if patch>.05: tuft(world,at)
+			if patch>.05 and grows: tuft(world,at)
 		elif roll<.83:
 			stone(world,at)
 		elif roll<.875:
-			if patch>.12: shrub(world,at)
+			if patch>.12 and grows: shrub(world,at)
 		elif roll<.945:
-			if patch>.0 and at.distance_to(world.CARAVAN)>5.0:
+			if patch>.0 and grows and at.distance_to(world.CARAVAN)>5.0:
 				world.batch("agave",world.stance(at,Kit.sized("agave",rng.randf_range(.6,1.2)),rng.randf_range(0,TAU)),leaves)
 		elif roll<.953 and at.distance_to(world.CARAVAN)>8.0:
 			var id = "tree" if rng.randf()<.5 else "dead_tree"
+			# (Only one spot in two keeps its tree.)
+			if fposmod(at.x*12.9898+at.z*78.233,2.0) < 1.0: continue
 			var tree = world.prop(id,at,rng.randf_range(3.2,5.2),rng.randf_range(0,TAU))
 			world.block_disc(at,.45)
 			world.screen([tree])

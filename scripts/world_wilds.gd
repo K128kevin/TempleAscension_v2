@@ -35,13 +35,19 @@ static func south_desert(world) -> void:
 		var up = world.dune_height(at.x,at.z)
 		if up>world.DUNE_HEIGHT*.55 or at.distance_to(world.START)<9.0: continue
 		var roll = rng.randf()
-		if roll<.5: Desert.tuft(world,at)
+		var grows = Desert.one_in(at,3.0)
+		if roll<.5:
+			if grows: Desert.tuft(world,at)
 		elif roll<.84: Desert.stone(world,at)
-		elif roll<.9: Desert.shrub(world,at)
-		elif roll<.96: world.batch("agave",world.stance(at,Kit.sized("agave",rng.randf_range(.6,1.2)),rng.randf_range(0,TAU)),leaves)
+		elif roll<.9:
+			if grows: Desert.shrub(world,at)
+		elif roll<.96:
+			if grows: world.batch("agave",world.stance(at,Kit.sized("agave",rng.randf_range(.6,1.2)),rng.randf_range(0,TAU)),leaves)
 		elif up<.3 and world.margins[cell]>6.0:
-			if rng.randf()<.5: Desert.boulder(world,at,rng.randf_range(2.2,4.2),rng.randf_range(1.6,3.0))
-			else:
+			if rng.randf()<.5:
+				if Desert.one_in(at,4.0,.5): Desert.boulder(world,at,rng.randf_range(2.2,4.2),rng.randf_range(1.6,3.0))
+			# (Only one spot in two keeps its tree.)
+			elif fposmod(at.x*12.9898+at.z*78.233,2.0) >= 1.0:
 				var tree = world.prop("dead_tree",at,rng.randf_range(3.2,4.8),rng.randf_range(0,TAU))
 				world.block_disc(at,.45)
 				world.screen([tree])

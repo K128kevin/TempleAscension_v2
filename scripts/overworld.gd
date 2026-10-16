@@ -460,13 +460,19 @@ func river_flow(x: float, z: float) -> Vector2:
 
 # (Its wandering eases off into the bend, to meet it.)
 func river_x(z: float) -> float:
-	# (Along the town, between its quays, it runs straighter.)
-	var calm = 1.0-.7*smoothstep(WALL_NORTH-50.0,WALL_NORTH-10.0,z)*(1.0-smoothstep(WALL_SOUTH+10.0,WALL_SOUTH+50.0,z))
+	# Along the town it bows gently out west, away from the quay, and runs
+	# back in at either end, where the walls come down to it.
+	var t = clampf((z-WALL_NORTH+30.0)/(WALL_SOUTH-WALL_NORTH+60.0),0.0,1.0)
+	var bow = -7.0*sin(PI*t)
+	# South of the town it winds, easing off into the bend.
+	var wind = (11.0*sin(z*.028+.4)+4.0*sin(z*.067+1.3))*smoothstep(WALL_SOUTH+10.0,WALL_SOUTH+60.0,z)
+	var ripple = 2.0*sin(z*.021)+1.0*sin(z*.057+1.3)
+	var bend = 1.0-smoothstep(RIVER_BEND.y-70.0,RIVER_BEND.y,z)
 	# North of the town it bends away north-west, winding, into the
 	# mountains.
 	var past = WALL_NORTH-12.0-z
 	var away = (sqrt(past*past+400.0)+past)*.5
-	return RIVER_X+(2.5*sin(z*.021)+1.5*sin(z*.057+1.3))*calm*(1.0-smoothstep(RIVER_BEND.y-60.0,RIVER_BEND.y,z))-away*.5-9.0*sin(away*.045)
+	return RIVER_X+bow+(wind+ripple)*bend-away*.5-9.0*sin(away*.045)
 
 func river_z(x: float) -> float:
 	var run = x-RIVER_BEND.x
@@ -474,7 +480,7 @@ func river_z(x: float) -> float:
 	# them, winding a little.
 	var past = x-RIVER_EAST_TURN
 	var away = (sqrt(past*past+900.0)+past)*.5
-	return RIVER_BEND.y+RIVER_TURN+(7.0*sin(run*.013)+2.0*sin(run*.041+.7))*smoothstep(0.0,50.0,run)-away*.85+6.0*sin(away*.05)*smoothstep(0.0,40.0,away)
+	return RIVER_BEND.y+RIVER_TURN+(10.0*sin(run*.016)+3.0*sin(run*.043+.7))*smoothstep(0.0,50.0,run)-away*.85+6.0*sin(away*.05)*smoothstep(0.0,40.0,away)
 
 # How far inside the open ground a point is; negative among the rim's rocks
 # and the mountains. (The river and what lies across it count as open: they

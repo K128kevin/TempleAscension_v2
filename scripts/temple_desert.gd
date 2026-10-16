@@ -7,6 +7,7 @@ extends RefCounted
 ## trees, by moonlight.
 const Kit = preload("res://scripts/world_art.gd")
 const Art = preload("res://scripts/assets.gd")
+const Desert = preload("res://scripts/world_desert.gd")
 const ROCKS = ["boulder_a","boulder_b","boulder_c","boulder_d"]
 const STONES = ["stone_a","stone_b","stone_c"]
 const ROCK_TINTS = [Color(1.06,.98,.9),Color(.9,.84,.78)]
@@ -76,20 +77,23 @@ static func strew(root: Node3D, middle: Vector3, keep: Rect2, layers: int) -> vo
 		if keep.grow(2.0).has_point(Vector2(middle.x+at.x,middle.z+at.z)): continue
 		var patch = noise.get_noise_2d(at.x*4.0,at.z*4.0)
 		var roll = rng.randf()
+		# (Growth kept one spot in three, boulders one in four, as outside.)
+		var grows = Desert.one_in(at,3.0)
 		if roll < .5:
-			if patch > -.05: add(batches,"dry_grass",grass,Kit.sized("dry_grass",rng.randf_range(.45,.95)),at,rng)
+			if patch > -.05 and grows: add(batches,"dry_grass",grass,Kit.sized("dry_grass",rng.randf_range(.45,.95)),at,rng)
 		elif roll < .84:
 			var id: String = STONES[rng.randi_range(0,2)]
 			add(batches,id,Kit.rock(id,ROCK_TINTS[rng.randi_range(0,1)],.3),Kit.SIZE[id]*rng.randf_range(1.6,4.2),at+Vector3.DOWN*.03,rng)
 		elif roll < .9:
-			if patch > .05:
+			if patch > .05 and grows:
 				if rng.randf() < .45:
 					var id = "shrub_a" if rng.randf() < .5 else "shrub_b"
 					add(batches,id,Kit.shared("shrub_02"),Kit.sized(id,rng.randf_range(.7,1.25)),at,rng)
 				else: add(batches,"scrub",Kit.shared("wild_rooibos_bush"),Kit.sized("scrub",rng.randf_range(.35,.6)),at,rng)
 		elif roll < .97:
-			if patch > -.1: add(batches,"agave",Kit.shared("Leaves"),Kit.sized("agave",rng.randf_range(.6,1.2)),at,rng)
+			if patch > -.1 and grows: add(batches,"agave",Kit.shared("Leaves"),Kit.sized("agave",rng.randf_range(.6,1.2)),at,rng)
 		elif roll < .988:
+			if not Desert.one_in(at,4.0,.5): continue
 			var id: String = ROCKS[rng.randi_range(0,3)]
 			var width = rng.randf_range(1.6,4.6)
 			add(batches,id,Kit.rock(id,ROCK_TINTS[rng.randi_range(0,1)]),Vector3(width,width*rng.randf_range(.45,.8),width*rng.randf_range(.8,1.2)),at+Vector3.DOWN*width*.08,rng)
@@ -109,6 +113,8 @@ static func strew(root: Node3D, middle: Vector3, keep: Rect2, layers: int) -> vo
 		root.add_child(node)
 	for at in trees:
 		var id = "dead_tree" if rng.randf() < .7 else "tree"
+		# (Only one spot in two keeps its tree.)
+		if fposmod(at.x*12.9898+at.z*78.233,2.0) < 1.0: continue
 		var tree = Art.model(id,Kit.sized(id,rng.randf_range(3.2,5.2)))
 		Kit.dress(tree)
 		tree.position = at
