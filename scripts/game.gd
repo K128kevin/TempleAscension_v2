@@ -111,6 +111,15 @@ var regen_recovery_time = 3.0
 var slowed = 0.0
 # How long frost (an ice shard, a frost nova) slows the hero.
 const CHILL_SECONDS = 5.0
+# Struck by the basement marksman's stunning arrow: stunned (unable to move
+# or act) for `stun_left`, and hobbled (at half pace, as when chilled) for
+# `hobbled`.
+var stun_left = 0.0
+var hobbled = 0.0
+var stun_halo: Node3D
+# The way the hero is walking this frame, toward his next waypoint (a
+# boulder he walks into is leaned on: scripts/basement_puzzle.gd).
+var walk_intent = Vector3.ZERO
 var combat_age = 0.0
 var save_timer = 0.0
 var crown_available = false
@@ -217,10 +226,15 @@ func load_floor() -> void:
 	regen_recovery_time = 3.0
 	combat_age = 10
 	slowed = 0
+	stun_left = 0
+	hobbled = 0
+	walk_intent = Vector3.ZERO
 	world = Overworld.new() if outdoors() else Temple.new()
 	add_child(world)
 	if outdoors(): world.setup(int(run.floor),int(run.seed))
 	else: world.setup(int(run.floor),int(run.seed),run.place)
+	# (The basement's boulders lie where they were last rolled.)
+	if world is Temple: world.start_puzzle(self,kept_boulders())
 	# (The fallen stones' ground, laid with the floor rather than at the first
 	# statue's fall, which it held up.)
 	if world.has_method("ensure_debris_collision"): world.ensure_debris_collision()
@@ -274,6 +288,17 @@ func load_floor() -> void:
 			var enemy = spawn_enemy(types[i],id,spots[i].at)
 			enemy.rotation.y = spots[i].facing
 			if spots[i].get("key",false): key_holder = enemy
+			if id in run.dead:
+				enemy.dead = true
+				enemy.hp = 0
+				enemy.visible = false
+		# The few who hold a level's last room (the basement's, beyond its
+		# lasers), each at its own post there, facing the way in.
+		var elites: Array = Data.area(run).get("elites",[])
+		for i in elites.size():
+			var id = Data.enemy_id(run,types.size()+i)
+			var enemy = spawn_enemy(elites[i],id,world.layout.to_world(world.layout.elite_posts[i]))
+			enemy.rotation.y = PI
 			if id in run.dead:
 				enemy.dead = true
 				enemy.hp = 0
@@ -417,6 +442,7 @@ func _process(dt: float) -> void:
 		if playground == null and pass_door(): return
 		world.update_visibility(player.position,dt)
 		for enemy in enemies: enemy.tick(dt)
+		if world is Temple and world.puzzle != null: world.puzzle.tick(dt)
 		tick_projectiles(dt)
 		tick_fireballs(dt)
 		tick_pickups(dt)
@@ -436,6 +462,10 @@ func _process(dt: float) -> void:
 		heal_cd = maxf(0,heal_cd-dt)
 		dash_cooldown = maxf(0,dash_cooldown-dt)
 		slowed = maxf(0,slowed-dt)
+		hobbled = maxf(0,hobbled-dt)
+		stun_left = maxf(0,stun_left-dt)
+		if stun_left<=0 and is_instance_valid(stun_halo): stun_halo.queue_free()
+		elif is_instance_valid(stun_halo): stun_halo.rotation.y += dt*4.0
 		save_timer += dt
 		if save_timer>8 and playground == null:
 			save_timer = 0
@@ -571,6 +601,8 @@ func zoom_camera(amount: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if mode!="playing" or intro_left>0: return
+	# (Stunned, he can do nothing but look on.)
+	if stun_left>0 and ((event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT]) or (event is InputEventKey and event.pressed and not event.physical_keycode in [KEY_ESCAPE,KEY_C,KEY_K,KEY_I])): return
 	if playground != null and playground.unhandled(event):
 		get_viewport().set_input_as_handled()
 		return
@@ -625,7 +657,7 @@ func toggle_walk() -> void:
 # How fast the hero goes over the ground: walking or running, halved when slowed.
 func player_pace() -> float:
 	# (Swift Footed quickens the ranger; hidden in the shadows he creeps.)
-	var pace = (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 else 1.0)*(1.0+Data.passive(run,"swift_footed")*.01)*(1.0+Items.bonus(run,"speed")*.01)*(1.0+(skills.BLAZING_RUN if skills.blazing_time>0 else 0.0)*.01)
+	var pace = (PLAYER_WALK_SPEED if walking else PLAYER_RUN_SPEED)*(.5 if slowed>0 or hobbled>0 else 1.0)*(1.0+Data.passive(run,"swift_footed")*.01)*(1.0+Items.bonus(run,"speed")*.01)*(1.0+(skills.BLAZING_RUN if skills.blazing_time>0 else 0.0)*.01)
 	# (The Night Vest quickens him while hidden.)
 	return pace*(1.0-skills.hide_slow*.01)*(1.0+skills.NIGHT_SPEED*.01 if Items.effect(run,"night_vest") else 1.0) if skills.hidden else pace
 
@@ -812,8 +844,15 @@ func order_attack(clicked, special: bool, slot: int = 0) -> void:
 	else: route = world.path(player.position,target.position)
 
 func player_control(dt: float) -> void:
+	walk_intent = Vector3.ZERO
 	if intro_left>0: return
 	if player.dead: return
+	if stun_left>0:
+		route.clear()
+		target = null
+		order_pending = false
+		player.visual.locomotion(false,false)
+		return
 	lean_into_dash(dt)
 	if leap_left>0:
 		# The flight is the last `leap_duration` seconds; before that he gathers.
@@ -897,6 +936,7 @@ func player_control(dt: float) -> void:
 			var offset: Vector3 = route[0]-player.position
 			var step: float = minf(offset.length(),pace*dt)
 			var before: Vector3 = player.position
+			walk_intent = offset.normalized()
 			player.position = world.move(before,offset.normalized()*step)
 			var displacement: Vector3 = player.position-before
 			moved = displacement.length_squared() > .000001
@@ -1303,17 +1343,50 @@ func hurt_player(damage: float, type: String = "physical", source = null, blow: 
 	if is_instance_valid(source): source.landed_attack()
 	if blow and damage > 0 and is_instance_valid(source): sound.play(LION_CRIES[randi()%2] if source.role == "lion" else "sword-hit",-8)
 	float_text(player.position+Vector3.UP*1.8,"−%d" % roundi(damage),Color(1,.35,.25))
-	if player.hp<=0:
-		player.dead = true
-		player.visual.play("Death")
-		run.deaths += 1
-		mode = "dead"
-		left_held = false
-		right_held = false
-		hud.dialog("STONE CLAIMS ANOTHER", "Retry with your class, XP, learned skills and equipment intact. Previously rewarded enemies grant no additional XP.")
-		hud.button("Rise again",retry_floor)
-		hud.button("Save and quit",quit_game)
+	if player.hp<=0: player_died()
 	elif damage>0: player.react_to_hit(damage>=player.max_hp*.2)
+
+# Killed outright, whatever he wears and however he evades (the basement's
+# lasers).
+func kill_player(cause: String = "") -> void:
+	if player.dead or playground != null or invincible_test or (debug.enabled and debug.invulnerable): return
+	player.hp = 0
+	if cause == "laser":
+		sound.play("lightning-zap",-4)
+		float_text(player.position+Vector3.UP*1.8,"Burned through",Color(1,.3,.25))
+	player_died()
+
+func player_died() -> void:
+	player.dead = true
+	player.visual.play("Death")
+	run.deaths += 1
+	mode = "dead"
+	left_held = false
+	right_held = false
+	hud.dialog("STONE CLAIMS ANOTHER", "Retry with your class, XP, learned skills and equipment intact. Previously rewarded enemies grant no additional XP.")
+	hud.button("Rise again",retry_floor)
+	hud.button("Save and quit",quit_game)
+
+# The marksman's stunning arrow: he stands dazed for `seconds`, a halo over
+# his head, his orders dropped.
+func stun_player(seconds: float) -> void:
+	if player.dead: return
+	stun_left = maxf(stun_left,seconds)
+	route.clear()
+	target = null
+	left_held = false
+	right_held = false
+	player.visual.react("HitStagger",.6)
+	float_text(player.position+Vector3.UP*2.0,"Stunned",Color(1,.88,.35))
+	if not is_instance_valid(stun_halo):
+		stun_halo = Art.seal(.8,Color(1,.88,.35,.95))
+		stun_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		stun_halo.layers = UI_LAYER
+		player.add_child(stun_halo)
+		stun_halo.position = Vector3.UP*2.2
+
+func hobble(seconds: float) -> void:
+	hobbled = maxf(hobbled,seconds)
 
 func retry_floor() -> void:
 	run.dead = run.dead.filter(func(id): return not Data.of_place(id,run.place))
@@ -1501,8 +1574,13 @@ func tick_projectiles(dt: float) -> void:
 						else: a.hit(p.damage,kind,0.0,impact)
 						p.hit.append(a.uid)
 					else:
+						var evading: bool = player.invulnerable>0
 						hurt_player(p.damage,"frost" if p.type=="ice" else "physical",p.source)
 						if p.type=="ice" and player.invulnerable<=0: slowed = CHILL_SECONDS
+						# (The marksman's stunning arrow.)
+						if p.extra.has("stun") and not evading and not player.dead:
+							stun_player(p.extra.stun)
+							hobble(p.extra.slow)
 					if not p.piercing:
 						remove = true
 						break
@@ -1808,9 +1886,18 @@ func leave_playground() -> void:
 	playground = null
 	load_floor()
 
+# The basement's boulders, as last saved (their top-left cells).
+func kept_boulders() -> Array:
+	var kept: Array = []
+	if run.get("place","") != "basement" or not run.get("boulders") is Array: return kept
+	for cell in run.boulders:
+		if cell is Array and cell.size() == 2: kept.append(Vector2i(int(cell[0]),int(cell[1])))
+	return kept
+
 func save_run() -> void:
 	# The playground's units and runs are never saved.
 	if creating_character or playground != null: return
+	if world is Temple and world.puzzle != null: run["boulders"] = world.puzzle.kept()
 	run.heal_cooldown = heal_cd
 	if not is_instance_valid(player): return
 	run.health = maxf(1,player.hp)

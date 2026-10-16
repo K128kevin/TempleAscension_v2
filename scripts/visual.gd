@@ -1136,7 +1136,8 @@ func idle_action() -> String:
 	if not is_stone and weapon_kind == "staff": return "WizardIdle" if clips.has("WizardIdle") else "Idle"
 	var wanted = {"bow":"BowIdle","spear":"SpearIdle","sword":"SwordIdle","heavy":"HeavyIdle","pike":"PikeIdle"}.get(weapon_kind,"Idle")
 	if weapon_kind == "sword" and is_instance_valid(off_item) and clips.has("DualIdle"): wanted = "DualIdle"
-	if enemy_kind in SHIELD_BEARERS: wanted = "ScutumSwordIdle" if weapon_kind=="sword" else "SpearShieldIdle"
+	# (A bandit bearing a scutum has no stance of his own with it: his sword's.)
+	if enemy_kind in SHIELD_BEARERS and clips.has("ScutumSwordIdle" if weapon_kind=="sword" else "SpearShieldIdle"): wanted = "ScutumSwordIdle" if weapon_kind=="sword" else "SpearShieldIdle"
 	return wanted if clips.has(wanted) else "Idle"
 
 func draw_amount(t: float, release: float, start: float) -> float:
@@ -2539,7 +2540,7 @@ func snap_facing() -> void:
 # The run this unit's carrying calls for (as locomotion() chooses it).
 func run_action() -> String:
 	if ranger_carry(): return "RangerRun"
-	if weapon_kind == "staff" and not is_stone: return "WizardRun"
+	if weapon_kind == "staff" and not is_stone and clips.has("WizardRun"): return "WizardRun"
 	if weapon_kind == "bow": return "BowRun"
 	if enemy_kind in SHIELD_BEARERS and clips.has("ScutumRun"): return "ScutumRun"
 	if weapon_kind == "sword" and is_instance_valid(off_item) and clips.has("DualRun"): return "DualRun"
@@ -2573,7 +2574,7 @@ func locomotion(moving: bool, busy: bool, crouch: bool = false, speed_scale: flo
 		elif weapon_kind in ["heavy","pike"]: wanted = weapon_kind.capitalize()+"Walk"
 		if not clips.has(wanted): wanted = "Walk"
 	elif moving and ranger_carry(): wanted = "RangerCrouch" if crouch else "RangerRun"
-	elif moving and weapon_kind=="staff" and not is_stone: wanted = "WizardCrouch" if crouch else "WizardRun"
+	elif moving and weapon_kind=="staff" and not is_stone and clips.has("WizardRun"): wanted = "WizardCrouch" if crouch else "WizardRun"
 	elif moving and weapon_kind=="bow": wanted = "BowCrouch" if crouch else "BowRun"
 	# Carry the sword low while running so the blade never swings through the head.
 	# Shield bearers keep the tall shield held upright while they run.

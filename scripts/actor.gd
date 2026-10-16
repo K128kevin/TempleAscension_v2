@@ -125,6 +125,31 @@ const NOVA_RADIUS = 3.8
 const NOVA_RECOVERY = .5
 const NOVA_COOLDOWN = 15.0
 var nova_cooldown = 0.0
+# The basement healer's mending spell (config "heals"): HEAL_CAST seconds on
+# a fellow below HEAL_BELOW of his health within HEAL_REACH, broken off by
+# any hurt (and tried again HEAL_RETRY seconds after), and not cast again
+# for HEAL_COOLDOWN once it is done. Between his fireballs he casts a
+# quicker bolt (config "bolt"), BOLT_CAST seconds: a smaller ball of fire
+# (bursting BOLT_RADIUS about), for BOLT_SHARE of a fireball's damage.
+const HEAL_CAST = 2.0
+const HEAL_BELOW = .7
+const HEAL_REACH = 14.0
+const HEAL_RETRY = 3.0
+const HEAL_COOLDOWN = 6.0
+const BOLT_CAST = .9
+const BOLT_SHARE = .6
+const BOLT_RADIUS = 1.2
+var healing = false
+var heal_target = null
+var heal_glow: Dictionary = {}
+var heal_cooldown = 0.0
+var spell_count = 0
+var bolting = false
+# The basement marksman's stunning arrow (config "stun_shot", how often):
+# the first is loosed STUN_FIRST seconds after he wakes, at the soonest.
+const STUN_FIRST = 3.0
+var stun_shot_left = STUN_FIRST
+var stun_arrow = false
 
 func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 	game = owner_game
@@ -153,7 +178,8 @@ func dress() -> void:
 	if human:
 		# Each bandit's look is its own, the same each time it is met.
 		if config.human == "bandit": visual.bandit_look = Bandit.look(uid.hash())
-		visual.setup(false,Color.WHITE,config.weapon,config.size,"",config.human)
+		# (A bandit with a shield bears a gladiator's scutum.)
+		visual.setup(false,Color.WHITE,config.weapon,config.size,"gladiator" if config.has("shield") else "",config.human)
 		visual.play(visual.idle_action())
 		return
 	visual.setup(true,config.color,config.weapon,config.size,kind)
@@ -236,6 +262,8 @@ func tick(dt: float) -> void:
 	busy = maxf(0,busy-dt)
 	cooldown = maxf(0,cooldown-dt)
 	nova_cooldown = maxf(0,nova_cooldown-dt)
+	heal_cooldown = maxf(0,heal_cooldown-dt)
+	if awake: stun_shot_left = maxf(0,stun_shot_left-dt)
 	if dead:
 		death_age += dt
 		if death_age > 8 and kind != "player":
@@ -306,6 +334,11 @@ func tick(dt: float) -> void:
 			release_attack()
 		return
 	if busy > 0: return
+	if config.has("heals") and heal_cooldown <= 0:
+		var ally = wounded_ally()
+		if ally != null:
+			start_heal(ally)
+			return
 	if role == "wizard" and nova_cooldown <= 0 and distance <= NOVA_RADIUS and game.world.clear_line(position,player.position):
 		cast_nova()
 		return
@@ -324,6 +357,7 @@ func tick(dt: float) -> void:
 		var before = position
 		var pace = config.speed*(slow_factor if slow_time>0 else 1.0)
 		position = game.world.move(position,direction*pace*dt)
+		keep_from_beams(before)
 		face(player.position)
 		# Backing away while facing the hero: the stride runs backward.
 		visual.locomotion(position.distance_to(before)>.005,false,false,1.0,-pace)
@@ -339,9 +373,16 @@ func start_attack(point: Vector3) -> void:
 	windup = 1.5 if role == "wizard" else (.65 if role == "boss" else (ARCHER_DRAW if role == "archer" else .42))
 	if role == "wizard":
 		# Every ranged cast is the fireball; frost comes only as the nova.
+		# (The basement healer's every third: the others are his bolt.)
 		fireball_flight = clampf(position.distance_to(point)/14.0,.4,.8)
 		windup = FIRE_CAST
+		bolting = config.get("bolt",false) and spell_count%3 != 2
+		if bolting: windup = BOLT_CAST
+		spell_count += 1
 		cast_total = windup
+	# The marksman draws his stunning arrow when it is ready.
+	stun_arrow = role == "archer" and config.has("stun_shot") and stun_shot_left <= 0
+	if stun_arrow: game.float_text(position+Vector3.UP*2.3,"Stunning Shot",Color(1,.78,.3))
 	cooldown = config.interval + windup
 	var clip = "Cast" if role in ["wizard","archer"] else "Attack"
 	var duration = windup+.25
@@ -442,17 +483,25 @@ func release_attack() -> void:
 		laser_model.setup(game,self)
 		laser_model.tick(0.0,laser_angle)
 		return
+	if healing:
+		finish_heal()
+		return
 	busy = attack_recovery
 	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]
 	if role == "archer":
 		# (The bow heard as the hero's is: a statue's or a bandit's.)
 		game.sound.play("archer-arrow",-13)
-		game.projectile(position,attack_point,damage,false,"arrow",false,self)
+		var extra: Dictionary = {"kind":"power","stun":config.stun,"slow":config.slow} if stun_arrow else {}
+		if stun_arrow: stun_shot_left = config.stun_shot
+		stun_arrow = false
+		game.projectile(position,attack_point,damage,false,"arrow",false,self,true,extra)
 	elif role == "wizard":
 		cast_total = 0
 		# The fireball leaves the crown of the staff, where the flame formed.
 		visual.align_weapon()
-		game.fireball(visual.staff_tip(),attack_point,2.2,damage,fireball_flight,self)
+		# (The healer's bolt: a smaller ball of fire, thrown flat and fast.)
+		if bolting: game.fireball(visual.staff_tip(),attack_point,BOLT_RADIUS,damage*BOLT_SHARE,fireball_flight*.5,self)
+		else: game.fireball(visual.staff_tip(),attack_point,2.2,damage,fireball_flight,self)
 	elif game.puppet_attack(self):
 		# A playground statue's swing lands on whoever stands in front of it.
 		for other in game.targets(self):
@@ -486,6 +535,65 @@ func cast_nova() -> void:
 	visual.play_from(clip,duration,contact)
 	busy = NOVA_RECOVERY
 
+# The healer's mending: the most hurt of his awake fellows in sight and
+# reach, below HEAL_BELOW of his health (not himself), or null.
+func wounded_ally():
+	var best = null
+	var worst = HEAL_BELOW
+	for other in game.enemies:
+		if other == self or other.dead or other.dormant or not other.awake: continue
+		if other.position.distance_to(position) > HEAL_REACH or not game.world.clear_line(position,other.position): continue
+		var share: float = other.hp/other.max_hp
+		if share < worst:
+			worst = share
+			best = other
+	return best
+
+func start_heal(ally) -> void:
+	face(ally.position)
+	healing = true
+	heal_target = ally
+	windup = HEAL_CAST
+	cast_total = windup
+	cooldown = config.interval*.5+windup
+	attack_recovery = FIRE_RECOVERY
+	visual.play("Cast",windup+.25)
+	heal_glow = game.effect(position,1.8,Color(.45,1,.5,.75),HEAL_CAST)
+	game.float_text(position+Vector3.UP*2.3,"Healing",Color(.5,1,.55))
+
+func finish_heal() -> void:
+	healing = false
+	cast_total = 0
+	busy = attack_recovery
+	heal_cooldown = HEAL_COOLDOWN
+	heal_glow = {}
+	if is_instance_valid(heal_target) and not heal_target.dead:
+		var amount: float = minf(heal_target.max_hp*config.heals,heal_target.max_hp-heal_target.hp)
+		heal_target.hp += amount
+		game.float_text(heal_target.position+Vector3.UP*1.9,"+%d" % roundi(amount),Color(.45,1,.5))
+		game.effect(heal_target.position,1.6,Color(.45,1,.5,.8),.8)
+		game.sound.play("heal",-8)
+	heal_target = null
+
+# A hurt breaks the healer's mending off.
+func interrupt_heal() -> void:
+	if not healing: return
+	healing = false
+	heal_target = null
+	windup = 0
+	cast_total = 0
+	busy = 0
+	heal_cooldown = HEAL_RETRY
+	if not heal_glow.is_empty(): heal_glow.life = 0.0
+	heal_glow = {}
+	game.float_text(position+Vector3.UP*2.3,"Interrupted",Color(1,.75,.4))
+
+# A bandit will not walk into one of the basement's lit lasers: stepped from
+# `before` into one, he stays where he was.
+func keep_from_beams(before: Vector3) -> void:
+	var puzzle = game.world.get("puzzle")
+	if puzzle != null and puzzle.barred(before,position): position = before
+
 # One of the centurions the Crowned Statue summons on the summit.
 func summoned() -> bool:
 	return uid.begins_with("summoned:")
@@ -515,6 +623,7 @@ func walk_to(destination: Vector3, dt: float) -> void:
 	var before = position
 	var pace = config.speed*(slow_factor if slow_time>0 else 1.0)
 	position = game.world.move(position,direction*pace*dt)
+	keep_from_beams(before)
 	if position.distance_to(before) > .005: face(position+direction)
 	visual.locomotion(position.distance_to(before)>.005,false,role=="lion",1.0,pace)
 
@@ -699,6 +808,7 @@ func held(how: String, seconds: float) -> void:
 		# An interrupted gaze is tried again afterward, not lost to its cooldown.
 		cast_count = 0
 		laser_cooldown = seconds
+	interrupt_heal()
 	windup = 0
 	cast_total = 0
 	busy = 0
@@ -816,6 +926,7 @@ func lose_sight() -> void:
 	awake = false
 	provoked = false
 	if laser_time>0: return
+	interrupt_heal()
 	windup = 0
 	cast_total = 0
 	route = PackedVector3Array()
@@ -854,6 +965,7 @@ func tick_dots(dt: float) -> void:
 	var dealt: float = Data.mitigate(total-burnt,armor(),0.0,int(game.run.level),"physical")+burnt
 	hp -= dealt
 	if dealt>0 and not daze in ["ambush","freeze","prison"]: end_stun()
+	if dealt>0 and hp>0: interrupt_heal()
 	if dealt>0 and rod_time>0: game.skills.rod_jolt(self)
 	# Shown as one number a kind every half second or so rather than one a tick.
 	for k in by_kind:
@@ -873,6 +985,7 @@ func tick_dots(dt: float) -> void:
 		if burnt>0 and visual.bandit: visual.scorch()
 
 func armor() -> float:
+	if config.has("armor"): return config.armor
 	return 35.0 if role=="boss" else (20.0 if role=="centurion" else 0.0)
 
 # Light hits alternate chest and head flinches; heavy hits stagger. Wind-ups,
@@ -904,6 +1017,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	if daze in ["ambush","prison"]: damage *= 1.0+daze_bonus*.01
 	hp -= damage
 	if damage>0 and not daze in ["ambush","freeze","prison"]: end_stun()
+	if damage>0 and hp>0: interrupt_heal()
 	if damage>0 and rod_time>0 and not dead: game.skills.rod_jolt(self)
 	# (A spell is heard by its own sounds, not as a weapon's blow.)
 	if not game.skills.spell_striking: game.sound.play(impact_sound(),-15)
@@ -983,6 +1097,8 @@ func die(reward: bool = true, death_impact: Vector3 = Vector3.ZERO) -> void:
 	cast_total = 0
 	dots.clear()
 	end_stun()
+	healing = false
+	if not heal_glow.is_empty(): heal_glow.life = 0.0
 	if is_instance_valid(laser_model): laser_model.queue_free()
 	# Statues crumble into physical fragments, with the original crumble sound;
 	# a man falls limp, thrown by the blow (heard already, as it struck).

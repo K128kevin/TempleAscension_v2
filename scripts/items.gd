@@ -57,6 +57,9 @@ const RARITY_COLORS = {"common":Color(.93,.91,.82),"uncommon":Color(.45,.92,.5),
 # Crowned Statue, which drops nothing less than rare.
 const RARITY_WEIGHTS = {"common":58,"uncommon":28,"rare":11,"unique":3}
 const BOSS_WEIGHTS = {"rare":75,"unique":25}
+# The basement's three in its last room drop nothing common.
+const ELITES = ["bandit_champion","bandit_marksman","bandit_healer"]
+const ELITE_WEIGHTS = {"uncommon":55,"rare":38,"unique":7}
 
 # What an item may add besides its armor or damage, and how each reads.
 # The five attributes count as points spent on them.
@@ -408,8 +411,9 @@ static func loot(class_id: String, uniques: bool = false) -> Array:
 # --- Drops --------------------------------------------------------------------
 # Any enemy that grants experience may drop one item as it dies: DROP_CHANCE
 # percent by its kind. Its rarity is drawn by RARITY_WEIGHTS (the Crowned
-# Statue's by BOSS_WEIGHTS), and the item made for the hero's class.
-const DROP_CHANCE = {"bandit":9.0,"bandit_archer":9.0,"gladiator":11.0,"archer":11.0,"lion":11.0,"wizard":15.0,"centurion":15.0,"boss":100.0}
+# Statue's by BOSS_WEIGHTS, the basement's elites' by ELITE_WEIGHTS), and the
+# item made for the hero's class.
+const DROP_CHANCE = {"bandit":9.0,"bandit_archer":9.0,"bandit_champion":100.0,"bandit_marksman":100.0,"bandit_healer":100.0,"gladiator":11.0,"archer":11.0,"lion":11.0,"wizard":15.0,"centurion":15.0,"boss":100.0}
 
 static func pick(rng: RandomNumberGenerator, list: Array):
 	return list[rng.randi_range(0,list.size()-1)]
@@ -458,7 +462,7 @@ static func generate(class_id: String, wanted: String, rng: RandomNumberGenerato
 # till then a unique drawn is drawn again from the rest.
 static func roll_drop(class_id: String, enemy: String, rng: RandomNumberGenerator, seen: Array = ["uncommon","rare"]) -> Dictionary:
 	if rng.randf()*100.0 >= DROP_CHANCE.get(enemy,0.0): return {}
-	var weights: Dictionary = (BOSS_WEIGHTS if enemy == "boss" else RARITY_WEIGHTS).duplicate()
+	var weights: Dictionary = (BOSS_WEIGHTS if enemy == "boss" else (ELITE_WEIGHTS if enemy in ELITES else RARITY_WEIGHTS)).duplicate()
 	if not uniques_open(seen): weights.erase("unique")
 	return generate(class_id,weighted(rng,weights),rng)
 

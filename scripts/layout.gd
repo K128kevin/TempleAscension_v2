@@ -60,17 +60,32 @@ var court_obstacle = Rect2i()
 var terrace: Array[Rect2i] = []
 var terrace_doors: Array[Rect2i] = []
 var rng_state = 0
-# The arena's basement is laid out along one great hallway (see
-# generate_basement): `halls` are its stretches, start to end; `reach` gives,
-# for each of `rooms`, how far along the hallway it opens off it. Where the
-# level has a way further down, the hallway ends at a gate (`gate`, a passage
-# of floor GATE_WIDTH across) into the `vault`, the chamber of the stair.
+# The arena's basement (see generate_basement). `halls` are its hallways'
+# straight stretches. On its first level the hallway that rings it comes, at
+# the far side from the entrance, to a gate (`gate`, a passage of floor
+# GATE_WIDTH across, `gate_dir` pointing through it) into the arena's middle:
+# the hallway in, its rooms and the `vault` of the stair down (all `sealed`).
 var halls: Array[Rect2i] = []
-var reach: Array[float] = []
-var hall_length = 0.0
 var gate = Rect2i()
-var gate_dir = Vector2i.RIGHT
+var gate_dir = Vector2i.DOWN
 var vault = Rect2i()
+var sealed: Array[Rect2i] = []
+# Its last level's puzzle: two `buttons` (2x2 plates, by their top-left
+# cells) on the floor of the room he comes down into, two `boulders` (2x2,
+# likewise) in the rooms at the ends of the hallways north-west and
+# north-east, and the `lasers` across the hallway south (each {"cell": the
+# floor cell beside its emitter, "dir": the way it fires}), dark only while
+# both buttons are held down. Beyond them, the `elite_room` and where its
+# three stand (`elite_posts`: the swordsman, the archer, the healer). No
+# other bandit stands in the `quiet` rects, and nothing solid is set down in
+# the `kept_clear` ones (the boulders' ways).
+var buttons: Array[Vector2i] = []
+var boulders: Array[Vector2i] = []
+var lasers: Array[Dictionary] = []
+var elite_room = Rect2i()
+var elite_posts: Array[Vector2i] = []
+var quiet: Array[Rect2i] = []
+var kept_clear: Array[Rect2i] = []
 
 static func floor_seed(run_seed: int, floor_number: int) -> int:
 	var h = ((run_seed*0x27d4eb2d) ^ (floor_number*0x165667b1)) & 0xffffffff
@@ -130,9 +145,9 @@ func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 		horizontal(Vector2i(a.x,b.y),b)
 
 func generate(run_seed: int, floor_index: int, place: String = "temple") -> void:
-	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear(); halls.clear(); reach.clear()
-	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i(); gate = Rect2i(); vault = Rect2i()
-	hall_length = 0.0
+	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear(); halls.clear(); sealed.clear()
+	buttons.clear(); boulders.clear(); lasers.clear(); elite_posts.clear(); quiet.clear(); kept_clear.clear()
+	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i(); gate = Rect2i(); vault = Rect2i(); elite_room = Rect2i()
 	kind = place
 	var plan: Dictionary = KINDS[kind]
 	corridor = plan.corridor
@@ -441,173 +456,291 @@ func on_terrace(cell: Vector2i) -> bool:
 
 # --- The arena's basement ------------------------------------------------------
 
-# One great hallway, MAIN_HALL wide, runs from the entrance room to the far
-# end of the level in stretches that turn this way and that (each HALL_RUN
-# long going on, HALL_TURN across), never doubling back across itself. Off
-# it, narrower passages (`corridor` wide, BRANCH long) lead to rooms of
-# BRANCH_ROOM a side (now and then, BRANCH_SKIP, a stretch of wall is left
-# bare; up to BRANCH_PASSES times along the whole hallway), until the level holds about BASEMENT_FLOOR tiles of
-# floor (a share HALL_SHARE of them the hallway's). Where the level has a way
-# further down, the hallway ends at a gate GATE_WIDTH across, into a vault of
-# VAULT a side holding the stair; on the last level it opens into a great
-# hall of FINAL_ROOM a side. The whole is then turned to one of eight ways
-# round, so no two levels lie alike.
-const BASEMENT_FLOOR = [2900,3550]
-const HALL_SHARE = .4
+# Its first level lies under the arena and is as big as it is: an oval OVAL
+# tiles out each way from its middle (the arena's outer wall,
+# Town.ARENA_RADII), with a wall's breadth to spare. A hallway MAIN_HALL wide
+# rings the middle, its centre line the oval RING (squared off a little,
+# RING_SQUARE) stepped round on a grid of
+# RING_STEP tiles, so that it runs in long straight stretches and turns in
+# steps at the oval's shoulders. Off both sides of its longer stretches
+# (RING_ROOMS_FROM tiles or more), passages `corridor` wide and BRANCH long
+# lead to rooms BRANCH_ROOM a side (now and then, BRANCH_SKIP, a stretch of
+# wall is left bare). The way in, down the stair from under the stands, is
+# the ENTRANCE room off the ring's south side. At its far side, the north,
+# the gate (GATE_WIDTH across) opens on a hallway INNER_HALL wide running
+# south into the middle, with rooms off it too; in the middle (a little south
+# of it, CENTER_SOUTH, for the hallway's rooms) is the vault of the stair
+# down, CENTER_ROOM a side.
+const OVAL = Vector2(45,39)
+const RING = Vector2(30,20)
+const RING_STEP = 5
+# How square the ring's oval is drawn (2, an ellipse): squarer, its stretches
+# north and south run long and its shoulders keep out of the middle.
+const RING_SQUARE = 3.0
 const MAIN_HALL = 6
-const HALL_RUN = Vector2i(14,22)
-const HALL_TURN = Vector2i(10,16)
-const HALL_DRIFT = 18
-const BRANCH = Vector2i(3,8)
-const BRANCH_ROOM = Vector2i(9,13)
-const BRANCH_SKIP = .2
-const BRANCH_PASSES = 3
-const ENTRANCE_ROOM = 10
+const RING_ROOMS_FROM = 12
+const BRANCH = Vector2i(2,4)
+const BRANCH_ROOM = Vector2i(7,10)
+const BRANCH_SKIP = .15
+const BRANCH_PASSES = 5
+# (The hallway in, and the last level's arms, are short for their rooms:
+# they are tried for more often.)
+const CLOSE_PASSES = 6
+const ENTRANCE = Vector2i(10,8)
 const GATE_WIDTH = 4
-const VAULT = 9
-const FINAL_ROOM = Vector2i(13,15)
+const INNER_HALL = 4
+const CENTER_ROOM = 10
+const CENTER_SOUTH = 2
+# Its last level begins in a room START_ROOM a side, where the stair comes
+# down. Hallways DEPTHS_HALL wide (room for a boulder and a man beside it)
+# leave it: south, LASER_HALL long, across which the lasers fire (at
+# LASER_ROWS into it), to the ELITE_ROOM; and north-west and north-east,
+# each in stretches turning north and outward by turns (ARM_RUNS long), with
+# rooms off them, to an END_ROOM holding a boulder.
+const START_ROOM = 15
+const DEPTHS_HALL = 5
+const LASER_HALL = 18
+const LASER_ROWS = [3,5,7]
+const ELITE_ROOM = Vector2i(17,13)
+const ARM_RUNS = [Vector2i(7,9),Vector2i(12,15),Vector2i(9,11),Vector2i(12,15),Vector2i(5,7)]
+const END_ROOM = 11
+# Whether side rooms must keep within the oval (on the first level).
+var bounded = false
+
 func generate_basement() -> void:
-	var target: int = BASEMENT_FLOOR[clampi(level_index,0,BASEMENT_FLOOR.size()-1)]
-	var half: int = MAIN_HALL/2
-	# The entrance room, the hallway leaving its far side.
-	var entrance = Rect2i(-ENTRANCE_ROOM,-ENTRANCE_ROOM/2,ENTRANCE_ROOM,ENTRANCE_ROOM)
-	var points: Array[Vector2i] = [Vector2i(-1,0)]
-	var length = 0.0
-	var going_on = true
-	while length < target*HALL_SHARE/MAIN_HALL or going_on:
-		var at: Vector2i = points[-1]
-		var step: Vector2i
-		if going_on: step = Vector2i(integer(HALL_RUN.x,HALL_RUN.y),0)
-		else:
-			var way: int = (1 if random()<.5 else -1) if absi(at.y)<HALL_DRIFT else -signi(at.y)
-			step = Vector2i(0,way*integer(HALL_TURN.x,HALL_TURN.y))
-		points.append(at+step)
-		length += absi(step.x)+absi(step.y)
-		going_on = not going_on
-	var hall_rects: Array[Rect2i] = []
-	for i in range(1,points.size()):
-		var a: Vector2i = points[i-1]
-		var b: Vector2i = points[i]
-		var low = Vector2i(mini(a.x,b.x),mini(a.y,b.y))
-		hall_rects.append(Rect2i(low-Vector2i(half,half),(b-a).abs()+Vector2i(MAIN_HALL,MAIN_HALL)))
-	var end: Vector2i = points[-1]
-	var parts: Array[Rect2i] = [entrance]
-	parts.append_array(hall_rects)
-	# Its far end: the gate and the vault, or the great hall.
-	var gate_rect = Rect2i()
-	var end_room: Rect2i
-	if not last:
-		gate_rect = Rect2i(end.x+half,end.y-GATE_WIDTH/2,1,GATE_WIDTH)
-		end_room = Rect2i(end.x+half+1,end.y-VAULT/2,VAULT,VAULT)
-	else:
-		var w: int = integer(FINAL_ROOM.x,FINAL_ROOM.y)
-		var h: int = integer(FINAL_ROOM.x,FINAL_ROOM.y)
-		end_room = Rect2i(end.x+half,end.y-h/2,w,h)
-	parts.append(end_room)
-	# The side rooms, off both sides of every stretch, each `reach` along it.
-	var side_rooms: Array[Rect2i] = []
-	var side_reach: Array[float] = []
-	var floor_now = func() -> int:
-		var area = {}
-		for r in parts:
-			for y in range(r.position.y,r.end.y):
-				for x in range(r.position.x,r.end.x): area[Vector2i(x,y)] = true
-		return area.size()
-	var walked = 0.0
+	if last: basement_depths()
+	else: basement_ring()
+
+func basement_ring() -> void:
+	bounded = true
+	var parts: Array[Rect2i] = []
+	var corners: Array[Vector2i] = ring_corners()
+	var stretches: Array = []
+	for i in corners.size():
+		var a: Vector2i = corners[i]
+		var b: Vector2i = corners[(i+1)%corners.size()]
+		stretches.append([a,b])
+		parts.append(stretch(a,b,MAIN_HALL))
+	var ring_halls: Array[Rect2i] = parts.duplicate()
+	var south: int = roundi(RING.y/RING_STEP)*RING_STEP
+	var north: int = -south
+	var low: int = MAIN_HALL/2
+	var high: int = MAIN_HALL-1-low
+	# The way in, off the south side.
+	var entrance = Rect2i(-ENTRANCE.x/2,south+high+3,ENTRANCE.x,ENTRANCE.y)
+	var into = Rect2i(-2,south+high+1,4,2)
+	parts.append_array([into,entrance])
+	# Through the gate in the north side, the hallway in to the vault.
+	var gate_rect = Rect2i(-GATE_WIDTH/2,north+high+1,GATE_WIDTH,1)
+	var center_room = Rect2i(-CENTER_ROOM/2,CENTER_SOUTH-CENTER_ROOM/2,CENTER_ROOM,CENTER_ROOM)
+	var inner = Rect2i(-INNER_HALL/2,gate_rect.end.y,INNER_HALL,center_room.position.y-gate_rect.end.y)
+	parts.append_array([gate_rect,inner,center_room])
+	# Rooms off the hallway in first (they are sealed behind the gate), then
+	# off the ring.
+	var inner_rooms: Array = []
+	for pass_number in CLOSE_PASSES:
+		rooms_along(Vector2i(0,inner.position.y),Vector2i(0,inner.end.y-1),INNER_HALL,parts,inner_rooms)
+	var ring_rooms: Array = []
 	for pass_number in BRANCH_PASSES:
-		walked = 0.0
-		for i in range(1,points.size()):
-			var a: Vector2i = points[i-1]
-			var b: Vector2i = points[i]
-			var run: int = absi(b.x-a.x)+absi(b.y-a.y)
-			var along: Vector2i = (b-a)/maxi(run,1)
-			var across = Vector2i(along.y,along.x)
-			# Each side of the stretch in turn, a room's breadth on past each
-			# one laid out, a step or two on past each that will not fit.
-			for way in [1,-1]:
-				var offset: int = integer(half+2,half+4)
-				while offset <= run-half-2 and floor_now.call() < target:
-					var room: Dictionary = branch(a+along*offset,across*way,parts) if random()>BRANCH_SKIP else {}
-					if room.is_empty():
-						offset += integer(2,4)
-						continue
-					parts.append(room.passage)
-					parts.append(room.room)
-					side_rooms.append(room.room)
-					side_reach.append(walked+offset)
-					offset += (room.room.size.x if along.x!=0 else room.room.size.y)+integer(2,5)
-			walked += run
-		if floor_now.call()>=target: break
-	hall_length = walked
-	# Turned one of eight ways round, and moved clear of the map's edge.
-	var turn: int = integer(0,7)
-	var all: Array[Rect2i] = []
-	for r in parts: all.append(turned(r,turn))
-	var low = Vector2i(1<<30,1<<30)
-	var high = -low
-	for r in all:
-		low = Vector2i(mini(low.x,r.position.x),mini(low.y,r.position.y))
-		high = Vector2i(maxi(high.x,r.end.x),maxi(high.y,r.end.y))
-	var shift: Vector2i = Vector2i(3,3)-low
-	size = maxi(high.x-low.x,high.y-low.y)+6
-	var placed = func(r: Rect2i) -> Rect2i:
-		var t: Rect2i = turned(r,turn)
-		return Rect2i(t.position+shift,t.size)
-	rooms.append(placed.call(entrance))
-	reach.append(0.0)
-	for i in side_rooms.size():
-		rooms.append(placed.call(side_rooms[i]))
-		reach.append(side_reach[i])
-	rooms.append(placed.call(end_room))
-	reach.append(hall_length)
-	for r in hall_rects: halls.append(placed.call(r))
-	for r in parts: carve(placed.call(r))
-	if not last:
-		vault = rooms[-1]
-		gate = placed.call(gate_rect)
-		carve(gate)
-		gate_dir = turned_dir(Vector2i.RIGHT,turn)
+		for line in stretches:
+			if absi(line[1].x-line[0].x)+absi(line[1].y-line[0].y) >= RING_ROOMS_FROM: rooms_along(line[0],line[1],MAIN_HALL,parts,ring_rooms)
+	var shift: Vector2i = settle(parts)
+	rooms.append(moved(entrance,shift))
+	for found in ring_rooms: rooms.append(moved(found.room,shift))
+	for found in inner_rooms:
+		rooms.append(moved(found.room,shift))
+		sealed.append(moved(found.room,shift))
+		sealed.append(moved(found.passage,shift))
+	rooms.append(moved(center_room,shift))
+	for r in ring_halls: halls.append(moved(r,shift))
+	halls.append(moved(inner,shift))
+	for r in parts: carve(moved(r,shift))
+	vault = rooms[-1]
+	gate = moved(gate_rect,shift)
+	gate_dir = Vector2i.DOWN
+	sealed.append_array([vault,gate,moved(inner,shift)])
 	start = center(rooms[0])
-	exit_cell = center(rooms[-1])
+	exit_cell = center(vault)
 	place_stairs()
 
-# A passage `corridor` wide leaving the hallway at `at` (on its centre line)
-# toward `out`, and a room at its end, meeting it somewhere along its near
-# wall, if neither runs into anything already laid out (`parts`); {} if they
-# would.
-func branch(at: Vector2i, out: Vector2i, parts: Array[Rect2i]) -> Dictionary:
-	var half: int = MAIN_HALL/2
+func basement_depths() -> void:
+	bounded = false
+	var parts: Array[Rect2i] = []
+	var half: int = START_ROOM/2
+	var room = Rect2i(-half,-half,START_ROOM,START_ROOM)
+	var low: int = DEPTHS_HALL/2
+	var down = Rect2i(-low,room.end.y,DEPTHS_HALL,LASER_HALL)
+	var elites = Rect2i(-ELITE_ROOM.x/2,down.end.y,ELITE_ROOM.x,ELITE_ROOM.y)
+	parts.append_array([room,down,elites])
+	# The two arms, north-west and north-east, and the rooms at their ends.
+	var arm_halls: Array[Rect2i] = []
+	var arm_lines: Array = []
+	var ends: Array[Rect2i] = []
+	var stones: Array[Vector2i] = []
+	for side in [-1,1]:
+		var p = Vector2i(side*(half-low-1),room.position.y)
+		for k in ARM_RUNS.size():
+			var run: int = integer(ARM_RUNS[k].x,ARM_RUNS[k].y)
+			var q: Vector2i = p+(Vector2i(0,-run) if k%2==0 else Vector2i(side*run,0))
+			arm_lines.append([p,q])
+			arm_halls.append(stretch(p,q,DEPTHS_HALL))
+			p = q
+		var end_room = Rect2i(p.x-END_ROOM/2,p.y-low-END_ROOM,END_ROOM,END_ROOM)
+		ends.append(end_room)
+		stones.append(center(end_room)-Vector2i.ONE)
+	parts.append_array(arm_halls)
+	parts.append_array(ends)
+	var side_rooms: Array = []
+	for pass_number in CLOSE_PASSES:
+		for line in arm_lines: rooms_along(line[0],line[1],DEPTHS_HALL,parts,side_rooms)
+	var shift: Vector2i = settle(parts)
+	rooms.append(moved(room,shift))
+	for found in side_rooms: rooms.append(moved(found.room,shift))
+	for r in ends: rooms.append(moved(r,shift))
+	elite_room = moved(elites,shift)
+	rooms.append(elite_room)
+	for r in arm_halls: halls.append(moved(r,shift))
+	halls.append(moved(down,shift))
+	for r in parts: carve(moved(r,shift))
+	for cell in stones: boulders.append(cell+shift)
+	var hall_in: Rect2i = moved(down,shift)
+	for k in LASER_ROWS.size():
+		var y: int = hall_in.position.y+LASER_ROWS[k]
+		lasers.append({"cell":Vector2i(hall_in.position.x if k%2==0 else hall_in.end.x-1,y),"dir":Vector2i.RIGHT if k%2==0 else Vector2i.LEFT})
+	var middle: int = elite_room.position.x+elite_room.size.x/2
+	elite_posts = [Vector2i(middle,elite_room.position.y+4),Vector2i(middle-5,elite_room.position.y+8),Vector2i(middle+5,elite_room.position.y+8)]
+	quiet = [hall_in,elite_room]
+	kept_clear = [rooms[0]]
+	kept_clear.append_array(halls.slice(0,arm_halls.size()))
+	for r in ends: kept_clear.append(moved(r,shift))
+	start = center(rooms[0])
+	exit_cell = start
+	place_stairs()
+	place_buttons()
+
+# The two buttons, either side of the room's middle, clear of the stair.
+func place_buttons() -> void:
+	for row in [1,3,-1,-3,5]:
+		var pair: Array[Vector2i] = [start+Vector2i(-5,row),start+Vector2i(4,row)]
+		var free = true
+		for plate in pair:
+			for cell in [plate,plate+Vector2i.RIGHT,plate+Vector2i.DOWN,plate+Vector2i.ONE]:
+				if not cells.has(cell) or arrival.grow(1).has_point(cell) or cell.distance_to(arrival_foot) < 2.0: free = false
+		if free:
+			buttons = pair
+			return
+	buttons = [start+Vector2i(-5,1),start+Vector2i(4,1)]
+
+# The ring's corners, going round: the oval RING, its points snapped to the
+# RING_STEP grid, each step between them turned at its outer corner.
+func ring_corners() -> Array[Vector2i]:
+	var loop: Array[Vector2i] = []
+	for i in 72:
+		var t: float = TAU*i/72.0
+		var q = Vector2i(snap(signf(cos(t))*pow(absf(cos(t)),2.0/RING_SQUARE)*RING.x),snap(signf(sin(t))*pow(absf(sin(t)),2.0/RING_SQUARE)*RING.y))
+		if loop.is_empty() or loop[-1] != q: loop.append(q)
+	if loop[-1] == loop[0]: loop.pop_back()
+	var path: Array[Vector2i] = []
+	for i in loop.size():
+		var a: Vector2i = loop[i]
+		var b: Vector2i = loop[(i+1)%loop.size()]
+		path.append(a)
+		if a.x != b.x and a.y != b.y:
+			var outer = Vector2i(b.x,a.y)
+			var inner = Vector2i(a.x,b.y)
+			path.append(outer if oval_measure(outer,RING) >= oval_measure(inner,RING) else inner)
+	var corners: Array[Vector2i] = []
+	for i in path.size():
+		var into: Vector2i = (path[i]-path[i-1]).sign()
+		var out: Vector2i = (path[(i+1)%path.size()]-path[i]).sign()
+		if into != out: corners.append(path[i])
+	return corners
+
+# To the RING_STEP grid, halves toward the middle (so that the ring is laid
+# out alike each side of it, whatever the rounding of its sines).
+static func snap(v: float) -> int:
+	return signi(roundi(v))*roundi(absf(v)/RING_STEP-.001)*RING_STEP
+
+static func oval_measure(p: Vector2i, radii: Vector2) -> float:
+	return (Vector2(p)/radii).length_squared()
+
+# Whether every tile of `r` lies within the arena's oval, a wall's breadth in.
+func inside_oval(r: Rect2i) -> bool:
+	var radii: Vector2 = OVAL-Vector2.ONE
+	for corner in [r.position,Vector2i(r.end.x,r.position.y),Vector2i(r.position.x,r.end.y),r.end]:
+		if oval_measure(corner,radii) > 1.0: return false
+	return true
+
+# A straight stretch of hallway `width` wide, its centre line from `a` to `b`
+# (its tiles running from width/2 below that line to the rest above).
+static func stretch(a: Vector2i, b: Vector2i, width: int) -> Rect2i:
+	var low: int = width/2
+	return Rect2i(a.min(b)-Vector2i(low,low),(b-a).abs()+Vector2i(width,width))
+
+# Side rooms along both sides of a stretch from `a` to `b`, `width` wide: a
+# room's breadth on past each one laid out, a step or two past each that
+# will not fit. Each is added to `parts` and `found`.
+func rooms_along(a: Vector2i, b: Vector2i, width: int, parts: Array[Rect2i], found: Array) -> void:
+	var run: int = absi(b.x-a.x)+absi(b.y-a.y)
+	var along: Vector2i = (b-a)/maxi(run,1)
+	var across = Vector2i(absi(along.y),absi(along.x))
+	var low: int = width/2
+	var high: int = width-1-low
+	for way in [1,-1]:
+		var offset: int = integer(low+2,low+4)
+		while offset <= run-high-2:
+			var room: Dictionary = branch(a+along*offset,across*way,width,parts) if random() > BRANCH_SKIP else {}
+			if room.is_empty():
+				offset += integer(2,4)
+				continue
+			parts.append(room.passage)
+			parts.append(room.room)
+			found.append(room)
+			offset += (room.room.size.x if along.x != 0 else room.room.size.y)+integer(2,5)
+
+# A passage `corridor` wide leaving a hallway `width` wide at `at` (on its
+# centre line) toward `out`, and a room at its end, meeting it somewhere along
+# its near wall, if neither runs into anything already laid out (`parts`) nor,
+# on the first level, out of the oval; {} if they would.
+func branch(at: Vector2i, out: Vector2i, width: int, parts: Array[Rect2i]) -> Dictionary:
 	var side = Vector2i(absi(out.y),absi(out.x))
+	var low: int = width/2
+	var high: int = width-1-low
 	var long: int = integer(BRANCH.x,BRANCH.y)
-	# (The hallway's cells run from half below its centre line to half-1 above.)
-	var mouth: Vector2i = at+out*(half if out.x+out.y>0 else half+1)
+	var mouth: Vector2i = at+out*(high+1 if out.x+out.y > 0 else low+1)
 	var tail: Vector2i = mouth+out*(long-1)
-	var passage = Rect2i(Vector2i(mini(mouth.x,tail.x),mini(mouth.y,tail.y))-side*(corridor/2),(tail-mouth).abs()+Vector2i.ONE+side*(corridor-1))
+	var passage = Rect2i(mouth.min(tail)-side*(corridor/2),(tail-mouth).abs()+Vector2i.ONE+side*(corridor-1))
 	var w: int = integer(BRANCH_ROOM.x,BRANCH_ROOM.y)
 	var h: int = integer(BRANCH_ROOM.x,BRANCH_ROOM.y)
 	var first: Vector2i = tail+out
-	var shift: int = integer(1,maxi(1,(w if side.x==1 else h)-corridor-1))
+	var shift: int = integer(1,maxi(1,(w if side.x == 1 else h)-corridor-1))
 	var corner: Vector2i
-	if side.x==1: corner = Vector2i(at.x-corridor/2-shift,first.y if out.y>0 else first.y-h+1)
-	else: corner = Vector2i(first.x if out.x>0 else first.x-w+1,at.y-corridor/2-shift)
+	if side.x == 1: corner = Vector2i(at.x-corridor/2-shift,first.y if out.y > 0 else first.y-h+1)
+	else: corner = Vector2i(first.x if out.x > 0 else first.x-w+1,at.y-corridor/2-shift)
 	var room = Rect2i(corner,Vector2i(w,h))
+	if bounded and not inside_oval(room): return {}
 	for other in parts:
 		if other.grow(2).intersects(room) or other.intersects(passage): return {}
 		if other.grow(1).intersects(passage) and not other.has_point(at): return {}
 	return {"passage":passage,"room":room}
 
-# `r` turned one of eight ways round (`turn`: bit 0 swaps across and down,
-# bit 1 mirrors across, bit 2 mirrors down).
-static func turned(r: Rect2i, turn: int) -> Rect2i:
-	var p: Vector2i = r.position
-	var s: Vector2i = r.size
-	if turn&1: p = Vector2i(p.y,p.x); s = Vector2i(s.y,s.x)
-	if turn&2: p.x = -p.x-s.x
-	if turn&4: p.y = -p.y-s.y
-	return Rect2i(p,s)
+# How far to move the level laid out about its middle (`parts`) to lie clear
+# of the map's edge; sets the map's size.
+func settle(parts: Array[Rect2i]) -> Vector2i:
+	var low = Vector2i(1<<30,1<<30)
+	var high = -low
+	for r in parts:
+		low = low.min(r.position)
+		high = high.max(r.end)
+	size = maxi(high.x-low.x,high.y-low.y)+6
+	return Vector2i(3,3)-low
 
-static func turned_dir(d: Vector2i, turn: int) -> Vector2i:
-	if turn&1: d = Vector2i(d.y,d.x)
-	if turn&2: d.x = -d.x
-	if turn&4: d.y = -d.y
-	return d
+static func moved(r: Rect2i, shift: Vector2i) -> Rect2i:
+	return Rect2i(r.position+shift,r.size)
+
+# Whether `cell` lies behind the first level's gate.
+func behind_gate(cell: Vector2i) -> bool:
+	return sealed.any(func(r): return r.has_point(cell))
+
+func in_any(list: Array[Rect2i], cell: Vector2i) -> bool:
+	return list.any(func(r): return r.has_point(cell))

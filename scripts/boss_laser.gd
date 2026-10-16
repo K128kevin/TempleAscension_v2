@@ -36,15 +36,7 @@ func setup(owner_game, owner_boss) -> void:
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.extra_cull_margin = 64.0
 	add_child(node)
-	for pass_color in [Color(1,.125,.125,.12),Color(.9,.125,.125,.52),Color(1,.36,.32,1)]:
-		var m = StandardMaterial3D.new()
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		m.cull_mode = BaseMaterial3D.CULL_DISABLED
-		m.albedo_color = pass_color
-		m.no_depth_test = false
-		materials.append(m)
+	materials = pass_materials()
 	for i in 2:
 		var eye = OmniLight3D.new()
 		eye.light_color = Color(1,.2,.15)
@@ -103,11 +95,27 @@ func tick(dt: float, angle: float) -> void:
 		var width = [GLOW_WIDTH,BAND_WIDTH,CORE_WIDTH][layer]
 		mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES,materials[layer])
 		for i in 2:
-			ribbon(lightning(sources[i],end_point,pulse,i),width,camera)
+			ribbon(mesh,lightning(sources[i],end_point,pulse,i,seed),width,camera)
 		mesh.surface_end()
 
+# The beam's three passes (a faint broad glow, a red band and a bright core),
+# additive and unshaded. (The basement's laser gates are drawn alike:
+# scripts/basement_puzzle.gd.)
+static func pass_materials() -> Array:
+	var made: Array = []
+	for pass_color in [Color(1,.125,.125,.12),Color(.9,.125,.125,.52),Color(1,.36,.32,1)]:
+		var m = StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.albedo_color = pass_color
+		m.no_depth_test = false
+		made.append(m)
+	return made
+
 # A thin bolt from `from` to `to`, its offsets shifting every pulse.
-func lightning(from: Vector3, to: Vector3, pulse: int, strand: int) -> PackedVector3Array:
+static func lightning(from: Vector3, to: Vector3, pulse: int, strand: int, phase: float) -> PackedVector3Array:
 	var points = PackedVector3Array([from])
 	var line = to-from
 	var length = line.length()
@@ -118,16 +126,16 @@ func lightning(from: Vector3, to: Vector3, pulse: int, strand: int) -> PackedVec
 	var segments = maxi(12,roundi(length/.8))
 	for i in range(1,segments):
 		var t = float(i)/segments
-		var n1 = sin(i*12.9898+pulse*78.233+seed+strand*3.1)
-		var n2 = sin(i*27.173-pulse*31.417+seed*1.7+strand*1.3)
+		var n1 = sin(i*12.9898+pulse*78.233+phase+strand*3.1)
+		var n2 = sin(i*27.173-pulse*31.417+phase*1.7+strand*1.3)
 		var offset = JITTER*((n1+n2*.55)/1.55)*sin(PI*t)
-		var n3 = sin(i*7.31+pulse*19.7+seed*2.3+strand)
+		var n3 = sin(i*7.31+pulse*19.7+phase*2.3+strand)
 		points.append(from+line*t+side*offset+lift*offset*.6*n3)
 	points.append(to)
 	return points
 
-# Camera-facing quads along the polyline.
-func ribbon(points: PackedVector3Array, width: float, camera: Camera3D) -> void:
+# Camera-facing quads along the polyline, into `mesh`'s open surface.
+static func ribbon(mesh: ImmediateMesh, points: PackedVector3Array, width: float, camera: Camera3D) -> void:
 	var view = -camera.global_basis.z
 	for i in points.size()-1:
 		var a = points[i]; var b = points[i+1]

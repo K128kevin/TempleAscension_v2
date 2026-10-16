@@ -34,6 +34,142 @@ func play(done: Callable, seconds: float) -> bool:
 		game._process(.05)
 		left -= .05
 	return done.call()
+# Leans the hero into boulder `b` the way `dir` goes until it has rolled or
+# rebounded (or `seconds` pass); returns the cell it ends on.
+func lean(puzzle, b: Dictionary, dir: Vector2i, seconds: float = 2.0) -> Vector2i:
+	var was: Vector2i = b.cell
+	var way = Vector3(dir.x,0,dir.y)
+	game.player.position = b.to-way*(puzzle.BOULDER_RADIUS+.42)
+	var left = seconds
+	while left > 0 and (b.cell == was or b.t < 1.0):
+		game.walk_intent = way
+		game.player.tick(.05)
+		puzzle.tick(.05)
+		left -= .05
+	return b.cell
+
+# The basement's last level: its boulders, plates and lasers, and the three
+# in the room beyond them.
+func puzzle_and_elites() -> void:
+	var world = game.world
+	var layout = world.layout
+	var puzzle = world.puzzle
+	# (Saved as a run in play is.)
+	var creating: bool = game.creating_character
+	game.creating_character = false
+	check(puzzle != null and puzzle.boulders.size()==2 and puzzle.plates.size()==2 and puzzle.beams.size()==3 and puzzle.lit,"Below: two boulders, two plates, and the lasers lit")
+	for beam in puzzle.beams:
+		check(Vector2(beam.end.x-beam.from.x,beam.end.z-beam.from.z).length()>=layout.quiet[0].size.x-1.0,"A beam spans the hallway, wall to wall")
+	# Rolled: a tile at a time, the way he leans; into a wall, it rebounds.
+	var b: Dictionary = puzzle.boulders[0]
+	var from: Vector2i = b.cell
+	var to: Vector2i = lean(puzzle,b,Vector2i.RIGHT)
+	check(to == from+Vector2i.RIGHT and world.fits(puzzle.centre(from)+Vector3.LEFT*1.2) and not world.fits(b.to),"Leaned on, a boulder rolls a tile on, and stands in the way")
+	var hero_before: Vector3
+	var bounced = false
+	for i in 12:
+		var at: Vector2i = b.cell
+		hero_before = b.to-Vector3(0,0,-1)*(puzzle.BOULDER_RADIUS+.42)
+		var now: Vector2i = lean(puzzle,b,Vector2i.UP)
+		if now == at+Vector2i.DOWN:
+			bounced = true
+			break
+	check(bounced,"Rolled into a wall, it rebounds a tile")
+	for i in 40: game.player.tick(.05)
+	# The plates: the hero on one, a boulder on the other.
+	game.player.position = puzzle.centre(layout.buttons[0])
+	puzzle.tick(.05)
+	check(puzzle.plates[0].down and not puzzle.plates[1].down and puzzle.lit,"Standing on one plate presses it; the lasers stay lit")
+	for i in 2:
+		var stone: Dictionary = puzzle.boulders[i]
+		stone.cell = layout.buttons[1-i]+Vector2i(i,0)
+		stone.to = puzzle.centre(stone.cell); stone.from = stone.to; stone.t = 1.0
+	game.player.position = world.layout.arrival_position()
+	puzzle.tick(.05)
+	check(puzzle.plates.all(func(p): return p.down) and not puzzle.lit,"With a boulder on each plate (a tile off, at most) the lasers go dark")
+	# (Across the middle of the hallway.)
+	var south: Vector3 = layout.to_world(layout.lasers[1].cell+layout.lasers[1].dir*2)
+	game.player.position = south+Vector3(0,0,-2)
+	puzzle.tick(.05)
+	game.player.position = south+Vector3(0,0,2)
+	puzzle.tick(.05)
+	check(not game.player.dead,"Dark, they are walked through")
+	game.save_run()
+	check(game.run.boulders == puzzle.kept() and game.kept_boulders()==[puzzle.boulders[0].cell,puzzle.boulders[1].cell],"Where the boulders lie is saved")
+	var stone: Dictionary = puzzle.boulders[0]
+	stone.cell = layout.boulders[0]; stone.to = puzzle.centre(stone.cell); stone.from = stone.to
+	game.player.position = world.layout.arrival_position()
+	puzzle.tick(.05)
+	check(puzzle.lit and not puzzle.barred(south+Vector3(0,0,-1.2),south+Vector3(0,0,-.8)) and puzzle.barred(south+Vector3(0,0,-.8),south+Vector3(0,0,.8)),"A boulder rolled off, they light again; no bandit walks through them")
+	# Lit, they kill whoever walks into them, however well armored.
+	game.player.position = south+Vector3(0,0,-2)
+	puzzle.tick(.05)
+	game.player.invulnerable = 1.0
+	game.player.position = south+Vector3(0,0,2)
+	puzzle.tick(.05)
+	check(game.player.dead and game.mode=="dead","Walking through a lit laser kills him outright, even evading")
+	game.player.invulnerable = 0.0
+	# (Up again, as if it had not happened: a retry would stand the first
+	# level's bandits up again too.)
+	game.player.dead = false; game.player.hp = game.player.max_hp; game.mode = "playing"; game.hud.close_modal()
+	game.player.position = layout.arrival_position()
+	var rolled: Array = puzzle.kept()
+	game.save_run()
+	game.load_floor()
+	world = game.world
+	layout = world.layout
+	puzzle = world.puzzle
+	check(not game.player.dead and puzzle.kept() == rolled,"Come back, the boulders lie where they were rolled")
+	# The three beyond.
+	var elites: Array = game.enemies.filter(func(e): return e.kind in ["bandit_champion","bandit_marksman","bandit_healer"])
+	check(elites.size()==3 and elites.all(func(e): return layout.elite_room.has_point(layout.to_cell(e.position)) and e.human),"Three bandits hold the last room")
+	check(game.enemies.all(func(e): return e in elites or not layout.elite_room.has_point(layout.to_cell(e.position)) and not layout.quiet[0].has_point(layout.to_cell(e.position))),"No other bandit stands there or in the hallway of the lasers")
+	var champion = elites.filter(func(e): return e.kind=="bandit_champion")[0]
+	var marksman = elites.filter(func(e): return e.kind=="bandit_marksman")[0]
+	var healer = elites.filter(func(e): return e.kind=="bandit_healer")[0]
+	check(is_instance_valid(champion.visual.shield_item) and champion.armor()>=80.0 and champion.role=="gladiator","The champion bears a shield and heavy armor")
+	check(healer.role=="wizard" and healer.visual.weapon_kind=="staff" and marksman.role=="archer" and marksman.config.damage>Data.ENEMIES.bandit_archer.damage*2,"A healer with a staff, a marksman whose arrows hit hard")
+	# The healer mends his fellows, unless he is hurt as he casts.
+	for e in elites: game.awaken(e)
+	game.player.position = layout.to_world(layout.elite_room.position+Vector2i(1,1))
+	champion.hp = champion.max_hp*.4
+	var casting = false
+	for i in 20:
+		healer.tick(.05)
+		if healer.healing: casting = true; break
+	check(casting and healer.heal_target == champion and is_equal_approx(healer.cast_total,healer.HEAL_CAST),"The healer begins a two-second mending of the hurt champion")
+	var hurt: float = champion.hp
+	healer.hit(1)
+	check(not healer.healing and healer.windup<=0 and is_equal_approx(champion.hp,hurt),"Struck, his mending is broken off")
+	healer.heal_cooldown = 0.0; healer.busy = 0.0; healer.hit_stun = 0.0
+	var mended = false
+	for i in 80:
+		healer.tick(.05)
+		if champion.hp > hurt+1.0: mended = true; break
+	check(mended and absf(champion.hp-hurt-champion.max_hp*healer.config.heals) < 1.0,"Left be, he mends him by a share of his health")
+	# The marksman's stunning arrow.
+	game.player.hp = game.player.max_hp
+	game.player.position = marksman.position+Vector3(0,0,-6)
+	marksman.stun_shot_left = 0.0; marksman.cooldown = 0.0; marksman.busy = 0.0
+	var stunned = false
+	for i in 120:
+		marksman.tick(.05)
+		game.tick_projectiles(.05)
+		if game.stun_left > 0: stunned = true; break
+	check(stunned and game.stun_left > 1.5 and game.hobbled > 3.5 and game.player.hp < game.player.max_hp,"Now and then his arrow stuns the hero for two seconds and hobbles him for four")
+	var at: Vector3 = game.player.position
+	game.route = PackedVector3Array([at+Vector3(3,0,0)])
+	game.player_control(.1)
+	check(game.player.position == at and game.player_pace() < Game.PLAYER_RUN_SPEED*.6,"Stunned, he cannot move; hobbled, he goes at half pace")
+	game.stun_left = 0.0; game.hobbled = 0.0
+	game.player.hp = game.player.max_hp
+	game.player.position = layout.arrival_position()
+	for i in elites.size():
+		elites[i].lose_sight()
+		elites[i].position = layout.to_world(layout.elite_posts[i])
+		elites[i].hp = elites[i].max_hp
+	game.creating_character = creating
+
 func test():
 	Save.directory = ProjectSettings.globalize_path("res://test-results/dungeons-save")
 	# The layouts: two levels each, gone down into.
@@ -53,13 +189,32 @@ func test():
 				else: check(layout.entry.has_area()==(level==0) and layout.arrival.has_area()==(level==1),"The way in is a door on the first level and a stair on the second: "+label)
 				check(layout.stairs.has_area()==(level==0) and layout.last==(level==1),"Only the first level has a stair further down: "+label)
 				if level==1: check(layout.cells.has(layout.arrival_foot) and not layout.arrival.has_point(layout.arrival_foot),"The stair back up is reached from the floor at its foot: "+label)
-				if place=="basement":
-					check(layout.halls.size()>=5 and layout.halls.all(func(h): return mini(h.size.x,h.size.y)==Layout.MAIN_HALL),"One great hallway, %d wide, in several stretches: %s" % [Layout.MAIN_HALL,label])
-					check(layout.cells.size()>=Layout.BASEMENT_FLOOR[level]*.85,"About 30%% larger than before (%d tiles): %s" % [layout.cells.size(),label])
+				if place=="basement" and level==0:
+					# As big as the arena and its shape: a hallway round the middle,
+					# rooms off both its sides, and at its far side from the way in a
+					# gate into a hallway in to the middle, rooms off that too, and
+					# the vault of the stair down.
+					var middle: Vector2i = layout.center(layout.vault)-Vector2i(0,Layout.CENTER_SOUTH)
+					check(layout.cells.keys().all(func(c): return Layout.oval_measure(c-middle,Layout.OVAL)<=1.0) and layout.cells.size()>=2000,"Within the arena's oval, and filling it (%d tiles): %s" % [layout.cells.size(),label])
+					var ring: Array = layout.halls.slice(0,layout.halls.size()-1)
+					check(ring.size()>=8 and ring.all(func(h): return mini(h.size.x,h.size.y)==Layout.MAIN_HALL) and layout.halls.any(func(h): return h.has_point(middle+Vector2i(0,Layout.RING.y))) and layout.halls.any(func(h): return h.has_point(middle+Vector2i(Layout.RING.x,0))) and layout.halls.any(func(h): return h.has_point(middle-Vector2i(Layout.RING.x,0))),"A great hallway rings the middle: "+label)
 					var off: Array = layout.rooms.slice(1,layout.rooms.size()-1)
-					check(off.size()>=6 and off.all(func(r): return r.size.x>=Layout.BRANCH_ROOM.x and r.size.y>=Layout.BRANCH_ROOM.x and not layout.halls.any(func(h): return h.intersects(r))),"Rooms off it, down passages of their own: "+label)
-					if level==0: check(layout.gate.get_area()==Layout.GATE_WIDTH and layout.vault.has_point(layout.gate.get_center()+layout.gate_dir) and layout.vault.encloses(layout.stairs) and layout.halls[-1].has_point(Vector2i(layout.gate.get_center())-layout.gate_dir),"At the hallway's end a gate opens into the vault of the stair: "+label)
-					else: check(not layout.gate.has_area() and not layout.vault.has_area(),"The last level has no gate: "+label)
+					var sealed_rooms: Array = off.filter(func(r): return layout.behind_gate(layout.center(r)))
+					check(off.size()-sealed_rooms.size()>=8 and sealed_rooms.size()>=1 and off.all(func(r): return not layout.halls.any(func(h): return h.intersects(r))),"Rooms off it (%d), and off the hallway in (%d): %s" % [off.size()-sealed_rooms.size(),sealed_rooms.size(),label])
+					var outer: int = off.filter(func(r): return Layout.oval_measure(layout.center(r)-middle,Layout.RING)>1.0).size()
+					check(outer>=3 and off.size()-sealed_rooms.size()-outer>=3,"On both sides of it: "+label)
+					check(layout.start.y>middle.y+Layout.RING.y and layout.gate.get_area()==Layout.GATE_WIDTH and layout.gate.position.y<middle.y-Layout.RING.y/2 and layout.gate_dir==Vector2i.DOWN and layout.halls[-1].has_point(layout.gate.position+layout.gate_dir) and layout.vault.encloses(layout.stairs) and layout.behind_gate(layout.exit_cell),"Its way in is to the south; to the north a gate opens on the way in to the vault of the stair: "+label)
+					check(Layout.oval_measure(layout.center(layout.vault)-middle,Vector2(8,8))<=1.0,"The stair down is in the middle: "+label)
+				elif place=="basement":
+					# The last level: the room he comes down into, its two plates; the
+					# arms north-west and north-east to the boulders; south, the lasers,
+					# and the elites' room beyond them.
+					var room: Rect2i = layout.rooms[0]
+					check(room.has_point(layout.start) and room.encloses(layout.arrival) and layout.buttons.size()==2 and layout.buttons.all(func(b): return room.encloses(Rect2i(b,Vector2i(2,2))) and not layout.arrival.grow(1).intersects(Rect2i(b,Vector2i(2,2)))),"Two pressure plates in the room he comes down into: "+label)
+					check(layout.boulders.size()==2 and layout.boulders.all(func(b): return b.y<room.position.y-10 and [b,b+Vector2i.RIGHT,b+Vector2i.DOWN,b+Vector2i.ONE].all(func(c): return layout.cells.has(c))) and layout.boulders.any(func(b): return b.x<room.position.x) and layout.boulders.any(func(b): return b.x>=room.end.x),"A boulder at the end of each hallway, north-west and north-east: "+label)
+					check(layout.lasers.size()==3 and layout.lasers.all(func(l): return layout.quiet[0].has_point(l.cell) and l.cell.y>room.end.y and not layout.cells.has(l.cell-l.dir)) and layout.elite_room.position.y>layout.lasers[-1].cell.y+8,"Lasers across the hallway south, the last room well beyond them: "+label)
+					check(layout.elite_posts.size()==3 and layout.elite_posts.all(func(c): return layout.elite_room.has_point(c) and layout.cells.has(c)),"Three posts in the last room: "+label)
+					check(layout.rooms.size()>=6 and not layout.gate.has_area() and not layout.vault.has_area(),"Rooms off the arms, and no gate: "+label)
 				var copy = Layout.new(); copy.generate(run_seed,level,place)
 				check(copy.cells==layout.cells and copy.start==layout.start,"Deterministic: "+label)
 				var signature = hash(layout.cells)
@@ -138,7 +293,10 @@ func test():
 	check(not game.has_way_on() or not (game.way_open() and game.has_way_on()),"The way down is shut while bandits remain")
 	# A bandit fights, and falls.
 	var bandit = game.enemies.filter(func(e): return e.kind=="bandit")[0]
-	game.player.position = bandit.position+Vector3(0,0,1.4)
+	# (On whichever side of him there is floor.)
+	for side in [Vector3(0,0,1.4),Vector3(0,0,-1.4),Vector3(1.4,0,0),Vector3(-1.4,0,0)]:
+		game.player.position = bandit.position+side
+		if world.fits(game.player.position) and world.clear_line(bandit.position,game.player.position): break
 	var hp: float = game.player.hp
 	for i in 120:
 		bandit.tick(1.0/60); game.tick_scheduled(1.0/60)
@@ -153,7 +311,7 @@ func test():
 	check(game.gated() and not world.gate_open and not world.fits(world.gate_point()) and not game.has_key(),"A locked gate bars the way to the stair")
 	check(layout0.vault.encloses(layout0.stairs) and layout0.vault.has_point(layout0.exit_cell),"The stair down is in the vault behind it")
 	var holder = game.key_holder
-	check(holder != null and world.key_rooms().any(func(r): return r.has_point(layout0.to_cell(holder.position))) and is_instance_valid(holder.visual.belt_key),"One bandit in a far room wears the key at his belt")
+	check(holder != null and not layout0.behind_gate(layout0.to_cell(holder.position)) and is_instance_valid(holder.visual.belt_key),"One bandit this side of the gate wears the key at his belt")
 	game.player.position = world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*1.5
 	game.hud.tick(0)
 	check("locked" in game.hud.prompt.text,"At the gate the HUD says it is locked")
@@ -198,7 +356,11 @@ func test():
 	check(game.pass_door(),"Walking into the stairs goes down them")
 	world = game.world
 	check(game.run.place=="basement" and game.run.floor==1 and world.layout.last and not game.has_way_on(),"The stair goes down to the second, last level")
-	check(game.enemies.all(func(e): return e.uid.begins_with("basement:1:")) and game.remaining()>expected,"More bandits wait below")
+	var below = 3
+	for count in Data.AREAS.basement[1].counts.values(): below += count
+	check(game.enemies.all(func(e): return e.uid.begins_with("basement:1:")) and game.remaining()==below,"More bandits wait below")
+	puzzle_and_elites()
+	world = game.world
 	# Back up, and down again: what was done stays done.
 	game.player.position = world.layout.arrival_position()
 	check(world.fits(game.player.position),"The foot of the stair back up can be stood at")
@@ -230,6 +392,10 @@ func test():
 	# A save from before the basement was laid out anew: its bandits stand again.
 	var older: Dictionary = game.run.duplicate(true)
 	older.version = 14; older.erase("keys")
+	var sixteen: Dictionary = game.run.duplicate(true)
+	sixteen.version = 16; sixteen.keys = ["basement:0:open"]; sixteen.bag = Items.empty_bag(); sixteen.boulders = [[1,1],[2,2]]
+	var seventeen: Dictionary = Save.migrate(sixteen)
+	check(Save.valid(sixteen) and seventeen.version==17 and seventeen.keys.is_empty() and Items.carries(seventeen,Game.GATE_KEY) and not seventeen.has("boulders") and not seventeen.dead.any(func(id): return id.begins_with("basement:")) and seventeen.position==[0,9],"A save from before the oval basement: its gate shut again with the key given back, its bandits standing again")
 	var renewed: Dictionary = Save.migrate(older)
 	check(Save.valid(older) and renewed.keys.is_empty() and not renewed.dead.any(func(id): return id.begins_with("basement:")) and renewed.cleared==["basement"],"An earlier save's basement is peopled again, still counted cleared")
 	# Out again.

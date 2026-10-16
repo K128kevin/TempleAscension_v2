@@ -575,6 +575,8 @@ func effects() -> Array:
 	if blazing_time>0: out.append(effect("blazing_speed","Blazing Speed",0,blazing_time,"Running 75%% faster and casting 50%% faster; fire spells cost nothing."))
 	if burn_left>0: out.append(effect("burning","Burning",0,burn_left,"Pyromaniac's fire: %d damage a second." % ceili(burn_rate),true))
 	if game.slowed>0: out.append(effect("chilled","Chilled",0,game.slowed,"Frozen to the bone: moving at half speed.",true,game.CHILL_SECONDS))
+	if game.stun_left>0: out.append(effect("stunned","Stunned",0,game.stun_left,"Dazed by an arrow: unable to move or act.",true))
+	if game.hobbled>0 and game.slowed<=0: out.append(effect("hobbled","Hobbled",0,game.hobbled,"Struck by an arrow: moving at half speed.",true))
 	return out
 
 func effect(id: String, title: String, stacks: int, left: float, text: String, debuff: bool = false, total: float = -1.0) -> Dictionary:

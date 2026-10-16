@@ -686,6 +686,22 @@ func rock_wall(pos: Vector3, dimensions: Vector3) -> Node3D:
 		rock.rotation.y = (0.0 if along_x else PI/2)+(chance.call(4.0)-.5)*.5+(PI if chance.call(5.0) > .5 else 0.0)
 	return run
 
+# Where nothing solid is set down: the basement's last level's ways for its
+# boulders (Layout.kept_clear), and the hallway of the lasers and the room
+# beyond (a statue in a beam's way would end it short).
+func kept_clear(cell: Vector2i) -> bool:
+	return layout.in_any(layout.kept_clear,cell) or layout.in_any(layout.quiet,cell)
+
+# The basement's last level's boulders, pressure plates and lasers
+# (scripts/basement_puzzle.gd), begun once the floor and its navigation are
+# laid; `kept` are the boulders' cells as saved.
+var puzzle = null
+func start_puzzle(game, kept: Array = []) -> void:
+	if layout.boulders.is_empty(): return
+	puzzle = preload("res://scripts/basement_puzzle.gd").new()
+	add_child(puzzle)
+	puzzle.setup(game,self,kept)
+
 # What a dungeon's rooms hold: the bandits' stores stacked in corners (crates,
 # barrels, sacks), solid to walk round and low enough to see over. The same
 # for the same seed.
@@ -705,7 +721,7 @@ func furnish_dungeon(run_seed: int) -> void:
 			if rng.randf() < .4: pile.append(corner+Vector2i(0,inward.y))
 			var free = true
 			for cell in pile:
-				if not layout.cells.has(cell) or layout.stairs.grow(2).has_point(cell) or layout.arrival.grow(2).has_point(cell) or layout.entry.grow(3).has_point(cell) or layout.gate.grow(3).has_point(cell): free = false
+				if not layout.cells.has(cell) or layout.stairs.grow(2).has_point(cell) or layout.arrival.grow(2).has_point(cell) or layout.entry.grow(3).has_point(cell) or layout.gate.grow(3).has_point(cell) or kept_clear(cell): free = false
 				for spot in keep_clear:
 					if (cell-spot).length() < 4.0: free = false
 			if not free: continue
@@ -754,7 +770,7 @@ func furnish_basement(run_seed: int) -> void:
 		if not layout.cells.has(cell) or layout.is_open(cell+back): return false
 		var side = Vector2i(absi(back.y),absi(back.x))
 		if layout.is_open(cell+back+side) or layout.is_open(cell+back-side): return false
-		if layout.stairs.grow(2).has_point(cell) or layout.arrival.grow(2).has_point(cell) or layout.entry.grow(3).has_point(cell) or layout.gate.grow(3).has_point(cell): return false
+		if layout.stairs.grow(2).has_point(cell) or layout.arrival.grow(2).has_point(cell) or layout.entry.grow(3).has_point(cell) or layout.gate.grow(3).has_point(cell) or kept_clear(cell): return false
 		for spot in keep_clear:
 			if (cell-spot).length() < 4.0: return false
 		return true
@@ -966,14 +982,6 @@ func pot(rng: RandomNumberGenerator, cell: Vector2i, back: Vector2i, show: Calla
 		standing = false
 	show.call(holder,cell,standing)
 
-# The rooms off the far half of the basement's hallway (not the vault), where
-# the gate's key is kept.
-func key_rooms() -> Array:
-	var far: Array = []
-	for i in range(1,layout.rooms.size()):
-		if layout.rooms[i] != layout.vault and layout.reach[i] > layout.hall_length*.5: far.append(layout.rooms[i])
-	return far
-
 # The basement's gate (scripts/basement_props.gd), GATE_HEIGHT tall under a
 # lintel up to the walls' top: barred to movement while it is locked, though
 # seen through, between its bars. `open_gate` swings it open over GATE_SWING
@@ -1147,6 +1155,11 @@ func post_allowed(cell: Vector2i) -> bool:
 	if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): return false
 	# (Nor behind the basement's gate, nor in its mouth.)
 	if layout.vault.has_point(cell) or (layout.gate.has_area() and layout.gate.grow(3).has_point(cell)): return false
+	# (Nor, on the basement's last level, in the hallway of the lasers or the
+	# room beyond, by a boulder, or on a pressure plate.)
+	if layout.in_any(layout.quiet,cell): return false
+	for stone in layout.boulders+layout.buttons:
+		if Rect2i(stone,Vector2i(2,2)).grow(2).has_point(cell): return false
 	var at = layout.to_world(cell)
 	return at.distance_to(spawn)>=9 and at.distance_to(exit_point)>=2.5 and fits(at,.45)
 
@@ -1217,17 +1230,6 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	for i in range(seeds.size()-1,0,-1):
 		var j = rng.randi_range(0,i)
 		var swap = seeds[i]; seeds[i] = seeds[j]; seeds[j] = swap
-	# Behind a gate: its key is carried by one of a clump begun first, in a
-	# room off the far half of the hallway.
-	var key_room = Rect2i()
-	if layout.gate.has_area():
-		var far: Array = key_rooms()
-		if not far.is_empty():
-			key_room = far[rng.randi_range(0,far.size()-1)]
-			var inside: Array[Vector2i] = []
-			var outside: Array[Vector2i] = []
-			for cell in seeds: (inside if key_room.has_point(cell) else outside).append(cell)
-			seeds = inside+outside
 	var sizes: Array[int] = clump_sizes(count,rng)
 	var placed: Array = []
 	var posts: Array[Dictionary] = []
@@ -1253,13 +1255,10 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 				posts.append({"at":at,"facing":post_facing(cell,middle,rng)})
 		apart -= 3.0
 	assert(sizes.is_empty(),"Generated floor has no room for its enemies' clumps")
+	# Behind a gate: its key is carried by any one of the bandits this side of it.
 	if layout.gate.has_area() and not posts.is_empty():
-		var holders: Array = posts.filter(func(p): return key_room.has_point(layout.to_cell(p.at)))
-		if holders.is_empty(): holders = posts.filter(func(p): return key_rooms().any(func(r): return r.has_point(layout.to_cell(p.at))))
-		if holders.is_empty():
-			holders = posts.duplicate()
-			holders.sort_custom(func(a,b): return a.at.distance_squared_to(spawn)>b.at.distance_squared_to(spawn))
-			holders.resize(1)
+		var holders: Array = posts.filter(func(p): return not layout.behind_gate(layout.to_cell(p.at)))
+		if holders.is_empty(): holders = posts.duplicate()
 		holders[rng.randi_range(0,holders.size()-1)]["key"] = true
 	for i in range(posts.size()-1,0,-1):
 		var j = rng.randi_range(0,i)
@@ -1549,6 +1548,8 @@ func fits(p: Vector3, radius: float = .4) -> bool:
 	for x in range(lo.x,hi.x+1):
 		for y in range(lo.y,hi.y+1):
 			if not layout.cells.has(Vector2i(x,y)): return false
+	# (The basement's boulders, wherever they have been rolled.)
+	if puzzle != null and puzzle.blocks(p,radius): return false
 	return true
 
 func move(from: Vector3, step: Vector3, radius: float = .4) -> Vector3:

@@ -509,6 +509,7 @@ func tick(dt: float) -> void:
 		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked"
 		elif game.way_open() and game.has_way_on() and game.player.position.distance_to(game.world.exit_point)<4: prompt.text = "The stairs lead down" if r.place == "basement" else "E · %s" % ("Descend" if r.place in Data.DUNGEONS else "Ascend")
 		elif r.place in Data.DUNGEONS and game.world.layout.arrival.has_area() and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair" if r.floor>0 else "E · Up the stair to the arena"
+		elif puzzle_prompt() != "": prompt.text = puzzle_prompt()
 		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
@@ -518,6 +519,17 @@ func tick(dt: float) -> void:
 		boss_bar.value = game.boss.hp
 	notice_time -= dt
 	notice.visible = notice_time > 0
+
+# The basement's last level: what its lasers and boulders want of him, when
+# he is near them (scripts/basement_puzzle.gd).
+func puzzle_prompt() -> String:
+	var puzzle = game.world.get("puzzle")
+	if puzzle == null: return ""
+	var at: Vector3 = game.player.position
+	if puzzle.lit and puzzle.struck(at,at,3.0): return "The beams burn through anything: weigh down both plates to quench them"
+	for b in puzzle.boulders:
+		if Vector2(b.to.x-at.x,b.to.z-at.z).length() < puzzle.BOULDER_RADIUS+1.2: return "Walk into the boulder to roll it"
+	return ""
 
 # The hotbar slot (Data) a tile of the bar shows: LMB's is the wizard's
 # LEFT_SLOT, then RMB and 1 to 4.
@@ -566,7 +578,7 @@ func place_title(r: Dictionary) -> String:
 	return "SUMMIT" if Data.summit(r) else "FLOOR %d" % (r.floor+1)
 
 func show_cast_bars() -> void:
-	var casting: Array = game.enemies.filter(func(e): return e.kind=="wizard" and not e.dead and e.visible and e.cast_total>0 and e.windup>0)
+	var casting: Array = game.enemies.filter(func(e): return e.role=="wizard" and not e.dead and e.visible and e.cast_total>0 and e.windup>0)
 	while cast_bars.size()<casting.size(): cast_bars.append(cast_bar())
 	for i in cast_bars.size():
 		var shown: bool = i<casting.size()
@@ -575,6 +587,8 @@ func show_cast_bars() -> void:
 		var caster = casting[i]
 		# Pushback can add more than the cast has left; the bar then sits empty.
 		cast_bars[i].value = clampf(1.0-caster.windup/caster.cast_total,0.0,1.0)
+		# (The basement healer's mending fills green.)
+		cast_bars[i].modulate = Color(.55,1.6,.6) if caster.healing else Color.WHITE
 		# Just above where the hover health bar sits.
 		var head: Vector3 = caster.position+Vector3.UP*caster.config.size*2.25
 		cast_bars[i].position = game.world.camera.unproject_position(head)-Vector2(cast_bars[i].size.x*.5,24)

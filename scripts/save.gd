@@ -4,7 +4,24 @@ const Items = preload("res://scripts/items.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=16: return d
+	if int(d.get("version",0))>=17: return d
+	if int(d.get("version",0))==16:
+		# The basement was laid out anew under the arena's oval: its bandits
+		# (known by their number on a level) stand again in their new places,
+		# what lay on its floors is gone, and a hero who was down there is set
+		# back at the foot of the level's stair. A gate opened before is shut
+		# again, its key given back.
+		var updated = d.duplicate(true)
+		updated.version = 17
+		var keys: Array = updated.get("keys",[]) if updated.get("keys") is Array else []
+		if keys.any(func(k): return str(k).begins_with("basement:")) and updated.get("bag") is Array and not Items.carries(updated,"gate_key"): Items.stow(updated,Items.make("gate_key"))
+		updated.keys = keys.filter(func(k): return not str(k).begins_with("basement:"))
+		updated.dead = updated.get("dead",[]).filter(func(id): return not str(id).begins_with("basement:"))
+		updated.erase("boulders")
+		if updated.get("place","") == "basement":
+			updated.drops = []
+			updated.position = [0,9]
+		return updated
 	if int(d.get("version",0))==15:
 		# Every item was remade (scripts/items.gd): what was an item's id is now
 		# an instance, a base with its prefix and suffix. A character from
@@ -18,7 +35,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 		if had_key: Items.stow(updated,Items.make("gate_key"))
 		updated.drops = []
 		updated["migration_notice"] = true
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==14:
 		# The basement's gates and their keys: none held yet. Its levels were
 		# laid out anew, so the bandits slain there (known by their number on
@@ -163,7 +180,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<16:
+	if int(d.get("version",0))<17:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():

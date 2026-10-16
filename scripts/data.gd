@@ -13,9 +13,10 @@ const DUNGEONS = ["basement","cave"]
 # and with bows. The temple's first floor holds gladiators, archers and lions;
 # its second adds Oracles (and has the fountain court); on its third
 # centurions stand in the gladiators' place (and it has the terraces); its
-# summit, the Crowned Statue.
+# summit, the Crowned Statue. (`elites`: the few who hold a level's last
+# room, each at its own post there: the basement's, beyond its lasers.)
 const AREAS = {
-	"basement":[{"level":1,"counts":{"bandit":36,"bandit_archer":20}},{"level":3,"counts":{"bandit":52,"bandit_archer":32}}],
+	"basement":[{"level":1,"counts":{"bandit":28,"bandit_archer":16}},{"level":3,"counts":{"bandit":24,"bandit_archer":14},"elites":["bandit_champion","bandit_marksman","bandit_healer"]}],
 	"cave":[{"level":5,"counts":{"bandit":29,"bandit_archer":18}},{"level":8,"counts":{"bandit":36,"bandit_archer":23}}],
 	"temple":[{"level":11,"counts":{"gladiator":35,"archer":20,"lion":16}},
 		{"level":15,"counts":{"gladiator":36,"archer":23,"lion":26,"wizard":16}},
@@ -43,6 +44,16 @@ const ENEMIES = {
 	# (scripts/bandit.gd), a man or a woman.
 	"bandit":{"title":"Bandit","as":"gladiator","human":"bandit","hp":45.0,"damage":10.5,"speed":3.7,"range":1.9,"interval":1.0,"weapon":"sword","size":1.0,"color":Color(.5,.4,.3)},
 	"bandit_archer":{"title":"Bandit Archer","as":"archer","human":"bandit","hp":27.0,"damage":15.0,"speed":3.6,"range":10.6,"interval":1.3,"weapon":"bow","size":1.0,"color":Color(.5,.4,.3)},
+	# The three who hold the basement's last room. The champion bears a
+	# scutum and heavy armor (`armor`, as Actor.armor). The marksman's arrows
+	# strike hard, and every `stun_shot` seconds one stuns the hero for
+	# `stun` seconds and hobbles him for `slow`. The healer fights as an
+	# Oracle does, with a quicker bolt between fireballs (`bolt`), and mends
+	# his fellows (`heals`, a share of their health) with a HEAL_CAST spell
+	# that a hurt breaks off (Actor).
+	"bandit_champion":{"title":"Bandit Champion","as":"gladiator","human":"bandit","hp":210.0,"damage":21.0,"speed":3.9,"range":1.9,"interval":.9,"weapon":"sword","shield":"scutum","armor":90.0,"size":1.12,"color":Color(.5,.4,.3)},
+	"bandit_marksman":{"title":"Bandit Marksman","as":"archer","human":"bandit","hp":120.0,"damage":36.0,"speed":3.7,"range":12.5,"interval":1.1,"weapon":"bow","stun_shot":7.0,"stun":2.0,"slow":4.0,"size":1.06,"color":Color(.5,.4,.3)},
+	"bandit_healer":{"title":"Bandit Healer","as":"wizard","human":"bandit","hp":110.0,"damage":30.0,"speed":4.0,"range":11.0,"interval":2.2,"weapon":"staff","bolt":true,"heals":.3,"size":1.06,"color":Color(.5,.4,.3)},
 	"boss":{"title":"The Crowned Statue","hp":1875.0,"damage":101.25,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
 const Items = preload("res://scripts/items.gd")
@@ -96,7 +107,7 @@ static func casts_left(run: Dictionary) -> bool:
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	var run = {"version":16,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"keys":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	var run = {"version":17,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"keys":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 	Items.outfit(run,class_id)
 	return run
 
@@ -274,7 +285,7 @@ static func gain_xp(run: Dictionary, amount: int) -> int:
 	return int(run.level)-before
 
 static func enemy_xp(run: Dictionary, kind: String) -> int:
-	var base: int = {"bandit":26,"bandit_archer":22,"gladiator":65,"archer":55,"lion":60,"wizard":80,"centurion":120,"boss":1800}[kind]
+	var base: int = {"bandit":26,"bandit_archer":22,"bandit_champion":140,"bandit_marksman":120,"bandit_healer":130,"gladiator":65,"archer":55,"lion":60,"wizard":80,"centurion":120,"boss":1800}[kind]
 	var level: int = enemy_level(run)
 	var penalty = maxf(.1,1.0-maxi(0,int(run.level)-level-3)*.12)
 	return maxi(1,roundi(base*(1.0+(level-1)*.2)*penalty))

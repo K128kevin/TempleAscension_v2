@@ -72,6 +72,9 @@ const WIZARD_GLYPHS = {
 # Effects on the hero that are no skill's own (the HUD's row of buffs and
 # debuffs), and the wizard's Barrier.
 const EFFECT_GLYPHS = {
+	# (Struck by the marksman's arrow: a halo of stars, and an arrow in a foot.)
+	"stunned":[["a",.5,.56,.34,0,360],["d",.5,.22,.06],["d",.18,.62,.05],["d",.82,.62,.05],["l",.4,.5,.6,.5]],
+	"hobbled":[["l",.12,.2,.62,.7],["l",.5,.7,.62,.7,.62,.58],["l",.1,.3,.2,.2,.1,.1],["l",.5,.9,.86,.9,.86,.74]],
 	# (The dash and the healing spell, under the hotbar.)
 	"dash":[["l",.1,.36,.4,.36],["l",.04,.5,.4,.5],["l",.1,.64,.4,.64],["l",.48,.26,.7,.5,.48,.74],["l",.68,.26,.9,.5,.68,.74]],
 	"teleport":[["a",.26,.66,.15,0,50],["a",.26,.66,.15,95,145],["a",.26,.66,.15,190,240],["a",.26,.66,.15,285,335],["c",.74,.34,.15],
