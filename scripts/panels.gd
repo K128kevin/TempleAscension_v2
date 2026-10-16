@@ -112,7 +112,7 @@ func setup(owner_hud) -> void:
 
 # Small readable text: the HUD's label with a thinner outline.
 func text(value: String, font_size: int, color: Color, parent: Node) -> Label:
-	var l = hud.label(value,font_size,color,parent)
+	var l = hud.label(value,maxi(font_size,12),color,parent)
 	l.add_theme_constant_override("outline_size",2)
 	return l
 
@@ -121,8 +121,8 @@ func small_button(value: String, font_size: int, callback: Callable) -> Button:
 	var b = Button.new()
 	b.text = value
 	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size",font_size)
-	b.add_theme_color_override("font_disabled_color",Color(.4,.39,.36))
+	b.add_theme_font_size_override("font_size",maxi(font_size,12))
+	b.add_theme_color_override("font_disabled_color",hud.Shrine.DISABLED_TEXT)
 	for state in ["normal","hover","pressed","disabled"]:
 		var style = hud.Shrine.button(state,3)
 		style.set_content_margin_all(3)
@@ -146,7 +146,7 @@ func plus_button(right: bool, callback: Callable) -> Button:
 
 func frame(width: float) -> PanelContainer:
 	var p = PanelContainer.new()
-	var style = hud.Shrine.panel(20)
+	var style = hud.Shrine.panel(14,10) if width>0 else hud.Shrine.panel(20)
 	p.add_theme_stylebox_override("panel",style)
 	p.custom_minimum_size.x = width
 	hud.root.add_child(p)
@@ -198,7 +198,7 @@ func open(wanted: String) -> void:
 	for t in TABS:
 		bodies[t].visible = t==tab
 		for look in ["normal","hover","pressed"]: tab_buttons[t].add_theme_stylebox_override(look,tab_styles["on" if t==tab else ("off" if look=="normal" else "over")])
-		tab_buttons[t].add_theme_color_override("font_color",hud.gold if t==tab else dim)
+		tab_buttons[t].add_theme_color_override("font_color",hud.Shrine.TAB_TEXT if t==tab else hud.cream)
 	stats = window if tab=="stats" else null
 	tree = window if tab=="skills" else null
 	bag = window if tab=="bag" else null
@@ -218,10 +218,8 @@ func build() -> void:
 	all.add_theme_constant_override("separation",8)
 	window.add_child(all)
 	if tab_styles.is_empty():
-		for look in [["on",Color(.16,.13,.07),hud.gold],["off",Color(.06,.062,.066),Color(.3,.27,.2)],["over",Color(.12,.11,.09),Color(.5,.44,.3)]]:
-			var style = hud.Shrine.button("hover" if look[0]=="on" else ("normal" if look[0]=="off" else "pressed"),4)
-			style.content_margin_left = 10; style.content_margin_right = 10
-			tab_styles[look[0]] = style
+		for state in ["on","off","over"]:
+			tab_styles[state] = hud.Shrine.tab(state=="on",state=="over")
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation",4)
 	all.add_child(row)
@@ -229,7 +227,9 @@ func build() -> void:
 		var b = Button.new()
 		b.text = TAB_TITLES[t]
 		b.focus_mode = Control.FOCUS_NONE
-		b.add_theme_font_size_override("font_size",13)
+		b.add_theme_font_size_override("font_size",hud.Shrine.TAB_SIZE)
+		for state in ["font_hover_color","font_pressed_color","font_hover_pressed_color"]:
+			b.add_theme_color_override(state,hud.Shrine.TAB_TEXT)
 		b.pressed.connect(func(): open(t))
 		row.add_child(b)
 		tab_buttons[t] = b
@@ -393,7 +393,7 @@ func slot(place: String) -> Control:
 	icon.position = Vector2(3,3); icon.size = Vector2(SLOT-6,SLOT-6)
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	square_frame.add_child(icon)
-	var name_label = text("",9,Color(.42,.41,.38),square_frame)
+	var name_label = text("",11,dim,square_frame)
 	name_label.position = Vector2(1,0); name_label.size = Vector2(SLOT-2,SLOT)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -623,7 +623,7 @@ func refresh_bag() -> void:
 		s.icon.texture = item_icon(inst) if not inst.is_empty() else null
 		# An empty equipment slot says what goes there; an item with no picture, its name.
 		s.name.text = (Items.SLOT_TITLES[place] if not Items.in_bag(place) else "") if inst.is_empty() else (Items.name_of(inst) if s.icon.texture == null else "")
-		s.name.add_theme_color_override("font_color",Color(.42,.41,.38) if inst.is_empty() else Items.color(inst))
+		s.name.add_theme_color_override("font_color",dim if inst.is_empty() else Items.color(inst))
 		s.frame.add_theme_stylebox_override("panel",slot_styles["empty" if inst.is_empty() else Items.rarity(inst)])
 	if is_instance_valid(figure):
 		if figure.worn != r.equipment: figure.wear(r.equipment)
@@ -644,8 +644,8 @@ func square(id: String) -> Button:
 	icon.position = Vector2(9,5)
 	icon.size = Vector2(NODE-18,NODE-18)
 	var rank = text("",10,dim,b)
-	rank.position = Vector2(0,NODE-16)
-	rank.size = Vector2(NODE-4,14)
+	rank.position = Vector2(0,NODE-18)
+	rank.size = Vector2(NODE-4,18)
 	rank.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var slot = text("",9,hud.cream,b)
 	slot.position = Vector2(4,1)
@@ -731,7 +731,7 @@ func refresh() -> void:
 			var state = "maxed" if rank>=s.max_rank else ("learned" if rank>0 else ("open" if Book.locked(r,id).is_empty() else "locked"))
 			n.icon.show_skill(id,{"locked":Color(.36,.36,.35),"open":hud.cream,"learned":hud.gold,"maxed":Color(1,.86,.5)}[state])
 			n.rank.text = "%d/%d" % [rank,s.max_rank]
-			n.rank.add_theme_color_override("font_color",green if Book.can_learn(r,id) else (hud.gold if rank>0 else Color(.42,.41,.38)))
+			n.rank.add_theme_color_override("font_color",green if Book.can_learn(r,id) else (hud.gold if rank>0 else dim))
 			var slot: int = r.hotbar.find(id)
 			n.slot.text = slot_name(slot) if slot>=0 else ""
 			if n.state != state:

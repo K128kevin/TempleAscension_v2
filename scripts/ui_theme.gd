@@ -3,11 +3,15 @@ extends RefCounted
 ## are supplied by callers; all chrome uses this same stone and gold vocabulary.
 const STONE = Color(.76,.63,.43)
 const GOLD = Color(.96,.8,.49)
-const TEXT = Color(.97,.92,.81)
-const MUTED = Color(.67,.61,.5)
+const TEXT = Color("f6f1e7")
+const MUTED = Color("d4c9b3")
+const DISABLED_TEXT = Color("aaa18f")
+const TAB_TEXT = Color("fff8e9")
+const TAB_SIZE = 16
 const INSET = Color(.065,.052,.037,.97)
 const EDGE = Color(.48,.37,.22)
 const PANEL = preload("res://assets/ui/shrine_panel.png")
+const Frame = preload("res://scripts/shrine_style.gd")
 
 static var title_face: SystemFont
 
@@ -17,20 +21,30 @@ static func heading() -> Font:
 		title_face.font_names = PackedStringArray(["Palatino Linotype","Palatino","Georgia","Times New Roman","serif"])
 	return title_face
 
-static func panel(padding: float = 20.0) -> StyleBoxTexture:
-	var s = StyleBoxTexture.new()
+static func panel(padding: float = 20.0, border: float = 16.0) -> StyleBox:
+	var s = Frame.new()
 	s.texture = PANEL
-	# Imported at 192px: retain the carved corners while the edges stretch.
+	# Full-resolution source with equal, repeating borders at this display width.
 	for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:
-		s.set_texture_margin(side,28)
+		s.set_texture_margin(side,border)
 		s.set_content_margin(side,padding)
 	return s
 
-static func button(state: String = "normal", padding: float = 6.0) -> StyleBoxTexture:
+static func button(state: String = "normal", padding: float = 6.0) -> StyleBox:
 	var s = panel(padding)
+	# Narrower trim leaves a dark text area even on short buttons.
+	s.set_texture_margin_all(8)
 	s.content_margin_left = maxf(10,padding)
 	s.content_margin_right = maxf(10,padding)
 	s.modulate_color = {"normal":Color(.85,.8,.7),"hover":Color(1.13,1.06,.91),"pressed":Color(.69,.6,.44),"focus":Color(1.1,.97,.7),"disabled":Color(.43,.4,.34,.8)}.get(state,Color.WHITE)
+	return s
+
+static func tab(active: bool, hovered: bool = false) -> StyleBoxFlat:
+	var s = inset(GOLD if active else EDGE)
+	s.bg_color = Color("30271b") if active else (Color("292217") if hovered else Color("191610"))
+	s.border_width_top = 3 if active else 1
+	s.set_content_margin_all(7)
+	s.content_margin_left = 10; s.content_margin_right = 10
 	return s
 
 static func inset(tone: Color = EDGE, active: bool = false) -> StyleBoxFlat:
@@ -50,7 +64,9 @@ static func make() -> Theme:
 		t.set_color("font_color",type,TEXT)
 		t.set_color("font_hover_color",type,Color(1,.96,.85))
 		t.set_color("font_pressed_color",type,GOLD)
-		t.set_color("font_disabled_color",type,MUTED.darkened(.3))
+		t.set_color("font_disabled_color",type,DISABLED_TEXT)
+		t.set_color("font_hover_pressed_color",type,TEXT)
+		t.set_color("font_focus_color",type,TEXT)
 		t.set_color("font_outline_color",type,Color(.025,.018,.011))
 		t.set_constant("outline_size",type,2)
 	for type in ["Button","OptionButton","CheckButton","CheckBox"]:
@@ -61,11 +77,11 @@ static func make() -> Theme:
 		t.set_stylebox("focus",type,focus)
 	t.set_stylebox("panel","PanelContainer",panel())
 	t.set_stylebox("panel","Panel",inset())
-	t.set_stylebox("panel","PopupMenu",panel(18))
+	t.set_stylebox("panel","PopupMenu",panel(14,10))
 	t.set_stylebox("hover","PopupMenu",inset(GOLD,true))
 	t.set_stylebox("separator","PopupMenu",inset(EDGE))
 	t.set_font_size("font_size","PopupMenu",14)
-	t.set_stylebox("panel","TooltipPanel",panel(18))
+	t.set_stylebox("panel","TooltipPanel",panel(14,10))
 	t.set_color("font_color","TooltipLabel",TEXT)
 	t.set_font_size("font_size","TooltipLabel",13)
 	for state in ["normal","focus","read_only"]: t.set_stylebox(state,"LineEdit",inset(GOLD if state=="focus" else EDGE))

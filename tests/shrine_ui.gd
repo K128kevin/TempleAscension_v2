@@ -7,6 +7,13 @@ const Bindings = preload("res://scripts/combat_bindings.gd")
 var passed: Array[String] = []
 var failed: Array[String] = []
 
+class DrawProbe:
+	extends "res://scripts/shrine_style.gd"
+	var calls = 0
+	func _draw(item: RID, area: Rect2) -> void:
+		calls += 1
+		super._draw(item,area)
+
 func _initialize() -> void: call_deferred("test")
 func check(ok: bool, message: String) -> void:
 	if ok: passed.append(message)
@@ -25,7 +32,53 @@ func click(control: Control) -> void:
 		root.push_input(event,true); await frames()
 func carved(control: Control, style: String = "panel") -> bool:
 	var s = control.get_theme_stylebox(style)
-	return s is StyleBoxTexture and s.texture==Shrine.PANEL
+	return s.get_script()==Shrine.Frame and s.texture==Shrine.PANEL
+
+func luminance(color: Color) -> float:
+	var linear = color.srgb_to_linear()
+	return linear.r*.2126+linear.g*.7152+linear.b*.0722
+
+func contrast(ink: Color, background: Color) -> float:
+	var a = luminance(ink); var b = luminance(background)
+	return (maxf(a,b)+.05)/(minf(a,b)+.05)
+
+func readable_tabs(panels) -> bool:
+	for button in panels.tab_buttons.values():
+		var font: Font = button.get_theme_font("font")
+		var size: int = button.get_theme_font_size("font_size")
+		var style: StyleBox = button.get_theme_stylebox("normal")
+		if size<16 or font.get_string_size(button.text,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x+style.get_margin(SIDE_LEFT)+style.get_margin(SIDE_RIGHT)>button.size.x+.5: return false
+		for state in [["normal","font_color"],["hover","font_hover_color"],["pressed","font_pressed_color"]]:
+			var background: StyleBoxFlat = button.get_theme_stylebox(state[0])
+			if contrast(button.get_theme_color(state[1]),background.bg_color)<7: return false
+	return true
+
+func check_frames() -> void:
+	var large = Shrine.panel()
+	var small = Shrine.make().get_stylebox("panel","TooltipPanel")
+	check(small.texture_margin_top<large.texture_margin_top and large.texture_margin_top<28,"Popup borders are thinner, with an even smaller frame for tooltips")
+	var canvas = RenderingServer.canvas_item_create()
+	var probe = DrawProbe.new()
+	probe.texture = Shrine.PANEL
+	probe.draw(canvas,Rect2(0,0,660,560))
+	check(probe.calls==1,"Godot invokes the custom tiled-frame renderer rather than the built-in stretched style")
+	for style in [large,small,Shrine.button()]:
+		for size in [Vector2(26,26),Vector2(250,180),Vector2(660,560),Vector2(2000,1100)]:
+			var area = Rect2(Vector2(13,17),size)
+			var segments: Array = style.patches(area)
+			var valid = true
+			var covered = 0.0
+			for segment in segments:
+				var source_size: Vector2 = Vector2(segment.source.size.y,segment.source.size.x) if segment.transpose else segment.source.size
+				var scale: Vector2 = segment.destination.size/source_size
+				valid = valid and absf(scale.x-scale.y)<.0001 and area.grow(.001).encloses(segment.destination)
+				covered += segment.destination.get_area()
+			var corners: Array = segments.filter(func(p): return p.source.size.is_equal_approx(Vector2.ONE*Shrine.PANEL.get_width()*style.SOURCE_BORDER_RATIO))
+			valid = valid and corners.size()==4 and corners.all(func(p): return p.destination.size.is_equal_approx(corners[0].destination.size))
+			check(valid and absf(covered-area.get_area())<1,"Frame tiles cover %s with equal corners and no change to any tile's aspect ratio" % size)
+			# Exercise the actual canvas submission, even with a headless renderer.
+			style.draw(canvas,area)
+	RenderingServer.free_rid(canvas)
 func capture(name: String) -> void:
 	if "--render-shrine" not in OS.get_cmdline_user_args(): return
 	await frames(); await RenderingServer.frame_post_draw
@@ -40,8 +93,9 @@ func test() -> void:
 	var hud = game.hud
 	var panels = hud.panels
 	check(hud.art_style==hud.Art.DEFAULT and hud.art_backplate.visible,"Sandstone Shrine is active in normal mode, superseding old preview settings")
-	check(Shrine.PANEL.get_width()==192 and Shrine.PANEL.get_image().has_mipmaps(),"Shared nine-patch imports at UI scale with mipmaps")
-	check(hud.root.theme.get_stylebox("panel","PanelContainer") is StyleBoxTexture and carved(panels.stat_plus,"normal"),"Shared windows and compact buttons use the sandstone artwork")
+	check(Shrine.PANEL.get_width()==1254 and Shrine.PANEL.get_image().has_mipmaps(),"Shared nine-patch retains the full-resolution source with mipmaps")
+	check_frames()
+	check(hud.root.theme.get_stylebox("panel","PanelContainer").get_script()==Shrine.Frame and carved(panels.stat_plus,"normal"),"Shared windows and compact buttons use the sandstone artwork")
 	var picture: Image = hud.art_backplate.texture.get_image()
 	for dimensions in [Vector2i(1120,700),Vector2i(1280,720),Vector2i(1440,900)]:
 		root.size=dimensions; await frames(); hud.tick(0)
@@ -65,6 +119,7 @@ func test() -> void:
 			for tab in panels.TABS:
 				panels.open(tab); await frames(); hud.tick(0); await frames()
 				check(root.get_visible_rect().encloses(panels.window.get_global_rect()) and carved(panels.window),"%s %s window fits and uses carved stone at %s" % [class_id,tab,dimensions])
+				check(readable_tabs(panels),"%s tabs use larger text, strong contrast in every state and no clipping at %s" % [tab,dimensions])
 			panels.close(); await frames()
 	game.run=Data.new_run("warrior"); game.mode="playing"; game.end_intro()
 	Data.Skills.learn(game.run,"cleave"); game.run.hotbar[0]="cleave"
@@ -115,7 +170,7 @@ func test() -> void:
 	panels.close(); await frames(); panels.open_inventory(); panels.hovered_item="head"; hud.tick(0); await frames()
 	check(carved(panels.item_tip),"Item details use the same carved frame while preserving rarity colours")
 	await capture("inventory")
-	check(hud.root.theme.get_stylebox("panel","TooltipPanel") is StyleBoxTexture and hud.root.theme.get_stylebox("panel","PopupMenu") is StyleBoxTexture,"Native tooltips and popup menus share sandstone chrome")
+	check(hud.root.theme.get_stylebox("panel","TooltipPanel").get_script()==Shrine.Frame and hud.root.theme.get_stylebox("panel","PopupMenu").get_script()==Shrine.Frame,"Native tooltips and popup menus share sandstone chrome")
 	check(hud.root.theme.get_stylebox("grabber","VScrollBar").border_color==Shrine.STONE,"Scrollbars share the shrine palette")
 	FileAccess.open("res://test-results/shrine-ui.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))
 	print("SHRINE_UI ",passed.size()," passed; ",failed)

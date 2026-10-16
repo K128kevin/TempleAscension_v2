@@ -112,6 +112,7 @@ func setup(owner_game) -> void:
 	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	add_child(root)
 	root.theme = Shrine.make()
 	art_backplate = TextureRect.new()
@@ -140,7 +141,7 @@ func setup(owner_game) -> void:
 	difficulty = label("",16,cream,root)
 	anchor(difficulty,Vector2(1,0),Vector2(-464,81),Vector2(440,24))
 	difficulty.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	direction = label("",14,Color(.7,.68,.59),root)
+	direction = label("",14,Shrine.MUTED,root)
 	anchor(direction,Vector2(1,0),Vector2(-464,108),Vector2(440,24))
 	direction.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	character_info = label("",15,gold,root)

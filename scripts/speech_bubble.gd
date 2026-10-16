@@ -21,7 +21,7 @@ var words = ""
 var typed = 0
 var clock = 0.0
 var line: Label
-var frame = Shrine.panel(18)
+var frame = Shrine.panel(14,10)
 
 func setup(said: String, size_px: int = 14) -> void:
 	words = said

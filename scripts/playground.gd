@@ -142,7 +142,7 @@ func build_panel() -> void:
 	var leave = compact(Button.new(),"Leave (Shift+P)")
 	leave.pressed.connect(func(): game.leave_playground())
 	body.add_child(leave)
-	var help = hud.label("Click a unit or Shift+click to attack. Statue: click ground to move, RMB attack, 1 special.",11,Color(.75,.72,.62),body)
+	var help = hud.label("Click a unit or Shift+click to attack. Statue: click ground to move, RMB attack, 1 special.",12,hud.Shrine.MUTED,body)
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.custom_minimum_size.x = 158
 

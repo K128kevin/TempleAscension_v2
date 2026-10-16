@@ -131,7 +131,7 @@ func row(id: String) -> Button:
 	var name_label = hud.label(item.name,14,Items.color(id),b)
 	name_label.position = Vector2(ICON+12,4)
 	var rarity: String = item.get("rarity","starting")
-	var kind_label = hud.label("%s · %s%s" % [rarity.capitalize(),about.kind,"" if about.note.is_empty() else " · can't use"],11,Color(.62,.6,.53),b)
+	var kind_label = hud.label("%s · %s%s" % [rarity.capitalize(),about.kind,"" if about.note.is_empty() else " · can't use"],12,hud.Shrine.MUTED,b)
 	kind_label.position = Vector2(ICON+12,24)
 	if rarity == "common":
 		var x = 300.0
