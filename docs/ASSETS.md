@@ -1274,14 +1274,15 @@ are created for the UI.
 
 ### Sandstone Shrine interface
 
-The selected production theme uses `assets/ui/hud/sandstone_shrine_v2.png`
+The selected production theme uses `assets/ui/hud/sandstone_shrine_v3.png`
 (2172 × 724, RGBA, real transparent orb holes and exterior) and
 `assets/ui/shrine_panel.png` (1254 × 1254, imported at full resolution with mipmaps;
 its borders repeat at a fixed scale and its centre crops/repeats at native size). Both were generated with the built-in imagegen tool on 2026-10-16,
 using the original Sandstone Shrine frame as the edit/style reference. The
 new frame contains empty recesses for six dynamic skill bindings and clickable
 dash/heal controls. All icons, key labels, names, cooldowns and resource fills
-remain live game controls. The shared panel and stone/gold palette supply the
-rest of the game UI. Original HUD previews remain available in debug mode.
+remain live game controls. The shared panel and muted stone/gold palette supply the
+rest of the game UI. The v3 HUD edit removes the broad fluting and lower scrolls
+from the orb surrounds; both the carved bands and shader bezels are thinner. Original HUD previews remain available in debug mode.
 Exact prompts, source output paths and integration details are in
 [HUD_ART.md](HUD_ART.md).

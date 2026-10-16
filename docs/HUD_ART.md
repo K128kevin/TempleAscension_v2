@@ -6,7 +6,7 @@ Created 2026-10-16 with the built-in imagegen tool. Each new source asset is a 2
 | --- | --- | --- |
 | Current · Classic | Existing HUD, no new frame | Original compact bronze-rimmed circles and skill tiles |
 | Imperial Bronze | [imperial_bronze.png](../assets/ui/hud/imperial_bronze.png) | Aged bronze, gold laurel and incised meander |
-| Sandstone Shrine · default | [sandstone_shrine_v2.png](../assets/ui/hud/sandstone_shrine_v2.png) | Integrated skill and utility sockets, weathered stone, fluting and gold inlay |
+| Sandstone Shrine · default | [sandstone_shrine_v3.png](../assets/ui/hud/sandstone_shrine_v3.png) | Integrated skill and utility sockets, weathered stone, fluting and gold inlay |
 | Obsidian Oracle | [obsidian_oracle.png](../assets/ui/hud/obsidian_oracle.png) | Black stone, silver crescents and dim teal insets |
 | Crimson Legion | [crimson_legion.png](../assets/ui/hud/crimson_legion.png) | Leather bindings, iron plates, bronze rivets and burgundy cloth |
 
@@ -18,7 +18,7 @@ Launch Debug Mode, show the debug panel with P if needed, and use its HUD artwor
 
 The frame is a mouse-ignoring TextureRect behind the existing HUD controls. Every option keeps the same health and energy ColorRects and their circular liquid-fill shader, the same six live skill buttons, their hotkeys, cooldown labels, and the dash/heal widgets. The wizard retains blue mana; other classes retain green energy; health remains red. Style swaps preserve all resource values and game state.
 
-The registry is scripts/hud_art.gd. It records the measured transparent hole centres and opaque bounds of each generated asset, plus the palette. The integrated Sandstone frame displays at 660 pixels wide; other frames display at 600 pixels wide; the circular gauges retain their original 112-pixel displayed diameter and are aligned with the art's openings. The six skills remain bottom-centred; utility tiles flank the new central carving. Gauge bezels, hotbar borders and key labels use a matching palette. Classic restores its original HUD layout and absence of a backplate, with the shared theme on surrounding controls. Source images use lossless import, generated mipmaps and bilinear mip filtering for clean downsampling. The debug action list scrolls to keep the selector visible on smaller windows.
+The registry is scripts/hud_art.gd. It records the measured transparent hole centres and opaque bounds of each generated asset, plus the palette. The integrated Sandstone frame displays at 652 pixels wide; other frames display at 600 pixels wide; the circular gauges retain their original 112-pixel displayed diameter and are aligned with the art's openings. The six skills remain bottom-centred; utility tiles flank the new central carving. Gauge bezels, hotbar borders and key labels use a matching palette. Classic restores its original HUD layout and absence of a backplate, with the shared theme on surrounding controls. Source images use lossless import, generated mipmaps and bilinear mip filtering for clean downsampling. The debug action list scrolls to keep the selector visible on smaller windows.
 
 ## Validation and captures
 
@@ -34,11 +34,11 @@ The five screenshots are written to test-results/hud-art-<style-id>.png. Tests u
 
 ## Game-wide theme and live sockets
 
-The revised Sandstone artwork has six empty carved skill recesses and two utility recesses. Hit targets contain transparent styles and subtle hover/active feedback, rather than opaque square buttons placed over the masonry. Icons, weapon art, skill names, key labels, disabled states and cooldowns remain live. Dash and heal are now clickable; a clicked evade moves forward from the hero, while the keyboard evade continues toward the world cursor. Wizard evade changes to teleport.
+The current Sandstone artwork (`sandstone_shrine_v3.png`) has slimmer orb surrounds, six empty carved skill recesses and two utility recesses. Hit targets contain transparent styles and subtle hover/active feedback, rather than opaque square buttons placed over the masonry. Icons, weapon art, skill names, key labels, disabled states and cooldowns remain live. Dash and heal are now clickable; a clicked evade moves forward from the hero, while the keyboard evade continues toward the world cursor. Wizard evade changes to teleport.
 
 `scripts/ui_theme.gd` owns the reusable carved panel, palette, typography and states. `assets/ui/shrine_panel.png` is the generated 1254 × 1254 source, imported losslessly at its full 1254px resolution with mipmaps. It supplies the attributes, skills and inventory windows, menus (difficulty, class creation, pause, death, completion and conversations), item and skill details, native tooltips and dropdown popups, speech bubbles, debug panel/browser and playground. Compact inventory/skill sockets, buffs, resource/cast bars, ground-item labels, scrollbars and controls use matching stone/gold borders and dark recesses. Health, energy/mana, rarity, buffs/debuffs and comparison colours retain their meanings. Menus add a warm translucent backdrop and classical serif headings.
 
-The readability pass uses ivory primary text and brighter secondary text. Character tabs use 16px text on dark inset backgrounds, with at least 7:1 contrast in normal, hover and pressed states; character-panel labels have a 12px minimum. Their tab state is indicated by the gold rim rather than dimming the title.
+The readability pass uses soft ivory primary text and muted secondary text. Character tabs use 16px text on dark inset backgrounds, with at least 7:1 contrast in normal, hover and pressed states; character-panel labels have a 12px minimum. Their tab state is indicated by the gold rim rather than dimming the title.
 
 `scripts/shrine_style.gd` keeps source sampling separate from displayed borders: 16px square corner regions for ordinary windows, 10px for tooltips/popups and 8px for buttons. It reflects the same source corner/edge around all four sides, so the bottom cannot become thicker than the top. Edge strips repeat at a uniform scale in both axes; the last tile is cropped. The charcoal centre also crops/repeats at native resolution. Large windows do not stretch border motifs or magnify a small background image. UI texture filtering uses linear mipmaps for clean downsampling.
 
@@ -105,3 +105,21 @@ Use case: precise-object-edit. Asset type: transparent production game HUD chass
 ### Shared panel texture
 
 Use case: stylized-concept. Asset type: production 9-slice game UI panel texture, square, flat orthographic front face. Create a reusable Sandstone Shrine panel matching the referenced game's pale ivory sandstone and antique gold inlay HUD. A perfectly rectangular carved sandstone frame with subtly chamfered corners, fine gold inner bead and very restrained geometric temple engraving. The entire frame must stay within the outermost 8 percent of the square; preserve a vast completely empty opaque charcoal-brown matte stone interior for live readable text and widgets. Each edge is straight and uniform along its middle 80 percent so it can stretch in a nine-patch. Tiny sculpted corner details only, entirely confined to the outer 8 percent at each corner. Fine realistic sandstone pores, crisp shallow relief, subtle top-left illumination. This is one EMPTY panel only, no inset panels or buttons. Canvas entirely covered, no transparent margin, no drop shadow outside, no perspective, no scene, no letters, icons, symbols, glyphs, text or watermark. The screenshot reference is style only; DO NOT reproduce its circles or horizontal HUD silhouette. Square 1024x1024.
+
+
+## Muted palette and slim orb surrounds
+
+The production frame is now `assets/ui/hud/sandstone_shrine_v3.png`. Its transparent holes and eight recesses were measured again and aligned to the same live gauges/buttons. The gauges retain their 112px displayed size. Carved bands are substantially slimmer and no longer carry the large radial fluting and lower scrollwork.
+
+### Slim orb frame: built-in imagegen edit
+
+Saved asset: `assets/ui/hud/sandstone_shrine_v3.png`. Edit target: `assets/ui/hud/sandstone_shrine_v2.png`. Built-in output: `/Users/ktabb/.codex/generated_images/01a13a94-e5cf-74a3-8921-0a9cb12a4957/exec-f8f6553d-fee8-4e73-99b5-e054f3df6bc8.png`.
+
+Exact prompt:
+
+Use case: precise-object-edit. Edit target: the referenced transparent Sandstone Shrine production game HUD. Make ONLY the circular stone surrounds substantially thinner. Preserve the exact 2172x724 canvas, exact empty transparent circular hole sizes and centres (left centre 295,342.5, right centre 1876,342; hole radius about 167 source pixels). Preserve the centre bar, all SIX empty square skill sockets, TWO empty utility sockets, their positions and sizes and the central palmette exactly as the reference. Reduce each circular surround from its very broad roughly 125px-thick stone band to a slim 45–55px-thick carved sandstone band outside the unchanged transparent hole. New outer ring radius about 220px instead of 300px. Remove the bulky radial fluting, oversized side rosette blocks and large lower scrolls around the orbs; retain a single fine stone moulding with a slender antique-gold inlay and very small restrained palmette details. Connect the slimmer rings to the existing central bar with short clean stone shoulders. Surrounds must be truly circular, front-facing, with crisp sharp edges. Keep reference materials and palette, do not increase brightness or highlights; the game applies a muted colour grade at runtime. Absolutely no liquid, fills, glyphs, letters, icons, numbers, binding labels or text. Preserve true transparent background and both empty orb holes. No scene, no added shadow rectangle.
+
+
+The shared stone artwork uses an RGB multiplier of `(0.78, 0.75, 0.69)`, with subdued gold and softer ivory text. Hover highlights no longer boost the texture above its native brightness. The 16px tab labels still retain at least 7:1 contrast on their dark insets. Semantic health/energy/mana and rarity colours keep their meanings.
+
+The circular liquid shader has a configurable `rim_start`: Sandstone uses 0.92 instead of 0.83, cutting the small inner bezel width by roughly half. The fill coordinate follows the new inner radius so an orb still fills fully at 100%. Other debug HUD previews restore their original bezel width.

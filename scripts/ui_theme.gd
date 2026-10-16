@@ -1,12 +1,13 @@
 extends RefCounted
 ## Shared Sandstone Shrine materials. Semantic health, rarity and status colours
 ## are supplied by callers; all chrome uses this same stone and gold vocabulary.
-const STONE = Color(.76,.63,.43)
-const GOLD = Color(.96,.8,.49)
-const TEXT = Color("f6f1e7")
-const MUTED = Color("d4c9b3")
+const STONE = Color(.65,.56,.43)
+const GOLD = Color(.76,.64,.42)
+const TEXT = Color("e2d9c7")
+const MUTED = Color("c0b59f")
 const DISABLED_TEXT = Color("aaa18f")
-const TAB_TEXT = Color("fff8e9")
+const TAB_TEXT = Color("e8dec9")
+const FRAME_TINT = Color(.78,.75,.69)
 const TAB_SIZE = 16
 const INSET = Color(.065,.052,.037,.97)
 const EDGE = Color(.48,.37,.22)
@@ -24,6 +25,7 @@ static func heading() -> Font:
 static func panel(padding: float = 20.0, border: float = 16.0) -> StyleBox:
 	var s = Frame.new()
 	s.texture = PANEL
+	s.modulate_color = FRAME_TINT
 	# Full-resolution source with equal, repeating borders at this display width.
 	for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]:
 		s.set_texture_margin(side,border)
@@ -36,7 +38,7 @@ static func button(state: String = "normal", padding: float = 6.0) -> StyleBox:
 	s.set_texture_margin_all(8)
 	s.content_margin_left = maxf(10,padding)
 	s.content_margin_right = maxf(10,padding)
-	s.modulate_color = {"normal":Color(.85,.8,.7),"hover":Color(1.13,1.06,.91),"pressed":Color(.69,.6,.44),"focus":Color(1.1,.97,.7),"disabled":Color(.43,.4,.34,.8)}.get(state,Color.WHITE)
+	s.modulate_color *= {"normal":Color(.95,.93,.9),"hover":Color(1,.98,.92),"pressed":Color(.75,.69,.57),"focus":Color(1,.96,.84),"disabled":Color(.5,.47,.42,.8)}.get(state,Color.WHITE)
 	return s
 
 static func tab(active: bool, hovered: bool = false) -> StyleBoxFlat:
@@ -62,7 +64,7 @@ static func make() -> Theme:
 	t.default_font_size = 18
 	for type in ["Label","Button","OptionButton","CheckButton","CheckBox","LineEdit","RichTextLabel","PopupMenu","TooltipLabel"]:
 		t.set_color("font_color",type,TEXT)
-		t.set_color("font_hover_color",type,Color(1,.96,.85))
+		t.set_color("font_hover_color",type,TAB_TEXT)
 		t.set_color("font_pressed_color",type,GOLD)
 		t.set_color("font_disabled_color",type,DISABLED_TEXT)
 		t.set_color("font_hover_pressed_color",type,TEXT)

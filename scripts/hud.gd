@@ -271,19 +271,19 @@ func make_orb(is_energy: bool) -> Dictionary:
 func fit_shrine_sockets(look: Dictionary) -> void:
 	var factor: float = look.width/Art.SOURCE.x
 	var top: float = -8-look.bottom*factor
-	# Measured centres of the empty recesses in sandstone_shrine_v2.png.
-	var centres = [686.5,844.0,1003.5,1166.0,1326.0,1484.5]
+	# Measured centres of the empty recesses in sandstone_shrine_v3.png.
+	var centres = [670.5,833.0,998.0,1164.0,1330.5,1495.5]
 	for i in weapon_slots.size():
 		weapon_slots[i].position.x = ((centres[i]-Art.SOURCE.x*.5)*factor+BAR_WIDTH*BAR_SCALE*.5)/BAR_SCALE-28
 	anchor(ready_row_control,Vector2(.5,1),Vector2(-look.width*.5,top),Art.SOURCE*factor)
 	for i in 2:
-		ready_tiles[i].frame.position = Vector2(960.5 if i==0 else 1210.0,557)*factor-Vector2.ONE*READY_ICON*.5
+		ready_tiles[i].frame.position = Vector2(954.5 if i==0 else 1208.5,559.5)*factor-Vector2.ONE*READY_ICON*.5
 
 func socket_style(active: bool) -> StyleBoxFlat:
 	var s = StyleBoxFlat.new()
 	# The recess and bevel already exist in the artwork. Only feedback is drawn.
-	s.bg_color = Color(1,.77,.37,.11) if active else Color.TRANSPARENT
-	s.border_color = Color(1,.85,.53,.65) if active else Color.TRANSPARENT
+	s.bg_color = Color(Shrine.GOLD,.08) if active else Color.TRANSPARENT
+	s.border_color = Color(Shrine.GOLD,.55) if active else Color.TRANSPARENT
 	s.set_border_width_all(1 if active else 0)
 	s.set_corner_radius_all(3)
 	s.set_content_margin_all(0)
@@ -294,6 +294,7 @@ func set_art_style(index: int, remember: bool = true) -> bool:
 	if index!=Art.DEFAULT and not game.debug.enabled: return false
 	art_style = index
 	var look: Dictionary = Art.STYLES[index]
+	art_backplate.self_modulate = look.get("modulate",Color.WHITE)
 	hotbar_accent = look.accent
 	art_backplate.visible = index!=0
 	var row_middle = -ROW_BOTTOM-28*BAR_SCALE
@@ -330,6 +331,7 @@ func set_art_style(index: int, remember: bool = true) -> bool:
 	var prompt_y = minf(-BAR_BOTTOM-ORB_HEIGHT*BAR_SCALE-36,row_middle-28*BAR_SCALE-6-(EFFECT_ICON+8)-34)
 	anchor(prompt,Vector2(.5,1),Vector2(-400,prompt_y),Vector2(800,28))
 	for orb in [health,energy]:
+		orb.material.set_shader_parameter("rim_start",look.get("rim_start",.83))
 		orb.material.set_shader_parameter("rim_dark",Vector3(look.rim_dark.r,look.rim_dark.g,look.rim_dark.b))
 		orb.material.set_shader_parameter("rim_light",Vector3(look.rim_light.r,look.rim_light.g,look.rim_light.b))
 	for title in orb_titles: title.add_theme_color_override("font_color",hotbar_accent)

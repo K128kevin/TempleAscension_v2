@@ -42,6 +42,16 @@ func contrast(ink: Color, background: Color) -> float:
 	var a = luminance(ink); var b = luminance(background)
 	return (maxf(a,b)+.05)/(minf(a,b)+.05)
 
+func carved_band_width(picture: Image, centre: Vector2) -> float:
+	# Sample a clear diagonal, away from the bar and the small palmettes.
+	var direction = Vector2(-1,-1).normalized()
+	var first = -1
+	for radius in range(120,360):
+		var solid = picture.get_pixelv(Vector2i(centre+direction*radius)).a>.5
+		if solid and first<0: first=radius
+		elif not solid and first>=0: return radius-first
+	return INF
+
 func readable_tabs(panels) -> bool:
 	for button in panels.tab_buttons.values():
 		var font: Font = button.get_theme_font("font")
@@ -97,6 +107,9 @@ func test() -> void:
 	check_frames()
 	check(hud.root.theme.get_stylebox("panel","PanelContainer").get_script()==Shrine.Frame and carved(panels.stat_plus,"normal"),"Shared windows and compact buttons use the sandstone artwork")
 	var picture: Image = hud.art_backplate.texture.get_image()
+	var old_frame: Image = load("res://assets/ui/hud/sandstone_shrine_v2.png").get_image()
+	var look: Dictionary = hud.Art.STYLES[hud.Art.DEFAULT]
+	check(carved_band_width(picture,look.left)<carved_band_width(old_frame,Vector2(295,342.5))*.65 and carved_band_width(picture,look.right)<carved_band_width(old_frame,Vector2(1876,342))*.65,"Both carved orb surrounds are substantially thinner in the actual artwork")
 	for dimensions in [Vector2i(1120,700),Vector2i(1280,720),Vector2i(1440,900)]:
 		root.size=dimensions; await frames(); hud.tick(0)
 		var art: Rect2 = hud.art_backplate.get_global_rect()

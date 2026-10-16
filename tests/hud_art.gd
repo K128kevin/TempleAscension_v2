@@ -68,6 +68,7 @@ func test() -> void:
 			check(hud.art_style==index and selector.selected==index and Save.setting("hud_art_shrine","")==Art.STYLES[index].id,"Dropdown selects and remembers "+Art.STYLES[index].name)
 			check(hud.health.get_instance_id()==original_health and hud.energy.get_instance_id()==original_energy and hud.weapon_slots.map(func(slot): return slot.get_instance_id())==buttons,"Changing artwork retains the live gauges and buttons: "+Art.STYLES[index].name)
 			check(game.run.hotbar==bar_assignment and game.skills.cooldowns.cleave==3.25,"Artwork changes preserve skill assignments and cooldowns")
+			check(is_equal_approx(hud.health.material.get_shader_parameter("rim_start"),.92 if index==Art.DEFAULT else .83) and hud.energy.material.get_shader_parameter("rim_start")==hud.health.material.get_shader_parameter("rim_start"),"Thin gauge bezels apply to Sandstone and reset for the other previews")
 			if index>0:
 				var picture: Image = hud.art_backplate.texture.get_image()
 				check(hud.art_backplate.visible and picture.get_size()==Vector2i(Art.SOURCE) and picture.has_mipmaps() and picture.detect_alpha()!=Image.ALPHA_NONE,"Artwork imports with genuine transparency and mipmaps: "+Art.STYLES[index].name)
