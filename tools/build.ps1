@@ -102,7 +102,7 @@ if (-not (Test-Path (Join-Path $WinDir "TempleAscension.exe"))) { Fail "The Wind
 # What ships beside the game: the debug launcher, the readme, the asset list
 # and every licence.
 Copy-Item "tools\Debug Mode.bat" $WinDir
-Copy-Item README.md, docs\ASSETS.md $WinDir
+Copy-Item README.md, docs\ASSETS.md, docs\HUD_ART.md $WinDir
 $Licenses = Join-Path $WinDir "licenses"
 New-Item -ItemType Directory -Force $Licenses | Out-Null
 Copy-Item "assets\licenses\*" $Licenses -Recurse
@@ -124,6 +124,7 @@ if (-not $SkipMac) {
     Add-Entry (Resolve-Path "tools\Debug Mode.command") "Debug Mode.command" 493
     Add-Entry (Resolve-Path README.md) "README.md"
     Add-Entry (Resolve-Path docs\ASSETS.md) "ASSETS.md"
+    Add-Entry (Resolve-Path docs\HUD_ART.md) "HUD_ART.md"
     Get-ChildItem "assets\licenses" -Recurse -File | ForEach-Object {
       $relative = $_.FullName.Substring((Resolve-Path "assets\licenses").Path.Length + 1) -replace "\\", "/"
       Add-Entry $_.FullName "licenses/$relative"

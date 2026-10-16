@@ -3,6 +3,8 @@ const Data = preload("res://scripts/data.gd")
 const Panels = preload("res://scripts/panels.gd")
 const SkillIcon = preload("res://scripts/skill_icon.gd")
 const Items = preload("res://scripts/items.gd")
+const Art = preload("res://scripts/hud_art.gd")
+const Save = preload("res://scripts/save.gd")
 var game
 # The attribute and skill panels and their + buttons.
 var panels
@@ -83,6 +85,14 @@ var gold = Color(.91,.75,.45)
 var cream = Color(.93,.91,.82)
 var selected_style: StyleBoxFlat
 var idle_style: StyleBoxFlat
+var art_style = 0
+var art_backplate: TextureRect
+var orb_holders: Array[Control] = []
+var orb_titles: Array[Label] = []
+var hotbar_row: Control
+var ready_row_control: Control
+var hotkeys: Array[Label] = []
+var hotbar_accent = Color(.91,.75,.45)
 
 func anchor(control: Control, point: Vector2, offset: Vector2, dimensions: Vector2) -> void:
 	control.anchor_left = point.x
@@ -109,6 +119,14 @@ func setup(owner_game) -> void:
 	for state in ["normal","hover","pressed","focus"]:
 		theme.set_stylebox(state,"Button",panel_style(Color(.12,.13,.14,.96) if state=="normal" else Color(.24,.23,.20),gold))
 	root.theme = theme
+	art_backplate = TextureRect.new()
+	art_backplate.name = "HudArtwork"
+	art_backplate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art_backplate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art_backplate.stretch_mode = TextureRect.STRETCH_SCALE
+	art_backplate.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	art_backplate.visible = false
+	root.add_child(art_backplate)
 	npc_name = label("",14,Color(.93,.86,.7),root)
 	npc_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	npc_name.size = Vector2(160,20)
@@ -136,6 +154,7 @@ func setup(owner_game) -> void:
 	experience.custom_minimum_size = Vector2(200,5)
 	anchor(experience,Vector2.ZERO,Vector2(24,51),Vector2(200,5))
 	var row = Control.new()
+	hotbar_row = row
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(row)
 	# Drawn at BAR_SCALE of its laid-out size, centred between the orbs and
@@ -185,6 +204,7 @@ func setup(owner_game) -> void:
 		slot_cooldowns.append(recharge)
 		var hotkey = label(["LMB","RMB","1","2","3","4"][i],12,gold,slot)
 		hotkey.position = Vector2(5,2)
+		hotkeys.append(hotkey)
 		var name_label = label("",10,cream,slot)
 		name_label.position = Vector2(2,39); name_label.size = Vector2(52,15)
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -198,6 +218,7 @@ func setup(owner_game) -> void:
 	anchor(effect_row,Vector2(.5,1),Vector2(-200,-ROW_BOTTOM-56*BAR_SCALE-6-(EFFECT_ICON+8)),Vector2(400,EFFECT_ICON+8))
 	effect_row.visible = false
 	var ready_row = Control.new()
+	ready_row_control = ready_row
 	ready_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(ready_row)
 	var across = READY_ICON*2+EFFECT_GAP
@@ -219,6 +240,8 @@ func setup(owner_game) -> void:
 	boss_bar.visible = false; boss_name.visible = false
 	panels = Panels.new()
 	panels.setup(self)
+	var chosen = Art.index_of(Save.setting("hud_art","classic")) if game.debug.enabled else 0
+	set_art_style(chosen,false)
 
 func make_orb(is_energy: bool) -> Dictionary:
 	var holder = Control.new()
@@ -229,6 +252,8 @@ func make_orb(is_energy: bool) -> Dictionary:
 	anchor(holder,Vector2(.5,1),Vector2(beside if is_energy else -beside-180*BAR_SCALE,-BAR_BOTTOM-ORB_HEIGHT*BAR_SCALE),Vector2(180,ORB_HEIGHT))
 	holder.scale = Vector2.ONE*BAR_SCALE
 	var title = label("ENERGY" if is_energy else "HEALTH",16,gold,holder)
+	orb_holders.append(holder)
+	orb_titles.append(title)
 	title.size = Vector2(180,24)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var orb = ColorRect.new()
@@ -243,6 +268,67 @@ func make_orb(is_energy: bool) -> Dictionary:
 	value.position = Vector2(0,94); value.size = Vector2(180,28)
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return {"orb":orb,"value":value,"title":title}
+
+# A live visual swap: retain the same gauge materials, skill buttons, inputs
+# and cooldown widgets. Preferences live in the isolated debug settings.
+func set_art_style(index: int, remember: bool = true) -> bool:
+	if index<0 or index>=Art.STYLES.size(): return false
+	if index!=0 and not game.debug.enabled: return false
+	art_style = index
+	var look: Dictionary = Art.STYLES[index]
+	hotbar_accent = look.accent
+	art_backplate.visible = index!=0
+	var row_middle = -ROW_BOTTOM-28*BAR_SCALE
+	if index==0:
+		art_backplate.texture = null
+		var beside = BAR_WIDTH*BAR_SCALE*.5+ORB_GAP
+		for i in 2:
+			anchor(orb_holders[i],Vector2(.5,1),Vector2(beside if i==1 else -beside-180*BAR_SCALE,-BAR_BOTTOM-ORB_HEIGHT*BAR_SCALE),Vector2(180,ORB_HEIGHT))
+			orb_titles[i].position.y = 0
+	else:
+		art_backplate.texture = load(look.texture)
+		var factor = Art.WIDTH/Art.SOURCE.x
+		var top: float = -8.0-look.bottom*factor
+		row_middle = top+look.bar_y*factor
+		anchor(art_backplate,Vector2(.5,1),Vector2(-Art.WIDTH*.5,top),Art.SOURCE*factor)
+		for i in 2:
+			var at: Vector2 = look.left if i==0 else look.right
+			var offset = Vector2((at.x-Art.SOURCE.x*.5)*factor-90*BAR_SCALE,top+at.y*factor-ORB_MIDDLE*BAR_SCALE)
+			anchor(orb_holders[i],Vector2(.5,1),offset,Vector2(180,ORB_HEIGHT))
+			# Keep titles above the tallest carving, clear of the live orbs.
+			orb_titles[i].position.y = (top+look.top*factor-18.0-offset.y)/BAR_SCALE
+	anchor(hotbar_row,Vector2(.5,1),Vector2(-BAR_WIDTH*BAR_SCALE*.5,row_middle-28*BAR_SCALE),Vector2(BAR_WIDTH,56))
+	# The new frames have a central carved pendant; flank it with the two
+	# utility tiles instead of covering the artwork. Classic keeps its gap.
+	var ready_gap = EFFECT_GAP+(40 if index!=0 else 0)
+	var across = READY_ICON*2+ready_gap
+	anchor(ready_row_control,Vector2(.5,1),Vector2(-across*.5,row_middle+28*BAR_SCALE+6),Vector2(across,READY_ICON))
+	for i in ready_tiles.size(): ready_tiles[i].frame.position.x = i*(READY_ICON+ready_gap)
+	anchor(effect_row,Vector2(.5,1),Vector2(-200,row_middle-28*BAR_SCALE-6-(EFFECT_ICON+8)),Vector2(400,EFFECT_ICON+8))
+	for orb in [health,energy]:
+		orb.material.set_shader_parameter("rim_dark",Vector3(look.rim_dark.r,look.rim_dark.g,look.rim_dark.b))
+		orb.material.set_shader_parameter("rim_light",Vector3(look.rim_light.r,look.rim_light.g,look.rim_light.b))
+	for title in orb_titles: title.add_theme_color_override("font_color",hotbar_accent)
+	for key in hotkeys: key.add_theme_color_override("font_color",hotbar_accent)
+	idle_style = panel_style(look.background,look.edge)
+	selected_style = panel_style(Color(.15,.115,.065,.97) if index==0 else look.background.lightened(.10),hotbar_accent)
+	selected_style.set_border_width_all(2)
+	selected_style.shadow_color = Color(.8,.49,.13,.24) if index==0 else Color(hotbar_accent,.20)
+	selected_style.shadow_size = 5
+	for i in weapon_slots.size():
+		var slot = weapon_slots[i]
+		slot.add_theme_stylebox_override("normal",selected_style if i==1 else idle_style)
+		slot.add_theme_stylebox_override("disabled",idle_style)
+		for state in ["hover","pressed","focus"]:
+			if index==0: slot.remove_theme_stylebox_override(state)
+			else: slot.add_theme_stylebox_override(state,selected_style)
+	for tile in ready_tiles:
+		for state in ["ready","waiting"]:
+			var style = panel_style(look.background,hotbar_accent if state=="ready" else look.edge)
+			style.set_content_margin_all(0)
+			tile.styles[state] = style
+	if remember and game.debug.enabled: Save.keep_setting("hud_art",look.id)
+	return true
 
 # The energy orb as the hero's class has it: the wizard's is mana, blue.
 func show_energy_kind() -> void:
@@ -359,7 +445,7 @@ func tick(dt: float) -> void:
 		weapon_icons[0].modulate = Color.WHITE
 		weapon_icons[0].visible = true
 		slot_cooldowns[0].text = ""
-		slot_glyphs[0].show_skill("",gold)
+		slot_glyphs[0].show_skill("",hotbar_accent)
 		weapon_names[0].text = "Attack"
 	else: weapon_icons[0].texture = load("res://assets/textures/seal.png")
 	for i in range(0 if casts_left else 1,6):
@@ -375,7 +461,7 @@ func tick(dt: float) -> void:
 		weapon_icons[i].visible = id.is_empty()
 		var recharge: float = game.skills.cooldowns.get(id,0.0)
 		slot_cooldowns[i].text = str(ceili(recharge)) if recharge>0 else ""
-		slot_glyphs[i].show_skill(id,Color(.45,.44,.4) if recharge>0 else (gold if problem.is_empty() else Color(.6,.58,.5)))
+		slot_glyphs[i].show_skill(id,Color(.45,.44,.4) if recharge>0 else (hotbar_accent if problem.is_empty() else Color(.6,.58,.5)))
 		weapon_names[i].text = "Empty" if id.is_empty() else game.Book.all()[id].title
 	panels.tick(dt)
 	var hovered_skill: String = r.hotbar[tile_slot(hovered_slot)] if hovered_slot>0 or (hovered_slot==0 and casts_left) else (panels.ATTACK if hovered_slot==0 else "")

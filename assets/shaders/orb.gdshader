@@ -1,12 +1,14 @@
 shader_type canvas_item;
 uniform float fill : hint_range(0.0,1.0) = 1.0;
 uniform vec4 liquid : source_color = vec4(.65,.03,.05,1.0);
+uniform vec3 rim_dark = vec3(.13,.09,.055);
+uniform vec3 rim_light = vec3(.69,.53,.29);
 void fragment() {
 	vec2 p = (UV-vec2(.5))*2.0;
 	float r = length(p);
 	float edge = 1.0-smoothstep(.975,1.0,r);
 	float light = clamp(.5-dot(p,vec2(.35,.45)),0.0,1.0);
-	vec3 bronze = mix(vec3(.13,.09,.055),vec3(.69,.53,.29),light);
+	vec3 bronze = mix(rim_dark,rim_light,light);
 	float ring = smoothstep(.83,.86,r);
 	vec3 glass = vec3(.025,.025,.032);
 	float height = (p.y+.84)/1.68;

@@ -10,6 +10,8 @@ var panel: PanelContainer
 var toggle: Button
 var buttons: Dictionary = {}
 var browser
+var hud_art_selector: OptionButton
+var action_scroll: ScrollContainer
 const ACTIONS = [
 	[KEY_G,"god","G · Invulnerable"],
 	[KEY_F9,"kill","F9 · Kill all enemies"],
@@ -64,11 +66,34 @@ func setup(owner_game) -> void:
 	body.add_theme_constant_override("separation",4)
 	panel.add_child(body)
 	hud.label("DEBUG · Separate save",16,hud.gold,body)
+	hud.label("HUD artwork",14,hud.gold,body)
+	hud_art_selector = OptionButton.new()
+	hud_art_selector.name = "HudArtworkSelector"
+	hud_art_selector.focus_mode = Control.FOCUS_NONE
+	hud_art_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hud_art_selector.add_theme_font_size_override("font_size",14)
+	for look in hud.Art.STYLES: hud_art_selector.add_item(look.name)
+	hud_art_selector.item_selected.connect(func(index):
+		if not available("hud_art"): return
+		if hud.set_art_style(index): game.toast("[Debug] HUD · %s" % hud.Art.STYLES[index].name)
+		refresh())
+	body.add_child(hud_art_selector)
+	hud.label("F4: next · Shift+F4: previous",12,hud.cream,body)
+	# Keep the artwork chooser visible while the existing action list scrolls
+	# on shorter windows.
+	action_scroll = ScrollContainer.new()
+	action_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	action_scroll.custom_minimum_size.y = clampf(hud.root.get_viewport_rect().size.y-260,120,590)
+	body.add_child(action_scroll)
+	var actions = VBoxContainer.new()
+	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_theme_constant_override("separation",4)
+	action_scroll.add_child(actions)
 	for action in ACTIONS:
-		buttons[action[1]] = add_button(body,action[2],func(): execute(action[1]))
-	hud.label("Jump to floor · Ctrl + 1–5",14,hud.cream,body)
+		buttons[action[1]] = add_button(actions,action[2],func(): execute(action[1]))
+	hud.label("Jump to floor · Ctrl + 1–5",14,hud.cream,actions)
 	var floors = HBoxContainer.new()
-	body.add_child(floors)
+	actions.add_child(floors)
 	for i in Data.FLOORS-1:
 		add_button(floors,str(i+1),func(): execute("floor",i))
 	add_button(floors,"Summit",func(): execute("floor",Data.FLOORS-1))
@@ -92,11 +117,14 @@ func refresh() -> void:
 	if not enabled or not is_instance_valid(panel): return
 	if is_instance_valid(toggle): toggle.text = "DEBUG · God %s · P %s" % ["ON" if invulnerable else "OFF","hide" if panel.visible else "show"]
 	buttons.god.text = "G · Invulnerable: %s" % ("ON" if invulnerable else "OFF")
+	if hud_art_selector.selected!=game.hud.art_style: hud_art_selector.select(game.hud.art_style)
+	action_scroll.custom_minimum_size.y = clampf(game.hud.root.get_viewport_rect().size.y-260,120,590)
 	browser.refresh()
 	for action in buttons: buttons[action].disabled = not available(action)
 	panel.reset_size()
 
 func available(action: String) -> bool:
+	if action=="hud_art": return enabled
 	# (The item browser also works beside the open inventory.)
 	if action=="items": return enabled and game.mode in ["playing","character"]
 	return enabled and (game.mode=="playing" or action in ["panel","reset","restart","first","floor","boss","desert","town","basement","cave"])
@@ -104,6 +132,9 @@ func available(action: String) -> bool:
 func handle_key(event: InputEventKey) -> bool:
 	if not enabled or not event.pressed or event.echo: return false
 	var key = event.physical_keycode if event.physical_keycode!=0 else event.keycode
+	if key==KEY_F4 and not event.ctrl_pressed and not event.alt_pressed and not event.meta_pressed:
+		execute("hud_art",-1 if event.shift_pressed else 1)
+		return true
 	if event.ctrl_pressed and not event.alt_pressed and not event.meta_pressed and key>=KEY_1 and key<KEY_1+Data.FLOORS-1:
 		execute("floor",key-KEY_1)
 		return true
@@ -145,6 +176,11 @@ func jump(index: int) -> void:
 func execute(action: String, floor_index: int = 0) -> void:
 	if not available(action): return
 	match action:
+		"hud_art":
+			var index = posmod(game.hud.art_style+(-1 if floor_index<0 else 1),game.hud.Art.STYLES.size())
+			if game.hud.set_art_style(index): game.toast("[Debug] HUD · %s" % game.hud.Art.STYLES[index].name)
+			refresh()
+			return
 		"panel": panel.visible = not panel.visible
 		"items":
 			browser.toggle()

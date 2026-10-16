@@ -1062,6 +1062,16 @@ external output folder. The icon reuses the generated seal.
    reflections. Earlier versions are retained. Full prompts and geometry notes:
    [OPENING_SKY.md](OPENING_SKY.md).
 
+10. `assets/ui/hud/imperial_bronze.png`, `sandstone_shrine.png`,
+    `obsidian_oracle.png`, and `crimson_legion.png` in the same directory.
+    Four transparent 2172 × 724 HUD frames generated with the built-in imagegen
+    tool. They depict bronze laurel work, carved desert stone, silver-trimmed
+    obsidian, and leather-bound legionary iron. The game draws the original
+    circular liquid gauges, values, skills, hotkeys and cooldowns over the art.
+    Debug mode offers all four plus the current UI in its HUD artwork dropdown
+    and through F4 / Shift+F4. Exact prompts and integration details:
+    [HUD_ART.md](HUD_ART.md).
+
 The hero's body texture, `assets/textures/hero_kit.png`, is baked by
 `tools/paint_hero.py` through the character's own UVs. Each vertex takes a region from
 its skin weights and rest-pose height: bronze scale armor over the chest, back,

@@ -57,6 +57,8 @@ run "$godot_bin" --headless --path . --script tests/bandit_visuals.gd --log-file
 run "$godot_bin" --headless --path . --script tests/shield_regression.gd --log-file "$PWD/test-results/shield-regression.log"
 run "$godot_bin" --headless --path . --script tests/enemy_hover.gd --log-file "$PWD/test-results/enemy-hover.log"
 run "$godot_bin" --headless --path . --script tests/hide_ui.gd --log-file "$PWD/test-results/hide-ui.log"
+run "$godot_bin" --headless --path . --script tests/hud_art.gd --log-file "$PWD/test-results/hud-art-normal.log"
+run "$godot_bin" --headless --path . --script tests/hud_art.gd --log-file "$PWD/test-results/hud-art-debug.log" -- --debug-mode
 run "$godot_bin" --headless --path . --script tests/buff_bar.gd --log-file "$PWD/test-results/buff-bar.log"
 run "$godot_bin" --headless --path . --log-file "$PWD/test-results/campaign.log" -- --test
 run "$godot_bin" --headless --path . --script tests/combat_timing.gd --log-file "$PWD/test-results/combat-timing.log"

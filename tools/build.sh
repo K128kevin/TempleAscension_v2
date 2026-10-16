@@ -19,6 +19,7 @@ if command -v ditto >/dev/null 2>&1; then
     cp README.md "builds/$platform/README.md"
     cp docs/ASSETS.md "builds/$platform/ASSETS.md"
     cp docs/OPENING_SKY.md "builds/$platform/OPENING_SKY.md"
+    cp docs/HUD_ART.md "builds/$platform/HUD_ART.md"
     mkdir -p "builds/$platform/licenses"
     cp -R assets/licenses/. "builds/$platform/licenses/"
     cp assets/models/character/*License.txt "builds/$platform/licenses/"
