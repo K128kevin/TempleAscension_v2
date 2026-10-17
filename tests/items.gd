@@ -236,6 +236,35 @@ func test():
 	for i in 2000:
 		if not Items.roll_drop("ranger","bandit",bandit_rng).is_empty(): bandit_fell += 1
 	check(bandit_fell > 100 and bandit_fell < 280,"A bandit seldom drops at all (%d in 2000)" % bandit_fell)
+	# The arena basement's first level: one bandit in five drops, mostly
+	# common, now and then (from the first) a unique.
+	var below = Data.new_run("warrior"); below.place = "basement"; below.floor = 0
+	var basement_rng = RandomNumberGenerator.new(); basement_rng.seed = 7
+	var tally = {}
+	var dropped = 0
+	for i in 20000:
+		var got: Dictionary = Items.roll_drop("warrior","bandit",basement_rng,[],Items.drop_table(below,"bandit"))
+		if got.is_empty(): continue
+		dropped += 1
+		tally[Items.rarity(got)] = tally.get(Items.rarity(got),0)+1
+	check(absf(dropped/20000.0-.2) < .015,"A bandit on the basement's first level drops an item one time in five (%d in 20000)" % dropped)
+	check(absf(tally.get("common",0)/float(dropped)-.7) < .03 and absf(tally.get("uncommon",0)/float(dropped)-.23) < .03 and absf(tally.get("rare",0)/float(dropped)-.065) < .015 and tally.get("unique",0) > 0,"Of those 70%% common, 23%% uncommon, 6.5%% rare, 0.5%% unique: %s" % tally)
+	below.floor = 1
+	check(Items.drop_table(below,"bandit").is_empty(),"Its second level's bandits drop as bandits do elsewhere")
+	# Its three elites: always an item, 10% uncommon, 65% rare, 25% unique;
+	# once one has dropped an uncommon or a unique, the others drop none.
+	var first: Dictionary = Items.drop_table(below,"bandit_healer")
+	check(first.chance == 100.0 and first.weights == {"uncommon":10.0,"rare":65.0,"unique":25.0},"Each of the basement's three drops an item, mostly rare")
+	below["elite_drops"] = ["uncommon"]
+	var after: Dictionary = Items.drop_table(below,"bandit_champion")
+	var elite_rng = RandomNumberGenerator.new(); elite_rng.seed = 3
+	var any_uncommon = false
+	for i in 400: any_uncommon = any_uncommon or Items.rarity(Items.roll_drop("warrior","bandit_champion",elite_rng,[],after)) == "uncommon"
+	check(not after.weights.has("uncommon") and after.weights.has("unique") and not any_uncommon,"After an uncommon from one of them, the others drop rare or unique")
+	below["elite_drops"] = ["uncommon","unique"]
+	check(Items.drop_table(below,"bandit_marksman").weights.keys() == ["rare"],"After a unique too, only rare")
+	below["elite_drops"] = ["rare"]
+	check(Items.drop_table(below,"bandit_marksman").weights.size() == 3,"A rare takes nothing away")
 
 	# --- What each class starts with, and may use.
 	var totals: Dictionary = {}

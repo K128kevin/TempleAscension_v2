@@ -134,6 +134,16 @@ func puzzle_and_elites() -> void:
 	layout = world.layout
 	puzzle = world.puzzle
 	check(not game.player.dead and puzzle.kept() == rolled,"Come back, the boulders lie where they were rolled")
+	# The level's own bandits are hardier than those above, and in studded
+	# leather and yellow bandanas; the guards stand down the hallway.
+	var bandit_here = game.enemies.filter(func(e): return e.kind=="bandit")[0]
+	check(is_equal_approx(bandit_here.max_hp,Data.ENEMIES.bandit.hp*Data.HEALTH_SCALE[game.run.difficulty]*1.25) and is_equal_approx(Data.might(game.run,"bandit","damage"),1.4),"Its bandits have a quarter more health and deal 40% more damage")
+	var above = game.run.duplicate(); above.floor = 0
+	check(Data.enemy_xp(game.run,"bandit") > Data.enemy_xp(above,"bandit")*1.3*1.3,"And are worth 30% more experience on top of their level's")
+	check(bandit_here.visual.bandit_look.get("studded",false) and bandit_here.visual.bandit_look.headwrap and bandit_here.visual.bandit_look.brow.g > bandit_here.visual.bandit_look.brow.b*3.0,"They wear studded leather and yellow bandanas")
+	var south_hall: Rect2i = layout.halls[-1]
+	var guards: Array = game.enemies.filter(func(e): return south_hall.has_point(layout.to_cell(e.position)) and not layout.quiet[0].has_point(layout.to_cell(e.position)))
+	check(guards.size()>=Data.AREAS.basement[1].guards.size(),"Bandits stand guard down the hallway to the last room")
 	# The three beyond.
 	var elites: Array = game.enemies.filter(func(e): return e.kind in ["bandit_champion","bandit_marksman","bandit_healer"])
 	check(elites.size()==3 and elites.all(func(e): return layout.elite_room.has_point(layout.to_cell(e.position)) and e.human),"Three bandits hold the last room")
@@ -142,6 +152,7 @@ func puzzle_and_elites() -> void:
 	var marksman = elites.filter(func(e): return e.kind=="bandit_marksman")[0]
 	var healer = elites.filter(func(e): return e.kind=="bandit_healer")[0]
 	check(is_instance_valid(champion.visual.shield_item) and champion.armor()>=80.0 and champion.role=="gladiator","The champion bears a shield and heavy armor")
+	check(not champion.visual.bandit_look.get("studded",false) and is_equal_approx(champion.max_hp,367.5*Data.HEALTH_SCALE[game.run.difficulty]) and Data.ENEMIES.bandit_marksman.damage==72.0 and Data.ENEMIES.bandit_healer.heals==.6,"The three are hardier and hit twice as hard, and the healer mends twice as much")
 	check(healer.role=="wizard" and healer.visual.weapon_kind=="staff" and marksman.role=="archer" and marksman.config.damage>Data.ENEMIES.bandit_archer.damage*2,"A healer with a staff, a marksman whose arrows hit hard")
 	# The healer mends his fellows, unless he is hurt as he casts.
 	for e in elites: game.awaken(e)
@@ -228,6 +239,11 @@ func test():
 					check(layout.boulders.size()==2 and layout.boulders.all(func(b): return b.y<room.position.y-10 and [b,b+Vector2i.RIGHT,b+Vector2i.DOWN,b+Vector2i.ONE].all(func(c): return layout.cells.has(c))) and layout.boulders.any(func(b): return b.x<room.position.x) and layout.boulders.any(func(b): return b.x>=room.end.x),"A boulder at the end of each hallway, north-west and north-east: "+label)
 					check(layout.lasers.size()==3 and layout.lasers.all(func(l): return layout.quiet[0].has_point(l.cell) and l.cell.y>room.end.y and not layout.cells.has(l.cell-l.dir)) and layout.elite_room.position.y>layout.lasers[-1].cell.y+8,"Lasers across the hallway south, the last room well beyond them: "+label)
 					check(layout.elite_posts.size()==3 and layout.elite_posts.all(func(c): return layout.elite_room.has_point(c) and layout.cells.has(c)),"Three posts in the last room: "+label)
+					var south: Rect2i = layout.halls[-1]
+					check(south.size.y==Layout.LASER_HALL and Layout.LASER_HALL==54 and layout.quiet[0].size.y==Layout.QUIET_HALL,"The hallway to it is three times as long as it was, its first stretch quiet: "+label)
+					var off_south: Array = layout.rooms.filter(func(r): return r.position.y>=south.position.y+Layout.QUIET_HALL and r.end.y<=south.end.y+2 and (r.end.x<south.position.x or r.position.x>=south.end.x))
+					check(off_south.size()==Layout.HALL_ROOMS and off_south.any(func(r): return r.end.x<south.position.x) and off_south.any(func(r): return r.position.x>=south.end.x),"Two rooms off it, one each side, beyond the lasers: "+label)
+					check(layout.guard_posts.size()>=Data.AREAS.basement[1].guards.size() and layout.guard_posts.all(func(c): return south.has_point(c) and not layout.quiet[0].has_point(c) and layout.cells.has(c)),"Guards' posts down it: "+label)
 					check(layout.rooms.size()>=6 and not layout.gate.has_area() and not layout.vault.has_area(),"Rooms off the arms, and no gate: "+label)
 				var copy = Layout.new(); copy.generate(run_seed,level,place)
 				check(copy.cells==layout.cells and copy.start==layout.start,"Deterministic: "+label)
@@ -347,7 +363,7 @@ func test():
 	game.hurt_player(100000)
 	game.retry_floor()
 	world = game.world
-	check(game.has_key() and game.enemies.all(func(e): return not e.dead) and not is_instance_valid(game.key_holder.visual.belt_key) and game.key_pickup().is_empty(),"Dying, he keeps the key; its bearer stands again without it")
+	check(game.has_key() and game.remaining()==0 and game.enemies.all(func(e): return e.dead) and game.key_pickup().is_empty(),"Dying, he keeps the key, and the basement's slain stay dead")
 	for enemy in game.enemies:
 		if not enemy.dead: enemy.hit(100000)
 	game.player.hp = game.player.max_hp
@@ -358,19 +374,16 @@ func test():
 	game.interact()
 	check(world.gate_open and world.fits(world.gate_point()) and (game.way_open() and game.has_way_on()) and game.way_open() and "basement:0:open" in game.run.keys and not Game.GATE_KEY in game.run.bag,"The key opens the gate (and stays in its lock), and the way down")
 	check(not world.path(world.gate_point()-Vector3(layout0.gate_dir.x,0,layout0.gate_dir.y)*2.0,world.exit_point).is_empty(),"Through the open gate the stair can be walked to")
-	# The way down is walked into, not taken with E.
-	game.player.position = world.exit_point+(world.gate_point()-world.exit_point).normalized()*3.0
-	check(not game.pass_door() and game.stair_armed,"Away from the stairs nothing happens")
+	# The way down is taken with E, not by walking onto it.
+	game.player.position = world.exit_point
+	check(not game.pass_door() and game.run.floor==0,"Walking onto the stairs does not take them")
 	game.player.position = world.exit_point+(world.gate_point()-world.exit_point).normalized()*1.5
 	game.hud.tick(0)
-	check("lead down" in game.hud.prompt.text.to_lower() and not "E ·" in game.hud.prompt.text,"Near them the HUD says the stairs lead down, with no key to press")
+	check("E · Descend" in game.hud.prompt.text,"Near them the HUD offers E to go down")
 	game.interact()
-	check(game.run.floor==0,"E does not take them")
-	game.player.position = world.exit_point
-	check(game.pass_door(),"Walking into the stairs goes down them")
 	world = game.world
 	check(game.run.place=="basement" and game.run.floor==1 and world.layout.last and not game.has_way_on(),"The stair goes down to the second, last level")
-	var below = 3
+	var below = 3+Data.AREAS.basement[1].guards.size()
 	for count in Data.AREAS.basement[1].counts.values(): below += count
 	check(game.enemies.all(func(e): return e.uid.begins_with("basement:1:")) and game.remaining()==below,"More bandits wait below")
 	puzzle_and_elites()
@@ -382,15 +395,18 @@ func test():
 	world = game.world
 	check(game.run.floor==0 and game.remaining()==0 and game.player.position.distance_to(world.exit_point)<.01,"The stair leads back up to the cleared level, at the head of the stair")
 	check(not game.pass_door() and game.run.floor==0,"Come up, he is not sent straight back down")
-	var foot: Vector3 = world.exit_point
-	for d in [Vector3(3,0,0),Vector3(-3,0,0),Vector3(0,0,3),Vector3(0,0,-3)]:
-		game.player.position = world.move(foot,d)
-		if game.player.position.distance_to(foot) > Game.STAIR_ARM: break
-	game.pass_door()
-	game.player.position = foot
-	check(game.pass_door(),"Stepping away and back onto them, he goes down again")
+	game.interact()
 	world = game.world
+	check(game.run.floor==1,"E takes him down again")
 	check(game.run.floor==1 and game.remaining()>0,"And down again")
+	# Killed in the basement, a bandit never stands again, even when he dies.
+	var slain = game.enemies.filter(func(e): return not e.dead)[0]
+	var slain_id: String = slain.uid
+	slain.hit(100000)
+	var left: int = game.remaining()
+	game.hurt_player(100000)
+	game.retry_floor()
+	check(game.remaining()==left and game.enemies.filter(func(e): return e.uid==slain_id)[0].dead and slain_id in game.run.dead,"The basement's slain stay dead when he dies and rises again")
 	# No arrow points the way to the last of them here, and the level's
 	# clearing goes unremarked.
 	var standing: Array = game.enemies.filter(func(e): return not e.dead)
@@ -409,7 +425,7 @@ func test():
 	var sixteen: Dictionary = game.run.duplicate(true)
 	sixteen.version = 16; sixteen.keys = ["basement:0:open"]; sixteen.bag = Items.empty_bag(); sixteen.boulders = [[1,1],[2,2]]
 	var seventeen: Dictionary = Save.migrate(sixteen)
-	check(Save.valid(sixteen) and seventeen.version==17 and seventeen.keys.is_empty() and Items.carries(seventeen,Game.GATE_KEY) and not seventeen.has("boulders") and not seventeen.dead.any(func(id): return id.begins_with("basement:")) and seventeen.position==[0,9],"A save from before the oval basement: its gate shut again with the key given back, its bandits standing again")
+	check(Save.valid(sixteen) and seventeen.version==Data.new_run().version and seventeen.keys.is_empty() and Items.carries(seventeen,Game.GATE_KEY) and not seventeen.has("boulders") and not seventeen.dead.any(func(id): return id.begins_with("basement:")) and seventeen.position==[0,9],"A save from before the oval basement: its gate shut again with the key given back, its bandits standing again")
 	var renewed: Dictionary = Save.migrate(older)
 	check(Save.valid(older) and renewed.keys.is_empty() and not renewed.dead.any(func(id): return id.begins_with("basement:")) and renewed.cleared==["basement"],"An earlier save's basement is peopled again, still counted cleared")
 	# Out again.

@@ -84,6 +84,8 @@ var boulders: Array[Vector2i] = []
 var lasers: Array[Dictionary] = []
 var elite_room = Rect2i()
 var elite_posts: Array[Vector2i] = []
+# Down the hallway to the elites' room, where its guards stand.
+var guard_posts: Array[Vector2i] = []
 var quiet: Array[Rect2i] = []
 var kept_clear: Array[Rect2i] = []
 
@@ -146,7 +148,7 @@ func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 
 func generate(run_seed: int, floor_index: int, place: String = "temple") -> void:
 	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear(); halls.clear(); sealed.clear()
-	buttons.clear(); boulders.clear(); lasers.clear(); elite_posts.clear(); quiet.clear(); kept_clear.clear()
+	buttons.clear(); boulders.clear(); lasers.clear(); elite_posts.clear(); guard_posts.clear(); quiet.clear(); kept_clear.clear()
 	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i(); gate = Rect2i(); vault = Rect2i(); elite_room = Rect2i()
 	kind = place
 	var plan: Dictionary = KINDS[kind]
@@ -456,9 +458,10 @@ func on_terrace(cell: Vector2i) -> bool:
 
 # --- The arena's basement ------------------------------------------------------
 
-# Its first level lies under the arena and is as big as it is: an oval OVAL
-# tiles out each way from its middle (the arena's outer wall,
-# Town.ARENA_RADII), with a wall's breadth to spare. A hallway MAIN_HALL wide
+# Its first level lies under the arena and spreads beyond it, a third again
+# as big (it was the arena's own size, Town.ARENA_RADII, and was made larger
+# at the user's asking): an oval OVAL tiles out each way from its middle, with
+# a wall's breadth to spare. A hallway MAIN_HALL wide
 # rings the middle, its centre line the oval RING (squared off a little,
 # RING_SQUARE) stepped round on a grid of
 # RING_STEP tiles, so that it runs in long straight stretches and turns in
@@ -471,8 +474,8 @@ func on_terrace(cell: Vector2i) -> bool:
 # south into the middle, with rooms off it too; in the middle (a little south
 # of it, CENTER_SOUTH, for the hallway's rooms) is the vault of the stair
 # down, CENTER_ROOM a side.
-const OVAL = Vector2(45,39)
-const RING = Vector2(30,20)
+const OVAL = Vector2(52,45)
+const RING = Vector2(35,23)
 const RING_STEP = 5
 # How square the ring's oval is drawn (2, an ellipse): squarer, its stretches
 # north and south run long and its shoulders keep out of the middle.
@@ -494,12 +497,17 @@ const CENTER_SOUTH = 2
 # Its last level begins in a room START_ROOM a side, where the stair comes
 # down. Hallways DEPTHS_HALL wide (room for a boulder and a man beside it)
 # leave it: south, LASER_HALL long, across which the lasers fire (at
-# LASER_ROWS into it), to the ELITE_ROOM; and north-west and north-east,
+# LASER_ROWS into it), to the ELITE_ROOM, no one standing in its first
+# QUIET_HALL tiles, two rooms (HALL_ROOMS) off it beyond those and guards
+# posted down it every GUARD_GAP tiles; and north-west and north-east,
 # each in stretches turning north and outward by turns (ARM_RUNS long), with
 # rooms off them, to an END_ROOM holding a boulder.
 const START_ROOM = 15
 const DEPTHS_HALL = 5
-const LASER_HALL = 18
+const LASER_HALL = 54
+const QUIET_HALL = 18
+const HALL_ROOMS = 2
+const GUARD_GAP = 5
 const LASER_ROWS = [3,5,7]
 const ELITE_ROOM = Vector2i(17,13)
 const ARM_RUNS = [Vector2i(7,9),Vector2i(12,15),Vector2i(9,11),Vector2i(12,15),Vector2i(5,7)]
@@ -590,7 +598,18 @@ func basement_depths() -> void:
 		stones.append(center(end_room)-Vector2i.ONE)
 	parts.append_array(arm_halls)
 	parts.append_array(ends)
+	# The hallway south's rooms first, one each side, past its quiet stretch.
 	var side_rooms: Array = []
+	var centre_x: int = down.position.x+low
+	for way in [1,-1]:
+		for attempt in 40:
+			var at = Vector2i(centre_x,down.position.y+integer(QUIET_HALL+3,LASER_HALL-8))
+			var found: Dictionary = branch(at,Vector2i(way,0),DEPTHS_HALL,parts)
+			if found.is_empty(): continue
+			parts.append(found.passage)
+			parts.append(found.room)
+			side_rooms.append(found)
+			break
 	for pass_number in CLOSE_PASSES:
 		for line in arm_lines: rooms_along(line[0],line[1],DEPTHS_HALL,parts,side_rooms)
 	var shift: Vector2i = settle(parts)
@@ -609,7 +628,13 @@ func basement_depths() -> void:
 		lasers.append({"cell":Vector2i(hall_in.position.x if k%2==0 else hall_in.end.x-1,y),"dir":Vector2i.RIGHT if k%2==0 else Vector2i.LEFT})
 	var middle: int = elite_room.position.x+elite_room.size.x/2
 	elite_posts = [Vector2i(middle,elite_room.position.y+4),Vector2i(middle-5,elite_room.position.y+8),Vector2i(middle+5,elite_room.position.y+8)]
-	quiet = [hall_in,elite_room]
+	quiet = [Rect2i(hall_in.position,Vector2i(hall_in.size.x,QUIET_HALL)),elite_room]
+	var along: int = QUIET_HALL+3
+	var turn = 0
+	while along < hall_in.size.y-3:
+		guard_posts.append(Vector2i(hall_in.position.x+low+(1 if turn%2 == 0 else -1),hall_in.position.y+along))
+		along += GUARD_GAP
+		turn += 1
 	kept_clear = [rooms[0]]
 	kept_clear.append_array(halls.slice(0,arm_halls.size()))
 	for r in ends: kept_clear.append(moved(r,shift))

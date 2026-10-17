@@ -4,7 +4,20 @@ const Items = preload("res://scripts/items.gd")
 static var directory = "user://"
 
 static func migrate(d: Dictionary) -> Dictionary:
-	if int(d.get("version",0))>=17: return d
+	if int(d.get("version",0))>=18: return d
+	if int(d.get("version",0))==17:
+		# The basement was laid out larger, and its lower level's hallway
+		# lengthened, more bandits in both: those slain there stand again in
+		# their new places, and a hero who was down there is set back at the
+		# foot of the level's stair (where its boulders lie is kept, where it
+		# still can be).
+		var updated = d.duplicate(true)
+		updated.version = 18
+		updated.dead = updated.get("dead",[]).filter(func(id): return not str(id).begins_with("basement:"))
+		if updated.get("place","") == "basement":
+			updated.drops = []
+			updated.position = [0,9]
+		return updated
 	if int(d.get("version",0))==16:
 		# The basement was laid out anew under the arena's oval: its bandits
 		# (known by their number on a level) stand again in their new places,
@@ -21,7 +34,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 		if updated.get("place","") == "basement":
 			updated.drops = []
 			updated.position = [0,9]
-		return updated
+		return migrate(updated)
 	if int(d.get("version",0))==15:
 		# Every item was remade (scripts/items.gd): what was an item's id is now
 		# an instance, a base with its prefix and suffix. A character from
@@ -180,7 +193,7 @@ static func migrate(d: Dictionary) -> Dictionary:
 
 static func valid(d) -> bool:
 	if not d is Dictionary: return false
-	if int(d.get("version",0))<17:
+	if int(d.get("version",0))<18:
 		var converted = migrate(d)
 		return not converted.is_empty() and valid(converted)
 	for key in Data.new_run():

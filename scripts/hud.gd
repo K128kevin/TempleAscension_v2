@@ -508,7 +508,7 @@ func tick(dt: float) -> void:
 		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
 		elif puzzle_prompt() != "": prompt.text = puzzle_prompt()
 		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked"
-		elif game.way_open() and game.has_way_on() and game.player.position.distance_to(game.world.exit_point)<4: prompt.text = "The stairs lead down" if r.place == "basement" else "E · %s" % ("Descend" if r.place in Data.DUNGEONS else "Ascend")
+		elif game.way_open() and game.has_way_on() and game.player.position.distance_to(game.world.exit_point)<4: prompt.text = "E · %s" % ("Descend" if r.place in Data.DUNGEONS else "Ascend")
 		elif r.place in Data.DUNGEONS and game.world.layout.arrival.has_area() and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair" if r.floor>0 else "E · Up the stair to the arena"
 		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest"

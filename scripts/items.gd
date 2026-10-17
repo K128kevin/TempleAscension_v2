@@ -57,9 +57,16 @@ const RARITY_COLORS = {"common":Color(.93,.91,.82),"uncommon":Color(.45,.92,.5),
 # Crowned Statue, which drops nothing less than rare.
 const RARITY_WEIGHTS = {"common":58,"uncommon":28,"rare":11,"unique":3}
 const BOSS_WEIGHTS = {"rare":75,"unique":25}
-# The basement's three in its last room drop nothing common.
+# The basement's three in its last room: each drops an item, nothing common,
+# mostly rare (ELITE_WEIGHTS); once one of them has dropped an uncommon item,
+# or a unique one, the others drop no more of that rarity, the rest of the
+# odds shared out as they stand (drop_table).
 const ELITES = ["bandit_champion","bandit_marksman","bandit_healer"]
-const ELITE_WEIGHTS = {"uncommon":55,"rare":38,"unique":7}
+const ELITE_WEIGHTS = {"uncommon":10.0,"rare":65.0,"unique":25.0}
+const ELITE_ONCE = ["uncommon","unique"]
+# The bandits of the arena basement's first level: one in five drops an item,
+# by these odds (uniques not held back, as RARITY_WEIGHTS's are).
+const BASEMENT_BANDITS = {"chance":20.0,"weights":{"common":70.0,"uncommon":23.0,"rare":6.5,"unique":.5}}
 
 # What an item may add besides its armor or damage, and how each reads.
 # The five attributes count as points spent on them.
@@ -411,7 +418,7 @@ static func loot(class_id: String, uniques: bool = false) -> Array:
 # --- Drops --------------------------------------------------------------------
 # Any enemy that grants experience may drop one item as it dies: DROP_CHANCE
 # percent by its kind. Its rarity is drawn by RARITY_WEIGHTS (the Crowned
-# Statue's by BOSS_WEIGHTS, the basement's elites' by ELITE_WEIGHTS), and the
+# Statue's by BOSS_WEIGHTS; the arena basement's own by drop_table), and the
 # item made for the hero's class.
 const DROP_CHANCE = {"bandit":9.0,"bandit_archer":9.0,"bandit_champion":100.0,"bandit_marksman":100.0,"bandit_healer":100.0,"gladiator":11.0,"archer":11.0,"lion":11.0,"wizard":15.0,"centurion":15.0,"boss":100.0}
 
@@ -460,11 +467,26 @@ static func generate(class_id: String, wanted: String, rng: RandomNumberGenerato
 # `seen`: the rarities that have dropped for the hero so far (a run's
 # "seen"). No unique drops until he has seen a green item and a blue one:
 # till then a unique drawn is drawn again from the rest.
-static func roll_drop(class_id: String, enemy: String, rng: RandomNumberGenerator, seen: Array = ["uncommon","rare"]) -> Dictionary:
-	if rng.randf()*100.0 >= DROP_CHANCE.get(enemy,0.0): return {}
-	var weights: Dictionary = (BOSS_WEIGHTS if enemy == "boss" else (ELITE_WEIGHTS if enemy in ELITES else RARITY_WEIGHTS)).duplicate()
-	if not uniques_open(seen): weights.erase("unique")
+# `table`: a place's own odds for this enemy ({"chance", "weights"}:
+# drop_table), in place of DROP_CHANCE and the rarity weights.
+static func roll_drop(class_id: String, enemy: String, rng: RandomNumberGenerator, seen: Array = ["uncommon","rare"], table: Dictionary = {}) -> Dictionary:
+	if rng.randf()*100.0 >= float(table.get("chance",DROP_CHANCE.get(enemy,0.0))): return {}
+	var weights: Dictionary = (table.weights if table.has("weights") else (BOSS_WEIGHTS if enemy == "boss" else RARITY_WEIGHTS)).duplicate()
+	if not table.has("weights") and not uniques_open(seen): weights.erase("unique")
 	return generate(class_id,weighted(rng,weights),rng)
+
+# The odds an enemy of `enemy` drops by where the run is ({} for the usual):
+# the arena basement's first-level bandits' own, and its three elites',
+# less any rarity of ELITE_ONCE one of them has dropped already (the run's
+# `elite_drops`).
+static func drop_table(run: Dictionary, enemy: String) -> Dictionary:
+	if enemy in ELITES:
+		var weights: Dictionary = ELITE_WEIGHTS.duplicate()
+		for rarity in run.get("elite_drops",[]):
+			if rarity in ELITE_ONCE: weights.erase(rarity)
+		return {"chance":100.0,"weights":weights}
+	if run.get("place","") == "basement" and int(run.get("floor",0)) == 0 and enemy in ["bandit","bandit_archer"]: return BASEMENT_BANDITS
+	return {}
 
 static func uniques_open(seen: Array) -> bool:
 	return "uncommon" in seen and "rare" in seen

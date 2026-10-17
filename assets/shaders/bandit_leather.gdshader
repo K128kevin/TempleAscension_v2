@@ -5,7 +5,10 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 // (round the body, and down it); its second UV set says how near its hem a
 // point is (x). `studs` sets rows of bronze studs along the hem and down the
 // front; `wound` makes it strips wound diagonally round a limb, over linen
-// that shows between them (bracers and shin bindings).
+// that shows between them (bracers and shin bindings); `studded` makes it
+// studded leather armor: harder, smoother boiled hide riveted all over in a
+// diamond grid of round-headed iron studs, each with a dark ring where it is
+// set into the hide.
 // Over it, photographed hide (assets/shaders/detail.gdshaderinc), through
 // its UVs: its grain, creases and scuffs.
 #include "res://assets/shaders/detail.gdshaderinc"
@@ -13,6 +16,7 @@ uniform vec3 leather : source_color = vec3(0.28, 0.16, 0.08);
 uniform sampler2D grit : source_color, filter_linear_mipmap, repeat_enable;
 uniform float studs = 0.0;
 uniform float wound = 0.0;
+uniform float studded = 0.0;
 uniform vec3 linen : source_color = vec3(0.62, 0.55, 0.43);
 uniform float wear = 0.5;
 uniform float seed = 0.0;
@@ -55,6 +59,25 @@ void fragment() {
 			colour = vec3(0.55, 0.38, 0.18) * (0.6 + 0.6 * grain);
 			metal = 1.0;
 			rough = 0.4;
+		}
+	}
+	if (studded > 0.0) {
+		// Boiled hard: smoother, a little glossier where it is rubbed.
+		rough = clamp(rough - 0.12, 0.25, 0.8);
+		// Rows STUD_GAP apart, each set half a stud along from the last.
+		float gap = 0.05;
+		float row = floor(UV.y / gap);
+		vec2 cell = vec2(fract(UV.x / gap + 0.5 * mod(row, 2.0)) - 0.5, fract(UV.y / gap) - 0.5);
+		float r = length(cell);
+		float head = 1.0 - smoothstep(0.17, 0.22, r);
+		float seat = (1.0 - smoothstep(0.22, 0.3, r)) * (1.0 - head);
+		colour *= 1.0 - 0.55 * seat;
+		if (head > 0.5) {
+			// Domed: lit across its crown, dark at its rim.
+			float dome = 1.0 - r / 0.22;
+			colour = vec3(0.56, 0.54, 0.5) * (0.5 + 0.9 * dome) * (0.8 + 0.4 * grain);
+			metal = 1.0;
+			rough = 0.35;
 		}
 	}
 	if (!FRONT_FACING) {

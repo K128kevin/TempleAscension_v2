@@ -123,6 +123,7 @@ func test():
 	# (He stands on the dune: his figure is lifted to its height.)
 	var stand: Vector3 = game.player.position+Vector3.UP*game.world.lift(game.player.position)
 	check(is_equal_approx(game.intro_left,game.INTRO_HOLD+game.INTRO_MOVE) and cam.projection == Camera3D.PROJECTION_PERSPECTIVE and cam.position.distance_to(stand) < game.INTRO_HEIGHT+8.0 and cam.position.y > stand.y+game.INTRO_HEIGHT-1.0,"A new character's story opens from high over his head (%s from him)" % [cam.position-stand])
+	check(not game.hud.visible and not cam.get_cull_mask_value(20),"No HUD or interface shows over the opening")
 	var town_way: Vector3 = (game.Town.ARENA-game.player.position)
 	town_way.y = 0
 	check(-cam.global_basis.z.dot(town_way.normalized()) > .9 and -cam.global_basis.z.y < -.1,"looking down over the town to its arena")
@@ -139,6 +140,7 @@ func test():
 	var esc = InputEventKey.new(); esc.physical_keycode = KEY_ESCAPE; esc.keycode = KEY_ESCAPE; esc.pressed = true
 	game._input(esc)
 	check(game.intro_left == 0 and cam.projection == Camera3D.PROJECTION_ORTHOGONAL and is_equal_approx(cam.size,game.world.zoom) and game.mode == "playing","Escape skips the opening into the game's own view, the game not paused")
+	check(game.hud.visible and cam.get_cull_mask_value(20),"The HUD comes back as it ends")
 	game._process(.1)
 	check(game.intro_left == 0 and cam.projection == Camera3D.PROJECTION_ORTHOGONAL,"and it stays there")
 	# A new character wakes in the desert: the corner names no floor, and points no way.

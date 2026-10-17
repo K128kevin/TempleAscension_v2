@@ -211,7 +211,6 @@ func load_floor() -> void:
 	pickup_goal = null
 	talk_goal = null
 	key_holder = null
-	stair_armed = false
 	scheduled.clear()
 	carriers.clear()
 	target = null
@@ -308,6 +307,17 @@ func load_floor() -> void:
 				enemy.dead = true
 				enemy.hp = 0
 				enemy.visible = false
+		# And those posted down the hallway to them.
+		var guards: Array = Data.area(run).get("guards",[])
+		var posts: Array = world.layout.guard_posts
+		for i in mini(guards.size(),posts.size()):
+			var id = Data.enemy_id(run,types.size()+elites.size()+i)
+			var enemy = spawn_enemy(guards[i],id,world.layout.to_world(posts[i]))
+			enemy.rotation.y = PI
+			if id in run.dead:
+				enemy.dead = true
+				enemy.hp = 0
+				enemy.visible = false
 		setup_key(came_up)
 		# Rats scurry about the arena basement (scripts/rats.gd), one to every
 		# RAT_ROOM tiles of its floor.
@@ -365,21 +375,9 @@ func pass_door() -> bool:
 		load_floor()
 		save_run()
 		return true
-	# The arena basement's stairs down are walked into, not taken with E;
-	# but not by a hero just come up them, until he has stepped away.
-	if run.place == "basement" and way_open() and has_way_on():
-		var gap: float = Vector2(player.position.x-world.exit_point.x,player.position.z-world.exit_point.z).length()
-		if gap > STAIR_ARM: stair_armed = true
-		elif stair_armed and gap < STAIR_STEP:
-			next_floor()
-			return true
 	if not world.leaving_temple(player.position): return false
 	leave_to_world()
 	return true
-
-const STAIR_STEP = .7
-const STAIR_ARM = 2.5
-var stair_armed = false
 
 # Out of a dungeon or the temple, into the world beside its way in.
 func leave_to_world() -> void:
@@ -563,6 +561,10 @@ func start_intro() -> void:
 	intro_left = INTRO_HOLD+INTRO_MOVE
 	left_held = false
 	right_held = false
+	# No interface over the opening: the HUD and what is drawn in the world
+	# for the player's eyes (names, bars, rings) come back as it ends.
+	hud.visible = false
+	world.camera.set_cull_mask_value(20,false)
 	world.camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	tick_intro(0.0)
 
@@ -592,6 +594,7 @@ func tick_intro(dt: float) -> void:
 # The opening over (or skipped): the game's own flat view, and him to command.
 func end_intro() -> void:
 	intro_left = 0.0
+	show_ui(not ui_hidden)
 	var cam: Camera3D = world.camera
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	cam.size = world.zoom
@@ -1417,8 +1420,14 @@ func stun_player(seconds: float) -> void:
 func hobble(seconds: float) -> void:
 	hobbled = maxf(hobbled,seconds)
 
+# Whether a slain enemy stays dead when the hero dies and rises again: those of
+# other places do, and the arena basement's always do (killed there, a bandit
+# is gone for good); the rest of the place he died in stand again.
+func stays_dead(id: String) -> bool:
+	return not Data.of_place(id,run.place) or run.place == "basement"
+
 func retry_floor() -> void:
-	run.dead = run.dead.filter(func(id): return not Data.of_place(id,run.place))
+	run.dead = run.dead.filter(func(id): return stays_dead(id))
 	run.drops = []
 	run.health = Data.max_health(run)
 	run.energy = Data.max_energy(run)
@@ -1438,7 +1447,9 @@ func enemy_died(enemy) -> void:
 			float_text(player.position+Vector3.UP*2.2,"LEVEL %d" % run.level,Color(1,.86,.45))
 			toast("Level %d: %d attribute points and %d skill point%s to spend." % [run.level,run.points,run.skill_points,"" if run.skill_points==1 else "s"])
 		# It may drop an item (scripts/items.gd; never a second time on a retry).
-		var found: Dictionary = loot_forced if not loot_forced.is_empty() else ({} if loot_off else Items.roll_drop(run.class_id,enemy.kind,loot_rng,run.get("seen",[])))
+		var found: Dictionary = loot_forced if not loot_forced.is_empty() else ({} if loot_off else Items.roll_drop(run.class_id,enemy.kind,loot_rng,run.get("seen",[]),Items.drop_table(run,enemy.kind)))
+		# (What the basement's elites have dropped narrows what the rest may.)
+		if not found.is_empty() and enemy.kind in Items.ELITES: run["elite_drops"] = run.get("elite_drops",[])+[Items.rarity(found)]
 		loot_forced = {}
 		if not found.is_empty(): drop_item(found,enemy.position)
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
@@ -1822,7 +1833,7 @@ func interact() -> void:
 	elif at_locked_gate():
 		if has_key(): unlock_gate()
 		else: toast("The gate is locked.")
-	elif way_open() and has_way_on() and run.place != "basement" and player.position.distance_to(world.exit_point)<4:
+	elif way_open() and has_way_on() and player.position.distance_to(world.exit_point)<4:
 		next_floor()
 	elif run.place in Data.DUNGEONS and world.layout.arrival.has_area() and out_of_combat() and player.position.distance_to(world.layout.arrival_position())<3.5:
 		# Up the stair: to the level above, or from the basement's first
@@ -1948,7 +1959,7 @@ func save_run() -> void:
 	run.health = maxf(1,player.hp)
 	run.position = [player.position.x,player.position.z]
 	if mode=="dead":
-		run.dead = run.dead.filter(func(id): return not Data.of_place(id,run.place))
+		run.dead = run.dead.filter(func(id): return stays_dead(id))
 		run.drops = []
 		run.position = [0,9]
 		run.health = Data.max_health(run)

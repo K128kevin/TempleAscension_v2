@@ -168,7 +168,9 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 		config = Data.ENEMIES[kind]
 		role = config.get("as",kind)
 		human = config.has("human")
-		max_hp = config.hp * Data.HEALTH_SCALE[game.run.difficulty]
+		# (A level's own bandits may be hardier than the same kind elsewhere:
+		# Data.might.)
+		max_hp = config.hp * Data.HEALTH_SCALE[game.run.difficulty] * Data.might(game.run,kind,"health")
 		hp = max_hp
 		dress()
 
@@ -177,7 +179,7 @@ func setup(owner_game, type: String, id: String, at: Vector3) -> void:
 func dress() -> void:
 	if human:
 		# Each bandit's look is its own, the same each time it is met.
-		if config.human == "bandit": visual.bandit_look = Bandit.look(uid.hash())
+		if config.human == "bandit": visual.bandit_look = Bandit.look(uid.hash(),Data.area(game.run).get("kit","") if Data.area(game.run).get("counts",{}).has(kind) else "")
 		# (A bandit with a shield bears a gladiator's scutum.)
 		visual.setup(false,Color.WHITE,config.weapon,config.size,"gladiator" if config.has("shield") else "",config.human)
 		visual.play(visual.idle_action())
@@ -487,7 +489,7 @@ func release_attack() -> void:
 		finish_heal()
 		return
 	busy = attack_recovery
-	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty]
+	var damage: float = config.damage * .6 * Data.DAMAGE_SCALE[game.run.difficulty] * Data.might(game.run,kind,"damage")
 	if role == "archer":
 		# (The bow heard as the hero's is: a statue's or a bandit's.)
 		game.sound.play("archer-arrow",-13)
@@ -526,7 +528,7 @@ func strike_reach(other) -> float:
 func cast_nova() -> void:
 	face(game.player.position)
 	nova_cooldown = NOVA_COOLDOWN
-	game.frost_nova(position,NOVA_RADIUS,11.25*.6*Data.DAMAGE_SCALE[game.run.difficulty],self)
+	game.frost_nova(position,NOVA_RADIUS,config.get("nova",11.25)*.6*Data.DAMAGE_SCALE[game.run.difficulty],self)
 	# Straight to the staff swing: the nova needs no flame.
 	var clip = "OracleCast" if visual.clips.has("OracleCast") else "Cast"
 	var contact: float = Motion.ORACLE_CAST.contacts[0] if clip=="OracleCast" else Motion.NORMAL[Data.WEAPONS.find("staff")].contacts[0]

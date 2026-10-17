@@ -11,6 +11,9 @@ extends RefCounted
 ##   apron      the ragged cloth over the skirt; `leather` the vest's and
 ##              straps' hide
 ##   shawl, cape, headwrap   which of them are worn
+## A `kit` dresses some differently: "veteran" (the arena basement's lower
+## level) wears studded leather armor, a vest, straps and bracers of dark
+## boiled hide riveted all over (`studded`), and a yellow bandana (`brow`).
 const Wardrobe = preload("res://scripts/bandit_wardrobe.gd")
 const People = preload("res://scripts/townsperson.gd")
 
@@ -19,15 +22,18 @@ const REDS = [Color(.44,.07,.06),Color(.52,.12,.08),Color(.36,.07,.1),Color(.5,.
 const LINENS = [Color(.8,.74,.62),Color(.74,.68,.55),Color(.84,.8,.7),Color(.7,.62,.5)]
 const APRONS = [Color(.26,.16,.1),Color(.3,.11,.08),Color(.22,.17,.12),Color(.34,.22,.13)]
 const HIDES = [Color(.6,.4,.24),Color(.52,.34,.2),Color(.66,.44,.27)]
+# Saffron, ochre and dull gold, for the veterans' bandanas; their boiled hide.
+const YELLOWS = [Color(.78,.58,.1),Color(.7,.5,.08),Color(.82,.66,.18),Color(.66,.5,.12)]
+const BOILED = [Color(.3,.19,.11),Color(.26,.17,.1),Color(.34,.22,.12)]
 const HAIR = {"man":["Hair_SimpleParted","Hair_Buzzed"],"woman":["Hair_Long","Hair_Buns"]}
 
-static func look(seed: int) -> Dictionary:
+static func look(seed: int, kit: String = "") -> Dictionary:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = seed
 	var who = "woman" if rng.randf() < .4 else "man"
 	var red: Color = REDS[rng.randi() % REDS.size()]
 	var shade = rng.randf_range(.04,.16)
-	return {
+	var dressed = {
 		"who":who,
 		"seed":rng.randf_range(0.0,10.0),
 		"skin":"dark" if rng.randf() < .75 else "light",
@@ -45,6 +51,15 @@ static func look(seed: int) -> Dictionary:
 		"cape":rng.randf() < .7,
 		"headwrap":rng.randf() < .85,
 	}
+	dressed["brow"] = red
+	if kit == "veteran":
+		dressed.brow = YELLOWS[rng.randi() % YELLOWS.size()]
+		dressed.headwrap = true
+		# (No shawl over the armor.)
+		dressed.shawl = false
+		dressed.studded = true
+		dressed.leather = BOILED[rng.randi() % BOILED.size()]
+	return dressed
 
 # The material for one part of a bandit's figure, or null when this bandit
 # does not wear it.
@@ -62,10 +77,11 @@ static func material(part: String, look: Dictionary) -> Material:
 		"Sash": return cloth(look,look.red*.85,.4,"hessian")
 		"Shawl": return cloth(look,look.red,.5,"linen",{"lattice":look.red*.45}) if look.shawl else null
 		"Cape": return cloth(look,look.red*.9,.82,"hessian",{"lattice":look.tunic*.7}) if look.cape else null
-		"Headwrap": return cloth(look,look.red,.35,"linen",{"lattice":look.tunic*.8}) if look.headwrap else null
-		"Vest": return leather(look,look.leather,{"studs":1.0})
+		"Headwrap": return cloth(look,look.get("brow",look.red),.35,"linen",{"lattice":look.tunic*.8}) if look.headwrap else null
+		"Vest": return leather(look,look.leather,{"studded":1.0,"wear":.3} if look.get("studded",false) else {"studs":1.0})
 		"Belt": return leather(look,look.leather*.7,{})
-		"Strap": return leather(look,look.leather*1.25,{"studs":1.0})
+		"Strap": return leather(look,look.leather*1.25,{"studded":1.0,"wear":.3} if look.get("studded",false) else {"studs":1.0})
+	if part.begins_with("Bracer") and look.get("studded",false): return leather(look,look.leather*1.1,{"studded":1.0,"wear":.3})
 	if part.begins_with("Bracer") or part.begins_with("Bindings"): return leather(look,look.leather*1.1,{"wound":1.0})
 	return null
 
