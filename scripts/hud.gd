@@ -506,6 +506,7 @@ func tick(dt: float) -> void:
 	if game.mode == "playing":
 		if outdoors: prompt.text = outdoor_prompt()
 		elif game.crown_available and game.player.position.distance_to(game.crown_position)<3: prompt.text = "E  ·  Claim the emperor's crown"
+		elif game.at_wing_gate() >= 0 and not game.world.wing_gates[game.at_wing_gate()].open: prompt.text = "E · Unlock the gate" if Items.carries(r,game.WING_KEYS[game.world.layout.wings[game.at_wing_gate()].name]) else "The gate is locked"
 		elif puzzle_prompt() != "": prompt.text = puzzle_prompt()
 		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked"
 		elif game.way_open() and game.has_way_on() and game.player.position.distance_to(game.world.exit_point)<4: prompt.text = "E · %s" % ("Descend" if r.place in Data.DUNGEONS else "Ascend")

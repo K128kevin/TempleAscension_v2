@@ -83,9 +83,17 @@ var buttons: Array[Vector2i] = []
 var boulders: Array[Vector2i] = []
 var lasers: Array[Dictionary] = []
 var elite_room = Rect2i()
+var war_table = Rect2i()
 var elite_posts: Array[Vector2i] = []
 # Down the hallway to the elites' room, where its guards stand.
 var guard_posts: Array[Vector2i] = []
+# The two wings: each {"name": "west" or "east", "rects": all it holds,
+# "gate": its locked gate into the room in the middle, "dir": the way
+# through it from the wing, "room": the boulder's room}.
+var wings: Array[Dictionary] = []
+# Where a boulder may be rolled: its wing's last room, through the passage
+# and the gate, and the room of the plates (never back out along its wing).
+var rolling_room: Array[Rect2i] = []
 var quiet: Array[Rect2i] = []
 var kept_clear: Array[Rect2i] = []
 
@@ -148,8 +156,8 @@ func connect_rooms(a: Vector2i, b: Vector2i) -> void:
 
 func generate(run_seed: int, floor_index: int, place: String = "temple") -> void:
 	cells.clear(); rooms.clear(); links.clear(); terrace.clear(); terrace_doors.clear(); halls.clear(); sealed.clear()
-	buttons.clear(); boulders.clear(); lasers.clear(); elite_posts.clear(); guard_posts.clear(); quiet.clear(); kept_clear.clear()
-	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i(); gate = Rect2i(); vault = Rect2i(); elite_room = Rect2i()
+	buttons.clear(); boulders.clear(); lasers.clear(); elite_posts.clear(); guard_posts.clear(); wings.clear(); rolling_room.clear(); quiet.clear(); kept_clear.clear()
+	court = Rect2i(); court_obstacle = Rect2i(); stairs = Rect2i(); arrival = Rect2i(); entry = Rect2i(); gate = Rect2i(); vault = Rect2i(); elite_room = Rect2i(); war_table = Rect2i()
 	kind = place
 	var plan: Dictionary = KINDS[kind]
 	corridor = plan.corridor
@@ -499,9 +507,9 @@ const CENTER_SOUTH = 2
 # leave it: south, LASER_HALL long, across which the lasers fire (at
 # LASER_ROWS into it), to the ELITE_ROOM, no one standing in its first
 # QUIET_HALL tiles, two rooms (HALL_ROOMS) off it beyond those and guards
-# posted down it every GUARD_GAP tiles; and north-west and north-east,
-# each in stretches turning north and outward by turns (ARM_RUNS long), with
-# rooms off them, to an END_ROOM holding a boulder.
+# posted down it every GUARD_GAP tiles; and the two wings, west and east,
+# out from its north side and round, rooms off them, to an END_ROOM
+# holding a boulder beside the room, a locked gate between (`wings`).
 const START_ROOM = 15
 const DEPTHS_HALL = 5
 const LASER_HALL = 54
@@ -509,8 +517,19 @@ const QUIET_HALL = 18
 const HALL_ROOMS = 2
 const GUARD_GAP = 5
 const LASER_ROWS = [3,5,7]
-const ELITE_ROOM = Vector2i(17,13)
-const ARM_RUNS = [Vector2i(7,9),Vector2i(12,15),Vector2i(9,11),Vector2i(12,15),Vector2i(5,7)]
+const ELITE_ROOM = Vector2i(21,16)
+# The war table in the middle of the elites' room, and the chairs round it
+# (tiles, the table's footprint; the chairs stand a tile out from it).
+const WAR_TABLE = Vector2i(4,2)
+# Each wing goes north from the room WING_NORTH, out WING_OUT, down to
+# WING_SOUTH below the room's middle and back in to its END_ROOM, WING_GAP
+# out from the room's side, its gate WING_GATE wide (a boulder and room
+# beside it).
+const WING_NORTH = Vector2i(12,14)
+const WING_OUT = Vector2i(33,37)
+const WING_SOUTH = Vector2i(25,29)
+const WING_GAP = 3
+const WING_GATE = 5
 const END_ROOM = 11
 # Whether side rooms must keep within the oval (on the first level).
 var bounded = false
@@ -580,22 +599,40 @@ func basement_depths() -> void:
 	var down = Rect2i(-low,room.end.y,DEPTHS_HALL,LASER_HALL)
 	var elites = Rect2i(-ELITE_ROOM.x/2,down.end.y,ELITE_ROOM.x,ELITE_ROOM.y)
 	parts.append_array([room,down,elites])
-	# The two arms, north-west and north-east, and the rooms at their ends.
+	# The two wings, west and east: out from the room's north side, round
+	# the outside and back to the room at their end, by its side, the
+	# boulder's; a short passage and a locked gate let from that room into
+	# the room in the middle.
 	var arm_halls: Array[Rect2i] = []
-	var arm_lines: Array = []
 	var ends: Array[Rect2i] = []
 	var stones: Array[Vector2i] = []
+	var wing_plans: Array = []
 	for side in [-1,1]:
 		var p = Vector2i(side*(half-low-1),room.position.y)
-		for k in ARM_RUNS.size():
-			var run: int = integer(ARM_RUNS[k].x,ARM_RUNS[k].y)
-			var q: Vector2i = p+(Vector2i(0,-run) if k%2==0 else Vector2i(side*run,0))
-			arm_lines.append([p,q])
-			arm_halls.append(stretch(p,q,DEPTHS_HALL))
-			p = q
-		var end_room = Rect2i(p.x-END_ROOM/2,p.y-low-END_ROOM,END_ROOM,END_ROOM)
+		var top: int = p.y-integer(WING_NORTH.x,WING_NORTH.y)
+		var far: int = p.x+side*integer(WING_OUT.x,WING_OUT.y)
+		var bottom: int = integer(WING_SOUTH.x,WING_SOUTH.y)
+		var end_room = Rect2i(room.end.x+WING_GAP if side > 0 else room.position.x-WING_GAP-END_ROOM,-END_ROOM/2,END_ROOM,END_ROOM)
+		var end_x: int = center(end_room).x
+		var points: Array[Vector2i] = [p,Vector2i(p.x,top),Vector2i(far,top),Vector2i(far,bottom),Vector2i(end_x,bottom),Vector2i(end_x,end_room.end.y-1)]
+		var lines: Array = []
+		var plan = {"name":"west" if side < 0 else "east","rects":[],"lines":lines,"rooms":[]}
+		for k in range(1,points.size()):
+			lines.append([points[k-1],points[k]])
+			var hall: Rect2i = stretch(points[k-1],points[k],DEPTHS_HALL)
+			arm_halls.append(hall)
+			plan.rects.append(hall)
+		var edge: int = room.end.x if side > 0 else room.position.x-1
+		var gate_rect = Rect2i(edge,-WING_GATE/2,1,WING_GATE)
+		var passage = Rect2i(edge+1 if side > 0 else edge-(WING_GAP-1),-WING_GATE/2,WING_GAP-1,WING_GATE)
+		plan.gate = gate_rect
+		plan.dir = Vector2i(-side,0)
+		plan.room = end_room
+		plan.rects.append_array([end_room,passage])
+		parts.append_array([gate_rect,passage])
 		ends.append(end_room)
 		stones.append(center(end_room)-Vector2i.ONE)
+		wing_plans.append(plan)
 	parts.append_array(arm_halls)
 	parts.append_array(ends)
 	# The hallway south's rooms first, one each side, past its quiet stretch.
@@ -611,7 +648,12 @@ func basement_depths() -> void:
 			side_rooms.append(found)
 			break
 	for pass_number in CLOSE_PASSES:
-		for line in arm_lines: rooms_along(line[0],line[1],DEPTHS_HALL,parts,side_rooms)
+		for plan in wing_plans:
+			for line in plan.lines:
+				var found_here: Array = []
+				rooms_along(line[0],line[1],DEPTHS_HALL,parts,found_here)
+				side_rooms.append_array(found_here)
+				for found in found_here: plan.rooms.append(found)
 	var shift: Vector2i = settle(parts)
 	rooms.append(moved(room,shift))
 	for found in side_rooms: rooms.append(moved(found.room,shift))
@@ -622,12 +664,22 @@ func basement_depths() -> void:
 	halls.append(moved(down,shift))
 	for r in parts: carve(moved(r,shift))
 	for cell in stones: boulders.append(cell+shift)
+	for plan in wing_plans:
+		var rects: Array[Rect2i] = []
+		for r in plan.rects: rects.append(moved(r,shift))
+		for found in plan.rooms: rects.append_array([moved(found.room,shift),moved(found.passage,shift)])
+		wings.append({"name":plan.name,"rects":rects,"gate":moved(plan.gate,shift),"dir":plan.dir,"room":moved(plan.room,shift)})
+		rolling_room.append_array([moved(plan.room,shift),moved(plan.rects[-1],shift),moved(plan.gate,shift)])
 	var hall_in: Rect2i = moved(down,shift)
 	for k in LASER_ROWS.size():
 		var y: int = hall_in.position.y+LASER_ROWS[k]
 		lasers.append({"cell":Vector2i(hall_in.position.x if k%2==0 else hall_in.end.x-1,y),"dir":Vector2i.RIGHT if k%2==0 else Vector2i.LEFT})
 	var middle: int = elite_room.position.x+elite_room.size.x/2
-	elite_posts = [Vector2i(middle,elite_room.position.y+4),Vector2i(middle-5,elite_room.position.y+8),Vector2i(middle+5,elite_room.position.y+8)]
+	var table_top: int = elite_room.position.y+elite_room.size.y/2-WAR_TABLE.y/2
+	war_table = Rect2i(middle-WAR_TABLE.x/2,table_top,WAR_TABLE.x,WAR_TABLE.y)
+	# The swordsman before the table, toward the way in; the archer and the
+	# healer either side of it.
+	elite_posts = [Vector2i(middle,elite_room.position.y+4),Vector2i(war_table.position.x-4,table_top+1),Vector2i(war_table.end.x+3,table_top+1)]
 	quiet = [Rect2i(hall_in.position,Vector2i(hall_in.size.x,QUIET_HALL)),elite_room]
 	var along: int = QUIET_HALL+3
 	var turn = 0
@@ -635,9 +687,11 @@ func basement_depths() -> void:
 		guard_posts.append(Vector2i(hall_in.position.x+low+(1 if turn%2 == 0 else -1),hall_in.position.y+along))
 		along += GUARD_GAP
 		turn += 1
+	rolling_room.append(moved(room,shift))
 	kept_clear = [rooms[0]]
 	kept_clear.append_array(halls.slice(0,arm_halls.size()))
 	for r in ends: kept_clear.append(moved(r,shift))
+	for wing in wings: kept_clear.append(wing.gate.grow(2))
 	start = center(rooms[0])
 	exit_cell = start
 	place_stairs()
@@ -764,6 +818,12 @@ static func moved(r: Rect2i, shift: Vector2i) -> Rect2i:
 	return Rect2i(r.position+shift,r.size)
 
 # Whether `cell` lies behind the first level's gate.
+# Which wing `cell` lies in (-1 if none).
+func wing_of(cell: Vector2i) -> int:
+	for i in wings.size():
+		if wings[i].rects.any(func(r): return r.has_point(cell)): return i
+	return -1
+
 func behind_gate(cell: Vector2i) -> bool:
 	return sealed.any(func(r): return r.has_point(cell))
 

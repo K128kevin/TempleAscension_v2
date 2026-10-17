@@ -54,6 +54,45 @@ func puzzle_and_elites() -> void:
 	check(puzzle != null and puzzle.boulders.size()==2 and puzzle.plates.size()==2 and puzzle.beams.size()==3 and puzzle.lit,"Below: two boulders, two plates, and the lasers lit")
 	for beam in puzzle.beams:
 		check(Vector2(beam.end.x-beam.from.x,beam.end.z-beam.from.z).length()>=layout.quiet[0].size.x-1.0,"A beam spans the hallway, wall to wall")
+	# The wings' gates: shut, each opened by its wing's key, which the last
+	# of its bandits drops.
+	check(world.wing_gates.size()==2 and world.wing_gates.all(func(g): return not g.open) and not world.fits(world.wing_gate_point(0)),"The wings' gates stand locked")
+	var west: Array = game.wing_bandits(0)
+	check(west.size() >= 4 and game.wing_bandits(1).size() >= 4,"Bandits hold both wings (%d west, %d east)" % [west.size(),game.wing_bandits(1).size()])
+	for k in west.size()-1: west[k].hit(100000)
+	check(not game.wing_key_lying(0) and not Items.carries(game.run,"west_gate_key"),"No key falls while any of the wing's bandits stands")
+	west[-1].hit(100000)
+	var key_drop = game.pickups.filter(func(p): return p.drop.item.get("base","") == "west_gate_key")
+	check(key_drop.size()==1 and Items.name_of(key_drop[0].drop.item)=="West Gate Key" and key_drop[0].node.position.distance_to(west[-1].position) < 1.5,"The last of them drops the West Gate Key")
+	game.take_pickup(key_drop[0])
+	game.player.position = world.wing_gate_point(0)+Vector3(world.layout.wings[0].dir.x,0,world.layout.wings[0].dir.y)*-1.5
+	game.hud.tick(0)
+	check("Unlock" in game.hud.prompt.text,"At its gate with the key, the HUD offers to unlock it")
+	game.interact()
+	check(world.wing_gates[0].open and world.fits(world.wing_gate_point(0)) and not Items.carries(game.run,"west_gate_key") and "basement:1:west:open" in game.run.keys,"E opens it (the key left in the lock), and it stays open")
+	check(not world.wing_gates[1].open,"The east gate is still shut")
+	# Through it the boulder is pushed a short way to the plate before it.
+	for e in game.enemies: e.dormant = true
+	var stone0: Dictionary = puzzle.boulders[0]
+	game.player.position = puzzle.stand_point(stone0.cell,Vector2i.RIGHT,false)
+	game.interact()
+	puzzle.roll_to(puzzle.centre(layout.buttons[0]))
+	var pushes: int = puzzle.moves.size()
+	roll_on(puzzle,30.0)
+	check(stone0.cell == layout.buttons[0] and pushes <= 16 and puzzle.plates[0].down,"Through the open gate it is rolled onto the plate before it in %d moves" % pushes)
+	game.interact()
+	for e in game.enemies: e.dormant = false
+	# The east gate shut, its boulder cannot be got out.
+	var stone1: Dictionary = puzzle.boulders[1]
+	game.player.position = puzzle.stand_point(stone1.cell,Vector2i.LEFT,false)
+	game.interact()
+	puzzle.roll_to(puzzle.centre(layout.buttons[1]))
+	check(puzzle.moves.is_empty() or stone1.cell+puzzle.moves.reduce(func(a,m): return a+m.m,Vector2i.ZERO) != layout.buttons[1],"Behind its locked gate the other boulder cannot be rolled out")
+	puzzle.moves.clear()
+	game.interact()
+	# (Back where the rest of these checks expect it.)
+	stone0.cell = layout.boulders[0]; stone0.to = puzzle.centre(stone0.cell); stone0.from = stone0.to; stone0.node.position = stone0.to; puzzle.settle(stone0.node)
+	puzzle.nav_mark(layout.buttons[0]); puzzle.nav_mark(stone0.cell)
 	# Held (E beside it), a boulder is rolled where he clicks: he goes round
 	# to push it from the side it must be pushed from.
 	# (The bandits stood aside: a boulder is not rolled into a man.)
@@ -74,7 +113,9 @@ func puzzle_and_elites() -> void:
 	game.issue_click(false)
 	puzzle.roll_to(puzzle.centre(goal))
 	check(puzzle.moves.size()==4 and puzzle.moves.all(func(m): return not m.pull),"A click plans it there, pushing it four tiles")
+	game.sound.heard.clear()
 	roll_on(puzzle)
+	check("boulder-roll-short" in game.sound.heard and "boulder-roll-medium" in game.sound.heard and not puzzle.grinding_now,"It grinds as it goes, with Boulders' sounds, and falls quiet when it stops")
 	check(b.cell == goal and b.t >= 1.0 and not world.fits(b.to),"He goes round it as he must and rolls it there")
 	# Wedged in a corner, it is pulled out before it is pushed on.
 	b.cell = room.position; b.to = puzzle.centre(b.cell); b.from = b.to; b.node.position = b.to; puzzle.settle(b.node)
@@ -236,12 +277,22 @@ func test():
 					# and the elites' room beyond them.
 					var room: Rect2i = layout.rooms[0]
 					check(room.has_point(layout.start) and room.encloses(layout.arrival) and layout.buttons.size()==2 and layout.buttons.all(func(b): return room.encloses(Rect2i(b,Vector2i(2,2))) and not layout.arrival.grow(1).intersects(Rect2i(b,Vector2i(2,2)))),"Two pressure plates in the room he comes down into: "+label)
-					check(layout.boulders.size()==2 and layout.boulders.all(func(b): return b.y<room.position.y-10 and [b,b+Vector2i.RIGHT,b+Vector2i.DOWN,b+Vector2i.ONE].all(func(c): return layout.cells.has(c))) and layout.boulders.any(func(b): return b.x<room.position.x) and layout.boulders.any(func(b): return b.x>=room.end.x),"A boulder at the end of each hallway, north-west and north-east: "+label)
+					check(layout.boulders.size()==2 and layout.boulders.all(func(b): return [b,b+Vector2i.RIGHT,b+Vector2i.DOWN,b+Vector2i.ONE].all(func(c): return layout.cells.has(c))) and layout.boulders.any(func(b): return b.x<room.position.x) and layout.boulders.any(func(b): return b.x>=room.end.x),"A boulder in each wing's last room, west and east: "+label)
+					# The wings: out from the room's north and round, three times as
+					# long as they were, back to their last rooms beside the room, a
+					# locked gate (wide enough for a boulder) between.
+					check(layout.wings.size()==2 and layout.wings.map(func(w): return w.name)==["west","east"],"Two wings, west and east: "+label)
+					for wing in layout.wings:
+						var g: Rect2i = wing.gate
+						var hall_length = 0
+						for r in wing.rects.slice(0,5): hall_length += maxi(r.size.x,r.size.y)-Layout.DEPTHS_HALL
+						check(g.size.y==Layout.WING_GATE and g.size.x==1 and Layout.WING_GATE>=4 and room.grow(1).has_point(g.position) and wing.room.has_point(layout.boulders[0 if wing.name=="west" else 1]+Vector2i.ONE) and wing.rects.any(func(r): return r.has_point(g.position-wing.dir)) and layout.cells.has(g.position),"%s: its last room holds the boulder, beside the room of the plates, a gate %d wide between: %s" % [wing.name,g.size.y,label])
+						check(hall_length >= 125 and wing.rects[0].position.y < room.position.y,"%s: out from the room's north side and round, %d tiles of hallway: %s" % [wing.name,hall_length,label])
 					check(layout.lasers.size()==3 and layout.lasers.all(func(l): return layout.quiet[0].has_point(l.cell) and l.cell.y>room.end.y and not layout.cells.has(l.cell-l.dir)) and layout.elite_room.position.y>layout.lasers[-1].cell.y+8,"Lasers across the hallway south, the last room well beyond them: "+label)
 					check(layout.elite_posts.size()==3 and layout.elite_posts.all(func(c): return layout.elite_room.has_point(c) and layout.cells.has(c)),"Three posts in the last room: "+label)
 					var south: Rect2i = layout.halls[-1]
 					check(south.size.y==Layout.LASER_HALL and Layout.LASER_HALL==54 and layout.quiet[0].size.y==Layout.QUIET_HALL,"The hallway to it is three times as long as it was, its first stretch quiet: "+label)
-					var off_south: Array = layout.rooms.filter(func(r): return r.position.y>=south.position.y+Layout.QUIET_HALL and r.end.y<=south.end.y+2 and (r.end.x<south.position.x or r.position.x>=south.end.x))
+					var off_south: Array = layout.rooms.filter(func(r): return layout.wing_of(layout.center(r)) < 0 and r.position.y>=south.position.y+Layout.QUIET_HALL and r.end.y<=south.end.y+2 and (r.end.x<south.position.x or r.position.x>=south.end.x))
 					check(off_south.size()==Layout.HALL_ROOMS and off_south.any(func(r): return r.end.x<south.position.x) and off_south.any(func(r): return r.position.x>=south.end.x),"Two rooms off it, one each side, beyond the lasers: "+label)
 					check(layout.guard_posts.size()>=Data.AREAS.basement[1].guards.size() and layout.guard_posts.all(func(c): return south.has_point(c) and not layout.quiet[0].has_point(c) and layout.cells.has(c)),"Guards' posts down it: "+label)
 					check(layout.rooms.size()>=6 and not layout.gate.has_area() and not layout.vault.has_area(),"Rooms off the arms, and no gate: "+label)
@@ -347,6 +398,19 @@ func test():
 	check("locked" in game.hud.prompt.text,"At the gate the HUD says it is locked")
 	game.interact()
 	check(not world.gate_open,"Without the key it stays shut")
+	# Its bearer slain too soon (before two thirds of those this side of the
+	# gate are dead), the key does not fall: another of them has it.
+	var first_holder = game.key_holder
+	first_holder.hit(100000)
+	check(game.key_pickup().is_empty() and game.key_holder != first_holder and not game.key_holder.dead and is_instance_valid(game.key_holder.visual.belt_key) and not is_instance_valid(first_holder.visual.belt_key),"Slain too soon, its bearer drops no key; another bandit wears it")
+	var side: Array = game.key_side()
+	for enemy in side:
+		if game.key_free(): break
+		if not enemy.dead and enemy != game.key_holder: enemy.hit(100000)
+	check(game.key_pickup().is_empty() and side.filter(func(e): return e.dead).size() >= ceili(side.size()*2.0/3.0),"Two thirds of them dead, the key has still to be won from its bearer")
+	holder = game.key_holder
+	holder.hit(100000)
+	check(not game.key_pickup().is_empty(),"Its bearer slain then, the key falls")
 	for enemy in game.enemies:
 		if not enemy.dead: enemy.hit(100000)
 	check(game.remaining()==0 and not (game.way_open() and game.has_way_on()) and game.run.cleared.is_empty() and not game.way_open(),"With the level cleared the gate is still locked")

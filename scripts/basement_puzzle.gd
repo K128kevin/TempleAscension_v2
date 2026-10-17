@@ -175,7 +175,8 @@ func plate_model() -> Dictionary:
 	glow.emission = Color(1,.3,.12)
 	glow.emission_energy_multiplier = .4
 	groove.material_override = glow
-	groove.position = Vector3.UP*.07
+	# (Just below the top's rim, so that pressed down it shows only round its edge.)
+	groove.position = Vector3.UP*-.03
 	root.add_child(groove)
 	var top: Node3D = Art.model("floor",Vector3(1.6,.14,1.6),Art.world_stone(Art.material("stone",Color(.6,.56,.5))))
 	top.position = Vector3.UP*.02
@@ -296,7 +297,7 @@ func here(b: Dictionary) -> Vector3:
 # its way as he pulls it, does not count.)
 func footprint_free(cell: Vector2i, index: int, starting: bool = false, pulled: bool = false) -> bool:
 	for c in footprint(cell):
-		if not layout.cells.has(c): return false
+		if not layout.cells.has(c) or not may_roll(c): return false
 	var mid: Vector3 = centre(cell)
 	for i in boulders.size():
 		if i == index: continue
@@ -330,7 +331,6 @@ func settle_plates(hero, dt: float) -> void:
 		if hero != null and absf(hero.position.x-mid.x) <= 1.0 and absf(hero.position.z-mid.z) <= 1.0: down = true
 		if down != plate.down:
 			plate.down = down
-			if hero != null: game.sound.play("rock-impact",-16)
 		plate.sink = move_toward(plate.sink,1.0 if down else 0.0,dt*8.0)
 		plate.top.position.y = .02-.09*plate.sink
 		plate.lamp.emission_energy_multiplier = .4+2.6*plate.sink
@@ -413,9 +413,9 @@ func take_hold(b: Dictionary) -> void:
 	if way == Vector2i.ZERO: way = Vector2i.UP
 	var spot: Vector3 = b.to-Vector3(way.x,0,way.y)*STAND
 	if world.fits(spot): game.route = world.path(game.player.position,spot)
-	game.sound.play("rock-impact",-24)
 
 func let_go() -> void:
+	grinding(false)
 	held = {}
 	moves.clear()
 	braced = false
@@ -451,6 +451,10 @@ static func stand_cells(cell: Vector2i, m: Vector2i, pull: bool) -> Array[Vector
 		var s: Vector2i = c+(m if pull else -m)
 		if not s in foot: out.append(s)
 	return out
+
+# Whether a boulder may lie on `c` (Layout.rolling_room).
+func may_roll(c: Vector2i) -> bool:
+	return layout.rolling_room.is_empty() or layout.in_any(layout.rolling_room,c)
 
 func open_tile(c: Vector2i, index: int) -> bool:
 	if not layout.cells.has(c): return false
@@ -525,7 +529,7 @@ func plan(b: Dictionary, goal: Vector2i) -> Array:
 			var to: Vector2i = cell+m
 			var free = true
 			for c in footprint(to):
-				if not open_tile(c,index): free = false
+				if not open_tile(c,index) or not may_roll(c): free = false
 			if not free: continue
 			var spots: Array[Vector2i] = stand_cells(cell,m,o.pull)
 			if not spots.all(func(c): return open_tile(c,index)): continue
@@ -555,6 +559,9 @@ func plan(b: Dictionary, goal: Vector2i) -> Array:
 func work(dt: float) -> void:
 	var b: Dictionary = held
 	var hero = game.player
+	# Heard while it is being moved, as in Boulders: its two grinding
+	# recordings looped together, quietly (boulder-roll-short and -medium).
+	grinding(b.t < 1.0 or (braced and not moves.is_empty()))
 	if b.t < 1.0:
 		var way = Vector3(b.dir.x,0,b.dir.y)
 		hero.position = here(b)+way*(STAND if b.pull else -STAND)
@@ -600,7 +607,6 @@ func work(dt: float) -> void:
 	braced = true
 	hero.position = Vector3(spot.x,hero.position.y,spot.z)
 	moves.pop_front()
-	game.sound.play("rock-impact",-22)
 	start_roll(b,b.cell+move.m,PULL_SPEED if move.pull else PUSH_SPEED,move.pull)
 
 # Marks the tiles about a boulder at `cell` walkable or not on the floor's
@@ -612,3 +618,15 @@ func nav_mark(cell: Vector2i) -> void:
 			var at: Vector3 = layout.to_world(Vector2i(x,y))
 			var point = Vector2i(roundi(at.x),roundi(at.z))
 			if world.nav.is_in_boundsv(point): world.nav.set_point_solid(point,not world.fits(at,.4))
+
+# The sound of a boulder grinding over the floor, from Boulders.
+const GRIND = ["boulder-roll-short","boulder-roll-medium"]
+const GRIND_VOLUME = -16.0
+var grinding_now = false
+func grinding(on: bool) -> void:
+	if on == grinding_now: return
+	grinding_now = on
+	for id in GRIND: game.sound.looping(id,on,GRIND_VOLUME)
+
+func _exit_tree() -> void:
+	if grinding_now and is_instance_valid(game): grinding(false)

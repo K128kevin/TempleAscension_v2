@@ -95,3 +95,25 @@ func release(sound, fade: float = .4) -> void:
 func note(id: String) -> void:
 	heard.append(id)
 	if heard.size()>64: heard.pop_front()
+
+# Sounds that loop while something goes on (a boulder being pushed), by id:
+# started by `looping(id, true)` and stopped by `looping(id, false)`; paused
+# with the game as the held sounds are.
+var loops: Dictionary = {}
+func looping(id: String, on: bool, volume: float = -11) -> void:
+	if on and not loops.has(id): note(id)
+	if not on or muted or DisplayServer.get_name()=="headless":
+		if loops.has(id):
+			if is_instance_valid(loops[id]): loops[id].queue_free()
+			loops.erase(id)
+		return
+	if loops.has(id) and is_instance_valid(loops[id]): return
+	var sound := AudioStreamPlayer.new()
+	add_child(sound)
+	var stream: AudioStream = stream(id).duplicate()
+	if stream is AudioStreamMP3: stream.loop = true
+	sound.stream = stream
+	sound.volume_db = volume
+	sound.play()
+	loops[id] = sound
+	holding.append(sound)

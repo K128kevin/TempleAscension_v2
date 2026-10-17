@@ -1195,6 +1195,13 @@ basement (`scripts/ash_death.gd`), as it does when a beam kills the player in
 Boulders. That game's credits list its effects as from www.zapsplat.com, this
 one's source not yet confirmed there.
 
+`assets/audio/boulder-roll-short.mp3` and `boulder-roll-medium.mp3` are the same
+game's `short_boulder_1.mp3` and `medium_boulder_1.mp3`, unedited (0.9 s and
+0.6 s): looped together, quietly, while the hero pushes or pulls a boulder in
+the arena basement, as they are in Boulders while a boulder is pushed
+(`scripts/basement_puzzle.gd`, `Audio.looping`). Their source, like
+`death.mp3`'s, is not yet confirmed in that game's credits.
+
 `assets/audio/fire-whoosh.mp3` is ZapSplat's "fire whoosh, fast burst, flames"
 (zapsplat_sound_design_fire_whoosh_fast_burst_flames_112136.mp3, from its fire
 whooshes pack), unedited: a 3.8 s burst of flame with a burning tail. It plays as

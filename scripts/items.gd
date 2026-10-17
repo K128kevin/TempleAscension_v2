@@ -122,10 +122,10 @@ const BASES = {
 
 	# --- Common: what drops, and what the prefixes and suffixes are put on.
 	# Light armor.
-	"silk_gloves":{"name":"Silk Gloves","rarity":"common","slot":"hands","weight":"light","armor":5.0,"bonus":{"intelligence":2},"look":{"tint":Color(.6,.07,.06)}},
-	"silk_robe":{"name":"Silk Robe","rarity":"common","slot":"chest","weight":"light","armor":8.0,"bonus":{"intelligence":3},"look":{"tint":Color(.3,.04,.04)}},
-	"silk_pants":{"name":"Silk Pants","rarity":"common","slot":"legs","weight":"light","armor":8.0,"bonus":{"intelligence":2},"look":{"tint":Color(.42,.05,.045)}},
-	"silk_hood":{"name":"Silk Hood","rarity":"common","slot":"head","weight":"light","armor":5.0,"bonus":{"willpower":2},"look":{"tint":Color(.33,.05,.045)}},
+	"silk_gloves":{"name":"Silk Gloves","rarity":"common","slot":"hands","weight":"light","armor":5.0,"bonus":{"intelligence":2},"look":{"tint":Color(.19,.02,.018)}},
+	"silk_robe":{"name":"Silk Robe","rarity":"common","slot":"chest","weight":"light","armor":8.0,"bonus":{"intelligence":3},"look":{"tint":Color(.09,.012,.012)}},
+	"silk_pants":{"name":"Silk Pants","rarity":"common","slot":"legs","weight":"light","armor":8.0,"bonus":{"intelligence":2},"look":{"tint":Color(.13,.015,.014)}},
+	"silk_hood":{"name":"Silk Hood","rarity":"common","slot":"head","weight":"light","armor":5.0,"bonus":{"willpower":2},"look":{"tint":Color(.095,.014,.013)}},
 	"wizard_hat":{"name":"Wizard Hat","rarity":"common","slot":"head","weight":"light","armor":4.0,"bonus":{"intelligence":2},"look":{"mesh":"wizard_hat","tint":Color(.12,.13,.2)}},
 	"sandals":{"name":"Sandals","rarity":"common","slot":"feet","weight":"light","armor":5.0},
 	# Medium armor.
@@ -204,7 +204,11 @@ const BASES = {
 
 	# --- Carried, not worn or held: the key to the arena basement's gate,
 	# which one of its bandits keeps (scripts/game.gd). Never random loot.
-	"gate_key":{"name":"Rusted Gate Key","rarity":"quest","slot":"key"}}
+	"gate_key":{"name":"Rusted Gate Key","rarity":"quest","slot":"key","opens":"Opens the locked gate at the far end of the basement's great hallway"},
+	# The keys of the basement's lower level's two wings: each opens the gate
+	# between its wing's last room and the room of the pressure plates.
+	"west_gate_key":{"name":"West Gate Key","rarity":"quest","slot":"key","opens":"Opens the gate from the west wing's last room to the room of the plates"},
+	"east_gate_key":{"name":"East Gate Key","rarity":"quest","slot":"key","opens":"Opens the gate from the east wing's last room to the room of the plates"}}
 # (`ALL` is the name the rest of the game has long used for the catalogue.)
 const ALL = BASES
 
@@ -772,7 +776,7 @@ static func describe(thing, class_id: String = "") -> Dictionary:
 	var what = ""
 	if item.slot == "key":
 		what = "Key"
-		lines.append("Opens the locked gate at the end of the basement's hallway")
+		lines.append(item.get("opens","Opens a locked gate"))
 	elif item.slot in ARMOR_SLOTS:
 		what = "%s · %s" % [ARMOR_TITLES[item.weight],SLOT_TITLES[item.slot]]
 		lines.append("%s armor" % figure(item.armor))

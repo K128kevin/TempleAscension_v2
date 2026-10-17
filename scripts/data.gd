@@ -20,7 +20,7 @@ const DUNGEONS = ["basement","cave"]
 # kind elsewhere (its elites are their own); `kit`: how they are dressed,
 # scripts/bandit.gd.)
 const AREAS = {
-	"basement":[{"level":1,"counts":{"bandit":38,"bandit_archer":22}},{"level":3,"counts":{"bandit":28,"bandit_archer":16},"might":{"health":1.25,"damage":1.4,"xp":1.3},"kit":"veteran","guards":["bandit","bandit_archer","bandit","bandit","bandit_archer","bandit"],"elites":["bandit_champion","bandit_marksman","bandit_healer"]}],
+	"basement":[{"level":1,"counts":{"bandit":38,"bandit_archer":22}},{"level":3,"counts":{"bandit":40,"bandit_archer":22},"might":{"health":1.25,"damage":1.4,"xp":1.3},"kit":"veteran","guards":["bandit","bandit_archer","bandit","bandit","bandit_archer","bandit"],"elites":["bandit_champion","bandit_marksman","bandit_healer"]}],
 	"cave":[{"level":5,"counts":{"bandit":29,"bandit_archer":18}},{"level":8,"counts":{"bandit":36,"bandit_archer":23}}],
 	"temple":[{"level":11,"counts":{"gladiator":35,"archer":20,"lion":16}},
 		{"level":15,"counts":{"gladiator":36,"archer":23,"lion":26,"wizard":16}},
@@ -114,7 +114,7 @@ static func casts_left(run: Dictionary) -> bool:
 static func new_run(class_id: String = "warrior") -> Dictionary:
 	# No skill is learned yet: the first level's point goes wherever the
 	# player likes.
-	var run = {"version":18,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"keys":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
+	var run = {"version":19,"place":"temple","cleared":[],"class_id":class_id,"level":1,"xp":0,"xp_claimed":[],"skills":{},"skill_points":1,"hotbar":["","","","","",""],"floor":0,"stats":[5,5,5,5,5],"equipment":{},"bag":[],"difficulty":0,"gems":[],"dead":[],"drops":[],"keys":[],"deaths":0,"seed":randi(),"position":[0,9],"health":100.0,"energy":100.0,"phase":"playing","points":0,"completed":false,"heal_cooldown":0.0}
 	Items.outfit(run,class_id)
 	return run
 

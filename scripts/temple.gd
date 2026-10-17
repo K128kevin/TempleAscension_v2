@@ -297,6 +297,8 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 		dirtied.seed = Layout.floor_seed(run_seed,level+13+Layout.KINDS[layout.kind].salt)
 		grime_walls(dirtied)
 	if layout.gate.has_area(): setup_gate(stone)
+	if layout.war_table.has_area(): war_table()
+	for i in layout.wings.size(): setup_wing_gate(i,stone)
 	if layout.court.has_area(): setup_court_torches()
 	# (No torch is hung over a statue standing against its wall, nor in a
 	# webbed corner.)
@@ -686,6 +688,101 @@ func rock_wall(pos: Vector3, dimensions: Vector3) -> Node3D:
 		rock.rotation.y = (0.0 if along_x else PI/2)+(chance.call(4.0)-.5)*.5+(PI if chance.call(5.0) > .5 else 0.0)
 	return run
 
+# The war table in the middle of the basement's last room: an old trestle
+# table of weathered, worn wood, chairs about it (two pushed back askew, one
+# knocked over), and on it the bandits' maps and plans (assets/shaders/
+# war_map.gdshader), wooden markers set out on the map, and a candle burned
+# low. The table and the chairs are solid.
+const WAR_TABLE_HEIGHT = .85
+func war_table() -> void:
+	var rect: Rect2i = layout.war_table
+	var middle: Vector3 = layout.to_world(rect.position)+Vector3(rect.size.x-1,0,rect.size.y-1)*.5
+	var around: Array[Vector2i] = []
+	for y in range(rect.position.y-2,rect.end.y+2):
+		for x in range(rect.position.x-2,rect.end.x+2): around.append(Vector2i(x,y))
+	var show = func(thing: Node3D) -> void:
+		add_child(thing)
+		visibility_nodes.append(thing)
+		visibility_cells[thing] = around
+	var old_wood: StandardMaterial3D = Kit.planks(Color(.33,.27,.21),1.4).duplicate()
+	old_wood.roughness = 1.0
+	var worn = func(thing: Node3D) -> void:
+		for mesh in thing.find_children("*","MeshInstance3D",true,false): mesh.material_override = old_wood
+	var table: Node3D = Kit.prop("table",WAR_TABLE_HEIGHT)
+	worn.call(table)
+	table.position = middle
+	show.call(table)
+	for y in range(rect.position.y,rect.end.y):
+		for x in range(rect.position.x,rect.end.x):
+			layout.cells.erase(Vector2i(x,y))
+			solid_floor[Vector2i(x,y)] = true
+	# The chairs: two along each side, one at each end, facing in.
+	var half = Vector2(rect.size.x*.5,rect.size.y*.5)
+	var seats = [[Vector3(-.75,0,-half.y-.45),0.0,0.0],[Vector3(.8,0,-half.y-.5),0.0,.25],[Vector3(-.8,0,half.y+.45),PI,-.1],[Vector3(.7,0,half.y+.75),PI,.45],[Vector3(-half.x-.45,0,0),PI/2,.05],[Vector3(half.x+.6,0,.2),-PI/2,0.0]]
+	for k in seats.size():
+		var chair: Node3D = Kit.prop("chair",1.0)
+		worn.call(chair)
+		var at: Vector3 = middle+seats[k][0]
+		var holder = Node3D.new()
+		holder.position = at
+		holder.rotation.y = seats[k][1]+seats[k][2]
+		holder.add_child(chair)
+		# (One knocked over in some quarrel, lying on its back.)
+		if k == 3:
+			chair.rotation.x = -PI/2
+			chair.position = Vector3(0,.28,-.5)
+		show.call(holder)
+		var cell: Vector2i = layout.to_cell(at)
+		if layout.cells.has(cell):
+			layout.cells.erase(cell)
+			solid_floor[cell] = true
+	# The maps and plans, overlapping, turned this way and that.
+	var top: float = WAR_TABLE_HEIGHT+.003
+	var sheets = [[0.0,Vector2(1.15,.8),Vector3(-.15,0,0),.06,.3],[0.0,Vector2(.72,.52),Vector3(.95,0,.18),-.22,1.7],[1.0,Vector2(.42,.58),Vector3(-1.1,0,-.05),.18,2.9],[1.0,Vector2(.4,.55),Vector3(.55,0,-.32),-.4,4.1]]
+	for k in sheets.size():
+		var sheet = MeshInstance3D.new()
+		var plane = PlaneMesh.new()
+		plane.size = sheets[k][1]
+		sheet.mesh = plane
+		var drawn = ShaderMaterial.new()
+		drawn.shader = load("res://assets/shaders/war_map.gdshader")
+		drawn.set_shader_parameter("kind",sheets[k][0])
+		drawn.set_shader_parameter("seed",sheets[k][4])
+		sheet.material_override = drawn
+		sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		sheet.position = middle+sheets[k][2]+Vector3.UP*(top+k*.002)
+		sheet.rotation.y = sheets[k][3]
+		show.call(sheet)
+	# Markers on the map: theirs in dark wood, the others' painted red.
+	var dark = Kit.planks(Color(.18,.12,.08),3.0)
+	var painted = Kit.gritty(Color(.42,.07,.05))
+	for k in 7:
+		var piece = MeshInstance3D.new()
+		var shape = CylinderMesh.new()
+		shape.top_radius = .022
+		shape.bottom_radius = .028
+		shape.height = .05
+		shape.radial_segments = 10
+		piece.mesh = shape
+		piece.material_override = painted if k >= 4 else dark
+		piece.position = middle+Vector3(-.15+(-.4+.13*k),top+.035,sin(k*1.7)*.22)
+		show.call(piece)
+	# A candle burned low at the far end, still alight.
+	var stick: Node3D = Kit.prop("candlestick",.3)
+	stick.position = middle+Vector3(-1.2,WAR_TABLE_HEIGHT,.38)
+	show.call(stick)
+	var flame = preload("res://scripts/candle_flame.gd").new()
+	add_child(flame)
+	flame.setup(stick,Kit.sized("candlestick",.3),true)
+	# (And a lantern's warmth over the table, that the maps can be read.)
+	var glow = OmniLight3D.new()
+	glow.light_color = Color(1,.68,.38)
+	glow.light_energy = 1.4
+	glow.omni_range = 5.5
+	glow.omni_attenuation = 1.3
+	glow.position = middle+Vector3.UP*2.4
+	show.call(glow)
+
 # Where nothing solid is set down: the basement's last level's ways for its
 # boulders (Layout.kept_clear), and the hallway of the lasers and the room
 # beyond (a statue in a beam's way would end it short).
@@ -1009,8 +1106,7 @@ func gate_point() -> Vector3:
 	var g: Rect2i = layout.gate
 	return layout.to_world(g.position)+Vector3(g.size.x-1,0,g.size.y-1)*.5
 
-func bar_gate(barred: bool) -> void:
-	var g: Rect2i = layout.gate
+func bar_gate(barred: bool, g: Rect2i = layout.gate) -> void:
 	for y in range(g.position.y,g.end.y):
 		for x in range(g.position.x,g.end.x):
 			var cell = Vector2i(x,y)
@@ -1038,6 +1134,42 @@ func open_gate(instantly: bool = false) -> void:
 	var swing = create_tween()
 	swing.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	swing.tween_method(func(t): BasementProps.open_gate(gate_node,t),0.0,1.0,GATE_SWING)
+
+# The gates of the basement's lower level's two wings (Layout.wings): each a
+# gate as the first level's is, as wide as its passage (room for a boulder
+# rolled through it), shut between its wing's last room and the room of the
+# plates until its key opens it. Each {"node", "open", "name"}.
+var wing_gates: Array[Dictionary] = []
+func setup_wing_gate(i: int, stone: Material) -> void:
+	var wing: Dictionary = layout.wings[i]
+	var g: Rect2i = wing.gate
+	var node: Node3D = BasementProps.gate(g.size.x*g.size.y,GATE_HEIGHT,WALL_HEIGHT,stone)
+	add_child(node)
+	node.position = wing_gate_point(i)
+	node.rotation.y = atan2(wing.dir.x,wing.dir.y)
+	visibility_nodes.append(node)
+	var faces: Array[Vector2i] = []
+	for y in range(g.position.y-1,g.end.y+1):
+		for x in range(g.position.x-1,g.end.x+1): faces.append(Vector2i(x,y))
+	visibility_cells[node] = faces
+	wing_gates.append({"node":node,"open":false,"name":wing.name})
+	bar_gate(true,g)
+
+func wing_gate_point(i: int) -> Vector3:
+	var g: Rect2i = layout.wings[i].gate
+	return layout.to_world(g.position)+Vector3(g.size.x-1,0,g.size.y-1)*.5
+
+func open_wing_gate(i: int, instantly: bool = false) -> void:
+	var gate: Dictionary = wing_gates[i]
+	if gate.open: return
+	gate.open = true
+	bar_gate(false,layout.wings[i].gate)
+	if instantly:
+		BasementProps.open_gate(gate.node,1.0)
+		return
+	var swing = create_tween()
+	swing.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	swing.tween_method(func(t): BasementProps.open_gate(gate.node,t),0.0,1.0,GATE_SWING)
 
 # The light beyond a door to the world outside follows the time of day there
 # (scripts/daylight.gd).
@@ -1155,6 +1287,7 @@ func post_allowed(cell: Vector2i) -> bool:
 	if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): return false
 	# (Nor behind the basement's gate, nor in its mouth.)
 	if layout.vault.has_point(cell) or (layout.gate.has_area() and layout.gate.grow(3).has_point(cell)): return false
+	if layout.wings.any(func(w): return w.gate.grow(3).has_point(cell)): return false
 	# (Nor, on the basement's last level, in the hallway of the lasers or the
 	# room beyond, by a boulder, or on a pressure plate.)
 	if layout.in_any(layout.quiet,cell): return false

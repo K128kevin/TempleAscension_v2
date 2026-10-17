@@ -319,6 +319,7 @@ func load_floor() -> void:
 				enemy.hp = 0
 				enemy.visible = false
 		setup_key(came_up)
+		setup_wings()
 		# Rats scurry about the arena basement (scripts/rats.gd), one to every
 		# RAT_ROOM tiles of its floor.
 		if run.place == "basement":
@@ -1453,10 +1454,13 @@ func enemy_died(enemy) -> void:
 		loot_forced = {}
 		if not found.is_empty(): drop_item(found,enemy.position)
 	if not enemy.uid in run.dead: run.dead.append(enemy.uid)
+	wing_key_check(enemy)
 	if enemy == key_holder and not has_key() and not gate_opened() and key_pickup().is_empty():
-		enemy.visual.drop_key()
-		drop_item(Items.make(GATE_KEY),enemy.position)
-		toast("A rusted iron key falls from the bandit's belt.")
+		# (Too soon, it is not dropped: another of them has it now.)
+		if key_free() or not pass_key():
+			enemy.visual.drop_key()
+			drop_item(Items.make(GATE_KEY),enemy.position)
+			toast("A rusted iron key falls from the bandit's belt.")
 	if enemy.kind=="boss":
 		crown_available = true
 		crown_position = enemy.position
@@ -1797,8 +1801,93 @@ func setup_key(came_up: bool) -> void:
 	if came_up and not gate_opened(): run.keys.append(key_name()+":open")
 	if gate_opened(): world.open_gate(true)
 	if key_holder == null or has_key() or gate_opened(): return
+	# (Its bearer slain already, and too soon for it to have dropped: one of
+	# those still standing has it.)
+	if key_holder.dead and not key_free() and not run.drops.any(func(d): return d.item.get("base","") == GATE_KEY) and pass_key(false): return
 	if not key_holder.dead: key_holder.visual.carry_key(Temple.BasementProps.key_model())
 	elif not run.drops.any(func(d): return d.item.get("base","") == GATE_KEY): run.drops.append({"item":Items.make(GATE_KEY),"position":[key_holder.position.x,key_holder.position.z]})
+
+# The key does not drop until KEY_SHARE of the bandits this side of the gate
+# (those that can be got at before it opens) are dead.
+const KEY_SHARE = 2.0/3.0
+func key_side() -> Array:
+	return enemies.filter(func(e): return not e.dormant and not world.layout.behind_gate(world.layout.to_cell(e.position)))
+
+func key_free() -> bool:
+	var side: Array = key_side()
+	return side.is_empty() or side.filter(func(e): return e.dead).size() >= ceili(side.size()*KEY_SHARE)
+
+# Its bearer slain too soon: the key goes to one of those still standing this
+# side of the gate, at his belt (with `told`, said so). Whether anyone was left.
+func pass_key(told: bool = true) -> bool:
+	var standing: Array = key_side().filter(func(e): return not e.dead)
+	if standing.is_empty(): return false
+	if is_instance_valid(key_holder): key_holder.visual.drop_key()
+	key_holder = standing[posmod(hash([run.seed,run.dead.size()]),standing.size())]
+	key_holder.visual.carry_key(Temple.BasementProps.key_model())
+	if told: toast("The bandit carried no key after all: another of them must have it.")
+	return true
+
+# --- The wings' gates and their keys ----------------------------------------------
+# On the basement's lower level each wing's last room is shut off from the
+# room of the plates by a gate (Temple.wing_gates), its key (WING_KEYS)
+# dropped by the last of the wing's bandits to fall. Opened, it stays open
+# (`run.keys`: "basement:1:west:open"), its key left in the lock.
+const WING_KEYS = {"west":"west_gate_key","east":"east_gate_key"}
+func wing_key_name(i: int) -> String:
+	return "%s:%d:%s:open" % [run.place,int(run.floor),world.layout.wings[i].name]
+
+func wing_bandits(i: int) -> Array:
+	return enemies.filter(func(e): return e.get_meta("wing",-1) == i)
+
+func wing_key_lying(i: int) -> bool:
+	var base: String = WING_KEYS[world.layout.wings[i].name]
+	return run.drops.any(func(d): return d.item.get("base","") == base)
+
+# The way it stands on arriving: each bandit known by the wing he stands in;
+# gates opened before stand open; a wing cleared before whose key was never
+# taken has it lying in its last room.
+func setup_wings() -> void:
+	if not world is Temple or world.layout.wings.is_empty(): return
+	for e in enemies: e.set_meta("wing",world.layout.wing_of(world.layout.to_cell(e.position)))
+	for i in world.layout.wings.size():
+		var base: String = WING_KEYS[world.layout.wings[i].name]
+		if wing_key_name(i) in run.keys: world.open_wing_gate(i,true)
+		elif wing_bandits(i).all(func(e): return e.dead) and not Items.carries(run,base) and not wing_key_lying(i):
+			var room: Rect2i = world.layout.wings[i].room
+			var at: Vector3 = world.layout.to_world(room.position+Vector2i(room.size.x/2,room.size.y-2))
+			run.drops.append({"item":Items.make(base),"position":[at.x,at.z]})
+
+# The last of a wing's bandits slain: its key falls from him.
+func wing_key_check(enemy) -> void:
+	var i: int = enemy.get_meta("wing",-1)
+	if i < 0 or not world is Temple: return
+	var base: String = WING_KEYS[world.layout.wings[i].name]
+	if wing_key_name(i) in run.keys or Items.carries(run,base) or wing_key_lying(i): return
+	if wing_bandits(i).any(func(e): return not e.dead): return
+	drop_item(Items.make(base),enemy.position)
+	toast("The %s falls from the last of them." % Items.name_of(Items.make(base)))
+
+# The wing gate he stands at (-1 if none).
+func at_wing_gate() -> int:
+	if not world is Temple: return -1
+	for i in world.wing_gates.size():
+		if player.position.distance_to(world.wing_gate_point(i)) < GATE_REACH+.5: return i
+	return -1
+
+func unlock_wing_gate(i: int) -> void:
+	var base: String = WING_KEYS[world.layout.wings[i].name]
+	if not Items.carries(run,base):
+		toast("The gate is locked.")
+		return
+	world.open_wing_gate(i)
+	for k in run.bag.size():
+		if not run.bag[k].is_empty() and run.bag[k].get("base","") == base:
+			run.bag[k] = {}
+			break
+	if not wing_key_name(i) in run.keys: run.keys.append(wing_key_name(i))
+	toast("The key turns in the lock, and the gate swings open.")
+	save_run()
 
 func unlock_gate() -> void:
 	world.open_gate()
@@ -1820,6 +1909,10 @@ func puzzle():
 	return world.puzzle if world is Temple else null
 
 func interact() -> void:
+	# (At one of the wings' locked gates, E unlocks it.)
+	if at_wing_gate() >= 0 and not world.wing_gates[at_wing_gate()].open:
+		unlock_wing_gate(at_wing_gate())
+		return
 	# E takes hold of a boulder beside him, and lets it go again.
 	var stones = puzzle()
 	if stones != null and stones.holding():
