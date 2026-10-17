@@ -830,11 +830,14 @@ func rally(percent: float, seconds: float) -> void:
 	rally_bonus = maxf(rally_bonus,percent)
 	rally_time = maxf(rally_time,seconds)
 
-func stun(seconds: float) -> void:
+# (`fading`: stunned again soon after, for less: Shield Bash's. Ice Spikes'
+# stun is its full second every time.)
+func stun(seconds: float, fading: bool = true) -> void:
 	if dead or dormant or laser_time>0: return
-	stun_count = stun_count+1 if stun_memory>0 else 0
-	stun_memory = STUN_MEMORY
-	seconds *= pow(.5,stun_count)
+	if fading:
+		stun_count = stun_count+1 if stun_memory>0 else 0
+		stun_memory = STUN_MEMORY
+		seconds *= pow(.5,stun_count)
 	held("stun",seconds)
 	visual.react("HitStagger",.6)
 	game.float_text(position+Vector3.UP*1.9,"Stunned",Color(1,.88,.35))

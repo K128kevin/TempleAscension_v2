@@ -120,7 +120,12 @@ func test():
 		ready(); foe.hp = foe.max_hp; foe.end_stun()
 		cast("ice_bolt",foe.position); play(1.5)
 		if foe.stunned and foe.daze=="freeze": frozen += 1
-	check(within(foe,1,140) and frozen>=2 and frozen<=18,"Rank 5: 140%%, and one bolt in five freezes (%d of 40)" % frozen)
+	check(within(foe,1,140) and frozen>=3 and frozen<=20,"Rank 5: 140%%, and one bolt in four freezes (%d of 40)" % frozen)
+	check(range(1,6).map(func(r): return Book.values("ice_bolt",r).y)==[5.0,10.0,15.0,20.0,25.0] and range(1,6).map(func(r): return Book.values("ice_bolt",r).z)==[2.0,2.5,3.0,3.5,4.0],"Its freeze: 5, 10, 15, 20 and 25%% a bolt, for 2, 2.5, 3, 3.5 and 4 seconds")
+	ready(); foe.hp = foe.max_hp; foe.end_stun()
+	game.skills.ice_bolt_hit(foe,{"direction":Vector3.FORWARD,"extra":{"percent":0.0,"freeze":100.0,"frozen_for":4.0}})
+	check(foe.daze=="freeze" and absf(foe.stagger_time-4.0)<.01,"Rank 5 freezes for 4 seconds")
+	foe.end_stun()
 	check(range(1,6).map(func(r): return Book.values("ice_bolt",r).x)==[100.0,110.0,120.0,130.0,140.0],"Ice Bolt deals 100, 110, 120, 130 and 140%% by rank")
 	foe.end_stun()
 	hero({"ice_bolt":1,"improved_chill":5}); foe.hp = foe.max_hp
@@ -181,12 +186,17 @@ func test():
 	check(game.skills.patches.size()<=game.skills.MAX_PATCHES,"No more than %d patches of ice lie at once (%d)" % [game.skills.MAX_PATCHES,game.skills.patches.size()])
 	clear()
 
-	# Ice Spikes: everyone within 2 metres of the aim.
+	# Ice Spikes: everyone within 3 metres of the aim, stunned a second.
 	hero({"ice_spikes":1})
-	var ring = [dummy(6),dummy(7.5),dummy(6,14),dummy(9.5)]
-	check(cast("ice_spikes",at) and game.player.visual.state=="CastGround" and is_equal_approx(game.run.energy,65.0),"Ice Spikes costs 35, raised with both hands")
+	var ring = [dummy(6),dummy(7.5),dummy(6,14),dummy(9.8),dummy(8.6)]
+	check(cast("ice_spikes",at) and game.player.visual.state=="CastGround" and is_equal_approx(game.run.energy,50.0),"Ice Spikes costs 50, raised with both hands")
+	for i in 40:
+		play(.05)
+		if lost(ring[0]) > 0: break
+	check(ring[0].stunned and ring[0].daze=="stun" and absf(ring[0].stagger_time-1.0)<.1 and ring[4].stunned and not ring[3].stunned,"Those they strike are stunned for a second")
 	play(1.5)
-	check(within(ring[0],1,100) and within(ring[1],1,100) and within(ring[2],1,100) and lost(ring[3])==0,"Rank 1: 100%% across 4 metres, not beyond (%.1f, %.1f, %.1f, %.1f)" % [lost(ring[0]),lost(ring[1]),lost(ring[2]),lost(ring[3])])
+	check(not ring[0].stunned,"And then not")
+	check(within(ring[0],1,100) and within(ring[1],1,100) and within(ring[2],1,100) and within(ring[4],1,100) and lost(ring[3])==0,"Rank 1: 100%% across 6 metres, not beyond (%.1f, %.1f, %.1f, %.1f, %.1f)" % [lost(ring[0]),lost(ring[1]),lost(ring[2]),lost(ring[4]),lost(ring[3])])
 	check(ring[0].chilled() and game.skills.on_ice(ring[1].position),"They are chilled, and the ground iced")
 	hero({"ice_spikes":5}); for e in ring: e.hp = e.max_hp
 	cast("ice_spikes",at); play(1.5)
@@ -229,6 +239,7 @@ func test():
 	check(cast("ice_storm",at) and game.player.visual.state=="CastSelf" and is_equal_approx(game.run.energy,60.0),"Ice Storm costs 40, cast on himself")
 	play(.6)
 	check(game.skills.storm_time>0 and game.skills.storm_time<=6.0 and game.skills.cooldowns.ice_storm>58.0,"Rank 1 lasts 6 seconds, on a 60-second cooldown")
+	check(range(1,6).map(func(r): return Book.values("ice_storm",r).z)==[60.0,55.0,48.0,40.0,30.0] and "30-second cooldown" in Book.describe("ice_storm",5),"Its cooldown: 60, 55, 48, 40 and 30 seconds by rank")
 	play(1.0)
 	check(lost(near)>0 and lost(far)==0 and near.chilled(),"Frost tears at everyone within 4 metres each second (%.1f)" % lost(near))
 	check(game.skills.reason("fireball")=="Only frost spells while the Ice Storm rages." and game.skills.reason("ice_bolt").is_empty(),"Only frost spells can be cast while it lasts")
@@ -496,12 +507,36 @@ func test():
 		ready(); foe.hp = foe.max_hp; beside.hp = beside.max_hp
 		game.sound.heard.clear()
 		cast("lightning_bolt",foe.position); play(.6)
-		if lost(beside)>0:
+		# (Ignition's burst, not the bolt arcing on to it: Lightning Bolt's arc.)
+		if game.skills.waves.any(func(w): return w is WizardFx.Ignition):
 			lit += 1
-			if game.skills.waves.any(func(w): return w is WizardFx.Ignition): bursts += 1
+			bursts += 1
 			if "ignition-burst" in game.sound.heard: popped += 1
-	check(lit>=3 and lit<=20 and (lost(beside)==0 or within(beside,1,200)),"Ignition rank 5: a bolt in three sets off 200%% of fire within 2 metres (%d of 30)" % lit)
+	check(lit>=3 and lit<=20,"Ignition rank 5: a bolt in three sets off 200%% of fire within 2 metres (%d of 30)" % lit)
 	check(bursts==lit and popped==lit,"Each time it goes off with an explosion, and is heard bursting (%d, %d of %d)" % [bursts,popped,lit])
+	# Lightning Bolt arcs on: `y` percent a time to the nearest other within
+	# reach, `z` percent weaker each time, and may arc again.
+	check(range(1,6).map(func(r): return Book.values("lightning_bolt",r).y)==[5.0,10.0,15.0,20.0,25.0] and range(1,6).map(func(r): return Book.values("lightning_bolt",r).z)==[40.0,35.0,30.0,25.0,20.0],"It arcs on 5, 10, 15, 20 and 25%% of the time, 40, 35, 30, 25 and 20%% weaker")
+	hero({"lightning_bolt":5})
+	# (Those stood up before are put away: the arcs are to go to these.)
+	for e in game.enemies: e.dead = true
+	var struck_first = dummy(6)
+	var arc_second = dummy(8,10)
+	var arc_third = dummy(10,20)
+	var arced = 0
+	var twice = 0
+	var weaker = true
+	for i in 200:
+		ready(); struck_first.hp = struck_first.max_hp; arc_second.hp = arc_second.max_hp; arc_third.hp = arc_third.max_hp
+		cast("lightning_bolt",struck_first.position); play(.4)
+		if lost(arc_second) > 0 or lost(arc_third) > 0: arced += 1
+		if lost(arc_second) > 0 and lost(arc_third) > 0:
+			twice += 1
+			weaker = weaker and lost(arc_third) < lost(arc_second)*1.25
+		if lost(arc_second) > 0 and lost(arc_third) == 0: weaker = weaker and within(arc_second,1,160*.8)
+	check(arced >= 30 and arced <= 75,"Rank 5 arcs on about one bolt in four (%d of 200)" % arced)
+	check(twice >= 1 and twice < arced/2 and weaker,"Now and then it arcs twice, each time weaker (%d)" % twice)
+	check("within a meter" in Book.describe("fireball",1),"Fireball's description says its burst hurts every enemy within a meter")
 	clear()
 
 	# Lightning Shield.

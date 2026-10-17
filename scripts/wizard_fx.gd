@@ -347,39 +347,97 @@ static func stream(parent: Node3D, broad: bool) -> Stream:
 
 # Ice Storm: frost whirling about the wizard out to `radius`, and the floor
 # iced under him, while it lasts (follows him: its parent is his figure).
+# How fast Ice Storm's snow is swept round him (radians a second).
+const STORM_SPIN = 3.4
+
+# A streak of driven snow for Ice Storm: a curving band `span` radians round
+# at `radius`, rising a little as it goes from `height`, `width` tall,
+# brightest in its middle and fading to nothing at its ends and edges.
+static func swirl_streak(radius: float, height: float, span: float, width: float) -> ArrayMesh:
+	var tool = SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var steps = 24
+	var ring: Array = []
+	for i in steps+1:
+		var t: float = float(i)/steps
+		var a: float = t*span
+		var r: float = radius*(1.0+.12*t)
+		var y: float = height+.35*t
+		var fade: float = sin(t*PI)
+		ring.append([Vector3(cos(a)*r,y-width*.5,sin(a)*r),Vector3(cos(a)*r,y+width*.5,sin(a)*r),fade])
+	for i in steps:
+		var a0: Array = ring[i]
+		var a1: Array = ring[i+1]
+		var c0 = Color(.85,.93,1,.3*a0[2])
+		var c1 = Color(.85,.93,1,.3*a1[2])
+		for v in [[a0[0],c0],[a0[1],c0],[a1[1],c1],[a0[0],c0],[a1[1],c1],[a1[0],c1]]:
+			tool.set_color(v[1])
+			tool.add_vertex(v[0])
+	return tool.commit()
 static func storm(body: Node3D, radius: float) -> Node3D:
 	var node = Node3D.new()
 	body.add_child(node)
-	var whirl = Vfx.particles(node,120,1.6,false,true)
-	whirl.local_coords = true
-	whirl.position = Vector3.UP*.2
-	whirl.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	whirl.emission_ring_axis = Vector3.UP
-	whirl.emission_ring_radius = radius*.9
-	whirl.emission_ring_inner_radius = radius*.3
-	whirl.emission_ring_height = .2
-	whirl.direction = Vector3.UP
-	whirl.spread = 10
-	whirl.gravity = Vector3(0,.9,0)
-	whirl.initial_velocity_min = .4; whirl.initial_velocity_max = 1.0
-	whirl.orbit_velocity_min = .45; whirl.orbit_velocity_max = .7
-	whirl.scale_amount_min = .07; whirl.scale_amount_max = .18
-	whirl.scale_amount_curve = Vfx.curve(1.0,0.0)
-	whirl.color_ramp = Vfx.ramp([0,.3,1],[Color(1,1,1,0),Color(.72,.88,1,.7),Color(.6,.85,1,0)])
-	whirl.emitting = true
-	var mist = Vfx.particles(node,40,1.8,false,false)
+	# A thick band of snow whirling round him out to the storm's edge, and a
+	# tighter, faster spiral of it close about him, rising: each held in a
+	# turning frame (scripts/spinner.gd), so that the flakes are swept round
+	# with it (particles' own orbit does not turn in 3D).
+	for layer in [[radius*.5,radius*.95,2.4,900,STORM_SPIN,.06,.12,.25],[radius*.15,radius*.45,2.2,380,STORM_SPIN*1.7,.05,.09,.9]]:
+		var spin = Node3D.new()
+		spin.set_script(preload("res://scripts/spinner.gd"))
+		spin.rate = layer[4]
+		node.add_child(spin)
+		var snow = Vfx.particles(spin,layer[3],1.4,false,false)
+		snow.local_coords = true
+		snow.position = Vector3.UP*layer[2]*.5
+		snow.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+		snow.emission_ring_axis = Vector3.UP
+		snow.emission_ring_radius = layer[1]
+		snow.emission_ring_inner_radius = layer[0]
+		snow.emission_ring_height = layer[2]
+		snow.direction = Vector3.UP
+		snow.spread = 40
+		snow.gravity = Vector3(0,layer[7],0)
+		snow.initial_velocity_min = .1; snow.initial_velocity_max = .5
+		snow.scale_amount_min = layer[5]; snow.scale_amount_max = layer[6]
+		snow.color_ramp = Vfx.ramp([0,.15,.8,1],[Color(1,1,1,0),Color(.96,.98,1,.95),Color(.9,.95,1,.85),Color(.9,.95,1,0)])
+		snow.emitting = true
+	# Gusts of driven snow, soft and broad, swept round more slowly.
+	var gusting = Node3D.new()
+	gusting.set_script(preload("res://scripts/spinner.gd"))
+	gusting.rate = STORM_SPIN*.6
+	node.add_child(gusting)
+	var mist = Vfx.particles(gusting,70,1.8,false,false)
 	mist.local_coords = true
-	mist.position = Vector3.UP*.3
+	mist.position = Vector3.UP*.9
 	mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	mist.emission_ring_axis = Vector3.UP
 	mist.emission_ring_radius = radius
-	mist.emission_ring_inner_radius = radius*.5
-	mist.emission_ring_height = .1
-	mist.gravity = Vector3(0,.2,0)
-	mist.orbit_velocity_min = .3; mist.orbit_velocity_max = .5
-	mist.scale_amount_min = .7; mist.scale_amount_max = 1.3
-	mist.color_ramp = Vfx.ramp([0,.3,1],[Color(.85,.95,1,0),Color(.85,.95,1,.3),Color(.85,.95,1,0)])
+	mist.emission_ring_inner_radius = radius*.4
+	mist.emission_ring_height = 1.6
+	mist.gravity = Vector3(0,.15,0)
+	mist.scale_amount_min = .6; mist.scale_amount_max = 1.2
+	mist.color_ramp = Vfx.ramp([0,.3,1],[Color(.9,.96,1,0),Color(.9,.96,1,.45),Color(.9,.96,1,0)])
 	mist.emitting = true
+	# Streaks of wind-driven snow curving round him, at several heights and
+	# radii, swept round as the snow is: the vortex's shape.
+	var streaking = Node3D.new()
+	streaking.set_script(preload("res://scripts/spinner.gd"))
+	streaking.rate = STORM_SPIN*1.2
+	node.add_child(streaking)
+	var streak_look = StandardMaterial3D.new()
+	streak_look.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	streak_look.vertex_color_use_as_albedo = true
+	streak_look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	streak_look.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	streak_look.cull_mode = BaseMaterial3D.CULL_DISABLED
+	streak_look.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	for k in 7:
+		var streak = MeshInstance3D.new()
+		streak.mesh = swirl_streak(radius*(.45+.08*k),.25+.3*k,1.6+.15*(k%3),.3+.1*(k%2))
+		streak.material_override = streak_look
+		streak.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		streak.rotation.y = k*2.4
+		streaking.add_child(streak)
 	ground_sprite(node,radius*2.1,Vfx.ramp([0,.6,1],[Color(.8,.92,1,.5),Color(.78,.9,1,.3),Color(.8,.92,1,0)]))
 	var glow = OmniLight3D.new()
 	glow.light_color = FROST

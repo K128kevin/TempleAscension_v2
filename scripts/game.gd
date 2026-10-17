@@ -1491,6 +1491,10 @@ func enemy_died(enemy) -> void:
 		var levels = Data.gain_xp(run,reward)
 		float_text(enemy.position,"+%d XP" % reward,Color(.55,.8,1))
 		if levels>0:
+			# A new level restores him: health and mana (or energy) full.
+			player.max_hp = Data.max_health(run)
+			player.hp = player.max_hp
+			run.energy = Data.max_energy(run)
 			float_text(player.position+Vector3.UP*2.2,"LEVEL %d" % run.level,Color(1,.86,.45))
 			toast("Level %d: %d attribute points and %d skill point%s to spend." % [run.level,run.points,run.skill_points,"" if run.skill_points==1 else "s"])
 		# It may drop an item (scripts/items.gd; never a second time on a retry).

@@ -172,13 +172,16 @@ const FLOOR_REACH = 15.0
 const PATCH_REFRESH = .5
 const MAX_PATCHES = 40
 const SPELL_REACH = 15.0
-const SPIKES_RADIUS = 2.0
+const SPIKES_RADIUS = 3.0
+# How long Ice Spikes stuns whatever they strike (in full, however often).
+const SPIKES_STUN = 1.0
 # A man the spikes kill is thrown straight up off them, not aside.
 const SPIKES_THROW = Vector3(0,1.5,0)
 const FROST_REACH = 10.0
 const FROST_RADIUS = 3.0
 const STORM_RADIUS = 4.0
-const STORM_COOLDOWN = 60.0
+# How far Lightning Bolt arcs from one enemy to the next.
+const BOLT_ARC = 6.0
 const BLAST_RADIUS = 5.0
 const TORNADO_RADIUS = 2.0
 const TORNADO_SECONDS = 8.0
@@ -405,7 +408,8 @@ func cast(id: String, at: Vector3, free: bool = false) -> bool:
 	# (A channelled spell is paid for as it is held.)
 	if not free and not Book.channeled(id): game.run.energy -= cost(id)
 	if s.effect in ["bash","shockwave"]: cooldowns[id] = Book.values(id,level).z
-	if s.effect=="icestorm": cooldowns[id] = STORM_COOLDOWN
+	# (Ice Storm's, by rank: its `z`.)
+	if s.effect=="icestorm": cooldowns[id] = Book.values(id,level).z
 	if s.effect=="blazing": cooldowns[id] = BLAZING_COOLDOWN
 	# (Lightning Shield's, by rank: its `z`.)
 	if s.effect=="lshield": cooldowns[id] = Book.values(id,level).z
@@ -765,7 +769,7 @@ func ice_bolt_hit(enemy, p: Dictionary) -> void:
 	WizardFx.shatter(game.world,enemy.position+Vector3.UP,.8)
 	WizardFx.rising(game.world,enemy.position+Vector3.UP*(1.0+game.world.lift(enemy.position)),"ice")
 	game.sound.play("ice-impact",-14)
-	if not enemy.dead and randf()*100.0<extra.get("freeze",0.0): enemy.freeze(FREEZE_SECONDS)
+	if not enemy.dead and randf()*100.0<extra.get("freeze",0.0): enemy.freeze(extra.get("frozen_for",FREEZE_SECONDS))
 
 # Lightning Rod: the marked enemy was hurt: a jolt leaps from it to the
 # nearest enemy within ROD_LEAP, and on to ROD_LEAPS more, each weaker.
@@ -1274,13 +1278,15 @@ func execute(job: Dictionary) -> void:
 			# (The bolt's flight is a metre up from where it is loosed.)
 			var loosed: Vector3 = loose_spell(direction)-Vector3.UP
 			game.sound.play("frost-bolt",-13)
-			game.projectile(loosed,loosed+direction*SPELL_REACH,attack_damage(v.x,"spell"),true,"ice",false,null,true,{"kind":"icebolt","percent":v.x,"freeze":v.y})
+			game.projectile(loosed,loosed+direction*SPELL_REACH,attack_damage(v.x,"spell"),true,"ice",false,null,true,{"kind":"icebolt","percent":v.x,"freeze":v.y,"frozen_for":v.z})
 		"spikes":
 			var spot: Vector3 = origin+direction*minf(SPELL_REACH,origin.distance_to(at))
 			waves.append(WizardFx.spikes(spot+Vector3.UP*game.world.lift(spot),SPIKES_RADIUS))
 			game.world.add_child(waves[-1])
 			game.sound.play("ice-spikes",-11)
-			for enemy in targets(spot,SPIKES_RADIUS+.5).filter(func(e): return e.position.distance_to(spot)<=SPIKES_RADIUS+bulk(e)): spell_hit(enemy,v.x,"frost",SPIKES_THROW)
+			for enemy in targets(spot,SPIKES_RADIUS+.5).filter(func(e): return e.position.distance_to(spot)<=SPIKES_RADIUS+bulk(e)):
+				spell_hit(enemy,v.x,"frost",SPIKES_THROW)
+				if not enemy.dead: enemy.stun(SPIKES_STUN,false)
 			lay_ice(spot,SPIKES_RADIUS,PATCH_SECONDS,0.0)
 		"prison":
 			var caged = aimed_target(at,direction)
@@ -1335,6 +1341,21 @@ func execute(job: Dictionary) -> void:
 			WizardFx.rising(game.world,hit.position+Vector3.UP*(1.0+game.world.lift(hit.position)),"lightning")
 			game.sound.play("lightning-zap",-4)
 			spell_hit(hit,v.x,"lightning",StoneFragment.impact(hit.position-origin))
+			# Now and then (`y` percent) it arcs on to another enemy nearby,
+			# `z` percent weaker each time, and may arc on again from there.
+			var struck: Array = [hit]
+			var from = hit
+			var percent: float = v.x
+			while randf()*100.0 < v.y:
+				var choices: Array = targets(from.position,BOLT_ARC).filter(func(e): return not e in struck)
+				if choices.is_empty(): break
+				choices.sort_custom(func(a,b): return a.position.distance_squared_to(from.position)<b.position.distance_squared_to(from.position))
+				var next = choices[0]
+				percent *= 1.0-v.z*.01
+				WizardFx.jolt(game.world,from.position+Vector3.UP*1.1,next.position+Vector3.UP*1.1)
+				spell_hit(next,percent,"lightning",StoneFragment.impact(next.position-from.position))
+				struck.append(next)
+				from = next
 		"lshield":
 			barrier = v.x
 			barrier_time = SHIELD_SECONDS

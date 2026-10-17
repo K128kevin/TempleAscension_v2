@@ -51,6 +51,11 @@ const TORCH_DECAY = 1.6
 const TEMPLE_TORCH_ENERGY = 1.5
 const TEMPLE_TORCH_RANGE = 16.0
 const TEMPLE_TORCH_DECAY = .8
+const BASEMENT_TORCH_RANGE = 14.0
+const BASEMENT_TORCH_ENERGY = 2.8
+const BASEMENT_TORCH_SPACING = 12.0
+const BASEMENT_TORCH_FILL = 7.0
+const BASEMENT_LIT_LEVEL = .09
 var torch_energy = TORCH_ENERGY
 var torch_range = TORCH_RANGE
 var torch_decay = TORCH_DECAY
@@ -123,6 +128,14 @@ func setup(floor_index: int, run_seed: int = 1, place: String = "temple") -> voi
 		lit_level = TEMPLE_LIT_LEVEL
 		torch_spacing = 8.0
 		torch_fill = 5.0
+	# The arena basement: half as many torches as it had, each reaching
+	# further, so it is lit about as well, if a little darker.
+	if place == "basement":
+		torch_range = BASEMENT_TORCH_RANGE
+		torch_energy = BASEMENT_TORCH_ENERGY
+		torch_spacing = BASEMENT_TORCH_SPACING
+		torch_fill = BASEMENT_TORCH_FILL
+		lit_level = BASEMENT_LIT_LEVEL
 	spawn = layout.to_world(layout.start)
 	exit_point = layout.exit_position()
 	var env = WorldEnvironment.new()
@@ -693,7 +706,10 @@ func rock_wall(pos: Vector3, dimensions: Vector3) -> Node3D:
 # knocked over), and on it the bandits' maps and plans (assets/shaders/
 # war_map.gdshader), wooden markers set out on the map, and a candle burned
 # low. The table and the chairs are solid.
-const WAR_TABLE_HEIGHT = .85
+# (Sized to the men about it: a table to stand and lean over, chairs with
+# seats at a grown man's knee.)
+const WAR_TABLE_HEIGHT = 1.0
+const WAR_CHAIR_HEIGHT = 1.3
 func war_table() -> void:
 	var rect: Rect2i = layout.war_table
 	var middle: Vector3 = layout.to_world(rect.position)+Vector3(rect.size.x-1,0,rect.size.y-1)*.5
@@ -718,9 +734,9 @@ func war_table() -> void:
 			solid_floor[Vector2i(x,y)] = true
 	# The chairs: two along each side, one at each end, facing in.
 	var half = Vector2(rect.size.x*.5,rect.size.y*.5)
-	var seats = [[Vector3(-.75,0,-half.y-.45),0.0,0.0],[Vector3(.8,0,-half.y-.5),0.0,.25],[Vector3(-.8,0,half.y+.45),PI,-.1],[Vector3(.7,0,half.y+.75),PI,.45],[Vector3(-half.x-.45,0,0),PI/2,.05],[Vector3(half.x+.6,0,.2),-PI/2,0.0]]
+	var seats = [[Vector3(-.85,0,-half.y-.5),0.0,0.0],[Vector3(.9,0,-half.y-.55),0.0,.25],[Vector3(-.9,0,half.y+.5),PI,-.1],[Vector3(.8,0,half.y+.85),PI,.45],[Vector3(-half.x-.5,0,0),PI/2,.05],[Vector3(half.x+.65,0,.2),-PI/2,0.0]]
 	for k in seats.size():
-		var chair: Node3D = Kit.prop("chair",1.0)
+		var chair: Node3D = Kit.prop("chair",WAR_CHAIR_HEIGHT)
 		worn.call(chair)
 		var at: Vector3 = middle+seats[k][0]
 		var holder = Node3D.new()
@@ -730,7 +746,7 @@ func war_table() -> void:
 		# (One knocked over in some quarrel, lying on its back.)
 		if k == 3:
 			chair.rotation.x = -PI/2
-			chair.position = Vector3(0,.28,-.5)
+			chair.position = Vector3(0,.36,-.65)
 		show.call(holder)
 		var cell: Vector2i = layout.to_cell(at)
 		if layout.cells.has(cell):
@@ -738,7 +754,7 @@ func war_table() -> void:
 			solid_floor[cell] = true
 	# The maps and plans, overlapping, turned this way and that.
 	var top: float = WAR_TABLE_HEIGHT+.003
-	var sheets = [[0.0,Vector2(1.15,.8),Vector3(-.15,0,0),.06,.3],[0.0,Vector2(.72,.52),Vector3(.95,0,.18),-.22,1.7],[1.0,Vector2(.42,.58),Vector3(-1.1,0,-.05),.18,2.9],[1.0,Vector2(.4,.55),Vector3(.55,0,-.32),-.4,4.1]]
+	var sheets = [[0.0,Vector2(1.35,.92),Vector3(-.15,0,0),.06,.3],[0.0,Vector2(.82,.6),Vector3(1.1,0,.2),-.22,1.7],[1.0,Vector2(.48,.66),Vector3(-1.28,0,-.05),.18,2.9],[1.0,Vector2(.46,.62),Vector3(.62,0,-.36),-.4,4.1]]
 	for k in sheets.size():
 		var sheet = MeshInstance3D.new()
 		var plane = PlaneMesh.new()
@@ -768,12 +784,12 @@ func war_table() -> void:
 		piece.position = middle+Vector3(-.15+(-.4+.13*k),top+.035,sin(k*1.7)*.22)
 		show.call(piece)
 	# A candle burned low at the far end, still alight.
-	var stick: Node3D = Kit.prop("candlestick",.3)
-	stick.position = middle+Vector3(-1.2,WAR_TABLE_HEIGHT,.38)
+	var stick: Node3D = Kit.prop("candlestick",.36)
+	stick.position = middle+Vector3(-1.4,WAR_TABLE_HEIGHT,.42)
 	show.call(stick)
 	var flame = preload("res://scripts/candle_flame.gd").new()
 	add_child(flame)
-	flame.setup(stick,Kit.sized("candlestick",.3),true)
+	flame.setup(stick,Kit.sized("candlestick",.36),true)
 	# (And a lantern's warmth over the table, that the maps can be read.)
 	var glow = OmniLight3D.new()
 	glow.light_color = Color(1,.68,.38)
@@ -1522,7 +1538,10 @@ func nearest_torch(placed: Array[Vector3], at: Vector3) -> float:
 func low_wall(cell: Vector2i, direction: Vector2i) -> bool:
 	return layout.summit or (layout.on_terrace(cell) and not Rect2i(0,0,layout.size,layout.size).has_point(cell+direction))
 
+# (How many torches the floor was given: for tests and tuning.)
+var torch_count = 0
 func torch(at: Vector3, cast_shadows: bool, wall: Vector3) -> void:
+	torch_count += 1
 	torch_walls[at] = wall
 	var cell = layout.to_cell(at)
 	# On a low parapet the light is a brazier standing on the wall's top: a
