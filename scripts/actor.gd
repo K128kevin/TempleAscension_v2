@@ -5,6 +5,7 @@ const Visual = preload("res://scripts/visual.gd")
 const Art = preload("res://scripts/assets.gd")
 const StoneFragment = preload("res://scripts/stone_fragment.gd")
 const Bandit = preload("res://scripts/bandit.gd")
+const Items = preload("res://scripts/items.gd")
 const Vfx = preload("res://scripts/vfx.gd")
 const WizardFx = preload("res://scripts/wizard_fx.gd")
 var game
@@ -148,6 +149,21 @@ var bolting = false
 # The basement marksman's stunning arrow (config "stun_shot", how often):
 # the first is loosed STUN_FIRST seconds after he wakes, at the soonest.
 const STUN_FIRST = 3.0
+# The champion's shield bash (config "bash"): when any of the basement's three
+# is first brought to HALVED of his health, the champion charges the hero
+# (BASH_PACE times his own speed, for at most BASH_CHASE seconds) and, within
+# BASH_REACH, bashes him: stunned for `bash` seconds, while the healer mends
+# the wounded one (Game.shield_bashed).
+const HALVED = .5
+const BASH_PACE = 1.5
+const BASH_CHASE = 5.0
+const BASH_REACH = 1.8
+var halved = false
+var bash_time = 0.0
+var bash_target = null
+# Others brought to half while a bash was under way: each bashed for in turn.
+var bash_queue: Array = []
+var pace_scale = 1.0
 var stun_shot_left = STUN_FIRST
 var stun_arrow = false
 
@@ -330,6 +346,12 @@ func tick(dt: float) -> void:
 			laser_cooldown = 16
 			start_gaze(player.position)
 			game.toast("THE CROWN'S GAZE — keep moving around the statue")
+	if bash_time <= 0 and not bash_queue.is_empty() and not game.held_off() and busy <= 0:
+		var next = bash_queue.pop_front()
+		if is_instance_valid(next) and not next.dead: start_bash(next)
+	if bash_time > 0:
+		bash_tick(dt)
+		return
 	if windup > 0:
 		windup -= dt
 		if windup <= 0:
@@ -341,6 +363,11 @@ func tick(dt: float) -> void:
 		if ally != null:
 			start_heal(ally)
 			return
+	# (While the champion's bash holds the hero, none of them strikes him:
+	# a blow would break it.)
+	if game.held_off():
+		visual.locomotion(false,false)
+		return
 	if role == "wizard" and nova_cooldown <= 0 and distance <= NOVA_RADIUS and game.world.clear_line(position,player.position):
 		cast_nova()
 		return
@@ -590,6 +617,46 @@ func interrupt_heal() -> void:
 	heal_glow = {}
 	game.float_text(position+Vector3.UP*2.3,"Interrupted",Color(1,.75,.4))
 
+# Brought to half his health for the first time: if he is one of the
+# basement's three, the champion comes to bash the hero.
+func halved_check() -> void:
+	if halved or hp > max_hp*HALVED or not kind in Items.ELITES: return
+	halved = true
+	for other in game.enemies:
+		if other.config.has("bash") and not other.dead:
+			if not other.awake: game.awaken(other)
+			if other.bash_time > 0 or game.held_off(): other.bash_queue.append(self)
+			else: other.start_bash(self)
+			return
+
+func start_bash(target) -> void:
+	bash_target = target
+	bash_time = BASH_CHASE
+	windup = 0
+	cast_total = 0
+	busy = 0
+	game.float_text(position+Vector3.UP*2.3,"Shield Bash!",Color(1,.78,.3))
+
+# Charging the hero; within reach, the bash.
+func bash_tick(dt: float) -> void:
+	bash_time -= dt
+	var player = game.player
+	if player.dead:
+		bash_time = 0
+		return
+	if position.distance_to(player.position) <= BASH_REACH and game.world.clear_line(position,player.position):
+		bash_time = 0
+		face(player.position)
+		var clip: String = "ScutumSwordSwing" if visual.clips.has("ScutumSwordSwing") else "Attack"
+		visual.play(clip,.5)
+		busy = .6
+		cooldown = config.interval+.6
+		game.shield_bashed(self,bash_target,config.bash)
+		return
+	pace_scale = BASH_PACE
+	walk_to(player.position,dt)
+	pace_scale = 1.0
+
 # A bandit will not walk into one of the basement's lit lasers: stepped from
 # `before` into one, he stays where he was.
 func keep_from_beams(before: Vector3) -> void:
@@ -623,7 +690,7 @@ func walk_to(destination: Vector3, dt: float) -> void:
 		if difference.length_squared() < room and difference.length_squared() > .001: separation += difference.normalized()*.6
 	direction = (direction + separation).normalized()
 	var before = position
-	var pace = config.speed*(slow_factor if slow_time>0 else 1.0)
+	var pace = config.speed*pace_scale*(slow_factor if slow_time>0 else 1.0)
 	position = game.world.move(position,direction*pace*dt)
 	keep_from_beams(before)
 	if position.distance_to(before) > .005: face(position+direction)
@@ -968,6 +1035,7 @@ func tick_dots(dt: float) -> void:
 	hp -= dealt
 	if dealt>0 and not daze in ["ambush","freeze","prison"]: end_stun()
 	if dealt>0 and hp>0: interrupt_heal()
+	if dealt>0 and hp>0: halved_check()
 	if dealt>0 and rod_time>0: game.skills.rod_jolt(self)
 	# Shown as one number a kind every half second or so rather than one a tick.
 	for k in by_kind:
@@ -1020,6 +1088,7 @@ func hit(damage: float, type: String = "physical", bonus: float = 0.0, death_imp
 	hp -= damage
 	if damage>0 and not daze in ["ambush","freeze","prison"]: end_stun()
 	if damage>0 and hp>0: interrupt_heal()
+	if damage>0 and hp>0: halved_check()
 	if damage>0 and rod_time>0 and not dead: game.skills.rod_jolt(self)
 	# (A spell is heard by its own sounds, not as a weapon's blow.)
 	if not game.skills.spell_striking: game.sound.play(impact_sound(),-15)

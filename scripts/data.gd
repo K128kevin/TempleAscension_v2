@@ -18,7 +18,9 @@ const DUNGEONS = ["basement","cave"]
 # `guards`: those posted along the hallway to it. `might`: how much more
 # health, damage and experience a level's own bandits have than the same
 # kind elsewhere (its elites are their own); `kit`: how they are dressed,
-# scripts/bandit.gd.)
+# scripts/bandit.gd. On the basement's lower level `counts` are only the mix
+# of kinds: how many stand there is Temple.depth_posts's, room by room and
+# down its hallways.)
 const AREAS = {
 	"basement":[{"level":1,"counts":{"bandit":38,"bandit_archer":22}},{"level":3,"counts":{"bandit":40,"bandit_archer":22},"might":{"health":1.25,"damage":1.4,"xp":1.3},"kit":"veteran","guards":["bandit","bandit_archer","bandit","bandit","bandit_archer","bandit"],"elites":["bandit_champion","bandit_marksman","bandit_healer"]}],
 	"cave":[{"level":5,"counts":{"bandit":29,"bandit_archer":18}},{"level":8,"counts":{"bandit":36,"bandit_archer":23}}],
@@ -58,9 +60,13 @@ const ENEMIES = {
 	# nova of his own strength (`nova`), and mends his fellows (`heals`, a
 	# share of their health) with a HEAL_CAST spell that a hurt breaks off
 	# (Actor).
-	"bandit_champion":{"title":"Bandit Champion","as":"gladiator","human":"bandit","hp":367.5,"damage":42.0,"speed":5.6,"range":1.9,"interval":.9,"weapon":"sword","shield":"scutum","armor":90.0,"size":1.05,"color":Color(.5,.4,.3)},
-	"bandit_marksman":{"title":"Bandit Marksman","as":"archer","human":"bandit","hp":210.0,"damage":72.0,"speed":3.7,"range":12.5,"interval":1.1,"weapon":"bow","stun_shot":7.0,"stun":2.0,"slow":4.0,"size":1.06,"color":Color(.5,.4,.3)},
-	"bandit_healer":{"title":"Bandit Healer","as":"wizard","human":"bandit","hp":192.5,"damage":60.0,"speed":4.0,"range":11.0,"interval":2.2,"weapon":"staff","bolt":true,"heals":.6,"nova":22.5,"size":1.06,"color":Color(.5,.4,.3)},
+	# (When any of the three is first brought to half his health, the
+	# champion charges the hero and bashes him with his shield (`bash`,
+	# seconds stunned), and the healer mends the wounded one meanwhile:
+	# Actor.start_bash, Game.shield_bashed.)
+	"bandit_champion":{"title":"Bandit Champion","as":"gladiator","human":"bandit","hp":551.25,"damage":54.6,"speed":5.6,"range":1.9,"interval":.9,"weapon":"sword","shield":"scutum","armor":90.0,"bash":3.0,"size":1.05,"color":Color(.5,.4,.3)},
+	"bandit_marksman":{"title":"Bandit Marksman","as":"archer","human":"bandit","hp":315.0,"damage":93.6,"speed":3.7,"range":12.5,"interval":1.1,"weapon":"bow","stun_shot":7.0,"stun":2.0,"slow":4.0,"size":1.06,"color":Color(.5,.4,.3)},
+	"bandit_healer":{"title":"Bandit Healer","as":"wizard","human":"bandit","hp":288.75,"damage":78.0,"speed":4.0,"range":11.0,"interval":2.2,"weapon":"staff","bolt":true,"heals":.6,"nova":29.25,"size":1.06,"color":Color(.5,.4,.3)},
 	"boss":{"title":"The Crowned Statue","hp":1875.0,"damage":101.25,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
 const Items = preload("res://scripts/items.gd")
@@ -290,6 +296,22 @@ static func gain_xp(run: Dictionary, amount: int) -> int:
 		run.points += STAT_POINTS
 		run.skill_points += 1
 	return int(run.level)-before
+
+# `total` enemies of the kinds in `counts`, in the same proportions (the
+# rounding's remainder going to the first kind), in a shuffled order.
+static func mixed(counts: Dictionary, total: int, rng: RandomNumberGenerator) -> Array[String]:
+	var sum = 0
+	for kind in counts: sum += counts[kind]
+	var kinds: Array[String] = []
+	for kind in counts:
+		if kind == counts.keys()[0]: continue
+		for i in roundi(float(counts[kind])*total/maxf(1.0,sum)): kinds.append(kind)
+	while kinds.size() < total: kinds.push_front(counts.keys()[0])
+	kinds.resize(total)
+	for i in range(kinds.size()-1,0,-1):
+		var j = rng.randi_range(0,i)
+		var swap = kinds[i]; kinds[i] = kinds[j]; kinds[j] = swap
+	return kinds
 
 # How much more `what` ("health", "damage" or "xp") a bandit of `kind` has
 # on the floor the run is on (its area's `might`; 1 for its elites).

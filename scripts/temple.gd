@@ -1106,13 +1106,15 @@ func gate_point() -> Vector3:
 	var g: Rect2i = layout.gate
 	return layout.to_world(g.position)+Vector3(g.size.x-1,0,g.size.y-1)*.5
 
-func bar_gate(barred: bool, g: Rect2i = layout.gate) -> void:
+# (`see_through`: the grille is seen, struck and shot through, as the first
+# level's is; a wing's solid gate is not.)
+func bar_gate(barred: bool, g: Rect2i = layout.gate, see_through: bool = true) -> void:
 	for y in range(g.position.y,g.end.y):
 		for x in range(g.position.x,g.end.x):
 			var cell = Vector2i(x,y)
 			if barred:
 				layout.cells.erase(cell)
-				solid_floor[cell] = true
+				if see_through: solid_floor[cell] = true
 			else:
 				layout.cells[cell] = true
 				solid_floor.erase(cell)
@@ -1136,14 +1138,15 @@ func open_gate(instantly: bool = false) -> void:
 	swing.tween_method(func(t): BasementProps.open_gate(gate_node,t),0.0,1.0,GATE_SWING)
 
 # The gates of the basement's lower level's two wings (Layout.wings): each a
-# gate as the first level's is, as wide as its passage (room for a boulder
-# rolled through it), shut between its wing's last room and the room of the
+# gate as the first level's is but solid, timber boards behind its grille
+# (nothing seen, struck or shot through it), as wide as its passage (room for
+# a boulder rolled through it), shut between its wing's last room and the room of the
 # plates until its key opens it. Each {"node", "open", "name"}.
 var wing_gates: Array[Dictionary] = []
 func setup_wing_gate(i: int, stone: Material) -> void:
 	var wing: Dictionary = layout.wings[i]
 	var g: Rect2i = wing.gate
-	var node: Node3D = BasementProps.gate(g.size.x*g.size.y,GATE_HEIGHT,WALL_HEIGHT,stone)
+	var node: Node3D = BasementProps.gate(g.size.x*g.size.y,GATE_HEIGHT,WALL_HEIGHT,stone,true)
 	add_child(node)
 	node.position = wing_gate_point(i)
 	node.rotation.y = atan2(wing.dir.x,wing.dir.y)
@@ -1153,7 +1156,8 @@ func setup_wing_gate(i: int, stone: Material) -> void:
 		for x in range(g.position.x-1,g.end.x+1): faces.append(Vector2i(x,y))
 	visibility_cells[node] = faces
 	wing_gates.append({"node":node,"open":false,"name":wing.name})
-	bar_gate(true,g)
+	# (Solid: nothing is seen, struck or shot through it while it is shut.)
+	bar_gate(true,g,false)
 
 func wing_gate_point(i: int) -> Vector3:
 	var g: Rect2i = layout.wings[i].gate
@@ -1282,7 +1286,8 @@ const POST_GAP = 3.0
 
 # Where an enemy may stand: not in the fountain court or the doorway, clear
 # of the hero's arrival and the way on.
-func post_allowed(cell: Vector2i) -> bool:
+# (`keep`: how far from where the hero comes in.)
+func post_allowed(cell: Vector2i, keep: float = 9.0) -> bool:
 	if layout.court.has_area() and layout.court.has_point(cell): return false
 	if layout.entry.has_area() and layout.entry.grow(4).has_point(cell): return false
 	# (Nor behind the basement's gate, nor in its mouth.)
@@ -1294,7 +1299,7 @@ func post_allowed(cell: Vector2i) -> bool:
 	for stone in layout.boulders+layout.buttons:
 		if Rect2i(stone,Vector2i(2,2)).grow(2).has_point(cell): return false
 	var at = layout.to_world(cell)
-	return at.distance_to(spawn)>=9 and at.distance_to(exit_point)>=2.5 and fits(at,.45)
+	return at.distance_to(spawn)>=keep and at.distance_to(exit_point)>=2.5 and fits(at,.45)
 
 # How many stand in each clump, each its own size within this floor's span.
 func clump_span() -> Vector2i:
@@ -1396,6 +1401,58 @@ func statue_posts(count: int, rng: RandomNumberGenerator) -> Array[Dictionary]:
 	for i in range(posts.size()-1,0,-1):
 		var j = rng.randi_range(0,i)
 		var swap = posts[i]; posts[i] = posts[j]; posts[j] = swap
+	return posts
+
+# The basement's lower level, peopled room by room: ROOM_POSTS in each side
+# room off its hallways (and the boulders' rooms), more in the bigger (by
+# floor area, ROOM_AREAS); and down each wing's hallway one every
+# HALL_SPACING tiles or so, near its middle. (Its south hallway has its own
+# guards, Layout.guard_posts.)
+const ROOM_POSTS = [3,4,5]
+const ROOM_AREAS = [64,85]
+const HALL_SPACING = 7
+const ROOM_KEEP = 6.0
+const ROOM_GAP = 1.6
+func depth_posts(rng: RandomNumberGenerator) -> Array[Dictionary]:
+	var posts: Array[Dictionary] = []
+	var placed: Array = []
+	# (A room's own may stand nearer the way in than a roaming clump would,
+	# behind its walls, and closer together where it is small.)
+	var take = func(cell: Vector2i, middle: Vector3, gap: float = POST_GAP) -> bool:
+		if not post_allowed(cell,ROOM_KEEP): return false
+		var at: Vector3 = layout.to_world(cell)
+		if not spaced(at,placed,gap): return false
+		placed.append(at)
+		posts.append({"at":at,"facing":post_facing(cell,middle,rng)})
+		return true
+	for i in range(1,layout.rooms.size()):
+		var room: Rect2i = layout.rooms[i]
+		if room == layout.elite_room: continue
+		var area: int = room.size.x*room.size.y
+		var want: int = ROOM_POSTS[0] if area < ROOM_AREAS[0] else (ROOM_POSTS[1] if area < ROOM_AREAS[1] else ROOM_POSTS[2])
+		var middle: Vector3 = layout.to_world(layout.center(room))
+		var cells: Array[Vector2i] = []
+		for y in range(room.position.y+1,room.end.y-1):
+			for x in range(room.position.x+1,room.end.x-1): cells.append(Vector2i(x,y))
+		for k in range(cells.size()-1,0,-1):
+			var j = rng.randi_range(0,k)
+			var swap = cells[k]; cells[k] = cells[j]; cells[j] = swap
+		var got = 0
+		for gap in [POST_GAP,ROOM_GAP]:
+			for cell in cells:
+				if got >= want: break
+				if take.call(cell,middle,gap): got += 1
+	for wing in layout.wings:
+		for hall in wing.rects.slice(0,5):
+			var along_x: bool = hall.size.x >= hall.size.y
+			var length: int = hall.size.x if along_x else hall.size.y
+			var at: int = rng.randi_range(2,HALL_SPACING)
+			while at < length-2:
+				var across: int = rng.randi_range(-1,1)
+				var middle = Vector2i(hall.position.x+hall.size.x/2,hall.position.y+hall.size.y/2)
+				var cell: Vector2i = Vector2i(hall.position.x+at,middle.y+across) if along_x else Vector2i(middle.x+across,hall.position.y+at)
+				take.call(cell,layout.to_world(middle))
+				at += rng.randi_range(HALL_SPACING-2,HALL_SPACING+2)
 	return posts
 
 # Floor light a torch at `at` gives a point on the floor, matching the omni

@@ -117,6 +117,9 @@ const CHILL_SECONDS = 5.0
 # `hobbled`.
 var stun_left = 0.0
 var hobbled = 0.0
+# A stun that a blow breaks (the champion's shield bash): while it holds, the
+# enemies hold off striking him (Actor.tick, held_off).
+var stun_breaks = false
 var stun_halo: Node3D
 # The way the hero is walking this frame, toward his next waypoint (a
 # boulder he walks into is leaned on: scripts/basement_puzzle.gd).
@@ -232,6 +235,7 @@ func load_floor() -> void:
 	slowed = 0
 	stun_left = 0
 	hobbled = 0
+	stun_breaks = false
 	walk_intent = Vector3.ZERO
 	world = Overworld.new() if outdoors() else Temple.new()
 	add_child(world)
@@ -286,7 +290,10 @@ func load_floor() -> void:
 			for i in counts[kind]: types.append(kind)
 		var spawn_rng = RandomNumberGenerator.new()
 		spawn_rng.seed = Temple.Layout.floor_seed(int(run.seed),int(run.floor)+1+Temple.Layout.KINDS[run.place].salt)
-		var spots = world.statue_posts(types.size(),spawn_rng)
+		var spots = world.statue_posts(types.size(),spawn_rng) if world.layout.wings.is_empty() else world.depth_posts(spawn_rng)
+		# (The basement's lower level is peopled room by room and down its
+		# hallways: as many as it has posts, its kinds in the level's mix.)
+		if not world.layout.wings.is_empty(): types = Data.mixed(counts,spots.size(),spawn_rng)
 		for i in types.size():
 			var id = Data.enemy_id(run,i)
 			var enemy = spawn_enemy(types[i],id,spots[i].at)
@@ -468,6 +475,7 @@ func _process(dt: float) -> void:
 		slowed = maxf(0,slowed-dt)
 		hobbled = maxf(0,hobbled-dt)
 		stun_left = maxf(0,stun_left-dt)
+		if stun_left<=0: stun_breaks = false
 		if stun_left<=0 and is_instance_valid(stun_halo): stun_halo.queue_free()
 		elif is_instance_valid(stun_halo): stun_halo.rotation.y += dt*4.0
 		save_timer += dt
@@ -1361,6 +1369,8 @@ func hurt_player(damage: float, type: String = "physical", source = null, blow: 
 	skills.leave_shadows()
 	player.hp -= damage
 	combat_age = 0
+	# (A blow breaks the champion's bash.)
+	if damage > 0 and stun_breaks: end_player_stun()
 	if is_instance_valid(source): source.landed_attack()
 	if blow and damage > 0 and is_instance_valid(source): sound.play(LION_CRIES[randi()%2] if source.role == "lion" else "sword-hit",-8)
 	float_text(player.position+Vector3.UP*1.8,"−%d" % roundi(damage),Color(1,.35,.25))
@@ -1417,6 +1427,42 @@ func stun_player(seconds: float) -> void:
 		stun_halo.layers = UI_LAYER
 		player.add_child(stun_halo)
 		stun_halo.position = Vector3.UP*2.2
+
+func end_player_stun() -> void:
+	stun_left = 0.0
+	stun_breaks = false
+	if is_instance_valid(stun_halo): stun_halo.queue_free()
+
+func held_off() -> bool:
+	return stun_breaks and stun_left > 0
+
+# The champion's shield bash lands (Actor.bash_tick): unless he evades it,
+# the hero is stunned for `seconds` (until he is struck), every enemy's
+# attack in hand is let go, and the healer mends the one who was wounded.
+func shield_bashed(champion, wounded, seconds: float) -> void:
+	if player.dead: return
+	sound.play("weapon-impact",-6)
+	shake(.2)
+	if player.invulnerable > 0:
+		float_text(player.position+Vector3.UP*2.0,"Evaded",Color(.8,.9,1))
+		return
+	stun_player(seconds)
+	stun_breaks = true
+	for e in enemies:
+		if e.dead or e.healing: continue
+		e.windup = 0
+		e.cast_total = 0
+	for e in enemies:
+		if e.config.has("heals") and not e.dead and is_instance_valid(wounded) and not wounded.dead:
+			if not e.awake: awaken(e)
+			if e.healing and e.heal_target == wounded: break
+			if e.healing:
+				e.healing = false
+				if not e.heal_glow.is_empty(): e.heal_glow.life = 0.0
+			e.busy = 0
+			e.heal_cooldown = 0
+			e.start_heal(wounded)
+			break
 
 func hobble(seconds: float) -> void:
 	hobbled = maxf(hobbled,seconds)

@@ -57,6 +57,10 @@ func puzzle_and_elites() -> void:
 	# The wings' gates: shut, each opened by its wing's key, which the last
 	# of its bandits drops.
 	check(world.wing_gates.size()==2 and world.wing_gates.all(func(g): return not g.open) and not world.fits(world.wing_gate_point(0)),"The wings' gates stand locked")
+	var through: Vector3 = Vector3(world.layout.wings[0].dir.x,0,world.layout.wings[0].dir.y)
+	var near_side: Vector3 = world.wing_gate_point(0)+through*1.5
+	var far_side: Vector3 = world.wing_gate_point(0)-through*1.5
+	check(not world.clear_line(near_side,far_side) and not world.clear_line(world.wing_gate_point(1)+Vector3(1.5,0,0),world.wing_gate_point(1)-Vector3(1.5,0,0)),"They are solid: nothing is seen, struck or shot through them")
 	var west: Array = game.wing_bandits(0)
 	check(west.size() >= 4 and game.wing_bandits(1).size() >= 4,"Bandits hold both wings (%d west, %d east)" % [west.size(),game.wing_bandits(1).size()])
 	for k in west.size()-1: west[k].hit(100000)
@@ -70,6 +74,7 @@ func puzzle_and_elites() -> void:
 	check("Unlock" in game.hud.prompt.text,"At its gate with the key, the HUD offers to unlock it")
 	game.interact()
 	check(world.wing_gates[0].open and world.fits(world.wing_gate_point(0)) and not Items.carries(game.run,"west_gate_key") and "basement:1:west:open" in game.run.keys,"E opens it (the key left in the lock), and it stays open")
+	check(world.clear_line(near_side,far_side),"Open, it is seen through")
 	check(not world.wing_gates[1].open,"The east gate is still shut")
 	# Through it the boulder is pushed a short way to the plate before it.
 	for e in game.enemies: e.dormant = true
@@ -193,7 +198,7 @@ func puzzle_and_elites() -> void:
 	var marksman = elites.filter(func(e): return e.kind=="bandit_marksman")[0]
 	var healer = elites.filter(func(e): return e.kind=="bandit_healer")[0]
 	check(is_instance_valid(champion.visual.shield_item) and champion.armor()>=80.0 and champion.role=="gladiator","The champion bears a shield and heavy armor")
-	check(not champion.visual.bandit_look.get("studded",false) and is_equal_approx(champion.max_hp,367.5*Data.HEALTH_SCALE[game.run.difficulty]) and Data.ENEMIES.bandit_marksman.damage==72.0 and Data.ENEMIES.bandit_healer.heals==.6,"The three are hardier and hit twice as hard, and the healer mends twice as much")
+	check(not champion.visual.bandit_look.get("studded",false) and is_equal_approx(champion.max_hp,Data.ENEMIES.bandit_champion.hp*Data.HEALTH_SCALE[game.run.difficulty]) and Data.ENEMIES.bandit_healer.heals==.6,"The three are hardier, and the healer mends twice as much")
 	check(healer.role=="wizard" and healer.visual.weapon_kind=="staff" and marksman.role=="archer" and marksman.config.damage>Data.ENEMIES.bandit_archer.damage*2,"A healer with a staff, a marksman whose arrows hit hard")
 	# The healer mends his fellows, unless he is hurt as he casts.
 	for e in elites: game.awaken(e)
@@ -228,6 +233,33 @@ func puzzle_and_elites() -> void:
 	game.player_control(.1)
 	check(game.player.position == at and game.player_pace() < Game.PLAYER_RUN_SPEED*.6,"Stunned, he cannot move; hobbled, he goes at half pace")
 	game.stun_left = 0.0; game.hobbled = 0.0
+	game.player.hp = game.player.max_hp
+	# The first time one of the three is brought to half his health, the
+	# champion charges and bashes the hero with his shield: stunned three
+	# seconds, none of them strikes him meanwhile (a blow would break it),
+	# while the healer mends the wounded one.
+	game.end_player_stun()
+	healer.heal_cooldown = 0.0; healer.busy = 0.0; healer.windup = 0.0; healer.healing = false
+	champion.busy = 0.0; champion.windup = 0.0
+	game.player.position = champion.position+Vector3(0,0,-5)
+	marksman.hp = marksman.max_hp*.55
+	marksman.hit(marksman.max_hp*.1)
+	check(marksman.halved and champion.bash_time > 0 and champion.bash_target == marksman,"Brought to half his health, the marksman has the champion charge to bash the hero")
+	for i in 120:
+		champion.tick(.05)
+		if game.stun_left > 0: break
+	check(game.stun_left > 2.5 and game.held_off() and is_instance_valid(game.stun_halo),"The bash stuns the hero for three seconds")
+	check(healer.healing and healer.heal_target == marksman,"And the healer mends the marksman meanwhile")
+	var hp_before: float = game.player.hp
+	for i in 30:
+		for e in elites: e.tick(.05)
+		game.tick_projectiles(.05)
+	check(game.player.hp == hp_before and game.held_off(),"None of them strikes him while it holds")
+	game.hurt_player(1.0)
+	check(game.stun_left == 0.0 and not game.held_off(),"A blow breaks it")
+	marksman.hit(1.0)
+	check(champion.bash_time <= 0 and champion.bash_queue.is_empty(),"It is only the first time")
+	check(Data.ENEMIES.bandit_champion.hp == 551.25 and Data.ENEMIES.bandit_marksman.damage == 93.6,"The three are hardier again, and strike harder")
 	game.player.hp = game.player.max_hp
 	game.player.position = layout.arrival_position()
 	for i in elites.size():
@@ -447,9 +479,21 @@ func test():
 	game.interact()
 	world = game.world
 	check(game.run.place=="basement" and game.run.floor==1 and world.layout.last and not game.has_way_on(),"The stair goes down to the second, last level")
-	var below = 3+Data.AREAS.basement[1].guards.size()
-	for count in Data.AREAS.basement[1].counts.values(): below += count
-	check(game.enemies.all(func(e): return e.uid.begins_with("basement:1:")) and game.remaining()==below,"More bandits wait below")
+	check(game.enemies.all(func(e): return e.uid.begins_with("basement:1:")) and game.remaining()==game.enemies.size() and game.remaining()>expected,"More bandits wait below (%d)" % game.remaining())
+	# Peopled room by room: three to five in each side room, more in the
+	# bigger, and others down each wing's hallway.
+	var lower = world.layout
+	var standing_in = func(r: Rect2i) -> int: return game.enemies.filter(func(e): return r.has_point(lower.to_cell(e.position))).size()
+	var side_rooms: Array = lower.rooms.slice(1).filter(func(r): return r != lower.elite_room and not lower.wings.any(func(w): return w.room == r))
+	check(side_rooms.size() >= 6 and side_rooms.all(func(r): return standing_in.call(r) >= 3 and standing_in.call(r) <= 5),"Each side room holds three to five bandits: %s" % [side_rooms.map(func(r): return standing_in.call(r))])
+	var big: Array = side_rooms.filter(func(r): return r.size.x*r.size.y >= 85)
+	var small: Array = side_rooms.filter(func(r): return r.size.x*r.size.y < 64)
+	check(big.all(func(r): return standing_in.call(r) >= 4) or big.is_empty(),"The bigger rooms more")
+	for wing in lower.wings:
+		var in_halls: int = game.enemies.filter(func(e): return wing.rects.slice(0,5).any(func(h): return h.has_point(lower.to_cell(e.position)))).size()
+		check(in_halls >= 10,"Bandits stand down the %s wing's hallway (%d)" % [wing.name,in_halls])
+	var archers: int = game.enemies.filter(func(e): return e.kind=="bandit_archer").size()
+	check(archers > game.enemies.size()*.25 and archers < game.enemies.size()*.45,"About a third of them bowmen")
 	puzzle_and_elites()
 	world = game.world
 	# Back up, and down again: what was done stays done.

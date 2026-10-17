@@ -552,7 +552,10 @@ static func web_mesh(hub: Vector3, edge: Callable, sag: Callable, size: float) -
 # unless given).
 const JAMB = Vector2(.34,.42)
 const BAR_SPACING = .14
-static func gate(width: float, height: float, lintel_top: float, stone: Material = null) -> Node3D:
+# (`solid`: a door of heavy timber boards behind each leaf's grille, banded
+# with iron, so that nothing is seen or shot through it: the basement's lower
+# level's wing gates.)
+static func gate(width: float, height: float, lintel_top: float, stone: Material = null, solid: bool = false) -> Node3D:
 	if stone == null: stone = Art.material("stone",Color(.62,.58,.52))
 	var root = Node3D.new()
 	root.name = "Gate"
@@ -577,6 +580,7 @@ static func gate(width: float, height: float, lintel_top: float, stone: Material
 		# The leaf reaches from its hinge in toward the middle.
 		leaf.position = Vector3(-s*leaf_width*.5,0,0)
 		pivot.add_child(leaf)
+		if solid: pivot.add_child(boards(leaf_width,height-.02,-s))
 		# Hinge straps on the jamb.
 		for y in [.35,height-.45]:
 			var strap = MeshInstance3D.new()
@@ -587,6 +591,34 @@ static func gate(width: float, height: float, lintel_top: float, stone: Material
 			pivot.add_child(strap)
 	open_gate(root,0.0)
 	return root
+
+# A leaf's door of old timber boards, `width` across and `height` tall, set
+# just behind its grille (reaching from its hinge toward `inward`), with
+# iron bands across it.
+static func boards(width: float, height: float, inward: float) -> Node3D:
+	var door = Node3D.new()
+	door.name = "Boards"
+	var wood = Art.material("wood",Color(.3,.22,.15)).duplicate()
+	wood.uv1_triplanar = true
+	wood.uv1_scale = Vector3.ONE*1.6
+	var count: int = maxi(3,roundi(width/.24))
+	for k in count:
+		var board = MeshInstance3D.new()
+		var box = BoxMesh.new()
+		box.size = Vector3(width/count-.008,height-.04*float(k%2),.07)
+		board.mesh = box
+		board.material_override = wood
+		board.position = Vector3(inward*(width/count*(k+.5)),box.size.y*.5,-.07)
+		door.add_child(board)
+	for y in [height*.2,height*.55,height*.85]:
+		var band = MeshInstance3D.new()
+		var box = BoxMesh.new()
+		box.size = Vector3(width,.07,.08)
+		band.mesh = box
+		band.material_override = iron(.85)
+		band.position = Vector3(inward*width*.5,y,-.11)
+		door.add_child(band)
+	return door
 
 # How far open `gate` stands: shut (0) to wide open (1, OPEN_ANGLE), each leaf
 # swung about its hinge toward +Z.
