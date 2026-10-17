@@ -22,8 +22,14 @@ const RED = Color(1.0,.38,.20)
 # light's, the sky's colour, and how far it is night (fires light the ground).
 # (At its height the day is held below full strength, so the town's white
 # marble keeps its carving rather than burning out to a flat white.)
+# Deep in the night: the moon's strength, and the dark blue fill of the
+# ambient light and its strength (kept low: the night is dark, and the fires
+# and torches light what is near them).
+const NIGHT_MOON = .06
+const NIGHT_AMBIENT = Color(.24,.30,.56)
+const NIGHT_FILL = .07
 const KEYS = [
-	[0.0,MOON,.15,Color(.30,.38,.66),.19,Color(.02,.028,.06),1.0],
+	[0.0,MOON,NIGHT_MOON,NIGHT_AMBIENT,NIGHT_FILL,Color(.008,.012,.028),1.0],
 	[40.0,MOON,0.0,Color(.50,.44,.56),.42,Color(.30,.21,.24),.7],
 	[40.01,RED,0.0,Color(.50,.44,.56),.42,Color(.30,.21,.24),.7],
 	[110.0,GOLD,.72,Color(.80,.62,.55),.38,Color(.86,.52,.32),.1],
@@ -34,8 +40,8 @@ const KEYS = [
 	[1100.0,GOLD,.75,Color(.80,.62,.55),.38,Color(.86,.50,.30),.1],
 	[1159.99,RED,0.0,Color(.52,.42,.54),.42,Color(.34,.21,.25),.7],
 	[1160.0,MOON,0.0,Color(.52,.42,.54),.42,Color(.34,.21,.25),.7],
-	[1200.0,MOON,.15,Color(.30,.38,.66),.19,Color(.02,.028,.06),1.0],
-	[1800.0,MOON,.15,Color(.30,.38,.66),.19,Color(.02,.028,.06),1.0]]
+	[1200.0,MOON,NIGHT_MOON,NIGHT_AMBIENT,NIGHT_FILL,Color(.008,.012,.028),1.0],
+	[1800.0,MOON,NIGHT_MOON,NIGHT_AMBIENT,NIGHT_FILL,Color(.008,.012,.028),1.0]]
 
 static func of_day(clock: float) -> float:
 	return fposmod(clock,CYCLE)

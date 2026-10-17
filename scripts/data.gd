@@ -45,13 +45,15 @@ const ENEMIES = {
 	"bandit":{"title":"Bandit","as":"gladiator","human":"bandit","hp":45.0,"damage":10.5,"speed":3.7,"range":1.9,"interval":1.0,"weapon":"sword","size":1.0,"color":Color(.5,.4,.3)},
 	"bandit_archer":{"title":"Bandit Archer","as":"archer","human":"bandit","hp":27.0,"damage":15.0,"speed":3.6,"range":10.6,"interval":1.3,"weapon":"bow","size":1.0,"color":Color(.5,.4,.3)},
 	# The three who hold the basement's last room. The champion bears a
-	# scutum and heavy armor (`armor`, as Actor.armor). The marksman's arrows
+	# scutum and heavy armor (`armor`, as Actor.armor), and charges nearly as
+	# fast as the hero runs (his run played near its own pace: a slower man
+	# would run it in slow motion, there being no jog to play). The marksman's arrows
 	# strike hard, and every `stun_shot` seconds one stuns the hero for
 	# `stun` seconds and hobbles him for `slow`. The healer fights as an
 	# Oracle does, with a quicker bolt between fireballs (`bolt`), and mends
 	# his fellows (`heals`, a share of their health) with a HEAL_CAST spell
 	# that a hurt breaks off (Actor).
-	"bandit_champion":{"title":"Bandit Champion","as":"gladiator","human":"bandit","hp":210.0,"damage":21.0,"speed":3.9,"range":1.9,"interval":.9,"weapon":"sword","shield":"scutum","armor":90.0,"size":1.12,"color":Color(.5,.4,.3)},
+	"bandit_champion":{"title":"Bandit Champion","as":"gladiator","human":"bandit","hp":210.0,"damage":21.0,"speed":5.6,"range":1.9,"interval":.9,"weapon":"sword","shield":"scutum","armor":90.0,"size":1.05,"color":Color(.5,.4,.3)},
 	"bandit_marksman":{"title":"Bandit Marksman","as":"archer","human":"bandit","hp":120.0,"damage":36.0,"speed":3.7,"range":12.5,"interval":1.1,"weapon":"bow","stun_shot":7.0,"stun":2.0,"slow":4.0,"size":1.06,"color":Color(.5,.4,.3)},
 	"bandit_healer":{"title":"Bandit Healer","as":"wizard","human":"bandit","hp":110.0,"damage":30.0,"speed":4.0,"range":11.0,"interval":2.2,"weapon":"staff","bolt":true,"heals":.3,"size":1.06,"color":Color(.5,.4,.3)},
 	"boss":{"title":"The Crowned Statue","hp":1875.0,"damage":101.25,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}

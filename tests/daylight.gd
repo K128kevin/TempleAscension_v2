@@ -32,11 +32,12 @@ func test():
 		steady = steady and now.x<=last.x+.0001 and now.angle_to(last)<.01 and now.y>.2
 		last = now
 	check(steady,"It moves smoothly westward all day, and is never followed below the horizon")
-	# Night: the moon's light, darker than day but not black.
+	# Night: the moon's light, far darker than day (it was made much darker,
+	# the fires and torches lighting what is near them) but not black.
 	var midnight: Dictionary = Daylight.sky(1500.0)
 	check(midnight.moon and midnight.light.b>midnight.light.r and midnight.night==1.0 and midnight.toward.y>.5,"At night the light is the moon's, cool and high")
 	var dark: float = brightness(midnight)/brightness(noon)
-	check(dark>.12 and dark<.4 and midnight.sky.get_luminance()<.08,"The night is much darker than the day, but not black (%.0f%% as bright)" % (dark*100.0))
+	check(dark>.03 and dark<.1 and midnight.sky.get_luminance()<.03,"The night is far darker than the day, but not black (%.0f%% as bright)" % (dark*100.0))
 	var all_night = true
 	for t in range(1200,1800): all_night = all_night and Daylight.sky(t).night==1.0 and Daylight.sky(t).moon
 	check(all_night and noon.night==0.0,"It is full night for the whole ten minutes")

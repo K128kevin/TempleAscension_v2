@@ -40,7 +40,10 @@ HERO = OUT/'warrior.glb'
 # blows and stances, the dagger's, flinching and falling.
 CLIPS = ['Idle', 'Walk', 'Run', 'Crouch', 'SneakIdle', 'Evade', 'Attack', 'Cast', 'SwordIdle', 'SwordRun', 'SwordSwing', 'SwordSlash',
     'DaggerStab', 'DaggerSlash', 'ArcherShot', 'BowIdle', 'BowShot', 'BowRun', 'BowCrouch', 'RangerIdle', 'RangerRun', 'RangerCrouch',
-    'Hit', 'HitHead', 'HitStagger', 'HitKnockdown', 'Death']
+    'Hit', 'HitHead', 'HitStagger', 'HitKnockdown', 'Death',
+    # (A bandit with a scutum, the basement's champion, bears it as the
+    # gladiators do: its stance, run, swing and flinches.)
+    'ScutumSwordIdle', 'ScutumRun', 'ScutumSwordSwing', 'ScutumHit', 'ScutumHitHead', 'ScutumHitStagger', 'ScutumHitKnockdown']
 # The hero's gear each bandit carries.
 CARRIED = ['RangerQuiver', 'RangerDagger']
 # How far the sica's point is swept back, in blade widths.

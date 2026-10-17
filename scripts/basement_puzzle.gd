@@ -22,9 +22,9 @@ const Art = preload("res://scripts/assets.gd")
 const Kit = preload("res://scripts/world_art.gd")
 const Gaze = preload("res://scripts/boss_laser.gd")
 const BOULDER_RADIUS = .92
-# Tiles a second, pushed and pulled: a heavy stone, walked on slowly.
-const PUSH_SPEED = 1.3
-const PULL_SPEED = .9
+# Tiles a second, pushed and pulled.
+const PUSH_SPEED = 2.6
+const PULL_SPEED = 1.8
 # How near the hero must stand to take hold of a boulder (from its surface),
 # and how far from its middle he stands to push it.
 const GRIP_REACH = 1.3
@@ -77,7 +77,8 @@ func setup(owner_game, owner_world, kept: Array = []) -> void:
 		var node = boulder_model(i,stone)
 		add_child(node)
 		var b = {"cell":cell,"node":node,"from":centre(cell),"to":centre(cell),"t":1.0,"speed":PUSH_SPEED,"dir":Vector2i.ZERO,"pull":false}
-		node.position = b.to+Vector3.UP*BOULDER_RADIUS
+		node.position = b.to
+		settle(node)
 		boulders.append(b)
 		world.visibility_nodes.append(node)
 	for cell in layout.buttons:
@@ -109,12 +110,18 @@ func centre(cell: Vector2i) -> Vector3:
 static func footprint(cell: Vector2i) -> Array[Vector2i]:
 	return [cell,cell+Vector2i.RIGHT,cell+Vector2i.DOWN,cell+Vector2i.ONE]
 
-# A boulder: a great ball of stone, hewn round but knobbled and pitted
-# (its surface pushed in and out by noise, BOULDER_ROUGH of its radius), in
+# A boulder: a great rough ball of stone, far from true: broad swells and
+# flats over it (BOULDER_SWELL of its radius, by slow noise), knobbled and
+# pitted over those (BOULDER_ROUGH), and a little longer one way than the
+# others (BOULDER_SHAPE), in
 # the cave's scanned rock; its middle at the node's origin, so that it rolls
 # about it. One shape for both, turned differently.
-const BOULDER_ROUGH = .07
+const BOULDER_SWELL = .16
+const BOULDER_ROUGH = .06
+const BOULDER_SHAPE = Vector3(1.08,.94,.98)
 static var ball: ArrayMesh
+# Points spread over its surface, for finding which of it rests on the floor.
+static var hull: PackedVector3Array
 func boulder_model(index: int, stone: Material) -> Node3D:
 	var root = Node3D.new()
 	root.name = "Boulder%d" % index
@@ -129,16 +136,21 @@ func boulder_model(index: int, stone: Material) -> Node3D:
 		lumps.seed = 7
 		lumps.frequency = 1.1
 		lumps.fractal_octaves = 4
+		var swells = FastNoiseLite.new()
+		swells.seed = 21
+		swells.frequency = .45
+		swells.fractal_octaves = 2
 		var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		for k in points.size():
 			var p: Vector3 = points[k]
-			points[k] = p*(1.0+BOULDER_ROUGH*lumps.get_noise_3dv(p*2.0))
+			points[k] = p*BOULDER_SHAPE*(1.0+BOULDER_SWELL*swells.get_noise_3dv(p*2.0)+BOULDER_ROUGH*lumps.get_noise_3dv(p*2.0))
 		arrays[Mesh.ARRAY_VERTEX] = points
 		var tool = SurfaceTool.new()
 		tool.create_from_arrays(arrays)
 		tool.generate_normals()
 		tool.generate_tangents()
 		ball = tool.commit()
+		for k in range(0,points.size(),5): hull.append(points[k])
 	var rock = MeshInstance3D.new()
 	rock.mesh = ball
 	rock.material_override = stone
@@ -254,7 +266,7 @@ func roll(b: Dictionary, dt: float) -> void:
 	b.t = minf(1.0,b.t+dt*b.speed)
 	var after: Vector3 = here(b)
 	var node: Node3D = b.node
-	node.position = after+Vector3.UP*BOULDER_RADIUS
+	node.position = after
 	if b.t >= 1.0:
 		nav_mark(b.dir*-1+b.cell)
 		nav_mark(b.cell)
@@ -265,7 +277,15 @@ func roll(b: Dictionary, dt: float) -> void:
 		var axis: Vector3 = Vector3.UP.cross(travel.normalized())
 		node.basis = Basis(axis,travel.length()/BOULDER_RADIUS)*node.basis
 		node.basis = node.basis.orthonormalized()
+	settle(node)
 	world.visibility_cells[node] = footprint(b.cell)
+
+# A rough stone lies on its lowest point: its middle stands as high above the
+# floor as that point lies below it, turned as it now is.
+func settle(node: Node3D) -> void:
+	var lowest = 0.0
+	for p in hull: lowest = minf(lowest,(node.basis*p).y)
+	node.position.y = -lowest
 
 func here(b: Dictionary) -> Vector3:
 	return b.from.lerp(b.to,b.t)
@@ -541,7 +561,7 @@ func work(dt: float) -> void:
 		hero.face(hero.position-way if b.pull else hero.position+way)
 		braced = true
 		hero.visual.walking = true
-		pose.update(dt,true,here(b)+Vector3.UP*BOULDER_RADIUS,BOULDER_RADIUS,b.pull)
+		pose.update(dt,true,b.node.position,BOULDER_RADIUS,b.pull)
 		# (Pulling, he walks backward: the stride runs in reverse.)
 		hero.visual.locomotion(true,false,false,1.0,-PULL_SPEED if b.pull else PUSH_SPEED)
 		return
@@ -552,14 +572,14 @@ func work(dt: float) -> void:
 		if braced:
 			hero.face(Vector3(b.to.x,0,b.to.z))
 			hero.visual.locomotion(false,false)
-		pose.update(dt,braced,b.to+Vector3.UP*BOULDER_RADIUS,BOULDER_RADIUS,false)
+		pose.update(dt,braced,b.node.position,BOULDER_RADIUS,false)
 		return
 	var move: Dictionary = moves[0]
 	var spot: Vector3 = stand_point(b.cell,move.m,move.pull)
 	if Vector2(spot.x-hero.position.x,spot.z-hero.position.z).length() > .15:
 		# Round to it: his hands off the stone as he goes.
 		braced = false
-		pose.update(dt,false,b.to+Vector3.UP*BOULDER_RADIUS,BOULDER_RADIUS,false)
+		pose.update(dt,false,b.node.position,BOULDER_RADIUS,false)
 		if game.route.is_empty() or game.route[-1].distance_to(spot) > .05:
 			game.route = world.path(hero.position,spot)
 			if game.route.is_empty():

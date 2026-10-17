@@ -1,15 +1,17 @@
 shader_type spatial;
 // The hero burned through by the basement's lasers (scripts/ash_death.gd):
-// in place of every part of him, charred black flesh and kit crazed with
-// glowing cracks, crumbling away from the head down. Where it is about to go
-// it glows orange, like the edge of burning paper. `progress` takes it from
-// whole (0) to gone (1); `ground` and `height` place the figure in the world.
+// in place of every part of him, flesh and kit gone molten red and yellow
+// (`heat`, 1) and cooling to char crazed with glowing cracks (0), crumbling
+// away from the head down. Where it is about to go it glows orange, like the
+// edge of burning paper. `progress` takes it from whole (0) to gone (1);
+// `ground` and `height` place the figure in the world.
 render_mode cull_disabled;
 uniform float progress : hint_range(0.0, 1.0) = 0.0;
 uniform float ground = 0.0;
 uniform float height = 2.0;
 // How hot the cracks still are (1, burning; 0, out).
 uniform float glow = 1.0;
+uniform float heat = 0.0;
 varying vec3 world;
 
 float hash(vec2 p) {
@@ -51,7 +53,11 @@ void fragment() {
 	vec3 char = vec3(mix(0.035, 0.13, grain)) * vec3(1.0, 0.88, 0.78);
 	// A dusting of pale ash over the char.
 	char = mix(char, vec3(0.36, 0.35, 0.34), smoothstep(0.78, 0.9, noise(p * 6.1 + 2.0)) * 0.55);
-	ALBEDO = char;
+	// Molten: red, flaring yellow where the grain runs hottest, darker in its
+	// cracks, all of it giving off its own light.
+	vec3 molten = mix(vec3(0.75, 0.08, 0.02), vec3(1.0, 0.72, 0.18), smoothstep(0.35, 0.75, grain + 0.25 * noise(p * 1.7 + TIME * 3.0)));
+	molten *= 1.0 - 0.6 * crack;
+	ALBEDO = mix(char, molten * 0.4, heat);
 	ROUGHNESS = 1.0;
-	EMISSION = vec3(1.0, 0.36, 0.08) * (edge * 3.5 + crack * 0.9 * glow);
+	EMISSION = vec3(1.0, 0.36, 0.08) * (edge * 3.5 + crack * 0.9 * glow) + molten * heat * 2.2;
 }

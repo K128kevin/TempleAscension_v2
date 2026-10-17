@@ -77,7 +77,7 @@ func puzzle_and_elites() -> void:
 	roll_on(puzzle)
 	check(b.cell == goal and b.t >= 1.0 and not world.fits(b.to),"He goes round it as he must and rolls it there")
 	# Wedged in a corner, it is pulled out before it is pushed on.
-	b.cell = room.position; b.to = puzzle.centre(b.cell); b.from = b.to; b.node.position = b.to+Vector3.UP*puzzle.BOULDER_RADIUS
+	b.cell = room.position; b.to = puzzle.centre(b.cell); b.from = b.to; b.node.position = b.to; puzzle.settle(b.node)
 	puzzle.nav_mark(goal); puzzle.nav_mark(b.cell)
 	game.player.position = puzzle.stand_point(b.cell,Vector2i.DOWN,true)
 	var out: Vector2i = b.cell+Vector2i(4,3)

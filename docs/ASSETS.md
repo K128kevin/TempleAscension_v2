@@ -1188,6 +1188,13 @@ throw them farther outward and upward. The body collapse and dust follow the com
 clock; the chips use Godot's physics clock, pause with the world, and expire after
 eight seconds. Collision slabs and prop hulls are built when the first statue falls.
 
+`assets/audio/laser-death.mp3` is the user's own Boulders game's `death.mp3`
+(Boulders-Liftoff, `core/assets/sounds/death.mp3`),
+unedited, 2.4 s: it plays as a laser burns the hero to ash in the arena
+basement (`scripts/ash_death.gd`), as it does when a beam kills the player in
+Boulders. That game's credits list its effects as from www.zapsplat.com, this
+one's source not yet confirmed there.
+
 `assets/audio/fire-whoosh.mp3` is ZapSplat's "fire whoosh, fast burst, flames"
 (zapsplat_sound_design_fire_whoosh_fast_burst_flames_112136.mp3, from its fire
 whooshes pack), unedited: a 3.8 s burst of flame with a burning tail. It plays as

@@ -1371,8 +1371,7 @@ func kill_player(cause: String = "") -> void:
 	if cause == "laser":
 		# Burned to ash where he stands (scripts/ash_death.gd); the death
 		# screen waits until he has crumbled away.
-		sound.play("lightning-zap",-4)
-		sound.play("fire-whoosh",-6)
+		sound.play("laser-death",-6)
 		player_died(false)
 		AshDeath.burn(world,player)
 		var shown = load_count
