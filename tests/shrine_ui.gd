@@ -100,6 +100,9 @@ func test() -> void:
 	Save.keep_setting("hud_art","crimson_legion") # Old preview preference must not override the selected theme.
 	var game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game); game.test_mode=true; game.set_process(false); game.sound.muted=true
+	# (It opens on the main menu: the saved character is taken up from it.)
+	if game.in_menu:
+		game.run = Save.load_run(); game.load_floor()
 	var hud = game.hud
 	var panels = hud.panels
 	check(hud.art_style==hud.Art.DEFAULT and hud.art_backplate.visible,"Sandstone Shrine is active in normal mode, superseding old preview settings")
@@ -165,12 +168,11 @@ func test() -> void:
 	InputMap.action_erase_events(Bindings.ACTIONS[0])
 	for event in original: InputMap.action_add_event(Bindings.ACTIONS[0],event)
 	game.skills.pending.clear(); game.scheduled.clear(); game.dash_cooldown=0; game.heal_cd=0
-	for menu in ["pause","difficulty","class","summary","dialogue"]:
+	for menu in ["pause","settings","summary","dialogue"]:
 		game.mode="playing"
 		match menu:
 			"pause": game.pause_game()
-			"difficulty": game.new_run_menu()
-			"class": game.ProgressionUI.creation(game,0)
+			"settings": game.settings_menu(func(): pass)
 			"summary": game.summary_menu()
 			"dialogue": hud.dialog("DESERT VOICES","A reusable dialogue frame, shared with every menu.")
 		await frames()

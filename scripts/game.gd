@@ -156,19 +156,27 @@ func _ready() -> void:
 	debug.game = self
 	if debug.enabled: Save.directory = Save.directory.path_join("debug")
 	run = Data.new_run()
-	creating_character = not test_mode and not debug.enabled
-	# A new character is made in the desert, where it will start.
-	if creating_character: run = Data.new_character()
-	if not test_mode:
+	# The game opens on its main menu (not in tests, nor in debug mode, which
+	# go straight into a run), over the world outside; a save from before
+	# characters had names becomes one of them.
+	in_menu = not test_mode and not debug.enabled
+	creating_character = in_menu
+	if in_menu:
+		# (Only in the game itself: run from the editor, as tests are, it
+		# would move the save they read.)
+		if not OS.has_feature("editor"): Save.import_unnamed()
+		run = Data.new_character()
+		run["clock"] = Daylight.MORNING+MENU_HOUR
+	elif not test_mode:
 		var saved = Save.load_run()
-		if not saved.is_empty() and not saved.completed:
-			run = saved
-			creating_character = false
+		if not saved.is_empty() and not saved.completed: run = saved
 	debug.apply_start(OS.get_cmdline_user_args())
 	# The game opens full screen if it was left that way.
 	if not test_mode and Save.setting("fullscreen",false): DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	sound = preload("res://scripts/audio.gd").new()
 	add_child(sound)
+	# (Sound off, if it was left so.)
+	if not test_mode and Save.setting("muted",false): sound.toggle()
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
@@ -176,8 +184,11 @@ func _ready() -> void:
 	skills = preload("res://scripts/skills.gd").new()
 	skills.game = self
 	add_child(skills)
+	# (Its backdrop is laid as a floor, which takes it off the menu: the
+	# menu is opened after.)
+	var opening_menu: bool = in_menu
 	load_floor()
-	if creating_character: new_run_menu()
+	if opening_menu: main_menu()
 	elif not outdoors(): toast("The crown waits above. Defeat every statue to open the ascent.")
 	if test_mode:
 		var tester = load("res://tests/campaign.gd").new()
@@ -195,6 +206,9 @@ func outdoors() -> bool:
 var load_count = 0
 func load_floor() -> void:
 	load_count += 1
+	# (Into a run: off the main menu. The main menu puts itself back after
+	# laying out its own backdrop.)
+	if in_menu: leave_menu()
 	if test_mode: creating_character = false
 	run.erase("seconds") # Discard elapsed time from legacy saves.
 	run.erase("skill_cooldowns") # Ignore obsolete skill recharge timers in saved runs.
@@ -487,7 +501,9 @@ func _process(dt: float) -> void:
 	for enemy in enemies:
 		if enemy.dead or not enemy.awake or not enemy.visible or enemy.position.distance_squared_to(player.position)>900: continue
 		world.occlusion_targets.append({"position":enemy.position,"height":1.8*enemy.config.size})
-	world.follow(playground.focus() if playground != null else player.position,dt)
+	# (On the main menu the camera circles high over the town instead.)
+	if mode == "menu": menu_camera(dt)
+	else: world.follow(playground.focus() if playground != null else player.position,dt)
 	if intro_left>0 and mode=="playing": tick_intro(dt)
 	if shake_left>0:
 		# A jolt that rings down: the camera thrown about its place.
@@ -528,6 +544,8 @@ func _input(event: InputEvent) -> void:
 			elif mode=="playing" and hud.panels.any_open(): hud.panels.close()
 			elif mode=="playing": pause_game()
 			elif mode in ["paused","character"] and not creating_character: resume_game()
+			# (On the main menu's pages, Escape goes back to it.)
+			elif mode == "menu" and menu_page != "main": main_menu()
 			get_viewport().set_input_as_handled()
 		if event.physical_keycode in [KEY_C,KEY_K,KEY_I] and mode in ["playing","character"] and not creating_character and intro_left<=0:
 			toggle_screen(event.physical_keycode)
@@ -1407,6 +1425,7 @@ func player_died(fall: bool = true) -> void:
 func death_screen() -> void:
 	hud.dialog("STONE CLAIMS ANOTHER", "Retry with your class, XP, learned skills and equipment intact. Previously rewarded enemies grant no additional XP.")
 	hud.button("Rise again",retry_floor)
+	hud.button("Return to the main menu",return_to_menu)
 	hud.button("Save and quit",quit_game)
 
 # The marksman's stunning arrow: he stands dazed for `seconds`, a halo over
@@ -2032,7 +2051,7 @@ func ending() -> void:
 func summary_menu() -> void:
 	mode = "summary"
 	hud.dialog("TEMPLE ASCENDED", "%s mode · %d deaths\n\nThe crown has a new guardian." % [Data.DIFFICULTIES[run.difficulty],run.deaths])
-	hud.button("Begin another ascent",new_run_menu)
+	hud.button("Return to the main menu",return_to_menu)
 	hud.button("Quit",quit_game)
 
 func pause_game() -> void:
@@ -2044,10 +2063,8 @@ func pause_game() -> void:
 	save_run()
 	hud.dialog("A MOMENT OF STILLNESS", "Progress is saved.\n\nLMB move / attack · Shift + LMB attack in place\nRMB + %s skills · %s evade · %s healing spell\nC attributes · K skills · I inventory · X other weapon · Hold LMB to steer · Wheel or trackpad zoom · E interact · F11 or Alt+Enter fullscreen (Ctrl+Cmd+F on a Mac)" % [hud.panels.key_names(),CombatBindings.caption(4),CombatBindings.caption(5)])
 	hud.button("Resume",resume_game)
-	hud.button("Continue saved ascent",continue_run)
-	hud.button("New ascent / Difficulty",new_run_menu)
-	hud.button("Sound: %s" % ("off" if sound.muted else "on"),func(): sound.toggle(); mode="playing"; pause_game())
-	hud.button("Fullscreen: %s" % ("on" if fullscreen() else "off"),func(): set_fullscreen(not fullscreen()); mode="playing"; pause_game())
+	hud.button("Settings",func(): settings_menu(func(): mode="playing"; pause_game()))
+	hud.button("Save and return to the main menu",return_to_menu)
 	hud.button("Save and quit",quit_game)
 
 func resume_game() -> void:
@@ -2055,19 +2072,174 @@ func resume_game() -> void:
 	mode = "playing"
 	hud.close_modal()
 
+# The run's own save, loaded again (its character's, or the unnamed one).
 func continue_run() -> void:
-	var loaded = Save.load_run()
+	var loaded = Save.load_run(str(run.get("name","")))
 	if loaded.is_empty(): toast("No valid saved ascent found."); return
 	run = loaded
 	load_floor()
 
+# --- The main menu ----------------------------------------------------------------
+# The game opens on it, over the world outside seen from high over the town,
+# the camera slowly circling (menu_camera): New Character (Game.new_run_menu,
+# scripts/character_creation.gd), Load Character (each saved character, to
+# continue or delete: Save.characters), Settings and Quit. The pause menu
+# returns to it, the run saved.
+var in_menu = false
+var menu_page = ""
+var menu_angle = 0.0
+var creation: Control
+const MENU_ORBIT = 150.0
+const MENU_PANEL = Vector2(460,330)
+const MENU_HEIGHT = 85.0
+const MENU_TURN = .02
+# The time of day behind the main menu: well into the morning.
+const MENU_HOUR = 300.0
+
+func main_menu() -> void:
+	close_creation()
+	intro_left = 0.0
+	# The world outside behind it, with no one in it of his.
+	# (Laid already at the game's start: a nameless run outside.)
+	if not outdoors() or run.has("name") or not is_instance_valid(world):
+		run = Data.new_character()
+		# (By day: a new character wakes before dawn.)
+		run["clock"] = Daylight.MORNING+MENU_HOUR
+		in_menu = true
+		creating_character = true
+		load_floor()
+	in_menu = true
+	creating_character = true
+	mode = "menu"
+	menu_page = "main"
+	world.process_mode = Node.PROCESS_MODE_INHERIT
+	player.visible = false
+	hud.menu_mode(true)
+	world.camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	world.camera.set_cull_mask_value(20,false)
+	menu_camera(0.0)
+	hud.dialog("TEMPLE ASCENSION","",MENU_PANEL)
+	hud.modal_body.get_child(0).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hud.modal_body.get_child(0).add_theme_font_size_override("font_size",40)
+	hud.modal_body.get_child(1).visible = false
+	hud.button("New Character",new_run_menu)
+	var saved: Array = Save.characters()
+	var load_button: Button = hud.button("Load Character" if not saved.is_empty() else "Load Character (none saved)",load_menu)
+	load_button.disabled = saved.is_empty()
+	hud.button("Settings",func(): settings_menu(main_menu))
+	hud.button("Quit",func(): get_tree().quit())
+
+# High over the town, slowly circling its arena.
+func menu_camera(dt: float) -> void:
+	menu_angle = fposmod(menu_angle+dt*MENU_TURN,TAU)
+	var cam: Camera3D = world.camera
+	cam.projection = Camera3D.PROJECTION_PERSPECTIVE
+	cam.fov = 45.0
+	cam.position = Town.ARENA+Vector3(cos(menu_angle)*MENU_ORBIT,MENU_HEIGHT,sin(menu_angle)*MENU_ORBIT)
+	cam.look_at(Town.ARENA+Vector3.UP*4.0)
+
 func new_run_menu() -> void:
-	mode = "paused"
-	world.process_mode = Node.PROCESS_MODE_DISABLED
-	hud.dialog("A NEW CHARACTER", "Choose difficulty, then Warrior, Ranger or Wizard. This replaces the current character.")
-	for i in Data.DIFFICULTIES.size():
-		hud.button(Data.DIFFICULTIES[i],func(): ProgressionUI.creation(self,i))
-	if not creating_character: hud.button("Back",resume_game)
+	if not in_menu:
+		main_menu()
+	hud.close_dialog()
+	menu_page = "new"
+	close_creation()
+	creation = preload("res://scripts/character_creation.gd").new()
+	hud.root.add_child(creation)
+	creation.setup(self)
+
+func close_creation() -> void:
+	if is_instance_valid(creation): creation.queue_free()
+	creation = null
+
+# A new character made (character_creation.gd): into the world, where he
+# wakes by his campfire, his story opening.
+func begin_character(class_id: String, character_name: String, difficulty: int) -> void:
+	close_creation()
+	hud.close_modal()
+	run = Data.new_character(class_id)
+	run.difficulty = difficulty
+	run["name"] = character_name
+	leave_menu()
+	load_floor()
+	save_run()
+	start_intro()
+
+func leave_menu() -> void:
+	in_menu = false
+	creating_character = false
+	menu_page = ""
+	hud.menu_mode(false)
+
+func load_menu() -> void:
+	menu_page = "load"
+	var saved: Array = Save.characters()
+	if saved.is_empty():
+		main_menu()
+		return
+	hud.dialog("LOAD A CHARACTER","")
+	for c in saved:
+		var row = HBoxContainer.new()
+		row.add_theme_constant_override("separation",10)
+		hud.modal_body.add_child(row)
+		var about: Label = hud.label("%s\n%s · Level %d · %s · %s" % [c.name,c.class_id.capitalize(),c.level,where(c),Data.DIFFICULTIES[c.difficulty]],18,hud.cream,row)
+		about.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var go = Button.new()
+		go.text = "Continue"
+		go.custom_minimum_size = Vector2(120,44)
+		go.pressed.connect(func(): continue_character(c.name))
+		row.add_child(go)
+		var drop = Button.new()
+		drop.text = "Delete"
+		drop.custom_minimum_size = Vector2(100,44)
+		drop.pressed.connect(func(): delete_menu(c.name))
+		row.add_child(drop)
+	hud.button("Back",main_menu)
+
+# Where a saved character is, in words (no place has a name).
+static func where(c: Dictionary) -> String:
+	if c.completed: return "Ascended"
+	match c.place:
+		"world": return "Outdoors"
+		"basement": return "Beneath the arena, level %d" % (c.floor+1)
+		"cave": return "The cave, level %d" % (c.floor+1)
+	return "The summit" if c.floor >= Data.FLOORS-1 else "The temple, floor %d" % (c.floor+1)
+
+func delete_menu(character_name: String) -> void:
+	menu_page = "delete"
+	hud.dialog("DELETE %s?" % character_name.to_upper(),"%s and everything he has done will be gone for good." % character_name)
+	hud.button("Delete %s" % character_name,func():
+		Save.delete_character(character_name)
+		load_menu())
+	hud.button("Keep",load_menu)
+
+func continue_character(character_name: String) -> void:
+	var loaded: Dictionary = Save.load_run(character_name)
+	if loaded.is_empty():
+		toast("That character's save could not be read.")
+		return
+	hud.close_modal()
+	run = loaded
+	leave_menu()
+	load_floor()
+	if run.get("completed",false): return
+	toast("Welcome back, %s." % character_name)
+
+func settings_menu(back: Callable) -> void:
+	if mode == "menu": menu_page = "settings"
+	hud.dialog("SETTINGS","")
+	hud.button("Fullscreen: %s" % ("on" if fullscreen() else "off"),func(): set_fullscreen(not fullscreen()); settings_menu(back))
+	hud.button("Sound: %s" % ("off" if sound.muted else "on"),func():
+		sound.toggle()
+		Save.keep_setting("muted",sound.muted)
+		settings_menu(back))
+	hud.button("Back",back)
+
+# Out of the run to the main menu, the run saved.
+func return_to_menu() -> void:
+	save_run()
+	world.process_mode = Node.PROCESS_MODE_INHERIT
+	main_menu()
 
 func enter_playground() -> void:
 	if playground != null: return

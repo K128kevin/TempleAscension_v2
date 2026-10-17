@@ -25,7 +25,9 @@ func test():
 	root.add_child(game); game.test_mode=true; game.set_process(false)
 	var debug=game.debug
 	if not debug.enabled:
-		check(not is_instance_valid(debug.panel) and game.run.class_id=="ranger" and game.run.seed==93741,"Normal launch loads its character without debug UI")
+		check(not is_instance_valid(debug.panel) and game.mode=="menu" and game.in_menu,"Normal launch opens the main menu, without debug UI")
+		game.run = Save.load_run(); game.load_floor()
+		check(game.run.class_id=="ranger" and game.run.seed==93741 and not game.in_menu,"From it, its character is loaded")
 		var generation=game.run_generation
 		for code in [KEY_F8,KEY_T,KEY_N,KEY_B,KEY_L,KEY_H,KEY_J,KEY_F9,KEY_G,KEY_F,KEY_F10]: key(code)
 		check(game.run_generation==generation and game.remaining()==Data.COUNTS[0].values().reduce(func(a,b): return a+b),"Debug shortcuts are gated")

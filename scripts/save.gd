@@ -283,37 +283,120 @@ static func keep_setting(key: String, value) -> void:
 	DirAccess.make_dir_recursive_absolute(directory)
 	config.save(path)
 
-static func load_run() -> Dictionary:
-	for file in ["run.json","run.backup.json"]:
-		var path = directory.path_join(file)
-		if not FileAccess.file_exists(path): continue
-		var parser = JSON.new()
-		if parser.parse(FileAccess.get_file_as_string(path)) != OK: continue
-		var parsed = parser.data
-		if valid(parsed):
-			parsed = migrate(parsed)
-			parsed.erase("seconds")
-			for key in ["floor","difficulty","points","deaths","seed","level","xp","skill_points"]: parsed[key] = int(parsed[key])
-			for i in parsed.stats.size(): parsed.stats[i] = int(parsed.stats[i])
-			for id in parsed.skills: parsed.skills[id] = int(parsed.skills[id])
+# --- Saves ----------------------------------------------------------------------
+# Each character has a save of his own, named for him (`run.name`), in
+# CHARACTERS: <slot>.json, the save before it kept as <slot>.backup.json. A
+# run with no name (as tests make, and saves from before characters had names)
+# is kept where saves always were: run.json and run.backup.json.
+const CHARACTERS = "characters"
+const NAME_LENGTH = 18
+
+# A name's file name: its letters and digits, lower case, any run of others
+# as one "_" (so that names differing only in case, spacing or punctuation
+# are one name).
+static func slot(name: String) -> String:
+	var out = ""
+	for c in name.strip_edges().to_lower():
+		var kept: bool = (c >= "a" and c <= "z") or (c >= "0" and c <= "9")
+		if kept: out += c
+		elif not out.ends_with("_"): out += "_"
+	return out.trim_suffix("_")
+
+static func files_for(name: String) -> Array:
+	if name.is_empty(): return [directory.path_join("run.json"),directory.path_join("run.backup.json")]
+	var folder = directory.path_join(CHARACTERS)
+	return [folder.path_join(slot(name)+".json"),folder.path_join(slot(name)+".backup.json")]
+
+static func read(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path): return {}
+	var parser = JSON.new()
+	if parser.parse(FileAccess.get_file_as_string(path)) != OK: return {}
+	var parsed = parser.data
+	if not valid(parsed): return {}
+	parsed = migrate(parsed)
+	parsed.erase("seconds")
+	for key in ["floor","difficulty","points","deaths","seed","level","xp","skill_points"]: parsed[key] = int(parsed[key])
+	for i in parsed.stats.size(): parsed.stats[i] = int(parsed.stats[i])
+	for id in parsed.skills: parsed.skills[id] = int(parsed.skills[id])
+	return parsed
+
+# The run saved for the character `name` (the unnamed save, without one).
+static func load_run(name: String = "") -> Dictionary:
+	for path in files_for(name):
+		var parsed: Dictionary = read(path)
+		if not parsed.is_empty():
+			if not name.is_empty(): parsed["name"] = name
 			return parsed
 	return {}
 
 static func write(run: Dictionary) -> bool:
 	run.erase("seconds")
-	DirAccess.make_dir_recursive_absolute(directory)
-	var file = FileAccess.open(directory.path_join("run.tmp"),FileAccess.WRITE)
+	var paths: Array = files_for(str(run.get("name","")))
+	var current: String = paths[0]
+	DirAccess.make_dir_recursive_absolute(current.get_base_dir())
+	var temporary = current.get_basename()+".tmp"
+	var file = FileAccess.open(temporary,FileAccess.WRITE)
 	if file == null: return false
 	file.store_string(JSON.stringify(run))
 	file.flush()
 	file.close()
-	var current = directory.path_join("run.json")
 	var parser = JSON.new()
 	if FileAccess.file_exists(current) and parser.parse(FileAccess.get_file_as_string(current))==OK and valid(parser.data):
 		var backup_data: Dictionary = parser.data
 		backup_data.erase("seconds")
-		var backup = FileAccess.open(directory.path_join("run.backup.json"),FileAccess.WRITE)
+		var backup = FileAccess.open(paths[1],FileAccess.WRITE)
 		if backup:
 			backup.store_string(JSON.stringify(backup_data))
 			backup.close()
-	return DirAccess.rename_absolute(directory.path_join("run.tmp"),current)==OK
+	return DirAccess.rename_absolute(temporary,current)==OK
+
+# The saved characters, the most lately played first: each the summary the
+# menu lists ({"name", "class_id", "level", "place", "floor", "completed",
+# "difficulty", "saved"}).
+static func characters() -> Array:
+	var found: Array = []
+	var folder = directory.path_join(CHARACTERS)
+	if not DirAccess.dir_exists_absolute(folder): return found
+	for file in DirAccess.get_files_at(folder):
+		if not file.ends_with(".json") or file.ends_with(".backup.json"): continue
+		var path = folder.path_join(file)
+		var run: Dictionary = read(path)
+		if run.is_empty() or str(run.get("name","")).is_empty(): continue
+		found.append({"name":run.name,"class_id":run.class_id,"level":int(run.level),"place":run.get("place","temple"),"floor":int(run.floor),"completed":run.get("completed",false),"difficulty":int(run.difficulty),"saved":FileAccess.get_modified_time(path)})
+	found.sort_custom(func(a,b): return a.saved > b.saved)
+	return found
+
+static func delete_character(name: String) -> void:
+	for path in files_for(name):
+		if FileAccess.file_exists(path): DirAccess.remove_absolute(path)
+
+# What is wrong with `name` for a new character ("" if nothing): it must be
+# given, short enough, of letters, digits, spaces, apostrophes and hyphens,
+# and not another's (as its file name: case and punctuation aside).
+static func name_problem(name: String) -> String:
+	var trimmed: String = name.strip_edges()
+	if trimmed.is_empty(): return "Give your character a name."
+	if trimmed.length() > NAME_LENGTH: return "A name may be at most %d letters long." % NAME_LENGTH
+	for c in trimmed:
+		var ok: bool = c.to_lower() != c.to_upper() or (c >= "0" and c <= "9") or c in [" ","'","-"]
+		if not ok: return "A name may have only letters, digits, spaces, apostrophes and hyphens."
+	if slot(trimmed).replace("_","").is_empty(): return "A name needs a letter or a digit in it."
+	for other in characters():
+		if slot(other.name) == slot(trimmed): return "There is already a character called %s." % other.name
+	return ""
+
+# A save from before characters had names (run.json, unfinished) becomes a
+# character of its own, "Wanderer" (or "Wanderer 2", ...), once.
+static func import_unnamed() -> String:
+	var run: Dictionary = load_run()
+	if run.is_empty() or run.get("completed",false): return ""
+	var name = "Wanderer"
+	var n = 1
+	while name_problem(name) != "":
+		n += 1
+		name = "Wanderer %d" % n
+	run["name"] = name
+	if not write(run): return ""
+	for path in files_for(""):
+		if FileAccess.file_exists(path): DirAccess.rename_absolute(path,path.get_basename()+".imported.json")
+	return name

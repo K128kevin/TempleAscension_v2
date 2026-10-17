@@ -435,6 +435,8 @@ func bar(color: Color, parent: Node) -> ProgressBar:
 	return p
 
 func tick(dt: float) -> void:
+	# (Nothing of the run is shown on the main menu.)
+	if game.mode == "menu": return
 	game.debug.refresh()
 	show_energy_kind()
 	show_enemy_bars()
@@ -463,7 +465,7 @@ func tick(dt: float) -> void:
 	if outdoors: show_outdoors()
 	point_to_nearest_enemy()
 	point_to_stairs()
-	character_info.text = "%s · Level %d" % [r.class_id.capitalize(),r.level]
+	character_info.text = ("%s · " % r.name if not str(r.get("name","")).is_empty() else "")+"%s · Level %d" % [r.class_id.capitalize(),r.level]
 	experience.max_value = Data.XP_STEPS[r.level-1] if r.level<Data.MAX_LEVEL else 1
 	experience.value = r.xp-Data.xp_at_level(r.level) if r.level<Data.MAX_LEVEL else 1
 	# The LMB tile: the normal attack, or the wizard's spell there.
@@ -511,7 +513,7 @@ func tick(dt: float) -> void:
 		elif game.at_locked_gate(): prompt.text = "E · Unlock the gate" if game.has_key() else "The gate is locked"
 		elif game.way_open() and game.has_way_on() and game.player.position.distance_to(game.world.exit_point)<4: prompt.text = "E · %s" % ("Descend" if r.place in Data.DUNGEONS else "Ascend")
 		elif r.place in Data.DUNGEONS and game.world.layout.arrival.has_area() and game.player.position.distance_to(game.world.layout.arrival_position())<3.5: prompt.text = "E · Back up the stair" if r.floor>0 else "E · Up the stair to the arena"
-		elif game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
+		elif game.world.has_method("leaving_soon") and game.world.leaving_soon(game.player.position): prompt.text = {"temple":"The door leads out to the desert","cave":"The cave's mouth leads out to the desert","basement":"The stair leads up into the arena"}[r.place]
 		elif game.player.position.distance_to(game.world.spawn)<2: prompt.text = "E · Rest"
 	boss_bar.visible = is_instance_valid(game.boss) and not game.boss.dead
 	boss_name.visible = boss_bar.visible
@@ -841,6 +843,21 @@ func show_enemy_bars() -> void:
 		var head: Vector3 = enemy.position+Vector3.UP*enemy.config.get("height",enemy.config.size*2.25)
 		health.position = camera.unproject_position(head)-Vector2(health.size.x*.5,12)
 
+# On the main menu the playing HUD is put away (what was shown, shown again
+# after), its menus' dialogs and the character creation alone over the world.
+var menu_hidden: Dictionary = {}
+func menu_mode(on: bool) -> void:
+	if on:
+		if not menu_hidden.is_empty(): return
+		for c in root.get_children():
+			if c == modal or c == modal_veil or c.name == "CharacterCreation": continue
+			menu_hidden[c] = c.visible
+			c.visible = false
+	else:
+		for c in menu_hidden:
+			if is_instance_valid(c): c.visible = menu_hidden[c]
+		menu_hidden.clear()
+
 # Closes the centre dialog and the side panels.
 func close_modal() -> void:
 	close_dialog()
@@ -856,7 +873,8 @@ func close_dialog() -> void:
 		modal.queue_free()
 	modal = null
 
-func dialog(title: String, subtitle: String) -> void:
+# (`size`: the panel's, in the middle of the screen.)
+func dialog(title: String, subtitle: String, size: Vector2 = Vector2(660,560)) -> void:
 	close_modal()
 	modal_veil = ColorRect.new()
 	modal_veil.color = Color(.035,.025,.012,.64)
@@ -864,10 +882,10 @@ func dialog(title: String, subtitle: String) -> void:
 	modal_veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(modal_veil)
 	modal = PanelContainer.new()
-	modal.custom_minimum_size = Vector2(660,560)
+	modal.custom_minimum_size = size
 	modal.add_theme_stylebox_override("panel",Shrine.panel(20))
 	root.add_child(modal)
-	anchor(modal,Vector2(.5,.5),Vector2(-330,-280),Vector2(660,560))
+	anchor(modal,Vector2(.5,.5),-size*.5,size)
 	var scroll = ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	modal.add_child(scroll)
@@ -879,7 +897,7 @@ func dialog(title: String, subtitle: String) -> void:
 	heading.add_theme_font_override("font",Shrine.heading())
 	heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var sub = label(subtitle,18,cream,modal_body)
-	sub.custom_minimum_size.x = 600
+	sub.custom_minimum_size.x = size.x-60
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 func make_enemy_arrow() -> void:

@@ -25,13 +25,3 @@ static func skills(game) -> void:
 static func equipment(game) -> void:
 	game.hud.close_dialog()
 	game.hud.panels.open_inventory()
-
-static func creation(game, difficulty: int) -> void:
-	open(game,"CHOOSE YOUR CLASS","Every class starts at level 1 with five in each attribute\nand one skill point to spend on any skill it can learn.")
-	var summaries = ["Warrior · sword and shield","Ranger · bow and dagger","Wizard · staff"]
-	for i in 3:
-		game.hud.button(summaries[i],func():
-			game.creating_character = false
-			game.run = Data.new_character(Data.CLASSES[i]); game.run.difficulty = difficulty
-			game.load_floor(); game.save_run()
-			game.start_intro())

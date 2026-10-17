@@ -108,14 +108,27 @@ func test():
 		check(game.run.energy<before_energy and not game.run.has("skill_cooldowns"),"Clicking hotbar spends energy: "+ids[i])
 		check(not game.left_held and game.route.is_empty(),"Skill panel consumes movement input: "+ids[i])
 	game.skills.pending.clear()
-	game.creating_character=true
+	# The main menu: New Character, Load Character, Settings, Quit; a new
+	# character is chosen from the three, shown in their starting gear, and
+	# given a name of his own.
+	Save.delete_character("Test Wizard")
+	game.main_menu()
+	await frames(2)
+	var menu_buttons: Array = game.hud.modal_body.get_children().filter(func(n): return n is Button).map(func(b): return b.text)
+	check(game.mode=="menu" and game.in_menu and not game.player.visible and menu_buttons.size()==4 and menu_buttons[0]=="New Character" and "Load Character" in menu_buttons[1] and menu_buttons[2]=="Settings" and menu_buttons[3]=="Quit","The main menu offers a new character, a saved one, settings and quitting")
 	game.new_run_menu()
-	game.hud.modal_body.get_child(2).pressed.emit()
-	check(game.mode=="character" and "CLASS" in game.hud.modal_body.get_child(0).text,"Difficulty selection opens class creation")
+	await frames(10)
+	check(is_instance_valid(game.creation) and game.creation.cards.size()==3 and game.creation.figures.size()==3 and game.creation.figures.all(func(f): return f.hero_class in Data.CLASSES and is_instance_valid(f.weapon_item)),"New Character shows the three classes, each in his starting gear")
 	await capture("class-creation")
-	game.hud.modal_body.get_child(4).pressed.emit()
-	check(game.run.class_id=="wizard" and Data.weapon(game.run)==4 and game.run.skills.is_empty() and game.run.skill_points==1 and not game.creating_character,"Wizard creation grants the staff and one skill point")
-	check(not Save.load_run().is_empty(),"New class creation writes a valid character save")
+	game.creation.pick("wizard")
+	game.creation.name_field.text = ""
+	game.creation.begin()
+	check(is_instance_valid(game.creation) and "name" in game.creation.problem.text,"He must be given a name")
+	game.creation.name_field.text = "Test Wizard"
+	game.creation.begin()
+	check(game.run.class_id=="wizard" and game.run.name=="Test Wizard" and Data.weapon(game.run)==4 and game.run.skills.is_empty() and game.run.skill_points==1 and not game.creating_character and not game.in_menu,"Wizard creation grants the staff and one skill point, under his name")
+	check(not Save.load_run("Test Wizard").is_empty() and Save.characters().any(func(c): return c.name=="Test Wizard"),"New class creation writes a valid character save of his own")
+	check(Save.name_problem("test  WIZARD") != "" and Save.name_problem("Test Wizard 2") == "","His name is his alone")
 	# His story opens on a view from just above his head, out toward the
 	# town, that holds and then draws back and up into the game's own view;
 	# until then he cannot be commanded. Escape skips it.
@@ -161,6 +174,20 @@ func test():
 		check(not saved.has("seconds"),"Elapsed time absent from "+name)
 	game.summary_menu()
 	check(not "time" in hud.modal_body.get_child(1).text.to_lower(),"Completion summary has no timing or best-time record")
+	# Load Character: each saved character, to continue or delete.
+	game.return_to_menu()
+	game.load_menu()
+	await frames(2)
+	var rows: Array = game.hud.modal_body.get_children().filter(func(n): return n is HBoxContainer)
+	check(rows.size()==Save.characters().size() and rows.any(func(r): return "Test Wizard" in r.get_child(0).text) and rows.all(func(r): return r.get_child(1).text=="Continue" and r.get_child(2).text=="Delete"),"Load Character lists each saved character, to continue or delete")
+	game.continue_character("Test Wizard")
+	check(game.run.name=="Test Wizard" and game.mode=="playing" and not game.in_menu and game.hud.visible,"Continue takes him back into his run")
+	game.pause_game()
+	check(game.hud.modal_body.get_children().any(func(n): return n is Button and "main menu" in n.text),"The pause menu has a way back to the main menu")
+	game.return_to_menu()
+	game.delete_menu("Test Wizard")
+	game.hud.modal_body.get_children().filter(func(n): return n is Button)[0].pressed.emit()
+	check(not Save.characters().any(func(c): return c.name=="Test Wizard"),"Delete removes him")
 	check(not FileAccess.file_exists(Save.directory.path_join("records.json")),"Completing a run creates no time record")
 	await capture("hud-completion")
 	FileAccess.open("res://test-results/hud-regression.json",FileAccess.WRITE).store_string(JSON.stringify({"passed":passed,"failed":failed},"  "))

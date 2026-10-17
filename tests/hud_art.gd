@@ -46,6 +46,9 @@ func test() -> void:
 	var game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
 	game.test_mode = true; game.set_process(false); game.sound.muted = true
+	# (It opens on the main menu: the saved character is taken up from it.)
+	if game.in_menu:
+		game.run = Save.load_run(); game.load_floor()
 	var hud = game.hud
 	check(hud.art_style==Art.DEFAULT and hud.art_backplate.visible,"Sandstone Shrine is the production default, including with an invalid debug setting")
 	check(Art.STYLES.size()==5 and Art.index_of("not-a-style")==Art.DEFAULT,"Exactly five named choices include the current UI and a safe fallback")
