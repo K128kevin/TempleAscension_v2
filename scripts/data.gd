@@ -64,9 +64,9 @@ const ENEMIES = {
 	# champion charges the hero and bashes him with his shield (`bash`,
 	# seconds stunned), and the healer mends the wounded one meanwhile:
 	# Actor.start_bash, Game.shield_bashed.)
-	"bandit_champion":{"title":"Bandit Champion","as":"gladiator","human":"bandit","hp":551.25,"damage":54.6,"speed":5.6,"range":1.9,"interval":.9,"weapon":"sword","shield":"scutum","armor":90.0,"bash":3.0,"size":1.05,"color":Color(.5,.4,.3)},
-	"bandit_marksman":{"title":"Bandit Marksman","as":"archer","human":"bandit","hp":315.0,"damage":93.6,"speed":3.7,"range":12.5,"interval":1.1,"weapon":"bow","stun_shot":7.0,"stun":2.0,"slow":4.0,"size":1.06,"color":Color(.5,.4,.3)},
-	"bandit_healer":{"title":"Bandit Healer","as":"wizard","human":"bandit","hp":288.75,"damage":78.0,"speed":4.0,"range":11.0,"interval":2.2,"weapon":"staff","bolt":true,"heals":.6,"nova":29.25,"size":1.06,"color":Color(.5,.4,.3)},
+	"bandit_champion":{"title":"Bandit Champion","as":"gladiator","human":"bandit","hp":826.875,"damage":68.25,"speed":5.6,"range":1.9,"interval":.9,"weapon":"sword","shield":"scutum","armor":90.0,"bash":3.0,"size":1.05,"color":Color(.5,.4,.3)},
+	"bandit_marksman":{"title":"Bandit Marksman","as":"archer","human":"bandit","hp":472.5,"damage":117.0,"speed":3.7,"range":12.5,"interval":1.1,"weapon":"bow","stun_shot":7.0,"stun":2.0,"slow":4.0,"size":1.06,"color":Color(.5,.4,.3)},
+	"bandit_healer":{"title":"Bandit Healer","as":"wizard","human":"bandit","hp":433.125,"damage":97.5,"speed":4.0,"range":11.0,"interval":2.2,"weapon":"staff","bolt":true,"heals":.6,"nova":36.5625,"size":1.06,"color":Color(.5,.4,.3)},
 	"boss":{"title":"The Crowned Statue","hp":1875.0,"damage":101.25,"speed":4.27,"range":3.3,"interval":2.0,"weapon":"sword","size":2.0,"color":Color(.85,.75,.52)}}
 const Skills = preload("res://scripts/skill_data.gd")
 const Items = preload("res://scripts/items.gd")

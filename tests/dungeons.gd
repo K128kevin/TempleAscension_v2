@@ -190,6 +190,8 @@ func puzzle_and_elites() -> void:
 	var south_hall: Rect2i = layout.halls[-1]
 	var guards: Array = game.enemies.filter(func(e): return south_hall.has_point(layout.to_cell(e.position)) and not layout.quiet[0].has_point(layout.to_cell(e.position)))
 	check(guards.size()>=Data.AREAS.basement[1].guards.size(),"Bandits stand guard down the hallway to the last room")
+	var approach: Rect2i = layout.quiet[2]
+	check(not game.enemies.any(func(e): return approach.has_point(layout.to_cell(e.position))),"No one stands in its last 20 m before the last room")
 	# The three beyond.
 	var elites: Array = game.enemies.filter(func(e): return e.kind in ["bandit_champion","bandit_marksman","bandit_healer"])
 	check(elites.size()==3 and elites.all(func(e): return layout.elite_room.has_point(layout.to_cell(e.position)) and e.human),"Three bandits hold the last room")
@@ -259,7 +261,7 @@ func puzzle_and_elites() -> void:
 	check(game.stun_left == 0.0 and not game.held_off(),"A blow breaks it")
 	marksman.hit(1.0)
 	check(champion.bash_time <= 0 and champion.bash_queue.is_empty(),"It is only the first time")
-	check(Data.ENEMIES.bandit_champion.hp == 551.25 and Data.ENEMIES.bandit_marksman.damage == 93.6,"The three are hardier again, and strike harder")
+	check(Data.ENEMIES.bandit_champion.hp == 826.875 and Data.ENEMIES.bandit_marksman.damage == 117.0,"The three are hardier again, and strike harder")
 	game.player.hp = game.player.max_hp
 	game.player.position = layout.arrival_position()
 	for i in elites.size():
@@ -323,7 +325,7 @@ func test():
 					check(layout.lasers.size()==3 and layout.lasers.all(func(l): return layout.quiet[0].has_point(l.cell) and l.cell.y>room.end.y and not layout.cells.has(l.cell-l.dir)) and layout.elite_room.position.y>layout.lasers[-1].cell.y+8,"Lasers across the hallway south, the last room well beyond them: "+label)
 					check(layout.elite_posts.size()==3 and layout.elite_posts.all(func(c): return layout.elite_room.has_point(c) and layout.cells.has(c)),"Three posts in the last room: "+label)
 					var south: Rect2i = layout.halls[-1]
-					check(south.size.y==Layout.LASER_HALL and Layout.LASER_HALL==54 and layout.quiet[0].size.y==Layout.QUIET_HALL,"The hallway to it is three times as long as it was, its first stretch quiet: "+label)
+					check(south.size.y==Layout.LASER_HALL and Layout.LASER_HALL==74 and layout.quiet[0].size.y==Layout.QUIET_HALL and layout.quiet[2].size.y==Layout.BOSS_APPROACH and layout.quiet[2].end.y==south.end.y,"The hallway to it is long, quiet at its start and for its last 20 m: "+label)
 					var off_south: Array = layout.rooms.filter(func(r): return layout.wing_of(layout.center(r)) < 0 and r.position.y>=south.position.y+Layout.QUIET_HALL and r.end.y<=south.end.y+2 and (r.end.x<south.position.x or r.position.x>=south.end.x))
 					check(off_south.size()==Layout.HALL_ROOMS and off_south.any(func(r): return r.end.x<south.position.x) and off_south.any(func(r): return r.position.x>=south.end.x),"Two rooms off it, one each side, beyond the lasers: "+label)
 					check(layout.guard_posts.size()>=Data.AREAS.basement[1].guards.size() and layout.guard_posts.all(func(c): return south.has_point(c) and not layout.quiet[0].has_point(c) and layout.cells.has(c)),"Guards' posts down it: "+label)

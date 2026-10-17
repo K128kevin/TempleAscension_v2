@@ -512,12 +512,14 @@ const CENTER_SOUTH = 2
 # holding a boulder beside the room, a locked gate between (`wings`).
 const START_ROOM = 15
 const DEPTHS_HALL = 5
-const LASER_HALL = 54
+const LASER_HALL = 74
+# Its last BOSS_APPROACH tiles, before the elites' room, are kept empty too.
+const BOSS_APPROACH = 20
 const QUIET_HALL = 18
 const HALL_ROOMS = 2
 const GUARD_GAP = 5
 const LASER_ROWS = [3,5,7]
-const ELITE_ROOM = Vector2i(21,16)
+const ELITE_ROOM = Vector2i(26,19)
 # The war table in the middle of the elites' room, and the chairs round it
 # (tiles, the table's footprint; the chairs stand a tile out from it).
 const WAR_TABLE = Vector2i(4,2)
@@ -640,7 +642,7 @@ func basement_depths() -> void:
 	var centre_x: int = down.position.x+low
 	for way in [1,-1]:
 		for attempt in 40:
-			var at = Vector2i(centre_x,down.position.y+integer(QUIET_HALL+3,LASER_HALL-8))
+			var at = Vector2i(centre_x,down.position.y+integer(QUIET_HALL+3,LASER_HALL-BOSS_APPROACH-8))
 			var found: Dictionary = branch(at,Vector2i(way,0),DEPTHS_HALL,parts)
 			if found.is_empty(): continue
 			parts.append(found.passage)
@@ -680,10 +682,10 @@ func basement_depths() -> void:
 	# The swordsman before the table, toward the way in; the archer and the
 	# healer either side of it.
 	elite_posts = [Vector2i(middle,elite_room.position.y+4),Vector2i(war_table.position.x-4,table_top+1),Vector2i(war_table.end.x+3,table_top+1)]
-	quiet = [Rect2i(hall_in.position,Vector2i(hall_in.size.x,QUIET_HALL)),elite_room]
+	quiet = [Rect2i(hall_in.position,Vector2i(hall_in.size.x,QUIET_HALL)),elite_room,Rect2i(hall_in.position.x,hall_in.end.y-BOSS_APPROACH,hall_in.size.x,BOSS_APPROACH)]
 	var along: int = QUIET_HALL+3
 	var turn = 0
-	while along < hall_in.size.y-3:
+	while along < hall_in.size.y-BOSS_APPROACH-3:
 		guard_posts.append(Vector2i(hall_in.position.x+low+(1 if turn%2 == 0 else -1),hall_in.position.y+along))
 		along += GUARD_GAP
 		turn += 1
